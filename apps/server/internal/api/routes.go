@@ -33,6 +33,7 @@ import (
 	growthservice "github.com/openpost/backend/internal/services/growth"
 	"github.com/openpost/backend/internal/services/identity"
 	"github.com/openpost/backend/internal/services/imagecaption"
+	"github.com/openpost/backend/internal/services/imagegeneration"
 	"github.com/openpost/backend/internal/services/instancesettings"
 	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/mcpoauth"
@@ -63,6 +64,7 @@ import (
 )
 
 type RouteDeps struct {
+	ImageGeneration              *imagegeneration.Service
 	WorkflowService              *workflows.Service
 	DB                           *bun.DB
 	Readiness                    *Readiness
@@ -321,6 +323,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	publicationBuildHandler.SetPlanner(deps.PublicationPlanner)
 	publicationBuildHandler.RegisterRoutes(api)
 	handlers.NewRepurposeHandler(deps.RepurposeSuggestions, deps.Authenticator).RegisterRoutes(api)
+	handlers.NewImageGenerationHandler(deps.ImageGeneration, deps.Authenticator).RegisterRoutes(api)
 	registerWorkflowRoutes(api, deps, publicationHandler, publicationBuildHandler)
 	handlers.NewPublicationDiscoveryHandler(deps.DB, deps.Authenticator, deps.PublicationDiscovery).RegisterRoutes(api)
 	handlers.NewVoiceProfileHandler(deps.DB, deps.Authenticator).RegisterRoutes(api)
