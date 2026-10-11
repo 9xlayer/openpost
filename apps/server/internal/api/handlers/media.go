@@ -3782,16 +3782,8 @@ func (h *MediaHandler) checkUploadQuotaExcludingMedia(ctx context.Context, works
 		return err
 	}
 
-	var stored int64
-	storedQuery := h.db.NewSelect().
-		Model((*models.MediaAttachment)(nil)).
-		ColumnExpr("COALESCE(SUM(size), 0)").
-		Where("workspace_id = ?", workspaceID).
-		Where("(asset_kind NOT IN (?, ?) OR asset_kind = '' OR asset_kind IS NULL)", "design_preview", "template_preview")
-	if excludeMediaID != "" {
-		storedQuery = storedQuery.Where("id != ?", excludeMediaID)
-	}
-	if err := storedQuery.Scan(ctx, &stored); err != nil {
+	stored, err := medialifecycle.StoredBytes(ctx, h.db, workspaceID, excludeMediaID)
+	if err != nil {
 		return errors.New("failed to load stored media usage")
 	}
 	return h.checkQuota(ctx, workspaceID, entitlements.LimitMediaBytesStored, stored, size)

@@ -309,6 +309,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	}
 	destinationOptionsHandler.RegisterRoutes(api)
 	publicationHandler := handlers.NewPublicationHandler(deps.DB, deps.Authenticator, deps.Entitlement)
+	publicationHandler.SetTextCardStorage(deps.MediaStorage)
 	publicationHandler.SetCapabilityDependencies(deps.Providers, deps.TokenSource)
 	providerRegistrars = append(providerRegistrars, publicationHandler.SetProvider)
 	publicationHandler.SetConnectorRegistry(deps.ConnectorRegistry)
