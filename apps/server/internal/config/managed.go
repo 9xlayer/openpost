@@ -248,6 +248,7 @@ var managedSettingBindings = map[string]managedSettingBinding{
 	"OPENPOST_OIDC_BOOTSTRAP_ALLOWLIST":             listBinding(func(c *Config) *[]string { return &c.OIDCBootstrapAllowlist }),
 	"OPENPOST_SSO_BREAK_GLASS_EMAILS":               listBinding(func(c *Config) *[]string { return &c.OIDCBreakGlassEmails }),
 	"OPENPOST_OIDC_NATIVE_CALLBACK_URL":             stringBinding(func(c *Config) *string { return &c.OIDCNativeCallbackURL }),
+	"FAL_KEY":                                       stringBinding(func(c *Config) *string { return &c.FalAPIKey }),
 	"OPENPOST_IMAGE_EDITOR_ENABLED":                 boolBinding(func(c *Config) *bool { return &c.ImageEditorEnabled }),
 	"OPENPOST_IMAGE_EDITOR_MODEL_BASE_URL":          trimmedStringBinding(func(c *Config) *string { return &c.ImageEditorModelBaseURL }),
 	"OPENPOST_MEME_GENERATOR_ENABLED":               boolBinding(func(c *Config) *bool { return &c.MemeGeneratorEnabled }),
