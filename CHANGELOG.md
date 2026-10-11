@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.16.5] - 2026-10-11
+
+### Fixed
+
+- Upload stored images and videos to X through the publisher's lazy media reader instead of failing before contacting X.
+
 ## [7.16.4] - 2026-10-10
 
 ### Added
