@@ -2200,7 +2200,7 @@
 		linkUrl = firstComposerURL(posts[0]?.content ?? '') || publication.source_url || '';
 		settingsByAccount = Object.fromEntries(
 			(publication.renditions ?? []).map((rendition) => {
-				const settings = parseComposerSettingsRecord(rendition.settings);
+				const settings = parseComposerSettingsRecord(rendition.settings ?? {});
 				if (supportsTextCards(rendition.platform) && settings.text_card === undefined) {
 					settings.text_card = 'off';
 				}
