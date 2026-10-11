@@ -29,9 +29,13 @@
 	import FeedbackDialog from '$lib/components/feedback-dialog.svelte';
 	import ImageEditorGuideDialog from './image-editor-guide-dialog.svelte';
 	import ImageEditorAssistant from './image-editor-assistant.svelte';
+	import ImageAIStudio from './image-ai-studio.svelte';
+	let imageAIStudioOpen = $state(false);
+	let imageAIStudio = $state<{ openFor: (operation: 'generate' | 'edit' | 'fill') => void }>();
 	import CheckpointRemove from './checkpoint-remove.svelte';
 	import ImageEditorResizeDialog from './image-editor-resize-dialog.svelte';
 	import { ui } from '$lib/stores/ui.svelte';
+	import { auth } from '$lib/stores/auth';
 	import { Input } from '$lib/components/ui/input';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import { Slider } from '$lib/components/ui/slider';
@@ -3156,7 +3160,9 @@
 />
 
 <div
-	class="image-editor-theme fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-background text-foreground"
+	class="image-editor-theme fixed inset-0 flex min-h-0 flex-col overflow-hidden bg-background text-foreground {imageAIStudioOpen
+		? 'pb-[50dvh] lg:pb-0'
+		: ''}"
 	data-testid="image-editor-shell"
 	data-agent-status={agentConnectionStatus}
 	{@attach initializeShell}
@@ -3223,6 +3229,14 @@
 			/>
 		{/snippet}
 		{#snippet actions()}
+			{#if $auth.user && editor.canEdit}
+				<ImageAIStudio
+					bind:this={imageAIStudio}
+					bind:open={imageAIStudioOpen}
+					{guestMode}
+					onSaveToOpenPost={saveToOpenPost}
+				/>
+			{/if}
 			{#if !guestMode && editor.canEdit}
 				<ImageEditorAssistant
 					workspaceId={editor.workspaceID}
@@ -4112,17 +4126,29 @@
 				></div>
 				<div class="min-h-0 min-w-0 overflow-hidden">
 					<PropertiesPanel
+						onAIEdit={$auth.user && editor.canEdit
+							? () => {
+									mobileSheet = null;
+									imageAIStudio?.openFor('edit');
+								}
+							: undefined}
 						onOpenMedia={openBackgroundMediaPicker}
 						colorWorkspace={activeEditorWorkspace === 'color'}
 					/>
 				</div>
 			</aside>
 		{/if}
-		{#if !desktopViewport.current && activeEditorWorkspace === 'color' && !focusedCanvas}
+		{#if !desktopViewport.current && activeEditorWorkspace === 'color' && !focusedCanvas && !imageAIStudioOpen}
 			<aside
 				class="image-editor-mobile-color min-h-0 min-w-0 overflow-hidden border-t bg-card lg:hidden"
 			>
 				<PropertiesPanel
+					onAIEdit={$auth.user && editor.canEdit
+						? () => {
+								mobileSheet = null;
+								imageAIStudio?.openFor('edit');
+							}
+						: undefined}
 					onOpenMedia={openBackgroundMediaPicker}
 					onOpenLayers={() => (mobileSheet = 'layers')}
 					colorWorkspace
@@ -4133,7 +4159,7 @@
 
 	<nav
 		class="flex h-[calc(4rem+env(safe-area-inset-bottom))] shrink-0 border-t bg-background px-1 pt-1 pb-[env(safe-area-inset-bottom)] sm:hidden"
-		hidden={activeEditorWorkspace !== 'edit'}
+		hidden={activeEditorWorkspace !== 'edit' || imageAIStudioOpen}
 		aria-label={m.image_editor_tools()}
 	>
 		<Button
@@ -4508,6 +4534,12 @@
 				<LayerTree />
 			{:else if mobileSheet === 'properties'}
 				<PropertiesPanel
+					onAIEdit={$auth.user && editor.canEdit
+						? () => {
+								mobileSheet = null;
+								imageAIStudio?.openFor('edit');
+							}
+						: undefined}
 					onOpenMedia={openBackgroundMediaPicker}
 					colorWorkspace={activeEditorWorkspace === 'color'}
 				/>
