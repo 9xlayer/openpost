@@ -20,6 +20,7 @@ var (
 	ErrBillingPending = fmt.Errorf("%w: billing", ErrPending)
 )
 
+//nolint:revive // This name identifies the request in the shared API schema.
 type ImageGenerationRequest struct {
 	WorkspaceID       string `json:"workspace_id" minLength:"1" maxLength:"200"`
 	ProjectID         string `json:"project_id" minLength:"1" maxLength:"200"`
@@ -36,6 +37,7 @@ type ImageGenerationRequest struct {
 	TargetFingerprint string `json:"target_fingerprint,omitempty" maxLength:"100" doc:"Browser snapshot fingerprint used to prevent stale application"`
 }
 
+//nolint:revive // This name identifies the run in the shared API schema.
 type ImageGenerationRun struct {
 	SourceMediaID     string    `json:"source_media_id"`
 	ID                string    `json:"id"`

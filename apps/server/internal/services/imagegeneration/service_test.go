@@ -223,8 +223,8 @@ func TestImageFillClipsReturnedPixelsAndRejectsInvalidMasks(t *testing.T) {
 	require.NoError(t, err)
 	decoded, err := png.Decode(bytes.NewReader(result))
 	require.NoError(t, err)
-	_, _, _, inside := decoded.At(1, 0).RGBA()
-	require.Equal(t, uint32(65535), inside)
+	inside := color.NRGBAModel.Convert(decoded.At(1, 0)).(color.NRGBA).A
+	require.Equal(t, uint8(255), inside)
 	for _, point := range []image.Point{{0, 0}, {0, 1}, {1, 1}} {
 		_, _, _, alpha := decoded.At(point.X, point.Y).RGBA()
 		require.Zero(t, alpha)

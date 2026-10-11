@@ -21,12 +21,12 @@ func TestImageGenerationRequiresSignInEvenWhenProviderIsUnconfigured(t *testing.
 	api := humaecho.New(e, huma.DefaultConfig("test", "1"))
 	NewImageGenerationHandler(nil, publicationBuildTestAuthenticator{}).RegisterRoutes(api)
 	for _, path := range []string{"/image-generations/config", "/image-generations?workspace_id=ws&project_id=project", "/image-generations/run"} {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
 		response := httptest.NewRecorder()
 		e.ServeHTTP(response, req)
 		require.Equal(t, http.StatusUnauthorized, response.Code, path)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/image-generations/config", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/image-generations/config", nil)
 	req.Header.Set("Authorization", "Bearer web-token")
 	response := httptest.NewRecorder()
 	e.ServeHTTP(response, req)

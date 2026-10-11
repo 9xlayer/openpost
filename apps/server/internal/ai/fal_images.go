@@ -82,7 +82,7 @@ func validImageRequestID(id string) bool {
 		return false
 	}
 	for _, char := range id {
-		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_') {
+		if char != '-' && char != '_' && (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') {
 			return false
 		}
 	}
@@ -117,21 +117,9 @@ func (f *FalImages) ImageResult(ctx context.Context, endpoint, id string) ([]byt
 	if err != nil {
 		return nil, errors.New("fal result unavailable")
 	}
-	body, err := json.Marshal(result)
-	if err != nil || len(body) > 1024*1024 {
-		return nil, errors.New("invalid fal result")
-	}
-	var output struct {
-		Images []struct {
-			URL string `json:"url"`
-		} `json:"images"`
-	}
-	if json.Unmarshal(body, &output) != nil || len(output.Images) != 1 {
-		return nil, errors.New("invalid fal images")
-	}
-	location, err := url.Parse(output.Images[0].URL)
-	if err != nil || location.Scheme != "https" || location.User != nil || location.Port() != "" || !strings.HasSuffix(location.Hostname(), ".fal.media") {
-		return nil, errors.New("invalid fal image location")
+	location, err := imageResultLocation(result)
+	if err != nil {
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, location.String(), nil)
 	if err != nil {
@@ -151,6 +139,26 @@ func (f *FalImages) ImageResult(ctx context.Context, endpoint, id string) ([]byt
 		return nil, errors.New("fal image exceeds download limit")
 	}
 	return data, nil
+}
+
+func imageResultLocation(result any) (*url.URL, error) {
+	body, err := json.Marshal(result)
+	if err != nil || len(body) > 1024*1024 {
+		return nil, errors.New("invalid fal result")
+	}
+	var output struct {
+		Images []struct {
+			URL string `json:"url"`
+		} `json:"images"`
+	}
+	if json.Unmarshal(body, &output) != nil || len(output.Images) != 1 {
+		return nil, errors.New("invalid fal images")
+	}
+	location, err := url.Parse(output.Images[0].URL)
+	if err != nil || location.Scheme != "https" || location.User != nil || location.Port() != "" || !strings.HasSuffix(location.Hostname(), ".fal.media") {
+		return nil, errors.New("invalid fal image location")
+	}
+	return location, nil
 }
 
 // Billing is reconciled by request ID. Model list prices cannot substitute for

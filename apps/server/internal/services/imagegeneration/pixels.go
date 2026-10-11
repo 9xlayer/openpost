@@ -16,14 +16,11 @@ import (
 )
 
 func validate(r ImageGenerationRequest) error {
-	if len(r.WorkspaceID) == 0 || len(r.WorkspaceID) > 200 || len(r.ProjectID) == 0 || len(r.ProjectID) > 200 || len(r.PageID) == 0 || len(r.PageID) > 200 || len(r.Prompt) == 0 || len(r.Prompt) > 8000 {
-		return ErrInvalid
+	if err := validateRequestContext(r); err != nil {
+		return err
 	}
-	if !slices.Contains([]string{"generate", "edit", "fill"}, r.Operation) || ai.ImageEndpoint(r.Model, r.Operation != "generate") == "" {
-		return ErrInvalid
-	}
-	if !slices.Contains([]string{"auto", "low", "medium", "high", "xhigh", "max"}, r.Quality) || !slices.Contains([]string{"auto", "opaque", "transparent"}, r.Background) || !slices.Contains([]string{"auto", "square_hd", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"}, r.Size) {
-		return ErrInvalid
+	if err := validateImageOptions(r); err != nil {
+		return err
 	}
 	if r.Operation == "generate" {
 		if r.SourceMediaID != "" || r.MaskPNG != "" || r.TargetLayerID != "" {
@@ -42,6 +39,23 @@ func validate(r ImageGenerationRequest) error {
 	}
 	_, err := decodeMask(r.MaskPNG)
 	return err
+}
+
+func validateRequestContext(r ImageGenerationRequest) error {
+	if len(r.WorkspaceID) == 0 || len(r.WorkspaceID) > 200 || len(r.ProjectID) == 0 || len(r.ProjectID) > 200 || len(r.PageID) == 0 || len(r.PageID) > 200 || len(r.Prompt) == 0 || len(r.Prompt) > 8000 {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func validateImageOptions(r ImageGenerationRequest) error {
+	if !slices.Contains([]string{"generate", "edit", "fill"}, r.Operation) || ai.ImageEndpoint(r.Model, r.Operation != "generate") == "" {
+		return ErrInvalid
+	}
+	if !slices.Contains([]string{"auto", "low", "medium", "high", "xhigh", "max"}, r.Quality) || !slices.Contains([]string{"auto", "opaque", "transparent"}, r.Background) || !slices.Contains([]string{"auto", "square_hd", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"}, r.Size) {
+		return ErrInvalid
+	}
+	return nil
 }
 
 func decodeBoundedImage(data []byte) (image.Image, error) {
