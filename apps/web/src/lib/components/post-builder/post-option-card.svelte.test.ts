@@ -1,15 +1,20 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { SocialAccount } from '$lib/api/client';
 import type { PublicationPostOption } from '$lib/post-builder/client';
 import PostOptionCard from './post-option-card.svelte';
 import '../../../routes/layout.css';
 
-const visualMocks = vi.hoisted(() => ({ render: vi.fn(), release: vi.fn() }));
-vi.mock('$lib/post-builder/visuals', () => ({
-	renderPostVisual: visualMocks.render,
-	releasePostVisual: visualMocks.release
-}));
+interface HTTPInterception {
+	handle?: typeof fetch;
+}
+
+const http = vi.hoisted(() => {
+	const original = globalThis.fetch.bind(globalThis);
+	const state: HTTPInterception = {};
+	globalThis.fetch = (input, init) => state.handle?.(input, init) ?? original(input, init);
+	return { original, state };
+});
 
 const account: SocialAccount = {
 	id: 'x-main',
@@ -71,12 +76,25 @@ const option: PublicationPostOption = {
 		}
 	]
 };
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+	http.state.handle = undefined;
+	vi.restoreAllMocks();
+});
+afterAll(() => {
+	globalThis.fetch = http.original;
+});
 it('retains a rendered visual while caption edits update the native preview', async () => {
-	visualMocks.render.mockImplementation(async (_workspace, document) => ({
-		url: 'data:image/png;base64,iVBORw0KGgo=',
-		document
-	}));
+	const canvas = document.createElement('canvas');
+	canvas.width = canvas.height = 2;
+	const png = canvas.toDataURL('image/png');
+	const previews: unknown[] = [];
+	http.state.handle = async (input, init) => {
+		const request = input instanceof Request ? input : new Request(input, init);
+		if (new URL(request.url).pathname !== '/api/v1/memes/preview')
+			return http.original(input, init);
+		previews.push(await request.json());
+		return Response.json({ mime_type: 'image/png', data_base64: png.split(',')[1] });
+	};
 	const use = vi.fn();
 	const props = {
 		option,
@@ -86,36 +104,99 @@ it('retains a rendered visual while caption edits update the native preview', as
 		onChange: vi.fn()
 	};
 	const screen = render(PostOptionCard, props);
-	await expect.poll(() => visualMocks.render.mock.calls.length).toBe(1);
+	await expect.element(screen.getByRole('button', { name: 'Use this post' })).toBeEnabled();
+	expect(previews).toEqual([
+		{
+			workspace_id: 'workspace-1',
+			template_id: 'drake',
+			captions: ['more code', 'more features'],
+			overlay_media_ids: [],
+			format: 'png'
+		}
+	]);
+	expect(screen.container.querySelector('img[src^="data:image/png"]')?.getAttribute('src')).toBe(
+		png
+	);
 	const edited = structuredClone(option);
 	edited.destinations[0].segments[0].body = 'apparently the delete key is a product feature';
 	await screen.rerender({ ...props, option: edited });
 	await expect.element(screen.getByText(edited.destinations[0].segments[0].body)).toBeVisible();
-	expect(visualMocks.render).toHaveBeenCalledTimes(1);
+	expect(previews).toHaveLength(1);
+	expect(screen.container.querySelector('img[src^="data:image/png"]')?.getAttribute('src')).toBe(
+		png
+	);
 	await screen.getByRole('button', { name: 'Use this post' }).click();
 	expect(use).toHaveBeenCalledWith(edited);
 	await screen.unmount();
-	expect(visualMocks.release).toHaveBeenCalledTimes(1);
 });
 
 it('discards late visual renders after recipe and Workspace changes or unmount', async () => {
-	const completions: Array<(value: { url: string; document: unknown }) => void> = [];
-	visualMocks.render.mockImplementation(() => new Promise((resolve) => completions.push(resolve)));
-	const props = { option, account, workspaceId: 'workspace-1', onUse: vi.fn(), onChange: vi.fn() };
+	const completions: Array<() => void> = [];
+	const decode = globalThis.createImageBitmap.bind(globalThis);
+	vi.spyOn(globalThis, 'createImageBitmap').mockImplementation(async (image) => {
+		const bitmap = await decode(image);
+		const pending = Promise.withResolvers<ImageBitmap>();
+		completions.push(() => pending.resolve(bitmap));
+		return pending.promise;
+	});
+	const revoked = vi.spyOn(URL, 'revokeObjectURL');
+	const screenshot = structuredClone(option);
+	screenshot.destinations[0].media = {
+		treatment: 'template',
+		role: 'punchline',
+		brief: 'A codebase conversation.',
+		template_id: 'messages',
+		document: {
+			schema_version: 1,
+			template_id: 'messages',
+			title: 'A codebase conversation',
+			appearance: 'light',
+			frame: 'natural',
+			text_size: 'normal',
+			conversation: {
+				name: 'The codebase',
+				timestamp: '',
+				show_header: false,
+				read_receipt: '',
+				self_id: 'me',
+				people: [
+					{ id: 'me', name: 'Me' },
+					{ id: 'code', name: 'Codebase' }
+				],
+				messages: [
+					{ id: 'one', sender_id: 'me', text: 'I deleted 15,000 lines.' },
+					{ id: 'two', sender_id: 'code', text: 'More features. Thanks.' }
+				]
+			}
+		}
+	};
+	const props = {
+		option: screenshot,
+		account,
+		workspaceId: 'workspace-1',
+		onUse: vi.fn(),
+		onChange: vi.fn()
+	};
 	const screen = render(PostOptionCard, props);
 	await expect.poll(() => completions.length).toBe(1);
-	const next = structuredClone(option);
+	await screen.rerender({ ...props, workspaceId: 'workspace-2' });
+	await expect.poll(() => completions.length).toBe(2);
+	const next = structuredClone(screenshot);
 	next.destinations[0].media.document!.title = 'A new recipe';
 	await screen.rerender({ ...props, option: next, workspaceId: 'workspace-2' });
-	await expect.poll(() => completions.length).toBe(2);
-	const obsolete = { url: 'blob:obsolete', document: option.destinations[0].media.document };
-	completions[0](obsolete);
-	await expect.poll(() => visualMocks.release.mock.calls.length).toBe(1);
-	expect(visualMocks.release).toHaveBeenCalledWith(obsolete);
+	await expect.poll(() => completions.length).toBe(3);
+	completions[0]();
+	await expect.poll(() => revoked.mock.calls.length).toBe(1);
+	expect(revoked.mock.calls[0][0]).toMatch(/^blob:/);
+	expect(screen.container.querySelector('img[src^="blob:"]')).toBeNull();
+	completions[1]();
+	await expect.poll(() => revoked.mock.calls.length).toBe(2);
+	expect(screen.container.querySelector('img[src^="blob:"]')).toBeNull();
 	await expect.element(screen.getByText('Rendering the visual…')).toBeVisible();
+	await expect.element(screen.getByRole('button', { name: 'Use this post' })).toBeDisabled();
 	await screen.unmount();
-	const detached = { url: 'blob:detached', document: next.destinations[0].media.document };
-	completions[1](detached);
-	await expect.poll(() => visualMocks.release.mock.calls.length).toBe(2);
-	expect(visualMocks.release).toHaveBeenCalledWith(detached);
+	completions[2]();
+	await expect.poll(() => revoked.mock.calls.length).toBe(3);
+	for (const [url] of revoked.mock.calls) expect(url).toMatch(/^blob:/);
+	expect(new Set(revoked.mock.calls.map(([url]) => url)).size).toBe(3);
 });
