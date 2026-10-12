@@ -76,3 +76,14 @@ appId: com.openpost.app
 - tapOn: Bluesky, @studio.bsky.social, draft
 - assertVisible: No text
 - takeScreenshot: ideate-selected-${SCHEME}
+
+- tapOn: Back
+- openLink: com.openpost.app:///privacy
+- extendedWaitUntil:
+    visible: App analytics
+    timeout: 20000
+- assertVisible: Decline
+- assertVisible: Allow analytics
+- tapOn: Decline
+- assertVisible: Decline, Selected
+- takeScreenshot: privacy-${SCHEME}

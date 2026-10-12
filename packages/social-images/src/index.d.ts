@@ -63,7 +63,10 @@ export interface DocumentationPageEntry extends SocialEntry {
     | { membership: "special"; reason: string };
   agentDiscovery:
     | { membership: "primary"; section?: DocumentationDiscoverySection }
-    | { membership: "optional" | "unlisted"; section?: DocumentationDiscoverySection };
+    | {
+        membership: "optional" | "unlisted";
+        section?: DocumentationDiscoverySection;
+      };
   agentCorpus:
     | { membership: "included"; section: DocumentationDiscoverySection }
     | { membership: "excluded"; reason: string };
@@ -80,6 +83,8 @@ export const marketingSocialEntries: readonly MarketingRouteEntry[];
 export const docsSocialEntries: readonly DocumentationPageEntry[];
 
 export function normalizeMarketingPath(pathname: string): string;
+export function marketingTelemetryPath(pathname: string): string;
+export function documentationTelemetryPath(pathname: string): string;
 export function canonicalMarketingUrl(pathname: string): string;
 export function marketingAgentMarkdownUrl(entry: MarketingRouteEntry): string | undefined;
 export function resolveMarketingSocial(pathname: string): MarketingRouteEntry;

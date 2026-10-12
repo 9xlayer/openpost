@@ -1,3 +1,4 @@
+import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, AppState, ScrollView, Switch, View } from "react-native";
 import * as ImagePicker from "expo-image-picker";
@@ -50,7 +51,11 @@ export default function IdeateScreen() {
 }
 
 function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
-  const params = useLocalSearchParams<{ idea?: string; build?: string; attachments?: string }>();
+  const params = useLocalSearchParams<{
+    idea?: string;
+    build?: string;
+    attachments?: string;
+  }>();
   const { colors, spacing, typography } = useNativeTheme().manifest;
   const queryClient = useQueryClient();
   const accounts = useAccounts();
@@ -276,6 +281,7 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
       if (!current()) return;
       const result = await service.commit(build.id, build.revision, option, media, signal);
       if (!current()) return;
+      void recordNativeFirstComposition("content_mode");
       await accept(await service.get(workspaceId, build.id, signal));
       if (!current()) return;
       await invalidatePublicationData(queryClient, {
@@ -297,7 +303,13 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
           : "Writing four posts…";
   return (
     <Screen safeTop={false}>
-      <Stack.Screen options={{ title: "Ideate", headerShown: true, headerBackTitle: "Back" }} />
+      <Stack.Screen
+        options={{
+          title: "Ideate",
+          headerShown: true,
+          headerBackTitle: "Back",
+        }}
+      />
       <ScrollView
         contentContainerStyle={{
           padding: spacing.large,
@@ -349,7 +361,13 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
               style={{ minHeight: 136 }}
               maxLength={12000}
             />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.small }}>
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                gap: spacing.small,
+              }}
+            >
               <Button
                 title={uploading ? "Attaching…" : "Attach"}
                 icon="gallery"
@@ -369,7 +387,13 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
             ) : null}
             {assets.map((asset) => (
               <View key={asset.id} style={{ gap: spacing.small }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.small }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.small,
+                  }}
+                >
                   <BodyText style={{ flex: 1 }}>{asset.name}</BodyText>
                   <Button
                     title={`Remove ${asset.name}`}
@@ -380,7 +404,13 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
                     disabled={disabled}
                   />
                 </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.small }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: spacing.small,
+                  }}
+                >
                   <BodyText style={{ flex: 1 }}>May appear in a post</BodyText>
                   <Switch
                     accessibilityLabel={`Allow ${asset.name} in a post`}
@@ -437,7 +467,13 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
             />
           </View>
         ) : (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.small }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: spacing.small,
+            }}
+          >
             <BodyText numberOfLines={2} style={{ flex: 1 }}>
               {idea}
             </BodyText>
@@ -529,7 +565,11 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
           {(accounts.data ?? []).map((account) => (
             <View
               key={account.id}
-              style={{ flexDirection: "row", alignItems: "center", gap: spacing.small }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: spacing.small,
+              }}
             >
               <PlatformIcon platform={account.platform} />
               <Text style={[typography.bodyLarge, { flex: 1, color: colors.onSurface }]}>
