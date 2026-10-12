@@ -1,3 +1,4 @@
+import { createMobileQueryAPI } from "../query-api";
 import type { components } from "@openpost/api-contract";
 import { throwIfAborted } from "@openpost/query-catalog";
 import {
@@ -18,6 +19,7 @@ export function buildIsRunning(build?: IdeateBuild): boolean {
 }
 
 export function createIdeateAPI(client: Api = api()) {
+  const reads = createMobileQueryAPI(() => client);
   async function receive<T>(
     request: () => Promise<{ data?: T; error?: unknown; response: Response }>,
     fallback: string,
@@ -44,10 +46,10 @@ export function createIdeateAPI(client: Api = api()) {
       );
     },
     async get(workspaceId: string, id: string, signal: AbortSignal) {
-      const build = await receive(
-        () => client.GET("/publication-builds/{id}", { signal, params: { path: { id } } }),
-        "Could not load these posts",
-      );
+      const identity = captureApiRequestIdentity();
+      const build = await reads.getPublicationBuild(workspaceId, id, signal);
+      if (!apiRequestIdentityIsCurrent(identity))
+        throw new Error("Your Workspace or session changed. Try again.");
       throwIfAborted(signal);
       if (build.workspace_id !== workspaceId)
         throw new Error("These posts belong to another Workspace.");
@@ -93,16 +95,12 @@ export function createIdeateAPI(client: Api = api()) {
       );
     },
     async listVoiceProfiles(workspaceId: string, signal: AbortSignal) {
-      return (
-        (await receive(
-          () =>
-            client.GET("/voice-profiles", {
-              signal,
-              params: { query: { workspace_id: workspaceId } },
-            }),
-          "Could not load voices",
-        )) ?? []
-      );
+      const identity = captureApiRequestIdentity();
+      const voices = await reads.listVoiceProfiles(workspaceId, signal);
+      throwIfAborted(signal);
+      if (!apiRequestIdentityIsCurrent(identity))
+        throw new Error("Your Workspace or session changed. Try again.");
+      return voices;
     },
   };
 }
