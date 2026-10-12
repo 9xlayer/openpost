@@ -52,36 +52,20 @@ export const browserExtensions = [
     ],
     cost: "The extension is free. AI requests use your own provider keys and their pricing.",
     privacy:
-      "OpenPost receives no extension data. Selected video text and images go directly to your configured AI providers when you request generation. Provider keys, saved references and job history stay in your browser.",
+      "YouTube Localizer works with your signed-in YouTube Studio session. It has no OpenPost account, backend, analytics or advertising tracking.",
     privacyUpdated: "12 October 2026",
     privacySections: [
       {
-        title: "Scope",
-        text: "YouTube Localizer by OpenPost helps creators localize video titles, descriptions and thumbnails and generate original thumbnails. It has no OpenPost account requirement, operator backend or telemetry.",
-      },
-      {
-        title: "YouTube Studio data",
-        text: "The extension reads selected video titles, descriptions, thumbnails, language coverage and channel/video identifiers from your signed-in YouTube Studio session. It uses these to find missing translations and save the results you request. Local account bindings keep work tied to the selected channel. The extension does not request your Google password or send your YouTube session credentials to an AI provider.",
-      },
-      {
-        title: "AI providers and authentication",
-        text: "When you request generation, the relevant video text, source thumbnail and any reference images you select are sent directly to the AI providers you configure. Text may go to OpenAI, OpenRouter, Anthropic or a compatible custom endpoint. Image generation and editing use Fal and its selected model. Provider API keys are sent only to authenticate requests to their configured provider. Remote provider connections use HTTPS. User-configured local text servers may use HTTP on localhost or 127.0.0.1.",
-      },
-      {
-        title: "Provider processing",
-        text: "Providers may retain inputs and outputs or use subprocessors according to their own policies and your provider account settings. OpenPost does not receive or store those requests. Provider processing and charges are governed by your relationship with the provider. Deleting data from this extension does not delete copies held by providers or translations already saved to YouTube.",
+        title: "Data and providers",
+        text: "Selected video titles, descriptions, thumbnails, reference images, language coverage and channel/video identifiers are used to find missing translations and save your results. When you request generation, relevant text and images go directly to your chosen text provider or Fal. API keys authenticate those requests. Your Google password and YouTube session credentials are not sent to AI providers. Providers handle submitted data under their own policies.",
       },
       {
         title: "Your data and deletion",
-        text: "Provider keys are kept in trusted extension session storage by default. You can explicitly choose to remember them on your device and can forget saved keys in Settings. Preferences, job history, source images, generated results, reusable thumbnail backgrounds and selected reference images remain in local extension storage so work can resume and paid outputs can be reused. Cached assets remain until you remove them or remove extension data. Uninstalling removes extension storage. Exported backups omit provider credentials and account bindings; downloaded images and backups remain wherever you save them.",
+        text: "Settings, job history, references and generated images stay in local extension storage. API keys are session-only unless you choose to remember them. You can forget saved keys in Settings; uninstalling removes extension storage. Uninstalling does not delete downloaded files, provider-held data or translations already saved to YouTube. Exported backups omit provider keys and account bindings.",
       },
       {
-        title: "Limited use",
-        text: "The extension does not sell user data, use it for advertising or credit decisions, or transfer it for purposes unrelated to requested localization and thumbnail generation. Its use of user data follows the Chrome Web Store User Data Policy, including the Limited Use requirements.",
-      },
-      {
-        title: "External websites and contact",
-        text: "External OpenPost, GitHub, YouTube and provider websites have their own privacy practices. For questions, contact https://github.com/getopenpost/youtube-localizer/issues. Do not post API keys, private video information or reference images in public issues.",
+        title: "Data use",
+        text: "Data is used only for requested localization and thumbnail generation. It is not sold or used for advertising or credit decisions. Linked websites have their own privacy policies. Use the contact link below for questions; do not include keys or private video data in public issues.",
       },
     ],
   },
@@ -136,32 +120,20 @@ export const browserExtensions = [
     ],
     cost: "Free. No extension account, subscription or API keys needed.",
     privacy:
-      "Settings, schedules and timers stay in your browser. Supported page URLs and feed elements are processed locally to apply your limits. No browsing content or activity is sent to OpenPost or another server.",
+      "Feed Limiter runs in your browser. It has no account, OpenPost backend, analytics or advertising tracking.",
     privacyUpdated: "12 October 2026",
     privacySections: [
       {
-        title: "Scope",
-        text: "Feed Limiter by OpenPost limits selected social website feeds. It has no extension account, operator backend, analytics or advertising tracking.",
-      },
-      {
         title: "Data handled locally",
-        text: "The extension processes the URL and page structure of supported websites locally to identify selected feeds and show or hide them. It stores preferences, schedules, site allowances and session timing in the browser. It does not build a list of visited posts or send page content, URLs or timer activity to OpenPost or another server. Local route processing is necessary to preserve access to direct posts, messages and other pages outside selected feeds.",
+        text: "The extension reads supported page URLs and structure to identify and pause feeds. Settings, schedules, allowances and timers stay in your browser. It does not keep a browsing-history list or send page content, URLs or activity to OpenPost or another server.",
       },
       {
         title: "Your data and deletion",
-        text: "Settings and timer state remain in the browser until changed or the extension's data is removed. Removing the extension removes its extension storage. The extension does not synchronize this information through an OpenPost service. Browser or device backup behavior is controlled separately by your browser and operating system.",
+        text: "Change preferences in Settings or uninstall the extension to remove its stored data. Browser and device backups are managed separately by your browser and operating system.",
       },
       {
-        title: "Limited use",
-        text: "Feed Limiter does not sell user data, use it for advertising or credit decisions, or transfer it for purposes unrelated to limiting feeds. Its use of user data is limited to the functionality described here and follows the Chrome Web Store User Data Policy, including the Limited Use requirements.",
-      },
-      {
-        title: "External websites",
-        text: "Links to OpenPost or GitHub open external websites with their own privacy practices. The social websites you visit continue to process data under their own policies.",
-      },
-      {
-        title: "Contact",
-        text: "For questions, contact the project through https://github.com/getopenpost/feed-limiter/issues. Do not include private browsing data in a public issue.",
+        title: "Data use",
+        text: "Data is used only to apply your feed limits. It is not sold or used for advertising or credit decisions. Linked websites have their own privacy policies. Use the contact link below for questions; do not include private browsing data in public issues.",
       },
     ],
   },
