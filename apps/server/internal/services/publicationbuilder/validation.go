@@ -268,6 +268,10 @@ func validateDestinationPlan(plan DestinationPlan, destination Destination, poli
 			return fmt.Errorf("adapter segment %d exceeds %s text limit of %d", index+1, destination.Platform, profile.TextLimit)
 		}
 		if capability, found := capabilities.FindOutput(destination.Platform, plan.OutputProfile); found {
+			if profile.TextLimit > 0 {
+				capability.TextLimit = profile.TextLimit
+				capability.Content.Body.MaxLength = profile.TextLimit
+			}
 			for _, issue := range capabilities.ValidateTextContent(capability, segment.Body, segment.Title, segment.Description, nil) {
 				if issue.Severity == "error" {
 					return fmt.Errorf("adapter segment %d: %s", index+1, issue.Message)
