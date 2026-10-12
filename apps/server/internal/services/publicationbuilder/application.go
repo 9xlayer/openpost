@@ -364,7 +364,28 @@ func GetStoredBuild(ctx context.Context, db *bun.DB, userID, buildID string) (Bu
 	if err != nil {
 		return Build{}, fmt.Errorf("load publication build: %w", err)
 	}
-	return decodeBuild(record)
+	build, err := decodeBuild(record)
+	if err != nil || build.State != BuildStateFailed || build.Input.OptionCount != 4 {
+		return build, err
+	}
+	// A failed generation attempt is not a terminal build while its durable job
+	// is processing or waiting to retry. Keep readers polling until that settles.
+	identity, err := jobregistry.PublicationBuildIdentity(build.ID)
+	if err != nil {
+		return Build{}, err
+	}
+	active, err := db.NewSelect().Model((*models.Job)(nil)).
+		Where("type = ? AND scope_id = ? AND dedupe_key = ?", jobregistry.TypePublicationBuild, identity.ScopeID, identity.DedupeKey).
+		Where("status IN (?, ?)", jobregistry.StatusPending, jobregistry.StatusProcessing).Exists(ctx)
+	if err != nil {
+		return Build{}, fmt.Errorf("inspect publication build retry: %w", err)
+	}
+	if active {
+		build.State = BuildStateQueued
+		build.Phase = BuildPhaseQueued
+		build.ErrorCode, build.ErrorMessage = "", ""
+	}
+	return build, nil
 }
 
 //nolint:gocyclo // Lease fencing and durable phase transitions stay visible in the job execution boundary.
@@ -488,6 +509,7 @@ func resolvedSourceIndex(input BuildInput) []ResolvedSource {
 		resolved = append(resolved, ResolvedSource{
 			ID:          source.ID,
 			Kind:        source.Kind,
+			MIMEType:    source.MIMEType,
 			Label:       source.Label,
 			Publishable: source.Publishable,
 		})
@@ -767,6 +789,8 @@ func (application *Application) fail(
 	var generation *generationFailure
 	if errors.As(cause, &generation) {
 		code = generation.code
+	} else if code == "generation_failed" && errors.Is(cause, context.DeadlineExceeded) {
+		code = "generation_timeout"
 	}
 	now := application.now().UTC()
 	model, providerRequestID, usageJSON := trace.encoded()

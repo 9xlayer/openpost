@@ -430,8 +430,8 @@ func prepareYouTubeUpload(req UploadMediaRequest) (youtubeVideoInsertRequest, er
 	if title == "" {
 		return youtubeVideoInsertRequest{}, fmt.Errorf("youtube upload requires an explicit title")
 	}
-	if strings.ContainsAny(firstNonEmptyString(settingString(req.Settings, "title"), strings.TrimSpace(req.Title)), "<>") {
-		return youtubeVideoInsertRequest{}, fmt.Errorf("youtube titles cannot contain <> characters")
+	if err := providerlimits.ValidateYouTubeTitleCharacters(firstNonEmptyString(settingString(req.Settings, "title"), strings.TrimSpace(req.Title))); err != nil {
+		return youtubeVideoInsertRequest{}, err
 	}
 	if err := providerlimits.ValidateYouTubeDescription(req.Description); err != nil {
 		return youtubeVideoInsertRequest{}, err

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -193,7 +194,9 @@ func TestApplicationFailureNeverReturnsOrStoresPrivateModelText(t *testing.T) {
 	privateFailure := errors.New("private customer transcript and raw model output")
 	for expectedCode, failure := range map[string]error{
 		"generation_failed":       privateFailure,
-		"director_output_invalid": &generationFailure{code: failureDirectorOutput, cause: privateFailure},
+		"director_output_invalid": &generationFailure{code: "director_output_invalid", cause: privateFailure},
+		"review_rejected":         &generationFailure{code: "review_rejected", cause: privateFailure},
+		"generation_timeout":      fmt.Errorf("private context: %w", context.DeadlineExceeded),
 	} {
 		t.Run(expectedCode, func(t *testing.T) {
 			db := newBuilderApplicationTestDB(t)
