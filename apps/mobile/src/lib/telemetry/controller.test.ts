@@ -43,6 +43,38 @@ const config = {
   edition: "cloud",
 };
 
+test("failed native identification stops collection and request correlation", async () => {
+  let captured = 0;
+  let stopped = 0;
+  const subject = new NativeTelemetryController(
+    { read: async () => "allow", write: async () => {} },
+    async () => ({
+      identify() {
+        throw new Error("SDK identification failed");
+      },
+      screen() {
+        captured++;
+      },
+      capture() {
+        captured++;
+      },
+      exception() {
+        captured++;
+      },
+      headers: () => ({ "X-PostHog-Distinct-ID": "anonymous-sdk-id" }),
+      stop() {
+        stopped++;
+      },
+    }),
+  );
+  subject.bind("server-a", "actor-a");
+  await subject.configure(config, { id: "opaque-user", is_admin: false });
+  subject.capture("publication publish requested", { account_count: 1, is_thread: false });
+  expect(captured).toBe(0);
+  expect(subject.headers("server-a")).toEqual({});
+  expect(stopped).toBe(1);
+});
+
 test("native telemetry starts only after consent and clears capture on revocation", async () => {
   const { subject, calls } = fixture();
   subject.screen("/publications/[id]");

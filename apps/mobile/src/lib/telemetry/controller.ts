@@ -153,7 +153,10 @@ export class NativeTelemetryController {
       if (this.user)
         client.identify(this.user.id, this.config.edition === "cloud" && this.user.is_admin);
     } catch {
-      /* Identification cannot block app startup. */
+      // Failed identity binding must not attribute this actor's activity to an
+      // anonymous or previous SDK identity. Collection stays optional.
+      this.stop();
+      return;
     }
     for (const event of pending) {
       try {
