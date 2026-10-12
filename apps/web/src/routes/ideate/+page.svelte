@@ -53,7 +53,7 @@
 	let links = $state('');
 	let direction = $state('');
 	let assets = $state<Array<{ id: string; name: string; mayPublish: boolean }>>([]);
-	let inputElement = $state<HTMLInputElement>();
+	let inputElement = $state<HTMLInputElement | null>(null);
 	let uploading = $state(false);
 	let build = $state.raw<PublicationBuild>();
 	let options = $state.raw<PublicationPostOption[]>([]);
@@ -410,8 +410,8 @@
 						}}
 					/></label
 				>
-				<input
-					bind:this={inputElement}
+				<Input
+					bind:ref={inputElement}
 					type="file"
 					multiple
 					accept="image/*,video/*,audio/*,application/pdf"
