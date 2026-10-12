@@ -21,7 +21,17 @@ export type PendingAttachment = {
  */
 export async function uploadAttachment(
   file: PendingAttachment,
-  { client = api(), workspaceId }: { client?: Api; workspaceId: string },
+  {
+    client = api(),
+    workspaceId,
+    source,
+    altText,
+  }: {
+    client?: Api;
+    workspaceId: string;
+    source?: "screenshot_template";
+    altText?: string;
+  },
 ): Promise<string> {
   const localFile = await FileSystem.getInfoAsync(file.uri);
   if (!localFile.exists || localFile.isDirectory) {
@@ -46,7 +56,8 @@ export async function uploadAttachment(
       size,
       mime_type: file.mimeType,
       asset_kind: "library",
-      source: file.localId.startsWith("camera:") ? "camera" : "upload",
+      source: source ?? (file.localId.startsWith("camera:") ? "camera" : "upload"),
+      ...(altText ? { alt_text: altText } : {}),
     },
   });
   if (error || !session)
