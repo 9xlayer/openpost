@@ -164,7 +164,7 @@ export interface ComposerPublicationPayload {
 			description_override?: string;
 			url_override?: string;
 			media_inherited: boolean;
-			settings: ComposerSettings;
+			settings: Record<string, unknown>;
 			media: Array<{
 				media_id: string;
 				role: string;
