@@ -18,6 +18,7 @@ import (
 	publicationservice "github.com/openpost/backend/internal/services/publications"
 	"github.com/openpost/backend/internal/services/sourcecontext"
 	"github.com/openpost/backend/internal/services/workspaceaccess"
+	"github.com/openpost/backend/internal/telemetry"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
@@ -58,6 +59,7 @@ func TestApplicationEnqueueIsIdempotentAndBuildsDurably(t *testing.T) {
 	db := newBuilderApplicationTestDB(t)
 	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
 	builderCalls := 0
+	recorder := &telemetry.MemoryRecorder{}
 	application, err := NewApplication(db, packageBuilderFunc(func(_ context.Context, input BuildInput) (BuildResult, error) {
 		builderCalls++
 		require.Len(t, input.Parts, 1)
@@ -84,8 +86,9 @@ func TestApplicationEnqueueIsIdempotentAndBuildsDurably(t *testing.T) {
 			}},
 		}, nil
 	}), ApplicationConfig{
-		Model: "test-model",
-		Now:   func() time.Time { return now },
+		Telemetry: recorder,
+		Model:     "test-model",
+		Now:       func() time.Time { return now },
 		AuthorizeStored: func(context.Context, workspaceaccess.StoredAuthority) error {
 			return nil
 		},
@@ -176,6 +179,13 @@ func TestApplicationEnqueueIsIdempotentAndBuildsDurably(t *testing.T) {
 	require.NoError(t, application.HandleJob(context.Background(), jobregistry.TypePublicationBuild, payload))
 	require.Equal(t, 1, builderCalls, "replayed completed work must be a no-op")
 
+	require.Len(t, recorder.Events, 2)
+	require.Equal(t, "publication build queued", recorder.Events[0].Name)
+	require.Equal(t, "publication build completed", recorder.Events[1].Name)
+	encoded, err := json.Marshal(recorder.Events)
+	require.NoError(t, err)
+	require.NotContains(t, string(encoded), "private")
+	require.NotContains(t, string(encoded), "Canonical draft")
 	publications := &publicationApplicationStub{}
 	committed, err := application.Commit(context.Background(), "user-1", first.ID, publications)
 	require.NoError(t, err)

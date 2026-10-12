@@ -1,6 +1,13 @@
+import { nativeTelemetry } from "./telemetry";
 import * as FileSystem from "expo-file-system/legacy";
 
-import { api, errorMessage, type Api } from "./api/client";
+import {
+  api,
+  apiRequestIdentityIsCurrent,
+  captureApiRequestIdentity,
+  errorMessage,
+  type Api,
+} from "./api/client";
 
 export const MAX_MOBILE_ATTACHMENT_COUNT = 10;
 export const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
@@ -33,6 +40,7 @@ export async function uploadAttachment(
     altText?: string;
   },
 ): Promise<string> {
+  const identity = captureApiRequestIdentity();
   const localFile = await FileSystem.getInfoAsync(file.uri);
   if (!localFile.exists || localFile.isDirectory) {
     throw new Error("This attachment is no longer available. Choose it again.");
@@ -87,5 +95,10 @@ export async function uploadAttachment(
     );
   }
 
+  if (apiRequestIdentityIsCurrent(identity))
+    nativeTelemetry.capture("media uploaded", {
+      count: 1,
+      source: file.localId.startsWith("camera:") ? "camera" : "upload",
+    });
   return session.media_id;
 }

@@ -13,7 +13,12 @@ const { Image } = require("react-native");
 const photo = Image.resolveAssetSource(
   require("../../../../tests/app/fixtures/product-screenshots/lisbon-tram.png"),
 ).uri;
-const workspace = { id: "mobile-review", name: "Studio", organization_id: "review", role: "owner" };
+const workspace = {
+  id: "mobile-review",
+  name: "Studio",
+  organization_id: "review",
+  role: "owner",
+};
 const now = new Date();
 const at = (day, hour) => new Date(now.getFullYear(), now.getMonth(), day, hour).toISOString();
 const media = [
@@ -33,7 +38,12 @@ const account = {
 };
 const accounts = [
   account,
-  { ...account, id: "threads-account", platform: "threads", account_username: "studio" },
+  {
+    ...account,
+    id: "threads-account",
+    platform: "threads",
+    account_username: "studio",
+  },
   { ...account, id: "x-account", platform: "x", account_username: "studio" },
   {
     ...account,
@@ -42,8 +52,18 @@ const accounts = [
     instance_url: "https://masto.pt",
     account_username: "studio",
   },
-  { ...account, id: "linkedin-account", platform: "linkedin", account_username: "Studio team" },
-  { ...account, id: "facebook-account", platform: "facebook", account_username: "Studio" },
+  {
+    ...account,
+    id: "linkedin-account",
+    platform: "linkedin",
+    account_username: "Studio team",
+  },
+  {
+    ...account,
+    id: "facebook-account",
+    platform: "facebook",
+    account_username: "Studio",
+  },
 ];
 const post = (id, text, status, day, hour, image = true) => ({
   id,
@@ -155,7 +175,11 @@ const overview = {
     account_id: account.id,
     platform: account.platform,
     username: account.account_username,
-    reference: { type: "openpost", publication_id: p.publication_id, rendition_id: "result-one" },
+    reference: {
+      type: "openpost",
+      publication_id: p.publication_id,
+      rendition_id: "result-one",
+    },
     metric_availability: "available",
   })),
   publications: content,
@@ -173,7 +197,10 @@ const overview = {
       ...point,
       value: point.value > 20 ? Math.round(point.value / 4) : -5,
     })),
-    engagement: series.map((point) => ({ ...point, value: Math.round(point.value / 4) })),
+    engagement: series.map((point) => ({
+      ...point,
+      value: Math.round(point.value / 4),
+    })),
   },
   insights: [],
 };
@@ -196,7 +223,11 @@ const ideateDocument = {
     ],
     messages: [
       { id: "one", sender_id: "me", text: "i deleted 15,000 lines" },
-      { id: "two", sender_id: "code", text: "thanks. i have more features now" },
+      {
+        id: "two",
+        sender_id: "code",
+        text: "thanks. i have more features now",
+      },
     ],
   },
 };
@@ -275,7 +306,10 @@ const ideateBuild = {
         id: ideateVoice.id,
         name: ideateVoice.name,
         revision: 1,
-        definition: { identity: ideateVoice.definition.identity_summary, language: "English" },
+        definition: {
+          identity: ideateVoice.definition.identity_summary,
+          language: "English",
+        },
       },
       allowed_output_profiles: [
         {
@@ -330,6 +364,7 @@ const ideateBuild = {
   },
 };
 const routes = new Map([
+  ["/telemetry/config", { enabled: false, environment: "test", edition: "selfhost" }],
   [
     "/app/bootstrap",
     {
@@ -351,7 +386,9 @@ const routes = new Map([
         id: "studio-set",
         name: "Shortform writing",
         is_default: true,
-        accounts: accounts.map((account) => ({ social_account_id: account.id })),
+        accounts: accounts.map((account) => ({
+          social_account_id: account.id,
+        })),
       },
     ],
   ],
@@ -437,7 +474,12 @@ global.fetch = async (input, options = {}) => {
         ...rendition,
         media: [global.ideateExport],
         segments: [
-          { id: `segment-${rendition.id}`, body: "", settings: {}, media: [global.ideateExport] },
+          {
+            id: `segment-${rendition.id}`,
+            body: "",
+            settings: {},
+            media: [global.ideateExport],
+          },
         ],
       }));
       posts.push(chosen);
@@ -457,7 +499,10 @@ global.fetch = async (input, options = {}) => {
   } else if (path.startsWith("/publications/")) {
     value = posts.find((p) => path === `/publications/${p.id}`);
   } else if (path === "/analytics") {
-    value = { ...overview, range_days: Number(url.searchParams.get("days")) || 30 };
+    value = {
+      ...overview,
+      range_days: Number(url.searchParams.get("days")) || 30,
+    };
   }
   return value === undefined
     ? jsonResponse({ detail: `No screenshot fixture for ${path}` }, 404)

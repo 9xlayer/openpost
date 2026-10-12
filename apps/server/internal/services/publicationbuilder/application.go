@@ -18,6 +18,7 @@ import (
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/sourcecontext"
 	"github.com/openpost/backend/internal/services/workspaceaccess"
+	"github.com/openpost/backend/internal/telemetry"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect"
 )
@@ -90,6 +91,7 @@ type AssetLoader interface {
 type StoredAuthorityFunc func(context.Context, workspaceaccess.StoredAuthority) error
 
 type ApplicationConfig struct {
+	Telemetry       telemetry.Recorder
 	Model           string
 	Now             func() time.Time
 	SourceLoader    SourceLoader
@@ -99,6 +101,7 @@ type ApplicationConfig struct {
 }
 
 type Application struct {
+	telemetry       telemetry.Recorder
 	db              *bun.DB
 	builder         PackageBuilder
 	model           string
@@ -218,7 +221,7 @@ func NewApplication(db *bun.DB, builder PackageBuilder, config ApplicationConfig
 		}
 	}
 	return &Application{
-		db: db, builder: builder, model: strings.TrimSpace(config.Model), now: now,
+		telemetry: config.Telemetry, db: db, builder: builder, model: strings.TrimSpace(config.Model), now: now,
 		sourceLoader: config.SourceLoader, assetLoader: config.AssetLoader, authorizeStored: authorize,
 		leaseDuration: leaseDuration,
 	}, nil
@@ -330,6 +333,9 @@ func (application *Application) Enqueue(ctx context.Context, request CreateBuild
 		return build, false, decodeErr
 	}
 	build, err := decodeBuild(*record)
+	if err == nil {
+		application.captureTelemetry(ctx, telemetry.EventPublicationBuildQueued, record, map[string]any{"destination_count": len(request.Input.Destinations), "option_count": request.Input.OptionCount})
+	}
 	return build, true, err
 }
 
@@ -491,6 +497,7 @@ func (application *Application) HandleJob(ctx context.Context, jobType, payload 
 	if rows == 0 {
 		return nil
 	}
+	application.captureTelemetry(ctx, telemetry.EventPublicationBuildCompleted, &record, map[string]any{"destination_count": len(result.Destinations)})
 	return nil
 }
 
@@ -817,6 +824,12 @@ func (application *Application) fail(
 	if rows == 0 {
 		return nil
 	}
+	status := 0
+	var provider *ai.ProviderError
+	if errors.As(cause, &provider) {
+		status = provider.StatusCode
+	}
+	application.captureTelemetry(ctx, telemetry.EventPublicationBuildFailed, record, map[string]any{"error_code": code, "http_status": status})
 	return &safeBuildJobError{code: code, message: message}
 }
 

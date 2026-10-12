@@ -1,4 +1,6 @@
 import { NativeText as Text } from "@/components/native-text";
+import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
+import { nativeTelemetry } from "@/lib/telemetry";
 import * as ImagePicker from "expo-image-picker";
 import { MediaImage } from "@/components/media-image";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -331,7 +333,10 @@ function Composer({
     const mediaIds: { mediaId: string; mimeType: string }[] = [];
     for (const attachment of attachments) {
       if (attachment.mediaId) {
-        mediaIds.push({ mediaId: attachment.mediaId, mimeType: attachment.mimeType });
+        mediaIds.push({
+          mediaId: attachment.mediaId,
+          mimeType: attachment.mimeType,
+        });
         continue;
       }
       if (!attachment.uri) continue;
@@ -512,6 +517,10 @@ function Composer({
       if (!scheduledAt) throw new Error("Pick a time first");
       const requestApi = api();
       const nextRevision = await persist(scope, requestApi);
+      nativeTelemetry.capture("publication schedule requested", {
+        account_count: pub.renditions?.length ?? 0,
+        is_thread: (pub.segments?.length ?? 0) > 1,
+      });
       const { error, response } = await requestApi.POST("/publications/{id}/schedule", {
         params: { path: { id: scope.publicationId } },
         body: { expected_revision: nextRevision },
@@ -544,6 +553,10 @@ function Composer({
       requireCurrentQuerySession(scope);
       const requestApi = api();
       const nextRevision = await persist(scope, requestApi);
+      nativeTelemetry.capture("publication publish requested", {
+        account_count: pub.renditions?.length ?? 0,
+        is_thread: (pub.segments?.length ?? 0) > 1,
+      });
       const { error, response } = await requestApi.POST("/publications/{id}/publish-now", {
         params: { path: { id: scope.publicationId } },
         body: { expected_revision: nextRevision },
@@ -681,7 +694,9 @@ function Composer({
         Object.fromEntries(
           (generated.renditions ?? []).map((rendition) => [
             rendition.social_account_id,
-            { [renditionFields[rendition.social_account_id]?.[0]?.key ?? "body"]: rendition.body },
+            {
+              [renditionFields[rendition.social_account_id]?.[0]?.key ?? "body"]: rendition.body,
+            },
           ]),
         ),
       );
@@ -762,6 +777,7 @@ function Composer({
 
     markEditorDirty();
     void selectionHaptic();
+    void recordNativeFirstComposition("media");
     setAttachments((current) => [
       ...current,
       ...accepted.map((item, index) => ({
@@ -812,7 +828,9 @@ function Composer({
       void errorHaptic();
       return;
     }
-    const result = await ImagePicker.launchCameraAsync({ quality: ORIGINAL_IMAGE_QUALITY });
+    const result = await ImagePicker.launchCameraAsync({
+      quality: ORIGINAL_IMAGE_QUALITY,
+    });
     if (!result.canceled && result.assets[0]) {
       addAttachment(result.assets[0]);
     }
@@ -909,6 +927,7 @@ function Composer({
             onChangeText={(text) => {
               markEditorDirty();
               setBody(text);
+              if (text.trim()) void recordNativeFirstComposition("text");
             }}
             accessibilityLabel="Post text"
             placeholder="What do you want to say?"
@@ -1313,7 +1332,10 @@ function Composer({
                                   markEditorDirty();
                                   setRenditionTextEdits((current) => ({
                                     ...current,
-                                    [account.id]: { ...current[account.id], [field.key]: text },
+                                    [account.id]: {
+                                      ...current[account.id],
+                                      [field.key]: text,
+                                    },
                                   }));
                                 }}
                                 placeholder="Account version"
