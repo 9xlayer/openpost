@@ -82,7 +82,7 @@ func validImageRequestID(id string) bool {
 		return false
 	}
 	for _, char := range id {
-		if !(char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9' || char == '-' || char == '_') {
+		if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' && char != '_' {
 			return false
 		}
 	}
@@ -117,9 +117,17 @@ func (f *FalImages) ImageResult(ctx context.Context, endpoint, id string) ([]byt
 	if err != nil {
 		return nil, errors.New("fal result unavailable")
 	}
+	location, err := imageResultLocation(result)
+	if err != nil {
+		return nil, err
+	}
+	return f.downloadImage(ctx, location)
+}
+
+func imageResultLocation(result any) (string, error) {
 	body, err := json.Marshal(result)
 	if err != nil || len(body) > 1024*1024 {
-		return nil, errors.New("invalid fal result")
+		return "", errors.New("invalid fal result")
 	}
 	var output struct {
 		Images []struct {
@@ -127,13 +135,17 @@ func (f *FalImages) ImageResult(ctx context.Context, endpoint, id string) ([]byt
 		} `json:"images"`
 	}
 	if json.Unmarshal(body, &output) != nil || len(output.Images) != 1 {
-		return nil, errors.New("invalid fal images")
+		return "", errors.New("invalid fal images")
 	}
 	location, err := url.Parse(output.Images[0].URL)
 	if err != nil || location.Scheme != "https" || location.User != nil || location.Port() != "" || !strings.HasSuffix(location.Hostname(), ".fal.media") {
-		return nil, errors.New("invalid fal image location")
+		return "", errors.New("invalid fal image location")
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, location.String(), nil)
+	return location.String(), nil
+}
+
+func (f *FalImages) downloadImage(ctx context.Context, location string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, location, nil)
 	if err != nil {
 		return nil, err
 	}

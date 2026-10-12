@@ -83,43 +83,7 @@ func (s *Service) advance(ctx context.Context, stored *record) error {
 		return s.save(ctx, stored)
 	}
 	if stored.ProviderRequestID == "" {
-		decision, err := workspaceaccess.NewAuthorizer(s.db).AuthorizeStored(ctx, authority, workspaceaccess.LevelEdit)
-		if err != nil {
-			return err
-		}
-		if !decision.Allowed {
-			return s.fail(ctx, stored, "Workspace access no longer allows image generation.")
-		}
-		input, err := s.providerInput(ctx, request)
-		if err != nil {
-			return s.fail(ctx, stored, "The source image or selection is no longer available or exceeds the image limits.")
-		}
-		stored.State = "submitting"
-		err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-			if err := aiusage.RecordImageDispatch(ctx, tx, aiusage.EditorIdentity{WorkspaceID: stored.WorkspaceID, UserID: stored.UserID, ProjectID: stored.ProjectID, RunID: "image:" + stored.ID}, authority.OrganizationID, stored.Endpoint, request.Operation); err != nil {
-				return err
-			}
-			return saveRecord(ctx, tx, stored)
-		})
-		if err != nil {
-			return err
-		}
-		receipt, submitErr := s.provider.SubmitImage(ctx, input)
-		// Persist receipts even if the worker is shutting down or the request timed out.
-		writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-		defer cancel()
-		if submitErr != nil {
-			if errors.Is(submitErr, ai.ErrImageRejected) {
-				return s.fail(writeCtx, stored, "fal rejected this request. Review the prompt, image and provider configuration before trying again.")
-			}
-			stored.State, stored.ErrorMessage, stored.BillingState = "unknown", "The provider may have accepted this request, but its receipt was not received. Check fal before starting another generation.", "unknown"
-			return s.save(writeCtx, stored)
-		}
-		stored.ProviderRequestID, stored.State = receipt, "queued"
-		if err = s.save(writeCtx, stored); err != nil {
-			return err
-		}
-		return ErrPending
+		return s.submit(ctx, stored, request, authority)
 	}
 	status, err := s.provider.ImageStatus(ctx, stored.Endpoint, stored.ProviderRequestID)
 	if err != nil {
@@ -138,9 +102,53 @@ func (s *Service) advance(ctx context.Context, stored *record) error {
 		}
 		return ErrPending
 	}
+	return s.saveResult(ctx, stored, request, authority)
+}
+
+func (s *Service) submit(ctx context.Context, stored *record, request ImageGenerationRequest, authority workspaceaccess.StoredAuthority) error {
+	decision, err := workspaceaccess.NewAuthorizer(s.db).AuthorizeStored(ctx, authority, workspaceaccess.LevelEdit)
+	if err != nil {
+		return err
+	}
+	if !decision.Allowed {
+		return s.fail(ctx, stored, "Workspace access no longer allows image generation.")
+	}
+	input, err := s.providerInput(ctx, request)
+	if err != nil {
+		return s.fail(ctx, stored, "The source image or selection is no longer available or exceeds the image limits.")
+	}
+	stored.State = "submitting"
+	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		if err := aiusage.RecordImageDispatch(ctx, tx, aiusage.EditorIdentity{WorkspaceID: stored.WorkspaceID, UserID: stored.UserID, ProjectID: stored.ProjectID, RunID: "image:" + stored.ID}, authority.OrganizationID, stored.Endpoint, request.Operation); err != nil {
+			return err
+		}
+		return saveRecord(ctx, tx, stored)
+	})
+	if err != nil {
+		return err
+	}
+	receipt, submitErr := s.provider.SubmitImage(ctx, input)
+	// Persist receipts even if the worker is shutting down or the request timed out.
+	writeCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if submitErr != nil {
+		if errors.Is(submitErr, ai.ErrImageRejected) {
+			return s.fail(writeCtx, stored, "fal rejected this request. Review the prompt, image and provider configuration before trying again.")
+		}
+		stored.State, stored.ErrorMessage, stored.BillingState = "unknown", "The provider may have accepted this request, but its receipt was not received. Check fal before starting another generation.", "unknown"
+		return s.save(writeCtx, stored)
+	}
+	stored.ProviderRequestID, stored.State = receipt, "queued"
+	if err = s.save(writeCtx, stored); err != nil {
+		return err
+	}
+	return ErrPending
+}
+
+func (s *Service) saveResult(ctx context.Context, stored *record, request ImageGenerationRequest, authority workspaceaccess.StoredAuthority) error {
 	// Keep paid success visible even when downloading or Media admission fails.
 	stored.State = "saving"
-	if err = s.save(ctx, stored); err != nil {
+	if err := s.save(ctx, stored); err != nil {
 		return err
 	}
 	content, err := s.provider.ImageResult(ctx, stored.Endpoint, stored.ProviderRequestID)
@@ -163,7 +171,7 @@ func (s *Service) advance(ctx context.Context, stored *record) error {
 		return s.deliveryFailure(ctx, stored)
 	}
 	stored.ResultMediaID, stored.State, stored.ErrorMessage = media.ID, "completed", ""
-	if err = s.save(ctx, stored); err != nil {
+	if err := s.save(ctx, stored); err != nil {
 		return err
 	}
 	return s.reconcileCost(ctx, stored)

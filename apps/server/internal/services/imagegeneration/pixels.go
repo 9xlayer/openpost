@@ -25,6 +25,10 @@ func validate(r ImageGenerationRequest) error {
 	if !slices.Contains([]string{"auto", "low", "medium", "high", "xhigh", "max"}, r.Quality) || !slices.Contains([]string{"auto", "opaque", "transparent"}, r.Background) || !slices.Contains([]string{"auto", "square_hd", "portrait_4_3", "portrait_16_9", "landscape_4_3", "landscape_16_9"}, r.Size) {
 		return ErrInvalid
 	}
+	return validateOperation(r)
+}
+
+func validateOperation(r ImageGenerationRequest) error {
 	if r.Operation == "generate" {
 		if r.SourceMediaID != "" || r.MaskPNG != "" || r.TargetLayerID != "" {
 			return ErrInvalid

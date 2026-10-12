@@ -250,6 +250,7 @@ var managedSettingBindings = map[string]managedSettingBinding{
 	"OPENPOST_OIDC_NATIVE_CALLBACK_URL":             stringBinding(func(c *Config) *string { return &c.OIDCNativeCallbackURL }),
 	"OPENPOST_IMAGE_EDITOR_ENABLED":                 boolBinding(func(c *Config) *bool { return &c.ImageEditorEnabled }),
 	"OPENPOST_IMAGE_EDITOR_MODEL_BASE_URL":          trimmedStringBinding(func(c *Config) *string { return &c.ImageEditorModelBaseURL }),
+	"FAL_KEY":                                       stringBinding(func(c *Config) *string { return &c.FalAPIKey }),
 	"OPENPOST_MEME_GENERATOR_ENABLED":               boolBinding(func(c *Config) *bool { return &c.MemeGeneratorEnabled }),
 	"OPENPOST_CONTENT_AI_PROVIDER":                  trimmedStringBinding(func(c *Config) *string { return &c.ContentAIProvider }),
 	"OPENPOST_CONTENT_AI_REQUIRE_ZDR":               boolBinding(func(c *Config) *bool { return &c.ContentAIRequireZDR }),
