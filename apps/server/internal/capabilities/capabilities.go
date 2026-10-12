@@ -232,11 +232,13 @@ type ResolveContext string
 const ResolveContextSocialSetDefaults ResolveContext = "social_set_defaults"
 
 type ResolveSegment struct {
-	ID    string
-	Body  string
-	Title string
-	URL   string
-	Media []MediaItem
+	ID          string
+	Body        string
+	Title       string
+	URL         string
+	Media       []MediaItem
+	Settings    map[string]any
+	Description string
 }
 
 type ResolvedCapability struct {
@@ -784,9 +786,9 @@ func ResolveCatalog(provider string, catalog []Capability, input ResolveInput) R
 			*selected,
 			segment.Body,
 			segment.Title,
-			"",
+			segment.Description,
 			segment.Media,
-			effectiveSettings,
+			mergeSegmentSettings(effectiveSettings, segment.Settings),
 		)
 		for index := range segmentIssues {
 			segmentIssues[index].SegmentID = segment.ID
@@ -1145,7 +1147,7 @@ func destinationSegments(segments []ResolveSegment, strategy string) []ResolveSe
 	if strategy != "join" || len(segments) < 2 {
 		return segments
 	}
-	joined := ResolveSegment{ID: segments[0].ID, Title: segments[0].Title, URL: segments[0].URL}
+	joined := ResolveSegment{ID: segments[0].ID, Title: segments[0].Title, URL: segments[0].URL, Description: segments[0].Description, Settings: segments[0].Settings}
 	bodies := make([]string, 0, len(segments))
 	for _, segment := range segments {
 		if body := strings.TrimSpace(segment.Body); body != "" {
@@ -1235,9 +1237,9 @@ func validateAccountConstraintSegment(resolved ResolvedCapability, segment Resol
 		resolved.Capability,
 		segment.Body,
 		segment.Title,
-		"",
+		segment.Description,
 		segment.Media,
-		settings,
+		mergeSegmentSettings(settings, segment.Settings),
 	)
 	for index := range segmentIssues {
 		segmentIssues[index].SegmentID = segment.ID
@@ -1631,18 +1633,25 @@ func findOutputForValidation(provider, outputProfile, fallbackProfile, shape str
 	return Capability{}, false
 }
 
-//nolint:gocyclo
-func validateCapability(capability Capability, body, title, description string, media []MediaItem, settings map[string]any) []ValidationIssue {
+// ValidateTextContent applies native content limits without requiring media or
+// provider settings that the author will choose when completing the draft.
+func ValidateTextContent(capability Capability, body, title, description string, settings map[string]any) []ValidationIssue {
 	provider := capability.Provider
 	profile := capability.Profile
+	authoredDescription := description
+	title = firstNonEmptyCapability(settingsValue(settings, "title"), title)
+	description = firstNonEmptyCapability(description, settingsValue(settings, "description"))
 	issues := []ValidationIssue{}
 	if provider == ProviderYouTube {
+		if err := providerlimits.ValidateYouTubeTitleCharacters(title); err != nil {
+			issues = append(issues, ValidationIssue{Severity: "error", Code: "title_invalid", Message: err.Error(), Provider: provider, Profile: profile, Field: "title"})
+		}
 		value, field := body, "body"
 		if setting := settingsValue(settings, "description"); setting != "" {
 			value, field = setting, "settings.description"
 		}
-		if strings.TrimSpace(description) != "" {
-			value, field = description, "description"
+		if strings.TrimSpace(authoredDescription) != "" {
+			value, field = authoredDescription, "description"
 		}
 		if err := providerlimits.ValidateYouTubeDescription(value); err != nil {
 			issues = append(issues, ValidationIssue{Severity: "error", Code: "description_invalid", Message: err.Error(), Provider: provider, Profile: profile, Field: field})
@@ -1659,6 +1668,44 @@ func validateCapability(capability Capability, body, title, description string, 
 	issues = append(issues, validateTextConstraint(capability, "body", body, capability.Content.Body)...)
 	issues = append(issues, validateTextConstraint(capability, "title", title, capability.Content.Title)...)
 	issues = append(issues, validateTextConstraint(capability, "description", description, capability.Content.Description)...)
+	return append(issues, validateTitleDescriptionSettings(capability, title, description)...)
+}
+
+func validateTitleDescriptionSettings(capability Capability, title, description string) []ValidationIssue {
+	issues := []ValidationIssue{}
+	for _, field := range capability.Settings {
+		var value string
+		var requiredByContent bool
+		switch field.Key {
+		case "title":
+			value = title
+			requiredByContent = capability.TitleRequired
+		case "description":
+			value = description
+			requiredByContent = capability.DescriptionRequired
+		default:
+			continue
+		}
+		if value == "" {
+			if field.Required && !requiredByContent {
+				issues = append(issues, settingValidationIssue(capability, field, "setting_required", fmt.Sprintf("%s is required", field.Label)))
+			}
+			continue
+		}
+		// Validate the effective authored text, rather than rereading a missing
+		// setting when the value came from a canonical title or description.
+		field.Dependencies, field.Conflicts = nil, nil
+		issues = append(issues, validateSettingDefinition(capability, field, map[string]any{field.Key: value}, 0)...)
+	}
+	return issues
+}
+
+//nolint:gocyclo
+func validateCapability(capability Capability, body, title, description string, media []MediaItem, settings map[string]any) []ValidationIssue {
+	provider := capability.Provider
+	profile := capability.Profile
+	issues := ValidateAttachmentRequirement(provider, profile, media, settings)
+	issues = append(issues, ValidateTextContent(capability, body, title, description, settings)...)
 	if len(media) < capability.Media.MinCount {
 		issues = append(issues, ValidationIssue{
 			Severity: "error",
@@ -1691,13 +1738,10 @@ func validateCapability(capability Capability, body, title, description string, 
 	}
 	issues = append(issues, validateUnsupportedSettings(capability, settings)...)
 	for _, field := range capability.Settings {
-		value := settingsValue(settings, field.Key)
-		switch field.Key {
-		case "title":
-			value = firstNonEmptyCapability(value, title)
-		case "description":
-			value = firstNonEmptyCapability(value, description)
+		if field.Key == "title" || field.Key == "description" {
+			continue
 		}
+		value := settingsValue(settings, field.Key)
 		if field.Required && settingDependenciesMet(field, settings, len(media)) && (value == "" || (field.Type == "boolean" && !settingBooleanValue(settings, field.Key))) {
 			issues = append(issues, settingValidationIssue(capability, field, "setting_required", fmt.Sprintf("%s is required", field.Label)))
 			continue
@@ -2092,7 +2136,7 @@ func validateUnsupportedSettings(capability Capability, settings map[string]any)
 	issues := []ValidationIssue{}
 	for key, value := range settings {
 		key = strings.TrimSpace(key)
-		if key == "" {
+		if key == "" || key == "attachment_requirement" {
 			continue
 		}
 		if _, ok := known[key]; ok {
@@ -2673,4 +2717,15 @@ func tiktokSettings() []SettingField {
 
 func float64Pointer(value float64) *float64 {
 	return &value
+}
+
+func mergeSegmentSettings(destination, segment map[string]any) map[string]any {
+	merged := make(map[string]any, len(destination)+len(segment))
+	for key, value := range destination {
+		merged[key] = value
+	}
+	for key, value := range segment {
+		merged[key] = value
+	}
+	return merged
 }

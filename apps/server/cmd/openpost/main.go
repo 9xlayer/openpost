@@ -674,7 +674,7 @@ func main() {
 		if err != nil {
 			fatalfWithDiagnostics(diagnosticsReporter, "failed to initialize public source loader: %v", err)
 		}
-		publicationBuilderService, err = publicationbuilder.New(contentGenerator, publicationbuilder.Config{Model: cfg.TextGenerationModel})
+		publicationBuilderService, err = publicationbuilder.New(contentGenerator, publicationbuilder.Config{Model: cfg.TextGenerationModel, Timeout: 180 * time.Second, Decider: decisionGenerator, DecisionModel: cfg.WorkflowDecisionModel})
 		if err != nil {
 			fatalfWithDiagnostics(diagnosticsReporter, "failed to initialize publication builder: %v", err)
 		}
@@ -711,9 +711,14 @@ func main() {
 			if err != nil {
 				fatalfWithDiagnostics(diagnosticsReporter, "failed to initialize AI meme suggestions: %v", err)
 			}
+			memeSuggester.(*memegeneration.Service).SetTemplateProvider(memeProvider)
 			log.Printf("AI meme suggestions enabled with model %s", cfg.MemeGenerationModel)
 		}
 		log.Printf("Meme generator enabled with renderer %s", memeProvider.Key())
+	}
+
+	if publicationBuilderService != nil {
+		publicationBuilderService.SetMemeProvider(memeProvider)
 	}
 
 	var feedbackDestination feedback.Destination
