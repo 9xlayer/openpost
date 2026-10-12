@@ -220,6 +220,7 @@ function ThemedApplication() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="appearance" options={{ headerShown: false }} />
+        <Stack.Screen name="ideate" options={{ title: "Ideate", headerBackTitle: "Back" }} />
         <Stack.Screen
           name="onboarding/server"
           options={{
