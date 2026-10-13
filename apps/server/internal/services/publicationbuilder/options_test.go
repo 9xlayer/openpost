@@ -256,8 +256,11 @@ func TestSourceBackedOptionEditsSurviveReloadAndCommit(t *testing.T) {
 	reloaded, err := app.Get(t.Context(), "user-1", build.ID)
 	require.NoError(t, err)
 	require.Equal(t, "someone really shipped this", reloaded.Result.Options[0].Destinations[0].Segments[0].Body)
-	_, err = app.SaveOption(t.Context(), "user-1", build.ID, "option-1", build.Revision, edits)
-	require.ErrorIs(t, err, ErrBuildNotReady, "stale edits must not overwrite newer edits")
+	replayed, err := app.SaveOption(t.Context(), "user-1", build.ID, "option-1", build.Revision, edits)
+	require.NoError(t, err, "a lost response must be safely recoverable")
+	require.Equal(t, saved.Revision, replayed.Revision)
+	_, err = app.SaveOption(t.Context(), "user-1", build.ID, "option-1", build.Revision, []OptionEdit{{AccountID: "account-1", Segments: []SegmentPlan{{Body: "obsolete client text"}}}})
+	require.ErrorIs(t, err, ErrBuildNotReady, "stale different edits must not overwrite newer edits")
 	publications := &publicationApplicationStub{}
 	_, err = app.CommitOption(t.Context(), "user-1", build.ID, "option-1", build.Revision, nil, []OptionEdit{{AccountID: "account-1", Segments: []SegmentPlan{{Body: "obsolete client text"}}}}, publications)
 	require.ErrorIs(t, err, ErrBuildNotReady, "stale selection must not overwrite saved edits")
