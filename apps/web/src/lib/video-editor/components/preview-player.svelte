@@ -117,12 +117,8 @@
 		scopeSamples
 	} from '$lib/video-editor/effects/scope-samples.svelte';
 	import { toast } from 'svelte-sonner';
-	import {
-		hasLinkedAudioCompanion,
-		isAudioTransitionParticipantAtFrame
-	} from '$lib/video-editor/audio/transition-crossfade';
-	import { requiresProcessedPreviewAudioForTimeline } from '$lib/video-editor/audio/preview-processing';
-	import { resolveAudioOwner } from '$lib/video-editor/preview/audio-owner';
+	import { hasLinkedAudioCompanion } from '$lib/video-editor/audio/transition-crossfade';
+	import { planPreviewAudioLayers } from '$lib/video-editor/preview/audio-plan';
 	import { sequenceStore } from '$lib/video-editor/sequences/sequence-store.svelte';
 	import { shapeMasksForTrack } from '$lib/video-editor/shapes/masks';
 	import { hasCornerPin } from '$lib/video-editor/preview/corner-pin';
@@ -286,6 +282,26 @@
 		for (const { item } of nearby) activeIds.add(item.id);
 		return orderedItems.filter((item) => activeIds.has(item.id));
 	});
+	const preparedAudioLayers = $derived(
+		planPreviewAudioLayers({
+			items: timelineStore.items,
+			tracks: timelineStore.tracks,
+			transitions: transitionsStore.list,
+			itemById: timelineStore.itemById,
+			fps: editorSession.fps,
+			busAudioEq: timelineStore.busAudioEq,
+			mediaEntry: (mediaId) => mediaPool.entry(mediaId)
+		})
+	);
+	// Keep keyed layer props tied to the item, not a newly prepared window object.
+	const activeAudioItems = $derived(
+		preparedAudioLayers
+			.filter(
+				({ startFrame, endFrame }) =>
+					timelineStore.currentFrame >= startFrame && timelineStore.currentFrame < endFrame
+			)
+			.map(({ item }) => item)
+	);
 	const previewMixPlan = $derived(
 		planNestedMixdown(
 			timelineStore.items,
@@ -1657,11 +1673,7 @@
 			{/each}
 		</ContextMenu.Content>
 	</ContextMenu.Root>
-	{#each timelineStore.items.filter((item) => {
-		const mediaEntry = item.mediaId ? mediaPool.entry(item.mediaId) : null;
-		const owner = resolveAudioOwner( { item, tracks: timelineStore.tracks, allItems: timelineStore.items, mediaEntry, usesSeparateProxyAudio: false, usesProcessedAudio: requiresProcessedPreviewAudioForTimeline(item, timelineStore.tracks, timelineStore.busAudioEq) } );
-		return (owner === 'processed' || (owner === 'embedded' && item.type === 'audio')) && isAudioTransitionParticipantAtFrame(item, timelineStore.currentFrame, transitionsStore.list, timelineStore.itemById, editorSession.fps);
-	}) as item (item.id)}
+	{#each activeAudioItems as item (item.id)}
 		<PreviewAudioLayer {item} url={urls[item.mediaId ?? '']} duckWindows={previewDuckWindows} />
 	{/each}
 	{#each nestedMixEntries.filter((entry) => timelineStore.currentFrame / editorSession.fps >= entry.whenSeconds && timelineStore.currentFrame / editorSession.fps < entry.whenSeconds + entry.durationSeconds) as entry (entry.itemId)}
