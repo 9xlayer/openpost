@@ -31,20 +31,20 @@ func NewVideoProjectHandler(db *bun.DB, authenticator middleware.Authenticator, 
 }
 
 type VideoProjectResponse struct {
-	ID                 string         `json:"id"`
-	WorkspaceID        string         `json:"workspace_id"`
-	Name               string         `json:"name"`
-	HeadRevision       int64          `json:"head_revision"`
-	Document           map[string]any `json:"document"`
-	SyncStatus         string         `json:"sync_status" enum:"pending,uploading,saving,synced,needs_attention"`
-	AttentionReason    string         `json:"attention_reason,omitempty"`
-	PreviewObjectKey   string         `json:"preview_object_key,omitempty"`
-	CreatedByUserID    string         `json:"created_by_user_id"`
-	UpdatedByUserID    string         `json:"updated_by_user_id"`
-	TrashedAt          string         `json:"trashed_at,omitempty"`
-	RetentionExpiresAt string         `json:"retention_expires_at,omitempty"`
-	CreatedAt          string         `json:"created_at"`
-	UpdatedAt          string         `json:"updated_at"`
+	ID                 string               `json:"id"`
+	WorkspaceID        string               `json:"workspace_id"`
+	Name               string               `json:"name"`
+	HeadRevision       int64                `json:"head_revision"`
+	Document           videoProjectDocument `json:"document"`
+	SyncStatus         string               `json:"sync_status" enum:"pending,uploading,saving,synced,needs_attention"`
+	AttentionReason    string               `json:"attention_reason,omitempty"`
+	PreviewObjectKey   string               `json:"preview_object_key,omitempty"`
+	CreatedByUserID    string               `json:"created_by_user_id"`
+	UpdatedByUserID    string               `json:"updated_by_user_id"`
+	TrashedAt          string               `json:"trashed_at,omitempty"`
+	RetentionExpiresAt string               `json:"retention_expires_at,omitempty"`
+	CreatedAt          string               `json:"created_at"`
+	UpdatedAt          string               `json:"updated_at"`
 }
 
 type CreateVideoProjectInput struct {
@@ -96,23 +96,23 @@ type VideoProjectMutationResponse struct {
 }
 
 type VideoProjectConflictResponse struct {
-	ID             string         `json:"id"`
-	Name           string         `json:"name"`
-	BaseRevision   int64          `json:"base_revision"`
-	HeadRevision   int64          `json:"head_revision"`
-	MutationID     string         `json:"mutation_id"`
-	Document       map[string]any `json:"document"`
-	OverlapTargets []string       `json:"overlap_targets"`
-	AuthorUserID   string         `json:"author_user_id"`
-	DeviceID       string         `json:"device_id,omitempty"`
-	CreatedAt      string         `json:"created_at"`
+	ID             string               `json:"id"`
+	Name           string               `json:"name"`
+	BaseRevision   int64                `json:"base_revision"`
+	HeadRevision   int64                `json:"head_revision"`
+	MutationID     string               `json:"mutation_id"`
+	Document       videoProjectDocument `json:"document"`
+	OverlapTargets []string             `json:"overlap_targets"`
+	AuthorUserID   string               `json:"author_user_id"`
+	DeviceID       string               `json:"device_id,omitempty"`
+	CreatedAt      string               `json:"created_at"`
 }
 
 type VideoProjectRevisionResponse struct {
 	Revision             int64                            `json:"revision"`
 	ParentRevision       int64                            `json:"parent_revision"`
 	Kind                 string                           `json:"kind"`
-	Document             map[string]any                   `json:"document"`
+	Document             videoProjectDocument             `json:"document"`
 	TouchedTargets       []string                         `json:"touched_targets"`
 	AuthorUserID         string                           `json:"author_user_id"`
 	DeviceID             string                           `json:"device_id,omitempty"`
@@ -445,8 +445,8 @@ func (h *VideoProjectHandler) listConflicts(ctx context.Context, input *GetVideo
 	}
 	responses := make([]VideoProjectConflictResponse, 0, len(conflicts))
 	for _, conflict := range conflicts {
-		document := map[string]any{}
-		if err := json.Unmarshal(conflict.Document, &document); err != nil {
+		document := videoProjectDocument{RawMessage: conflict.Document}
+		if !document.valid() {
 			return nil, huma.Error500InternalServerError("Stored project conflict is invalid")
 		}
 		responses = append(responses, VideoProjectConflictResponse{
@@ -481,8 +481,8 @@ func (h *VideoProjectHandler) listRevisions(ctx context.Context, input *GetVideo
 	}
 	responses := make([]VideoProjectRevisionResponse, 0, len(revisions))
 	for _, revision := range revisions {
-		document := map[string]any{}
-		if err := json.Unmarshal(revision.Document, &document); err != nil {
+		document := videoProjectDocument{RawMessage: revision.Document}
+		if !document.valid() {
 			return nil, huma.Error500InternalServerError("Stored project revision is invalid")
 		}
 		response := VideoProjectRevisionResponse{
@@ -648,8 +648,11 @@ func projectAssetResponse(asset *models.ProjectAsset) (ProjectAssetResponse, err
 }
 
 func videoProjectResponse(project *models.VideoProject) (VideoProjectResponse, error) {
-	document := map[string]any{}
-	if project == nil || json.Unmarshal([]byte(project.DocumentJSON), &document) != nil {
+	if project == nil {
+		return VideoProjectResponse{}, huma.Error500InternalServerError("Stored project document is invalid")
+	}
+	document := videoProjectDocument{RawMessage: json.RawMessage(project.DocumentJSON)}
+	if !document.valid() {
 		return VideoProjectResponse{}, huma.Error500InternalServerError("Stored project document is invalid")
 	}
 	response := VideoProjectResponse{

@@ -53,7 +53,7 @@ func TestCloudVideoProjectCreateLoadAndWorkspaceAuthorization(t *testing.T) {
 	require.Equal(t, int64(1), project.HeadRevision)
 	require.Equal(t, "user-editor", project.UpdatedByUserID)
 	require.Equal(t, "synced", project.SyncStatus)
-	require.NotContains(t, project.Document, "rootFolderName")
+	require.NotContains(t, projectDocument(t, project.Document), "rootFolderName")
 	require.NotContains(t, projectItem(t, project.Document, 0), "panelLayout")
 
 	replayed := server.request(t, "editor-token", http.MethodPost, "/api/v1/video-projects", map[string]any{
@@ -418,7 +418,7 @@ func TestCloudVideoProjectCanDismissConflictWithoutChangingHead(t *testing.T) {
 	var dismissedProject VideoProjectResponse
 	require.NoError(t, json.Unmarshal(dismissed.Body.Bytes(), &dismissedProject))
 	require.Equal(t, int64(2), dismissedProject.HeadRevision)
-	require.Equal(t, "Desktop", dismissedProject.Document["title"])
+	require.Equal(t, "Desktop", projectDocument(t, dismissedProject.Document)["title"])
 }
 
 func TestCloudVideoProjectTreatsTimelineMembershipAsOverlappingEntityEdits(t *testing.T) {
@@ -662,9 +662,16 @@ func (videoProjectTestAuthenticator) AuthenticateBearer(_ context.Context, token
 	}
 }
 
-func projectItem(t *testing.T, document map[string]any, index int) map[string]any {
+func projectDocument(t *testing.T, document videoProjectDocument) map[string]any {
 	t.Helper()
-	timeline, ok := document["timeline"].(map[string]any)
+	var decoded map[string]any
+	require.NoError(t, json.Unmarshal(document.RawMessage, &decoded))
+	return decoded
+}
+
+func projectItem(t *testing.T, document videoProjectDocument, index int) map[string]any {
+	t.Helper()
+	timeline, ok := projectDocument(t, document)["timeline"].(map[string]any)
 	require.True(t, ok)
 	items, ok := timeline["items"].([]any)
 	require.True(t, ok)
