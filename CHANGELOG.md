@@ -4,6 +4,28 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.19.1] - 2026-10-13
+
+### Added
+
+- Invite clients to connect and reconnect social accounts and decide assigned approvals. Clients cannot author, publish, disconnect accounts, or administer the workspace.
+- Workspace summaries expose `can_connect` and `can_approve` separately from editing rights, and the interface follows those capabilities.
+- Client invitations open account connections after acceptance.
+- Client-role support incorporates [PR #332](https://github.com/getopenpost/openpost/pull/332) by Digital Media Group.
+- Create a source-backed series within Ideate, select concepts to generate, edit each post, and explicitly save selected drafts.
+- Preview exact dates for selected drafts, then confirm them with safe partial retries and workspace-local timing.
+- Send individual posts to a named client for required approval. Submitted versions and decisions remain inspectable, and content changes require another review.
+
+### Changed
+
+- Improved Ideate's four post alternatives to prioritize source-supported reader value, honest openings and payoffs, feasible media briefs, meaningful variety, and earned humor without inventing tutorial details or platform-performance claims.
+- Web Ideate uses one resumable dialog from navigation and the composer. The old route opens that dialog. Ordinary solo-founder drafting and publishing remain unchanged.
+- Scheduled usage is reserved atomically with delivery jobs across individual and batch scheduling.
+
+### Upgrade notes
+
+- Apply additive migration 158 and upgrade every publishing process before enabling `OPENPOST_CLIENT_REVIEWS_ENABLED`. Existing reviews remain enforced when new review admission is disabled. See `docs/development/client-reviews-and-series.md` for rollout and rollback instructions.
+
 ## [7.18.5] - 2026-10-13
 
 ### Fixed
