@@ -506,12 +506,13 @@ test("clients review submitted posts without entering authoring", async ({
   const post = await created.json();
   await authenticatePage(page, owner.token);
   await page.goto(`/publications/${post.id}?workspace_id=${workspace.id}`);
+  await page.getByRole("button", { name: "Post settings", exact: true }).click();
   await page.getByRole("button", { name: "Send to client", exact: true }).click();
   const ownerReview = page.getByRole("dialog", { name: "Client review", exact: true });
   await expect(
     ownerReview.getByText("Offline drafts are now available.", { exact: true }),
   ).toBeVisible();
-  await ownerReview.getByRole("combobox", { name: "Choose a client", exact: true }).click();
+  await ownerReview.getByRole("button", { name: "Choose a client", exact: true }).click();
   await page.getByRole("option", { name: clientEmail, exact: true }).click();
   await ownerReview
     .getByRole("textbox", { name: "Note to the client", exact: true })
