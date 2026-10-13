@@ -316,7 +316,7 @@ func (h *PublicationHandler) batchSchedulePreflight(ctx context.Context, post *m
 	if err := h.requirePublicationReadinessWithDB(ctx, h.db, post, providerreadiness.OperationPublishScheduled, providerreadiness.ExecutionIntentProduction, false); err != nil {
 		return err
 	}
-	_, err = h.checkScheduledPublicationQuota(ctx, post.WorkspaceID, at)
+	err = h.checkScheduledPublicationQuota(ctx, post.WorkspaceID, at)
 	return err
 }
 func (h *PublicationHandler) confirmBatchSchedule(ctx context.Context, input *BatchScheduleConfirmInput) (*BatchScheduleConfirmOutput, error) {
@@ -363,7 +363,7 @@ func (h *PublicationHandler) confirmBatchScheduleItem(ctx context.Context, works
 	if err != nil {
 		return err
 	}
-	_, err = h.checkScheduledPublicationQuota(ctx, workspaceID, at)
+	err = h.checkScheduledPublicationQuota(ctx, workspaceID, at)
 	if err != nil {
 		return err
 	}

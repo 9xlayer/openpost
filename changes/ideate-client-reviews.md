@@ -11,4 +11,4 @@
 
 ### Upgrade notes
 
-- Apply additive migration 156 and upgrade every publishing process before enabling `OPENPOST_CLIENT_REVIEWS_ENABLED`. Existing reviews remain enforced when new review admission is disabled. See `docs/development/client-reviews-and-series.md` for rollout and rollback instructions.
+- Apply additive migration 158 and upgrade every publishing process before enabling `OPENPOST_CLIENT_REVIEWS_ENABLED`. Existing reviews remain enforced when new review admission is disabled. See `docs/development/client-reviews-and-series.md` for rollout and rollback instructions.

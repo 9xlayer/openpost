@@ -1077,8 +1077,9 @@ func (h *PublicationHandler) schedulePublication(api huma.API) {
 	})
 }
 
-func (h *PublicationHandler) checkScheduledPublicationQuota(ctx context.Context, workspaceID string, scheduledAt time.Time) (bool, error) {
-	return h.checkScheduledPublicationQuotaAmount(ctx, workspaceID, scheduledAt, 1)
+func (h *PublicationHandler) checkScheduledPublicationQuota(ctx context.Context, workspaceID string, scheduledAt time.Time) error {
+	_, err := h.checkScheduledPublicationQuotaAmount(ctx, workspaceID, scheduledAt, 1)
+	return err
 }
 
 func (h *PublicationHandler) checkScheduledPublicationQuotaAmount(ctx context.Context, workspaceID string, scheduledAt time.Time, amount int64) (bool, error) {
