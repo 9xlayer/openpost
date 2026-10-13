@@ -5454,6 +5454,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/video-project-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Cloud Video Project summaries
+         * @description Project metadata for browsing, without the authored editing documents. Load a project by ID when opening it.
+         */
+        get: operations["list-video-project-summaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/video-projects": {
         parameters: {
             query?: never;
@@ -16466,6 +16486,25 @@ export interface components {
             /** Format: int64 */
             revision: number;
             touched_targets: string[] | null;
+        };
+        VideoProjectSummaryResponse: {
+            attention_reason?: string;
+            created_at: string;
+            created_by_user_id: string;
+            /** Format: int64 */
+            head_revision: number;
+            id: string;
+            name: string;
+            preview_object_key?: string;
+            retention_expires_at?: string;
+            /** @description Editor document family; empty for legacy projects without a string family */
+            schema_family: string;
+            /** @enum {string} */
+            sync_status: "pending" | "uploading" | "saving" | "synced" | "needs_attention";
+            trashed_at?: string;
+            updated_at: string;
+            updated_by_user_id: string;
+            workspace_id: string;
         };
         Viewport: {
             /** Format: int64 */
@@ -39447,6 +39486,58 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-video-project-summaries": {
+        parameters: {
+            query: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Include projects in Trash */
+                include_trash?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoProjectSummaryResponse"][] | null;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

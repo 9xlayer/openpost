@@ -30,21 +30,34 @@ func NewVideoProjectHandler(db *bun.DB, authenticator middleware.Authenticator, 
 	return &VideoProjectHandler{service: videoprojects.NewService(db), auth: authenticator, db: db, storage: storage}
 }
 
+type VideoProjectMetadata struct {
+	ID                 string `json:"id"`
+	WorkspaceID        string `json:"workspace_id"`
+	Name               string `json:"name"`
+	HeadRevision       int64  `json:"head_revision"`
+	SyncStatus         string `json:"sync_status" enum:"pending,uploading,saving,synced,needs_attention"`
+	AttentionReason    string `json:"attention_reason,omitempty"`
+	PreviewObjectKey   string `json:"preview_object_key,omitempty"`
+	CreatedByUserID    string `json:"created_by_user_id"`
+	UpdatedByUserID    string `json:"updated_by_user_id"`
+	TrashedAt          string `json:"trashed_at,omitempty"`
+	RetentionExpiresAt string `json:"retention_expires_at,omitempty"`
+	CreatedAt          string `json:"created_at"`
+	UpdatedAt          string `json:"updated_at"`
+}
+
 type VideoProjectResponse struct {
-	ID                 string               `json:"id"`
-	WorkspaceID        string               `json:"workspace_id"`
-	Name               string               `json:"name"`
-	HeadRevision       int64                `json:"head_revision"`
-	Document           videoProjectDocument `json:"document"`
-	SyncStatus         string               `json:"sync_status" enum:"pending,uploading,saving,synced,needs_attention"`
-	AttentionReason    string               `json:"attention_reason,omitempty"`
-	PreviewObjectKey   string               `json:"preview_object_key,omitempty"`
-	CreatedByUserID    string               `json:"created_by_user_id"`
-	UpdatedByUserID    string               `json:"updated_by_user_id"`
-	TrashedAt          string               `json:"trashed_at,omitempty"`
-	RetentionExpiresAt string               `json:"retention_expires_at,omitempty"`
-	CreatedAt          string               `json:"created_at"`
-	UpdatedAt          string               `json:"updated_at"`
+	VideoProjectMetadata
+	Document videoProjectDocument `json:"document"`
+}
+
+type VideoProjectSummaryResponse struct {
+	VideoProjectMetadata
+	SchemaFamily string `json:"schema_family" doc:"Editor document family; empty for legacy projects without a string family"`
+}
+
+type VideoProjectSummaryListOutput struct {
+	Body []VideoProjectSummaryResponse
 }
 
 type CreateVideoProjectInput struct {
@@ -282,6 +295,11 @@ func (h *VideoProjectHandler) RegisterRoutes(api huma.API) {
 		Middlewares: auth, Errors: []int{403},
 	}, h.list)
 	huma.Register(api, huma.Operation{
+		OperationID: "list-video-project-summaries", Method: http.MethodGet, Path: "/video-project-summaries",
+		Summary: "List Cloud Video Project summaries", Description: "Project metadata for browsing, without the authored editing documents. Load a project by ID when opening it.",
+		Tags: []string{"Video Projects"}, Middlewares: auth, Errors: []int{403},
+	}, h.listSummaries)
+	huma.Register(api, huma.Operation{
 		OperationID: "get-video-project", Method: http.MethodGet, Path: videoProjectsPath + "/{id}",
 		Summary: "Get a Cloud Video Project", Tags: []string{"Video Projects"},
 		Middlewares: auth, Errors: []int{403, 404},
@@ -390,6 +408,18 @@ func (h *VideoProjectHandler) list(ctx context.Context, input *ListVideoProjects
 		responses = append(responses, response)
 	}
 	return &VideoProjectListOutput{Body: responses}, nil
+}
+
+func (h *VideoProjectHandler) listSummaries(ctx context.Context, input *ListVideoProjectsInput) (*VideoProjectSummaryListOutput, error) {
+	projects, err := h.service.ListSummaries(ctx, workspaceActor(ctx, middleware.GetUserID(ctx)), input.WorkspaceID, input.IncludeTrash)
+	if err != nil {
+		return nil, videoProjectError(err, "list")
+	}
+	responses := make([]VideoProjectSummaryResponse, 0, len(projects))
+	for i := range projects {
+		responses = append(responses, VideoProjectSummaryResponse{VideoProjectMetadata: videoProjectMetadata(&projects[i].VideoProject), SchemaFamily: projects[i].SchemaFamily})
+	}
+	return &VideoProjectSummaryListOutput{Body: responses}, nil
 }
 
 func (h *VideoProjectHandler) get(ctx context.Context, input *GetVideoProjectInput) (*VideoProjectOutput, error) {
@@ -655,9 +685,13 @@ func videoProjectResponse(project *models.VideoProject) (VideoProjectResponse, e
 	if !document.valid() {
 		return VideoProjectResponse{}, huma.Error500InternalServerError("Stored project document is invalid")
 	}
-	response := VideoProjectResponse{
+	return VideoProjectResponse{VideoProjectMetadata: videoProjectMetadata(project), Document: document}, nil
+}
+
+func videoProjectMetadata(project *models.VideoProject) VideoProjectMetadata {
+	response := VideoProjectMetadata{
 		ID: project.ID, WorkspaceID: project.WorkspaceID, Name: project.Name,
-		HeadRevision: project.HeadRevision, Document: document, SyncStatus: project.SyncStatus,
+		HeadRevision: project.HeadRevision, SyncStatus: project.SyncStatus,
 		AttentionReason: project.AttentionReason, PreviewObjectKey: project.PreviewObjectKey,
 		CreatedByUserID: project.CreatedByUserID, UpdatedByUserID: project.UpdatedByUserID,
 		CreatedAt: project.CreatedAt.UTC().Format(time.RFC3339Nano), UpdatedAt: project.UpdatedAt.UTC().Format(time.RFC3339Nano),
@@ -668,7 +702,7 @@ func videoProjectResponse(project *models.VideoProject) (VideoProjectResponse, e
 	if !project.RetentionExpiresAt.IsZero() {
 		response.RetentionExpiresAt = project.RetentionExpiresAt.UTC().Format(time.RFC3339Nano)
 	}
-	return response, nil
+	return response
 }
 
 func videoProjectError(err error, action string) error {

@@ -599,7 +599,7 @@ type videoProjectTestServer struct {
 	db   *bun.DB
 }
 
-func newVideoProjectTestServer(t *testing.T) *videoProjectTestServer {
+func newVideoProjectTestServer(t testing.TB) *videoProjectTestServer {
 	t.Helper()
 	db := createHandlerTestDB(t,
 		(*models.Workspace)(nil),
@@ -612,6 +612,11 @@ func newVideoProjectTestServer(t *testing.T) *videoProjectTestServer {
 		(*models.VideoProjectCheckpoint)(nil),
 		(*models.ProjectAsset)(nil),
 	)
+	return videoProjectTestServerWithDB(t, db)
+}
+
+func videoProjectTestServerWithDB(t testing.TB, db *bun.DB) *videoProjectTestServer {
+	t.Helper()
 	ctx := context.Background()
 	users := []models.User{
 		{ID: "user-editor", Email: "editor@example.com", PasswordHash: "hash"},
@@ -635,7 +640,7 @@ func newVideoProjectTestServer(t *testing.T) *videoProjectTestServer {
 	return &videoProjectTestServer{echo: e, db: db}
 }
 
-func (s *videoProjectTestServer) request(t *testing.T, token, method, path string, body any) *httptest.ResponseRecorder {
+func (s *videoProjectTestServer) request(t testing.TB, token, method, path string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 	var payload bytes.Buffer
 	if body != nil {

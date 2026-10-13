@@ -20,7 +20,7 @@ type MobileQueryAPI = Pick<
   | "listSocialSets"
   | "listWorkspaces"
 > &
-  Pick<VideoProjectQueryAPI, "listVideoProjects"> &
+  Pick<VideoProjectQueryAPI, "listVideoProjectSummaries"> &
   AnalyticsQueryAPI &
   VoiceProfileQueryAPI & {
     getPublicationBuild(
@@ -178,17 +178,29 @@ export function createMobileQueryAPI(getTransport: () => QueryTransport): Mobile
       });
       return data;
     },
-    async listVideoProjects(workspaceId, includeTrash, signal) {
+    async listVideoProjectSummaries(workspaceId, includeTrash, signal) {
       const { data } = await queryGET({
         signal,
         fallback: "Could not load Video Projects",
-        request: (requestSignal) =>
-          getTransport().GET("/video-projects", {
+        request: async (requestSignal) => {
+          const transport = getTransport();
+          const options = {
             signal: requestSignal,
-            params: {
-              query: { workspace_id: workspaceId, include_trash: includeTrash },
-            },
-          }),
+            params: { query: { workspace_id: workspaceId, include_trash: includeTrash } },
+          };
+          const summaries = await transport.GET("/video-project-summaries", options);
+          if (summaries.response.status !== 404) return summaries;
+          // Native clients may connect to self-hosted servers predating summary reads.
+          const legacy = await transport.GET("/video-projects", options);
+          return {
+            ...legacy,
+            data: legacy.data?.map(({ document, ...metadata }) => ({
+              ...metadata,
+              schema_family:
+                typeof document?.schemaFamily === "string" ? document.schemaFamily : "",
+            })),
+          };
+        },
       });
       return data;
     },

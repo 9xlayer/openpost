@@ -124,7 +124,7 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 	} from '$lib/quick-cut/cloud-project';
 	import {
 		CloudVideoProjectConflictError,
-		type CloudVideoProject
+		type CloudVideoProjectSummary
 	} from '$lib/video-editor/cloud/project-repository';
 	import {
 		clampTimelineViewport,
@@ -167,7 +167,7 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 	let storageMode = $state<'cloud' | 'local'>('cloud');
 	let storageModeChosen = $state(false);
 	let cloudSession = $state.raw<QuickCutCloudSession | null>(null);
-	let cloudProjects = $state.raw<Array<CloudVideoProject<QuickCutCloudDocument>>>([]);
+	let cloudProjects = $state.raw<Array<CloudVideoProjectSummary>>([]);
 	let cloudLoading = $state(false);
 	let openingProjectId = $state<string | null>(null);
 	let cloudError = $state('');
@@ -479,7 +479,7 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 	}
 
 	async function openCloudProject(
-		cloudProject: CloudVideoProject<QuickCutCloudDocument>
+		cloudProject: Pick<CloudVideoProjectSummary, 'id'>
 	): Promise<void> {
 		const repository = cloudRepository;
 		if (!repository) return;
