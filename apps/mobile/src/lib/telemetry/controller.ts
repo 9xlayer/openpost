@@ -36,6 +36,8 @@ export class NativeTelemetryController {
   private identity = "";
   private generation = 0;
   private choice: NativeAnalyticsChoice = "undecided";
+  private choiceUpdates = new Map<string, { choice: "allow" | "off"; confirmed: boolean }>();
+  private choiceWrite: Promise<void> = Promise.resolve();
   private config: NativeTelemetryConfig | null = null;
   private client: NativeTelemetryClient | null = null;
   private pendingEvents: {
@@ -107,7 +109,14 @@ export class NativeTelemetryController {
       /* Unreadable consent stays off. */
     }
     if (generation !== this.generation) return;
-    this.choice = stored === "allow" || stored === "off" ? stored : "undecided";
+    const update = this.choiceUpdates.get(server);
+    this.choice = update
+      ? update.confirmed
+        ? update.choice
+        : "off"
+      : stored === "allow" || stored === "off"
+        ? stored
+        : "undecided";
     this.publish();
     await this.start(generation);
   }
@@ -119,8 +128,17 @@ export class NativeTelemetryController {
     this.stop();
     // Stop immediately. Failed persistence must never resume capture.
     this.choice = "off";
+    const update = { choice, confirmed: false };
+    this.choiceUpdates.set(server, update);
     this.publish();
-    await this.persistence.write(server, choice);
+    const write = this.choiceWrite
+      .catch(() => {})
+      .then(() => this.persistence.write(server, choice));
+    this.choiceWrite = write;
+    await write;
+    // Consent belongs to the server on this device, independently of the actor
+    // generation. A stale save cannot confirm a newer pending or failed choice.
+    if (this.choiceUpdates.get(server) === update) update.confirmed = true;
     if (generation !== this.generation) return;
     this.choice = choice;
     this.publish();
@@ -153,7 +171,10 @@ export class NativeTelemetryController {
       if (this.user)
         client.identify(this.user.id, this.config.edition === "cloud" && this.user.is_admin);
     } catch {
-      /* Identification cannot block app startup. */
+      // Failed identity binding must not attribute this actor's activity to an
+      // anonymous or previous SDK identity. Collection stays optional.
+      this.stop();
+      return;
     }
     for (const event of pending) {
       try {

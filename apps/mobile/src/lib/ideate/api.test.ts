@@ -78,3 +78,26 @@ test("a late build response cannot enter the native screen after switching serve
   expect(failure).toBeInstanceOf(Error);
   expect(failure.message).toContain("Workspace or session changed");
 });
+
+test("equal voice-profile reads share the Query owner and reuse its cached result", async () => {
+  const { voiceProfilesQueryOptions } = await import("@openpost/query-catalog");
+  const { queryClient } = await import("../query-client");
+  let requests = 0;
+  const client = createClient<paths>({
+    baseUrl: "https://native-ideate.example.com/api/v1",
+    fetch: async (request) => {
+      requests++;
+      expect(new URL(request.url).searchParams.get("workspace_id")).toBe("workspace");
+      return Response.json([{ id: "voice-1", workspace_id: "workspace", name: "Writing" }]);
+    },
+  });
+  const options = voiceProfilesQueryOptions(createIdeateAPI(client), "workspace");
+  const [first, second] = await Promise.all([
+    queryClient.fetchQuery(options),
+    queryClient.fetchQuery(options),
+  ]);
+  expect(first).toEqual(second);
+  expect(first[0]?.id).toBe("voice-1");
+  await queryClient.fetchQuery(options);
+  expect(requests).toBe(1);
+});

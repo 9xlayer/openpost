@@ -95,9 +95,9 @@ export const nativeTelemetry = new NativeTelemetryController(
     });
     return {
       identify(id, isInternal) {
-        identified = true;
         internal = isInternal;
         client.identify(id, { $internal_or_test_user: isInternal });
+        identified = true;
       },
       screen: (path) => {
         client.screen(path);

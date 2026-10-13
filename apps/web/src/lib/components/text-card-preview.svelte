@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { client } from '$lib/api/client';
+	import { renderTextCardPreview } from '$lib/text-card-renderer';
 	import { m } from '$lib/paraglide/messages';
 	import { textCardRequestKey, type TextCardRequest, type TextCardResult } from '$lib/text-cards';
 	import InlineNotice from './inline-notice.svelte';
@@ -41,13 +41,8 @@
 		const timer = setTimeout(async () => {
 			if (!input) return;
 			try {
-				const { data, error } = await client.POST('/publications/preview-text-card', {
-					body: input,
-					signal: abort.signal
-				});
-				if (error || !data?.images?.length)
-					throw new Error(error?.detail || m.text_card_preview_failed());
-				update({ key: requestKey, images: data.images, loading: false, error: '' });
+				const images = await renderTextCardPreview(input, abort.signal);
+				update({ key: requestKey, images, loading: false, error: '' });
 			} catch (cause) {
 				update({
 					key: requestKey,

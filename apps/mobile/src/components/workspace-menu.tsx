@@ -84,9 +84,20 @@ export function WorkspaceMenu({
           <Text style={[typography.bodyLarge, { color: colors.onSurface }]}>Appearance</Text>
           <BodyText>Theme and light or dark mode</BodyText>
         </DitherPressable>
-        <DitherPressable radius={shape.medium} focusColor={colors.focus} accessibilityRole="button"
-          onPress={() => { onClose(); router.push("/privacy"); }}
-          style={({ pressed }) => [styles.menuRow, { gap: spacing.extraSmall, paddingHorizontal: spacing.medium }, pressed && { opacity: 0.5 }]}>
+        <DitherPressable
+          radius={shape.medium}
+          focusColor={colors.focus}
+          accessibilityRole="button"
+          onPress={() => {
+            onClose();
+            router.push("/privacy");
+          }}
+          style={({ pressed }) => [
+            styles.menuRow,
+            { gap: spacing.extraSmall, paddingHorizontal: spacing.medium },
+            pressed && { opacity: 0.5 },
+          ]}
+        >
           <Text style={[typography.bodyLarge, { color: colors.onSurface }]}>Privacy</Text>
           <BodyText>App analytics choices</BodyText>
         </DitherPressable>

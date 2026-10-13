@@ -226,7 +226,7 @@ export const videoFormats: readonly { id: VideoToolFormat; name: string }[];
 export const audioFormats: readonly { id: AudioToolFormat; name: string }[];
 
 export interface BrowserExtension {
-  slug: "youtube-localizer" | "x-timeline-blocker";
+  slug: "youtube-localizer" | "feed-limiter";
   name: string;
   title: string;
   description: string;
@@ -237,11 +237,20 @@ export interface BrowserExtension {
   screenshotWidth: number;
   screenshotHeight: number;
   screenshotCaption: string;
+  screenshots: {
+    src: string;
+    alt: string;
+    caption: string;
+    width: number;
+    height: number;
+  }[];
   tone: "lilac" | "blue";
   benefits: { title: string; text: string }[];
   setup: string[];
   cost: string;
   privacy: string;
+  privacyUpdated: string;
+  privacySections: { title: string; text: string }[];
   chromeStoreUrl?: string;
   firefoxStoreUrl?: string;
 }

@@ -21,6 +21,9 @@ func requestClient(request *http.Request) string {
 	if request.Header.Get("X-OpenPost-Client") == "native" {
 		return "native"
 	}
+	if request.URL.Path == "/mcp" || request.URL.Path == "/api/v1/mcp" {
+		return "mcp"
+	}
 	ua := strings.ToLower(strings.TrimSpace(request.UserAgent()))
 	switch {
 	case strings.HasPrefix(ua, "openpost-cli/"):

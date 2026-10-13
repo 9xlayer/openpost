@@ -102,7 +102,7 @@ func (s *Service) advance(ctx context.Context, stored *record) error {
 		}
 		return ErrPending
 	}
-	return s.saveResult(ctx, stored, request, authority)
+	return s.importResult(ctx, stored, request, authority)
 }
 
 func (s *Service) submit(ctx context.Context, stored *record, request ImageGenerationRequest, authority workspaceaccess.StoredAuthority) error {
@@ -145,7 +145,7 @@ func (s *Service) submit(ctx context.Context, stored *record, request ImageGener
 	return ErrPending
 }
 
-func (s *Service) saveResult(ctx context.Context, stored *record, request ImageGenerationRequest, authority workspaceaccess.StoredAuthority) error {
+func (s *Service) importResult(ctx context.Context, stored *record, request ImageGenerationRequest, authority workspaceaccess.StoredAuthority) error {
 	// Keep paid success visible even when downloading or Media admission fails.
 	stored.State = "saving"
 	if err := s.save(ctx, stored); err != nil {
@@ -171,7 +171,7 @@ func (s *Service) saveResult(ctx context.Context, stored *record, request ImageG
 		return s.deliveryFailure(ctx, stored)
 	}
 	stored.ResultMediaID, stored.State, stored.ErrorMessage = media.ID, "completed", ""
-	if err := s.save(ctx, stored); err != nil {
+	if err = s.save(ctx, stored); err != nil {
 		return err
 	}
 	return s.reconcileCost(ctx, stored)

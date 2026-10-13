@@ -1171,7 +1171,7 @@
     },
     {
       "name": "Client errors by release",
-      "description": "Sanitized exceptions and rejected REST writes by release. HTTP rejection does not imply a failed publication.",
+      "description": "Sanitized exceptions and rejected REST writes by app/native version or public build revision. HTTP rejection does not imply a failed publication.",
       "dashboards": [890265],
       "query": {
         "kind": "InsightVizNode",
@@ -1227,8 +1227,8 @@
             "showLegend": true
           },
           "breakdownFilter": {
-            "breakdown": "version",
-            "breakdown_type": "event"
+            "breakdown": "coalesce(nullIf(toString(properties.version), ''), nullIf(toString(properties.revision), ''), 'unknown')",
+            "breakdown_type": "hogql"
           }
         }
       },

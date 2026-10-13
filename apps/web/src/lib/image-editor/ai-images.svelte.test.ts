@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ImageEditorController } from './editor.svelte';
 import { defaultTransform, defaultImageAdjustments } from './document';
 import { prepareImageAIRequest, applyImageAIResult } from './ai-images';
 import type { ImageGenerationRequest, ImageGenerationRun } from '$lib/query/image-generation';
 
-vi.mock('$lib/media-upload-client', () => ({
-	uploadMediaFile: vi.fn(async () => ({ id: 'fill-source' }))
-}));
+import { mediaQueryKeys } from '@openpost/query-catalog';
+import { queryClient } from '$lib/query/client';
+
+afterEach(() => {
+	queryClient.clear();
+	vi.unstubAllGlobals();
+});
 
 function editorFixture() {
 	const editor = new ImageEditorController();
@@ -86,6 +90,33 @@ function completed(request: ImageGenerationRequest): ImageGenerationRun {
 
 describe('AI image review through editor history', () => {
 	it('sends the selected pixels as mask transparency and applies fill at page coordinates', async () => {
+		queryClient.setQueryData(mediaQueryKeys.storage('workspace'), {
+			asset_count: 0,
+			direct_upload_supported: true,
+			internal_bytes: 0,
+			limit_bytes: 0,
+			used_bytes: 0
+		});
+		const nativeFetch = globalThis.fetch;
+		const reservations: RequestInit[] = [];
+		vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input).endsWith('/api/v1/media/upload-session')) {
+				if (init) reservations.push(init);
+				return Response.json({
+					media_id: 'fill-source',
+					deduped: true,
+					complete_url: '/api/v1/media/upload-session/fill-source/complete',
+					upload: {
+						method: 'PUT',
+						url: '/api/v1/media/upload-session/fill-source/content',
+						headers: {},
+						expires_at: '2030-01-01T00:00:00Z',
+						object_key: 'fill-source.png'
+					}
+				});
+			}
+			return nativeFetch(input, init);
+		});
 		const editor = editorFixture();
 		editor.mutate('Empty page', (document) => {
 			document.pages[0].layers = [];
@@ -95,6 +126,13 @@ describe('AI image review through editor history', () => {
 		editor.applyPixelSelection(selected, []);
 		const request = await prepareImageAIRequest(editor, { ...settings, operation: 'fill' });
 		expect(request.source_media_id).toBe('fill-source');
+		expect(reservations).toHaveLength(1);
+		expect(JSON.parse(String(reservations[0].body))).toMatchObject({
+			workspace_id: 'workspace',
+			mime_type: 'image/png',
+			source: 'image_editor_edit',
+			retention_class: 'library'
+		});
 		const response = await fetch(`data:image/png;base64,${request.mask_png}`);
 		const bitmap = await createImageBitmap(await response.blob());
 		const canvas = document.createElement('canvas');

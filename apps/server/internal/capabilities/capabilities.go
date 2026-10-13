@@ -79,6 +79,7 @@ type SettingConstraint struct {
 	Accept        []string `json:"accept,omitempty"`
 	UniqueItems   bool     `json:"unique_items,omitempty"`
 	LocalDateTime bool     `json:"local_date_time,omitempty"`
+	DateTime      bool     `json:"date_time,omitempty" doc:"Value must be an RFC 3339 timestamp with a timezone"`
 }
 
 type TextConstraint struct {
@@ -116,6 +117,7 @@ type SettingDefinition struct {
 	OutputProfiles     []string           `json:"output_profiles,omitempty"`
 	MediaShapes        []string           `json:"media_shapes,omitempty"`
 	Required           bool               `json:"required"`
+	PostOnly           bool               `json:"post_only,omitempty" doc:"Choose this setting on each post, never in reusable Social Set defaults"`
 	RequiredPolicy     string             `json:"required_policy,omitempty" enum:"never,always,when_available"`
 	Default            any                `json:"default,omitempty"`
 	Constraints        SettingConstraint  `json:"constraints,omitempty"`
@@ -677,7 +679,7 @@ func settingGroup(key string) string {
 	case "thumbnail_media_id", "cover_media_id", "thumbnail_timestamp_ms", "cover_timestamp_ms",
 		"caption_media_id", "collaborators", "user_tags", "product_tags", "location_id":
 		return "media_accessibility"
-	case "privacy", "privacy_level", "playlist_id", "category_id", "notify_subscribers",
+	case "privacy", "privacy_level", "playlist_id", "category_id", "notify_subscribers", "publish_at",
 		"content_posting_method", "community_id", "topic_tag", "text_format_preset_id":
 		return "distribution"
 	default:
@@ -834,7 +836,12 @@ func resolvedSettingApplies(setting SettingDefinition, intent, outputProfile, sh
 }
 
 func commonDefaultSettings(catalog []Capability, provider, outputProfile string, selected []SettingDefinition) []SettingDefinition {
-	common := append([]SettingDefinition(nil), selected...)
+	common := make([]SettingDefinition, 0, len(selected))
+	for _, field := range selected {
+		if !field.PostOnly {
+			common = append(common, field)
+		}
+	}
 	for _, candidate := range catalog {
 		if candidate.Provider != provider || candidate.OutputProfile != outputProfile {
 			continue
@@ -1872,6 +1879,11 @@ func validateSettingDefinition(capability Capability, field SettingDefinition, s
 			issues = append(issues, settingValidationIssue(capability, field, "setting_local_datetime_invalid", fmt.Sprintf("%s must use YYYY-MM-DDTHH:MM", field.Label)))
 		}
 	}
+	if field.Constraints.DateTime {
+		if _, err := time.Parse(time.RFC3339, value); err != nil {
+			issues = append(issues, settingValidationIssue(capability, field, "setting_datetime_invalid", fmt.Sprintf("%s must be an RFC 3339 time with a timezone", field.Label)))
+		}
+	}
 	return issues
 }
 
@@ -1895,6 +1907,10 @@ func ValidateDefaultSettings(capability Capability, scope string, values, contex
 			issues = append(issues, ValidationIssue{Severity: "error", Code: "unsupported_setting", Field: key, Message: key + " is not supported by this account or scope"})
 			continue
 		}
+		if field.PostOnly {
+			issues = append(issues, settingValidationIssue(capability, field, "setting_requires_post", "Choose this setting on the post."))
+			continue
+		}
 		if attachmentDependentDefault(field) {
 			issues = append(issues, settingValidationIssue(capability, field, "setting_requires_post_media", "Choose media-specific settings on the post."))
 			continue
@@ -1910,21 +1926,21 @@ func ValidateDefaultSettings(capability Capability, scope string, values, contex
 			continue
 		}
 		validated := field
-		validated.Dependencies = nil
-		for _, condition := range field.Dependencies {
-			if _, known := fields[condition.Key]; known {
-				validated.Dependencies = append(validated.Dependencies, condition)
-			}
-		}
-		validated.Conflicts = nil
-		for _, condition := range field.Conflicts {
-			if _, known := fields[condition.Key]; known {
-				validated.Conflicts = append(validated.Conflicts, condition)
-			}
-		}
+		validated.Dependencies = knownSettingConditions(field.Dependencies, fields)
+		validated.Conflicts = knownSettingConditions(field.Conflicts, fields)
 		issues = append(issues, validateSettingDefinition(capability, validated, context, 0)...)
 	}
 	return issues
+}
+
+func knownSettingConditions(conditions []SettingCondition, fields map[string]SettingDefinition) []SettingCondition {
+	var known []SettingCondition
+	for _, condition := range conditions {
+		if _, exists := fields[condition.Key]; exists {
+			known = append(known, condition)
+		}
+	}
+	return known
 }
 
 func attachmentDependentDefault(field SettingDefinition) bool {
@@ -2686,10 +2702,11 @@ func youtubeSettings() []SettingField {
 		{Key: "thumbnail_media_id", Label: "Thumbnail", Type: "media", Control: "media_picker"},
 		{Key: "caption_media_id", Label: "Caption file", Type: "media", Control: "captions_file"},
 		{Key: "caption_language", Label: "Caption language", Type: "text", Control: "language", Dependencies: []SettingCondition{{Key: "caption_media_id", Operator: "present"}}},
+		{Key: "publish_at", Label: "YouTube publish time", Type: "text", PostOnly: true, Constraints: SettingConstraint{DateTime: true}, Dependencies: []SettingCondition{{Key: "privacy", Operator: "equals", Value: "private"}}, Help: "RFC 3339 time with a timezone, for example 2030-10-12T12:00:00Z. YouTube makes the video public at this time. A past time publishes immediately. OpenPost's schedule controls when the upload starts."},
 		{Key: "license", Label: "License", Type: "select", Default: "youtube", Options: []string{"youtube", "creativeCommon"}},
 		{Key: "embeddable", Label: "Allow embedding", Type: "boolean", Default: true},
-		{Key: "self_declared_made_for_kids", Label: "Made for kids", Type: "boolean"},
-		{Key: "contains_synthetic_media", Label: "Synthetic media", Type: "boolean"},
+		{Key: "self_declared_made_for_kids", Label: "Made for kids", Type: "boolean", Control: "optional_boolean"},
+		{Key: "contains_synthetic_media", Label: "Synthetic media", Type: "boolean", Control: "optional_boolean"},
 		{Key: "paid_placement", Label: "Contains paid promotion", Type: "boolean"},
 		{Key: "notify_subscribers", Label: "Notify subscribers", Type: "boolean"},
 		{Key: "first_comment", Label: "First comment", Type: "textarea", Control: "follow_up", Scope: SettingScopeSegment},

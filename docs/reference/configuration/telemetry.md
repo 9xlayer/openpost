@@ -102,7 +102,11 @@ The browser rewrites PostHog-owned page lifecycle and Web Vitals URL properties 
 
 ## Source maps
 
-Production source-map upload is opt-in in CI. Set `POSTHOG_SOURCEMAPS_ENABLED=1`, then provide `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_UI_HOST`, and a release identity through `OPENPOST_RELEASE_VERSION` or `GITHUB_SHA`. The personal API key is a CI secret and must never use a `VITE_` prefix. Builds upload hidden source maps and delete them from the deployed output after upload.
+Production source-map upload is opt-in in CI. Set `POSTHOG_SOURCEMAPS_ENABLED=1`, then provide `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `POSTHOG_UI_HOST`, and a release identity through `OPENPOST_RELEASE_VERSION`, `GITHUB_SHA`, or Cloudflare's automatic `CF_PAGES_COMMIT_SHA`. The personal API key is a CI secret and must never use a `VITE_` prefix. Builds upload hidden source maps and delete them from the deployed output after upload.
+
+For the Hosted public site, open Cloudflare's `openpost-marketing` Pages project, then **Settings → Variables and Secrets → Production**. Add `POSTHOG_PERSONAL_API_KEY` as an encrypted secret, using a PostHog personal API key restricted to the production project with Error Tracking write access. Add `POSTHOG_SOURCEMAPS_ENABLED=1`, `POSTHOG_PROJECT_ID=246054`, and `POSTHOG_UI_HOST=https://eu.posthog.com`. Keep the existing `VITE_POSTHOG_*` collection settings. Save, then retry the latest production deployment. Its build log must show successful source-map uploads for both marketing and docs before treating public-site errors as symbolicated. Do not change the Preview environment or put the private key in a browser-prefixed variable.
+
+For the Hosted application, keep the same private key in the GitHub repository's **Settings → Secrets and variables → Actions → Repository secrets**, named `POSTHOG_PERSONAL_API_KEY`. A listed secret name does not prove the running build receives a nonempty key. Confirm `POSTHOG_SOURCEMAPS_ENABLED=1` and successful uploads in the canonical frontend build log, without printing the key. Publish a new app release after restoring the credential so production uses that mapped build; do not replace an existing release tag or image.
 
 ## Shutdown and delivery
 

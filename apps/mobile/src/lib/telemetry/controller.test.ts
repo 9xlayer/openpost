@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { NativeTelemetryController, type NativeTelemetryClient } from "./controller";
 
-function fixture() {
+function fixture(writeError?: Error) {
   const calls: string[] = [];
   const choices = new Map<string, string>();
   const client: NativeTelemetryClient = {
@@ -24,6 +24,7 @@ function fixture() {
     {
       read: async (server) => choices.get(server) ?? null,
       write: async (server, choice) => {
+        if (writeError) throw writeError;
         choices.set(server, choice);
       },
     },
@@ -42,6 +43,140 @@ const config = {
   environment: "test",
   edition: "cloud",
 };
+
+test("failed consent persistence stays off across foreground reconfiguration", async () => {
+  const { subject, choices, calls } = fixture(new Error("Secure storage unavailable"));
+  choices.set("server-a", "allow");
+  await subject.configure(config, { id: "opaque-user", is_admin: false });
+  await expect(subject.choose("off")).rejects.toThrow("Secure storage unavailable");
+  await subject.configure(config, { id: "opaque-user", is_admin: false });
+  const count = calls.length;
+  subject.capture("publication publish requested", { account_count: 1, is_thread: false });
+  expect(subject.getChoice()).toBe("off");
+  expect(subject.headers("server-a")).toEqual({});
+  expect(calls.length).toBe(count);
+});
+
+test("overlapping consent saves retain the last choice after an actor change", async () => {
+  let stored = "off";
+  let started!: () => void;
+  let finish!: () => void;
+  const writeStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const allowWrite = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const subject = new NativeTelemetryController(
+    {
+      read: async () => stored,
+      write: async (_server, choice) => {
+        if (choice === "allow") {
+          started();
+          await allowWrite;
+        }
+        stored = choice;
+      },
+    },
+    async () => ({
+      identify() {},
+      screen() {},
+      capture() {},
+      exception() {},
+      stop() {},
+      headers: () => ({ "X-PostHog-Distinct-ID": "anonymous-sdk-id" }),
+    }),
+  );
+  subject.bind("server-a", "actor-a");
+  await subject.configure(config, null);
+  const allowing = subject.choose("allow");
+  await writeStarted;
+  const declining = subject.choose("off");
+  finish();
+  await Promise.all([allowing, declining]);
+  subject.bind("server-a", "actor-b");
+  await subject.configure(config, null);
+  expect(subject.getChoice()).toBe("off");
+  expect(subject.headers("server-a")).toEqual({});
+});
+
+test("successful consent saved during an actor change applies on reconfiguration", async () => {
+  let stored = "off";
+  let started!: () => void;
+  let finish!: () => void;
+  const writeStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const writeFinished = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const identified: string[] = [];
+  const subject = new NativeTelemetryController(
+    {
+      read: async () => stored,
+      write: async (_server, choice) => {
+        started();
+        await writeFinished;
+        stored = choice;
+      },
+    },
+    async () => ({
+      identify(id) {
+        identified.push(id);
+      },
+      screen() {},
+      capture() {},
+      exception() {},
+      stop() {},
+      headers: () => ({ "X-PostHog-Distinct-ID": "current-sdk-id" }),
+    }),
+  );
+  subject.bind("server-a", "actor-a");
+  await subject.configure(config, { id: "actor-a", is_admin: false });
+  const allowing = subject.choose("allow");
+  await writeStarted;
+  subject.bind("server-a", "actor-b");
+  await subject.configure(config, { id: "actor-b", is_admin: false });
+  finish();
+  await allowing;
+  expect(identified).toEqual([]);
+  await subject.configure(config, { id: "actor-b", is_admin: false });
+  expect(subject.getChoice()).toBe("allow");
+  expect(identified).toEqual(["actor-b"]);
+  expect(subject.headers("server-a")).toEqual({ "X-PostHog-Distinct-ID": "current-sdk-id" });
+});
+
+test("failed native identification stops collection and request correlation", async () => {
+  let captured = 0;
+  let stopped = 0;
+  const subject = new NativeTelemetryController(
+    { read: async () => "allow", write: async () => {} },
+    async () => ({
+      identify() {
+        throw new Error("SDK identification failed");
+      },
+      screen() {
+        captured++;
+      },
+      capture() {
+        captured++;
+      },
+      exception() {
+        captured++;
+      },
+      headers: () => ({ "X-PostHog-Distinct-ID": "anonymous-sdk-id" }),
+      stop() {
+        stopped++;
+      },
+    }),
+  );
+  subject.bind("server-a", "actor-a");
+  await subject.configure(config, { id: "opaque-user", is_admin: false });
+  subject.capture("publication publish requested", { account_count: 1, is_thread: false });
+  expect(captured).toBe(0);
+  expect(subject.headers("server-a")).toEqual({});
+  expect(stopped).toBe(1);
+});
 
 test("native telemetry starts only after consent and clears capture on revocation", async () => {
   const { subject, calls } = fixture();
@@ -131,18 +266,23 @@ test("a consent dialog from a previous server cannot grant the current server", 
 
 test("consented native errors wait for SDK initialization and are delivered once", async () => {
   let finish!: (client: NativeTelemetryClient) => void;
+  let started!: () => void;
+  const sdkStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
   let exceptions = 0;
   const subject = new NativeTelemetryController(
     { read: async () => null, write: async () => {} },
     () =>
       new Promise((resolve) => {
         finish = resolve;
+        started();
       }),
   );
   subject.bind("server-a", "actor-a");
   await subject.configure(config, null);
   const pending = subject.choose("allow", "server-a");
-  await Promise.resolve();
+  await sdkStarted;
   subject.exception(new Error("private failure"), "/publications/[id]/edit");
   finish({
     identify() {},

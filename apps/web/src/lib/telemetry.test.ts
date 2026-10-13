@@ -1,13 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest';
 
-const configure = vi.hoisted(() => vi.fn());
-vi.mock('@openpost/telemetry', () => ({ configureTelemetry: configure }));
-
 afterEach(() => {
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	vi.resetModules();
-	configure.mockClear();
 });
 
 const config = {
@@ -20,25 +16,25 @@ const config = {
 
 it('recovers configuration after a temporary HTTP failure without duplicate initialization', async () => {
 	vi.useFakeTimers();
+	vi.stubGlobal('window', new EventTarget());
 	const fetch = vi
 		.fn()
 		.mockResolvedValueOnce(new Response(null, { status: 503 }))
 		.mockResolvedValue(Response.json(config));
 	vi.stubGlobal('fetch', fetch);
+	const { getTelemetryPreference, subscribeTelemetryPreference } =
+		await import('@openpost/telemetry');
+	const preferences: string[] = [];
+	const unsubscribe = subscribeTelemetryPreference((value) => preferences.push(value));
 	const { initializeAppTelemetry } = await import('./telemetry');
 	const first = initializeAppTelemetry();
 	const concurrent = initializeAppTelemetry();
 	await vi.runAllTimersAsync();
 	await Promise.all([first, concurrent]);
 	expect(fetch).toHaveBeenCalledTimes(2);
-	expect(configure).toHaveBeenCalledTimes(1);
-	expect(configure).toHaveBeenCalledWith(
-		expect.objectContaining({
-			enabled: true,
-			surface: 'app',
-			projectToken: 'phc_fixture'
-		})
-	);
+	expect(getTelemetryPreference()).toBe('undecided');
+	expect(preferences.filter((value) => value === 'undecided')).toHaveLength(1);
+	unsubscribe();
 });
 
 it('bounds offline attempts and recovers when the browser returns online', async () => {
@@ -47,15 +43,16 @@ it('bounds offline attempts and recovers when the browser returns online', async
 	vi.stubGlobal('window', window);
 	const fetch = vi.fn().mockRejectedValue(new TypeError('Network unavailable'));
 	vi.stubGlobal('fetch', fetch);
+	const { getTelemetryPreference } = await import('@openpost/telemetry');
 	const { initializeAppTelemetry } = await import('./telemetry');
 	const initial = initializeAppTelemetry();
 	await vi.runAllTimersAsync();
 	await initial;
 	expect(fetch).toHaveBeenCalledTimes(3);
-	expect(configure).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: false }));
+	expect(getTelemetryPreference()).toBe('unavailable');
 	fetch.mockResolvedValue(Response.json(config));
 	window.dispatchEvent(new Event('online'));
 	await vi.runAllTimersAsync();
 	expect(fetch).toHaveBeenCalledTimes(4);
-	expect(configure).toHaveBeenLastCalledWith(expect.objectContaining({ enabled: true }));
+	expect(getTelemetryPreference()).toBe('undecided');
 });
