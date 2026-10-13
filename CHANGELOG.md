@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.18.5] - 2026-10-13
+
+### Fixed
+
+- Upload production browser source maps for the app, website, and documentation so new error reports can show readable source locations.
+
 ## [7.18.4] - 2026-10-13
 
 ### Added
