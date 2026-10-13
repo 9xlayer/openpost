@@ -99,7 +99,7 @@ type OAuthHandler struct {
 	tokenSource                  AccessTokenSource
 	accountAvatars               accountAvatarCache
 	blueskyPDS                   func(context.Context, string) (string, string, error)
-	blueskyAdapter               func(string) *platform.BlueskyAdapter
+	blueskyAdapter               func(string) blueskyLoginProvider
 	// frontendURL is the absolute base URL the SPA is served from
 	// (e.g. "https://openpost.example.com"). OAuth callback redirects go
 	// here so they work behind reverse proxies and subpath mounts.
@@ -145,16 +145,22 @@ func NewOAuthHandler(
 		oauthStates:                  oauthstate.NewStore(db),
 		frontendURL:                  strings.TrimRight(frontendURL, "/"),
 		blueskyPDS:                   platform.ResolveBlueskyPDS,
-		blueskyAdapter:               platform.NewResolvedBlueskyAdapter,
+		blueskyAdapter:               func(pds string) blueskyLoginProvider { return platform.NewResolvedBlueskyAdapter(pds) },
 	}
+}
+
+type blueskyLoginProvider interface {
+	platform.Adapter
+	PDSURL() string
+	CreateSession(context.Context, string, string) (string, string, string, string, int, error)
 }
 
 // blueskyLoginAdapter targets the PDS named by the handle's DID document. It
 // falls back to the configured PDS only when resolution succeeded and named
 // none; a resolution failure fails the login rather than signing in against a
 // server that may not hold the repository.
-func (h *OAuthHandler) blueskyLoginAdapter(ctx context.Context, adapter platform.Adapter, handle string) (*platform.BlueskyAdapter, string, error) {
-	configured, ok := adapter.(*platform.BlueskyAdapter)
+func (h *OAuthHandler) blueskyLoginAdapter(ctx context.Context, adapter platform.Adapter, handle string) (blueskyLoginProvider, string, error) {
+	configured, ok := adapter.(blueskyLoginProvider)
 	if !ok {
 		return nil, "", huma.Error500InternalServerError("bluesky adapter type mismatch")
 	}
@@ -172,7 +178,7 @@ func (h *OAuthHandler) blueskyLoginAdapter(ctx context.Context, adapter platform
 	}
 	adapterFactory := h.blueskyAdapter
 	if adapterFactory == nil {
-		adapterFactory = platform.NewResolvedBlueskyAdapter
+		adapterFactory = func(pds string) blueskyLoginProvider { return platform.NewResolvedBlueskyAdapter(pds) }
 	}
 	return adapterFactory(pdsURL), resolvedDID, nil
 }
@@ -180,7 +186,7 @@ func (h *OAuthHandler) blueskyLoginAdapter(ctx context.Context, adapter platform
 // setBlueskyPDSResolver keeps DID resolution off the network in tests.
 func (h *OAuthHandler) setBlueskyPDSResolver(resolve func(context.Context, string) (string, string, error)) {
 	h.blueskyPDS = resolve
-	h.blueskyAdapter = platform.NewBlueskyAdapter
+	h.blueskyAdapter = func(pds string) blueskyLoginProvider { return platform.NewBlueskyAdapter(pds) }
 }
 
 // provider guards reads that can race dynamic PDS registration.
@@ -1139,7 +1145,7 @@ func generateXAuthURL(
 	authURL, err := xAdapter.GenerateAuthURLWithIntent(userID, input.WorkspaceID, string(intent))
 	if err != nil {
 		log.Printf("[X OAuth] auth url generation failed: %v", err)
-		return nil, huma.Error400BadRequest(fmt.Sprintf("x auth url generation failed: %s", err.Error()))
+		return nil, huma.Error400BadRequest("X authorization could not be started")
 	}
 	resp := &GetAuthURLOutput{}
 	resp.Body.URL = authURL
@@ -1154,6 +1160,7 @@ func (h *OAuthHandler) Callback(api huma.API) {
 		Path:        "/accounts/{platform}/callback",
 		Summary:     "Handle OAuth callback from provider",
 		Tags:        []string{tagAccounts},
+		Middlewares: huma.Middlewares{middleware.OptionalAuthMiddleware(api, h.auth)},
 		Errors:      []int{400},
 		Hidden:      true,
 	}, func(ctx context.Context, input *OAuthCallbackInput) (*huma.StreamResponse, error) {
@@ -1303,6 +1310,10 @@ func (h *OAuthHandler) resolveOAuthCallbackSession(ctx context.Context, input *O
 		}
 	}
 
+	if middleware.GetUserID(ctx) == "" || middleware.GetUserID(ctx) != userID {
+		resp, err := h.redirectWithError("oauth initiating account mismatch", workspaceID)
+		return nil, resp, err
+	}
 	if err := h.checkWorkspaceEditAccess(ctx, workspaceID, userID); err != nil {
 		log.Printf("[Callback] Workspace access check failed: %v", err)
 		resp, err := h.redirectWithError("workspace access denied", workspaceID)
@@ -1613,7 +1624,7 @@ func accountConnectionErrorMessage(err error) string {
 	case strings.Contains(msg, "social_accounts limit exceeded"), strings.Contains(msg, "social account limit exceeded"):
 		return "Social account limit reached for this workspace. Upgrade your plan or disconnect an account, then try again."
 	case msg != "":
-		return msg
+		return "Failed to save account"
 	default:
 		return "Failed to save account"
 	}
@@ -1669,7 +1680,7 @@ func (h *OAuthHandler) exchangeCompatCode(ctx context.Context, provider string, 
 
 	tokenResp, err := adapter.ExchangeCode(ctx, input.Body.Code, nil)
 	if err != nil {
-		return nil, huma.Error500InternalServerError(fmt.Sprintf("%s exchange failed: %s", provider, err.Error()))
+		return nil, huma.Error500InternalServerError("Provider token exchange failed")
 	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, provider, instanceURL, string(intent), userID,

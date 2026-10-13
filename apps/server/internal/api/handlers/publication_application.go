@@ -718,16 +718,11 @@ func (commands publicationApplication) Schedule(
 	if err := commands.validateForEnqueue(ctx, userID, publication.ID); err != nil {
 		return publicationEnqueueResult{}, err
 	}
-	metered, err := commands.handler.checkScheduledPublicationQuota(ctx, publication.WorkspaceID, publication.ScheduledAt)
+	err = commands.handler.checkScheduledPublicationQuota(ctx, publication.WorkspaceID, publication.ScheduledAt)
 	if err != nil {
 		return publicationEnqueueResult{}, err
 	}
 	result, err = commands.handler.queueScheduledPublicationExpected(ctx, publication.ID, expectedRevision, intent)
-	if err == nil && metered {
-		if usageErr := commands.handler.recordScheduledPublicationUsage(ctx, publication.WorkspaceID, publication.ScheduledAt); usageErr != nil {
-			return publicationEnqueueResult{}, usageErr
-		}
-	}
 	if err == nil {
 		commands.handler.captureActivationEvent(ctx, userID, publication.WorkspaceID, result)
 	}
@@ -755,7 +750,7 @@ func (commands publicationApplication) ScheduleIdempotent(
 	if err := commands.validateForEnqueue(ctx, userID, publication.ID); err != nil {
 		return publicationEnqueueResult{}, false, err
 	}
-	metered, err := commands.handler.checkScheduledPublicationQuota(ctx, publication.WorkspaceID, publication.ScheduledAt)
+	err = commands.handler.checkScheduledPublicationQuota(ctx, publication.WorkspaceID, publication.ScheduledAt)
 	if err != nil {
 		return publicationEnqueueResult{}, false, err
 	}
@@ -789,11 +784,6 @@ func (commands publicationApplication) ScheduleIdempotent(
 	)
 	if err != nil {
 		return publicationEnqueueResult{}, false, err
-	}
-	if !result.Replayed && metered {
-		if err := commands.handler.recordScheduledPublicationUsage(ctx, publication.WorkspaceID, publication.ScheduledAt); err != nil {
-			return publicationEnqueueResult{}, false, err
-		}
 	}
 	if !result.Replayed {
 		commands.handler.captureActivationEvent(ctx, userID, publication.WorkspaceID, result.Value)

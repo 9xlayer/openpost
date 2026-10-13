@@ -31345,6 +31345,16 @@
 						},
 						"description": "Unprocessable Entity"
 					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Too Many Requests"
+					},
 					"500": {
 						"content": {
 							"application/problem+json": {
@@ -31414,6 +31424,16 @@
 							}
 						},
 						"description": "Unprocessable Entity"
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Too Many Requests"
 					},
 					"500": {
 						"content": {
@@ -31491,6 +31511,16 @@
 							}
 						},
 						"description": "Unprocessable Entity"
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Too Many Requests"
 					},
 					"500": {
 						"content": {
@@ -31655,6 +31685,16 @@
 							}
 						},
 						"description": "Unprocessable Entity"
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Too Many Requests"
 					},
 					"500": {
 						"content": {
@@ -49530,6 +49570,16 @@
 							}
 						},
 						"description": "Unprocessable Entity"
+					},
+					"429": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Too Many Requests"
 					},
 					"500": {
 						"content": {

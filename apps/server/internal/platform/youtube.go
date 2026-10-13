@@ -1282,8 +1282,6 @@ func youtubeSubscriberDescription(count string) string {
 
 func youtubeScopes() []string {
 	return []string{
-		"https://www.googleapis.com/auth/userinfo.profile",
-		"https://www.googleapis.com/auth/userinfo.email",
 		"https://www.googleapis.com/auth/youtube.readonly",
 		youtubeAnalyticsReadScope,
 		"https://www.googleapis.com/auth/youtube.upload",

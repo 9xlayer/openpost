@@ -58,7 +58,13 @@ func TestFacebookExchangeAndSelectPage(t *testing.T) {
 	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 		switch req.URL.Path {
 		case "/v25.0/oauth/access_token":
-			query := req.URL.Query()
+			if req.Method != http.MethodPost || req.URL.RawQuery != "" {
+				t.Fatal("token exchange must keep credentials in its POST body")
+			}
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			query := req.PostForm
 			switch query.Get(grantType) {
 			case "fb_exchange_token":
 				if query.Get("fb_exchange_token") != "short-token" {
@@ -73,7 +79,7 @@ func TestFacebookExchangeAndSelectPage(t *testing.T) {
 			}
 		case "/v25.0/me/accounts":
 			accountsCalls++
-			if req.URL.Query().Get(oauthParamAccessToken) != "long-token" {
+			if req.Header.Get(headerAuthorization) != "Bearer long-token" {
 				t.Fatalf("unexpected accounts token %q", req.URL.Query().Get(oauthParamAccessToken))
 			}
 			return jsonResponse(req, `{"data":[{"id":"page-1","name":"OpenPost Page","username":"openpost","access_token":"page-token","picture":{"data":{"url":"https://cdn.example/page.png"}}}]}`), nil
@@ -230,7 +236,7 @@ func TestFacebookPublishesHostedVideoThroughRuploadBeforeFinish(t *testing.T) {
 					}
 					return jsonResponse(req, `{"success":true}`), nil
 				case req.URL.Host == "graph.facebook.com" && strings.HasSuffix(req.URL.Path, "/video-1"):
-					if req.URL.Query().Get("fields") != "status" || req.URL.Query().Get(oauthParamAccessToken) != "page-token" {
+					if req.URL.Query().Get("fields") != "status" || req.Header.Get(headerAuthorization) != "Bearer page-token" {
 						t.Fatalf("unexpected status query: %s", req.URL.RawQuery)
 					}
 					statusCalls++
