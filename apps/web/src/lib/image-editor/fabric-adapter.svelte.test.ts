@@ -120,6 +120,96 @@ async function settleCanvas(): Promise<void> {
 	);
 }
 
+it('resolves selection against current ancestors after sync, canvas edits, and page changes', async () => {
+	const root: ImageEditorLayer = { ...renderLayer('root', 0, 0, 100, 100), type: 'group' };
+	const nested: ImageEditorLayer = {
+		...renderLayer('nested', 0, 0, 100, 100),
+		type: 'group',
+		parent_id: root.id
+	};
+	const child = { ...renderLayer('child', 0, 0, 100, 100), parent_id: nested.id };
+	const cover = renderLayer('cover', 0, 0, 100, 100);
+	let page = pageFixture([child, nested, root, cover]);
+	let document = documentFixture(page);
+	const { adapter, canvas } = await mountAdapter(document, page);
+	const point = { x: 25, y: 25 };
+	try {
+		expect(adapter.layerIDsAtPoint(point)).toEqual(['cover', 'root']);
+		expect(adapter.topmostLayerIDAtPoint(point)).toBe('cover');
+		expect(adapter.magicLayerIDsAtPoint(point, 0)).toEqual(['root', 'cover']);
+		page = { ...page, layers: [child, nested, { ...root, locked: true }, cover] };
+		document = { ...document, pages: [page] };
+		await adapter.sync(document, page);
+		expect(adapter.layerIDsAtPoint(point)).toEqual(['cover']);
+		expect(adapter.lockedLayerIDAtPoint(point)).toBe('root');
+		expect(adapter.magicLayerIDsAtPoint(point, 0)).toEqual(['cover']);
+
+		page = { ...page, layers: [child, nested, { ...root, visible: false }, cover] };
+		document = { ...document, pages: [page] };
+		await adapter.sync(document, page);
+		expect(adapter.layerIDsAtPoint(point)).toEqual(['cover']);
+		expect(adapter.lockedLayerIDAtPoint(point)).toBeNull();
+
+		const replacementRoot = { ...root, id: 'replacement' };
+		page = {
+			...page,
+			layers: [child, { ...nested, parent_id: replacementRoot.id }, replacementRoot, cover]
+		};
+		document = { ...document, pages: [page] };
+		await adapter.sync(document, page);
+		expect(adapter.layerIDsAtPoint(point)).toEqual(['cover', 'replacement']);
+
+		page = {
+			...page,
+			layers: page.layers.map((layer) =>
+				layer.id === replacementRoot.id ? { ...layer, locked: true } : layer
+			)
+		};
+		document = { ...document, pages: [page] };
+		adapter.accept(document, page);
+		expect(adapter.layerIDsAtPoint(point)).toEqual(['cover']);
+		expect(adapter.lockedLayerIDAtPoint(point)).toBe('replacement');
+
+		page = { ...pageFixture([renderLayer('child', 0, 0, 100, 100)]), id: 'second-page' };
+		document = { ...document, pages: [page] };
+		await adapter.sync(document, page);
+		expect(adapter.layerIDsAtPoint(point)).toEqual(['child']);
+		expect(adapter.topmostLayerIDAtPoint(point)).toBe('child');
+		expect(adapter.lockedLayerIDAtPoint(point)).toBeNull();
+	} finally {
+		adapter.dispose();
+		canvas.remove();
+	}
+});
+
+it('finds the first visible pixel when the top layer has transparent paint', async () => {
+	const paint: ImageEditorLayer = {
+		...renderLayer('paint', 0, 0, 100, 100),
+		type: 'paint',
+		paint: {
+			kind: 'fill',
+			color: '#f97316',
+			size: 1,
+			opacity: 1,
+			source_width: 100,
+			source_height: 100,
+			points: [],
+			spans: Array.from({ length: 20 }, (_, y) => ({ x: 40, y: 20 + y, width: 20 }))
+		}
+	};
+	const page = pageFixture([renderLayer('underneath', 0, 0, 100, 100), paint]);
+	const { adapter, canvas } = await mountAdapter(documentFixture(page), page);
+	try {
+		expect(adapter.topmostLayerIDAtPoint({ x: 25, y: 25 })).toBe('underneath');
+		expect(adapter.topmostLayerIDAtPoint({ x: 50, y: 30 })).toBe('paint');
+		expect(adapter.layerIDsAtPoint({ x: 50, y: 30 })).toEqual(['paint', 'underneath']);
+		expect(adapter.topmostLayerIDAtPoint({ x: 150, y: 150 })).toBeNull();
+	} finally {
+		adapter.dispose();
+		canvas.remove();
+	}
+});
+
 function pixelDigest(canvas: HTMLCanvasElement): number {
 	const context = canvas.getContext('2d');
 	if (!context) throw new Error('Canvas context is unavailable.');

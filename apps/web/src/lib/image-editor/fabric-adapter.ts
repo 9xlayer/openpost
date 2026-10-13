@@ -353,26 +353,32 @@ function applyImageEditorRotationConstraint(
 	target.snapThreshold = constrain ? ROTATION_SNAP_ANGLE / 2 : undefined;
 }
 
-function layerIsVisibleIn(layer: ImageEditorLayer, layers: readonly ImageEditorLayer[]): boolean {
+function layerIsVisibleIn(
+	layer: ImageEditorLayer,
+	layers: ReadonlyMap<string, ImageEditorLayer>
+): boolean {
 	let current: ImageEditorLayer | undefined = layer;
 	const visited = new Set<string>();
 	while (current) {
 		if (!current.visible) return false;
 		if (!current.parent_id || visited.has(current.parent_id)) break;
 		visited.add(current.parent_id);
-		current = layers.find((candidate) => candidate.id === current?.parent_id);
+		current = layers.get(current.parent_id);
 	}
 	return true;
 }
 
-function layerIsLockedIn(layer: ImageEditorLayer, layers: readonly ImageEditorLayer[]): boolean {
+function layerIsLockedIn(
+	layer: ImageEditorLayer,
+	layers: ReadonlyMap<string, ImageEditorLayer>
+): boolean {
 	let current: ImageEditorLayer | undefined = layer;
 	const visited = new Set<string>();
 	while (current) {
 		if (current.locked) return true;
 		if (!current.parent_id || visited.has(current.parent_id)) break;
 		visited.add(current.parent_id);
-		current = layers.find((candidate) => candidate.id === current?.parent_id);
+		current = layers.get(current.parent_id);
 	}
 	return false;
 }
@@ -414,6 +420,7 @@ export class OpenPostFabricAdapter {
 	private applyingPageGrade = false;
 	private document: ImageEditorDocument;
 	private page: ImageEditorPage;
+	private layerByID = new Map<string, ImageEditorLayer>();
 	private readOnly: boolean;
 	private interactionTool: ImageEditorTool = 'select';
 	private snappingEnabled = true;
@@ -457,6 +464,7 @@ export class OpenPostFabricAdapter {
 		this.onRender = options.onRender;
 		this.document = options.document;
 		this.page = options.page;
+		this.indexPageLayers();
 		this.backgroundSnapshot = JSON.stringify(imageEditorPageBackground(options.page));
 		this.readOnly = options.readOnly;
 		this.staticMode = Boolean(options.staticCanvas);
@@ -476,6 +484,13 @@ export class OpenPostFabricAdapter {
 
 	private get pageDimensions(): { width: number; height: number } {
 		return imageEditorPageDimensions(this.document, this.page);
+	}
+
+	private indexPageLayers(): void {
+		this.layerByID = new Map();
+		for (const layer of this.page.layers) {
+			if (!this.layerByID.has(layer.id)) this.layerByID.set(layer.id, layer);
+		}
 	}
 
 	async mount(): Promise<void> {
@@ -511,6 +526,7 @@ export class OpenPostFabricAdapter {
 		if (!this.canvas || !this.fabric) return;
 		this.document = document;
 		this.page = page;
+		this.indexPageLayers();
 		const sequence = ++this.renderSequence;
 		this.renderAbort.abort();
 		this.renderAbort = new AbortController();
@@ -582,17 +598,18 @@ export class OpenPostFabricAdapter {
 		const sequence = ++this.renderSequence;
 		this.renderAbort.abort();
 		this.renderAbort = new AbortController();
-		const previousLayers = [...this.layerSnapshots.values()];
+		const previousLayers = new Map(this.layerSnapshots);
 		const nextLayerByID = new Map(page.layers.map((layer) => [layer.id, layer] as const));
 		const hierarchyChanged =
 			page.layers.some(
 				(layer) => layer.type === 'group' && this.layerSnapshots.get(layer.id) !== layer
 			) ||
-			previousLayers.some(
+			[...previousLayers.values()].some(
 				(layer) => layer.type === 'group' && nextLayerByID.get(layer.id) !== layer
 			);
 		this.document = document;
 		this.page = page;
+		this.indexPageLayers();
 		this.syncing = true;
 		const interactiveCanvas = this.interactiveCanvas();
 		const activeObject = interactiveCanvas?.getActiveObject();
@@ -655,8 +672,8 @@ export class OpenPostFabricAdapter {
 					this.refreshDecorations(layer, object);
 				} else if (
 					JSON.stringify(previous) !== JSON.stringify(layer) ||
-					layerIsVisibleIn(previous, previousLayers) !== layerIsVisibleIn(layer, page.layers) ||
-					layerIsLockedIn(previous, previousLayers) !== layerIsLockedIn(layer, page.layers)
+					layerIsVisibleIn(previous, previousLayers) !== this.layerIsVisible(layer) ||
+					layerIsLockedIn(previous, previousLayers) !== this.layerIsLocked(layer)
 				) {
 					this.updateObject(object, previous, layer);
 					await this.refreshCurvedText(object, layer);
@@ -704,6 +721,7 @@ export class OpenPostFabricAdapter {
 	accept(document: ImageEditorDocument, page: ImageEditorPage): void {
 		this.document = document;
 		this.page = page;
+		this.indexPageLayers();
 		this.layerSnapshots = new Map(page.layers.map((layer) => [layer.id, layer] as const));
 		this.backgroundSnapshot = JSON.stringify(imageEditorPageBackground(page));
 	}
@@ -830,21 +848,25 @@ export class OpenPostFabricAdapter {
 	}
 
 	topmostLayerIDAtPoint(point: SelectionPoint): string | null {
-		return this.layerIDsAtPoint(point)[0] ?? null;
+		for (const layer of this.selectableLayersAtPoint(point)) return this.selectionRootID(layer);
+		return null;
 	}
 
 	layerIDsAtPoint(point: SelectionPoint): string[] {
-		if (!this.fabric) return [];
-		const ids: string[] = [];
+		const ids = new Set<string>();
+		for (const layer of this.selectableLayersAtPoint(point)) ids.add(this.selectionRootID(layer));
+		return [...ids];
+	}
+
+	private *selectableLayersAtPoint(point: SelectionPoint): Iterable<ImageEditorLayer> {
+		if (!this.fabric) return;
 		for (const layer of imageEditorLayerRenderOrder(this.page.layers).reverse()) {
 			if (layer.type === 'group' || !this.layerCanBeSelected(layer)) continue;
 			const object = this.objectByLayerID.get(layer.id);
 			if (!object || !this.objectContainsPoint(object, point)) continue;
 			if (!this.layerHasVisiblePixelAtPoint(layer, point)) continue;
-			const id = this.selectionRootID(layer);
-			if (!ids.includes(id)) ids.push(id);
+			yield layer;
 		}
-		return ids;
 	}
 
 	lockedLayerIDAtPoint(point: SelectionPoint): string | null {
@@ -1001,7 +1023,7 @@ export class OpenPostFabricAdapter {
 	previewImageLayer(id: string, preview?: ImageEditorLayer): void {
 		if (!this.canvas || this.staticMode) return;
 		const object = this.objectByLayerID.get(id);
-		const current = this.page.layers.find((layer) => layer.id === id);
+		const current = this.layerByID.get(id);
 		const target = preview ?? current;
 		if (!object || !current || target?.type !== 'image' || !target.image) return;
 		this.updateObject(object, current, target);
@@ -1069,7 +1091,7 @@ export class OpenPostFabricAdapter {
 		const object = this.objectByLayerID.get(id);
 		const geometry = this.layerLocalGeometry(id, point);
 		if (!object || !geometry) return null;
-		const paint = this.page.layers.find((layer) => layer.id === id)?.paint;
+		const paint = this.layerByID.get(id)?.paint;
 		const displaySize = { width: object.width, height: object.height };
 		try {
 			// Erase masks address authored paint pixels, independently of the layer's display size.
@@ -1162,9 +1184,7 @@ export class OpenPostFabricAdapter {
 				object.evented = false;
 				continue;
 			}
-			const layer = this.page.layers.find(
-				(candidate) => candidate.id === object.__imageEditorLayerID
-			);
+			const layer = this.layerByID.get(object.__imageEditorLayerID);
 			const interactive =
 				Boolean(layer) &&
 				!this.readOnly &&
@@ -1206,6 +1226,7 @@ export class OpenPostFabricAdapter {
 		this.objectByLayerID.clear();
 		this.decorationsByLayerID.clear();
 		this.layerSnapshots.clear();
+		this.layerByID.clear();
 		this.backgroundObject = null;
 		this.backgroundSnapshot = '';
 		this.clearAltOriginGhost();
@@ -1489,7 +1510,7 @@ export class OpenPostFabricAdapter {
 		const value = this.onTextChange(layerID, target.text, edit);
 		if (value) {
 			this.applyTextRuns(target, value);
-			const layer = this.page.layers.find((candidate) => candidate.id === layerID);
+			const layer = this.layerByID.get(layerID);
 			if (layer?.text?.curve) {
 				void this.refreshCurvedText(target, { ...layer, text: value })
 					.then(() => this.canvas?.requestRenderAll())
@@ -1497,7 +1518,7 @@ export class OpenPostFabricAdapter {
 			}
 		}
 		this.onTextSelectionChange(layerID, target.selectionStart, target.selectionEnd);
-		const layer = this.page.layers.find((candidate) => candidate.id === layerID);
+		const layer = this.layerByID.get(layerID);
 		if (layer && (layer.effects?.stroke || layer.effects?.inner_shadow)) {
 			// Canvas-origin edits are accepted without a document render to preserve the caret.
 			this.refreshDecorations(layer, target);
@@ -2557,11 +2578,11 @@ export class OpenPostFabricAdapter {
 	}
 
 	private layerIsVisible(layer: ImageEditorLayer): boolean {
-		return layerIsVisibleIn(layer, this.page.layers);
+		return layerIsVisibleIn(layer, this.layerByID);
 	}
 
 	private layerIsLocked(layer: ImageEditorLayer): boolean {
-		return layerIsLockedIn(layer, this.page.layers);
+		return layerIsLockedIn(layer, this.layerByID);
 	}
 
 	private usesAreaSelection(): boolean {
@@ -2594,7 +2615,7 @@ export class OpenPostFabricAdapter {
 		const visited = new Set<string>();
 		while (current.parent_id && !visited.has(current.parent_id)) {
 			visited.add(current.parent_id);
-			const parent = this.page.layers.find((candidate) => candidate.id === current.parent_id);
+			const parent = this.layerByID.get(current.parent_id);
 			if (!parent) break;
 			current = parent;
 		}
