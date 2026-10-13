@@ -1,21 +1,14 @@
 package handlers
 
 import (
-	"context"
-	"database/sql"
 	"encoding/json"
-	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/stretchr/testify/require"
-	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/dialect/pgdialect"
-	"github.com/uptrace/bun/driver/pgdriver"
 )
 
 func TestCloudVideoProjectSummaries(t *testing.T) {
@@ -31,26 +24,9 @@ func TestCloudVideoProjectSummaries(t *testing.T) {
 
 func newPostgresVideoProjectTestServer(t testing.TB) *videoProjectTestServer {
 	t.Helper()
-	dsn := os.Getenv("OPENPOST_TEST_POSTGRES_URL")
-	if dsn == "" {
-		t.Skip("OPENPOST_TEST_POSTGRES_URL is not configured")
-	}
-	db := bun.NewDB(sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn))), pgdialect.New())
-	db.SetMaxOpenConns(1)
-	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	schema := fmt.Sprintf("video_summaries_%d", time.Now().UnixNano())
-	_, err := db.ExecContext(t.Context(), `CREATE SCHEMA "`+schema+`"`)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_, err := db.ExecContext(context.Background(), `DROP SCHEMA IF EXISTS "`+schema+`" CASCADE`)
-		require.NoError(t, err)
-	})
-	_, err = db.ExecContext(t.Context(), `SET search_path TO "`+schema+`"`)
-	require.NoError(t, err)
-	for _, model := range []any{(*models.User)(nil), (*models.Workspace)(nil), (*models.WorkspaceMember)(nil), (*models.VideoProject)(nil)} {
-		_, err = db.NewCreateTable().Model(model).Exec(t.Context())
-		require.NoError(t, err)
-	}
+	db := createHandlerPostgresTestDB(t,
+		(*models.User)(nil), (*models.Workspace)(nil), (*models.WorkspaceMember)(nil), (*models.VideoProject)(nil),
+	)
 	return videoProjectTestServerWithDB(t, db)
 }
 

@@ -2572,9 +2572,9 @@ func (h *MediaHandler) mediaUsageSummary(ctx context.Context, workspaceID, media
 }
 
 type mediaPublicationUsageRow struct {
-	MediaID       string `bun:"media_id"`
-	PublicationID string `bun:"publication_id"`
-	Status        string `bun:"status"`
+	MediaID string `bun:"media_id"`
+	Status  string `bun:"status"`
+	Count   int    `bun:"usage_count"`
 }
 
 type mediaOrganizationRow struct {
@@ -2614,9 +2614,11 @@ func (h *MediaHandler) mediaUsageSummaries(ctx context.Context, workspaceID stri
 	if len(mediaIDs) == 0 {
 		return summaries, nil
 	}
+	// Count distinct posts in SQL without transferring every reference. Group by
+	// stored status so the existing Unicode-aware status normalization still applies.
 	var publicationRows []mediaPublicationUsageRow
 	err := h.db.NewRaw(`
-		SELECT DISTINCT reference.media_id, publication.id AS publication_id, publication.status
+		SELECT reference.media_id, publication.status, COUNT(*) AS usage_count
 		FROM (
 			SELECT asset.media_id, asset.publication_id
 			FROM publication_assets asset
@@ -2639,7 +2641,8 @@ func (h *MediaHandler) mediaUsageSummaries(ctx context.Context, workspaceID stri
 			WHERE segment_media.media_id IN (?)
 		) AS reference
 		JOIN publications publication ON publication.id = reference.publication_id
-		WHERE publication.workspace_id = ?`,
+		WHERE publication.workspace_id = ?
+		GROUP BY reference.media_id, publication.status`,
 		bun.List(mediaIDs), bun.List(mediaIDs), bun.List(mediaIDs), bun.List(mediaIDs), workspaceID,
 	).Scan(ctx, &publicationRows)
 	if err != nil {
@@ -2647,9 +2650,9 @@ func (h *MediaHandler) mediaUsageSummaries(ctx context.Context, workspaceID stri
 	}
 	for _, row := range publicationRows {
 		summary := summaries[row.MediaID]
-		summary.Total++
+		summary.Total += row.Count
 		if mediaUsageStatusBlocks(row.Status) {
-			summary.Blocking++
+			summary.Blocking += row.Count
 		}
 		summaries[row.MediaID] = summary
 	}
