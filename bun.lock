@@ -222,7 +222,7 @@
     },
     "packages/cli": {
       "name": "@getopenpost/cli",
-      "version": "0.1.17",
+      "version": "0.1.18",
       "bin": {
         "openpost": "./bin/openpost.js",
         "openpost-mcp": "./bin/openpost-mcp.js",
@@ -288,7 +288,7 @@
     },
     "packages/sdk": {
       "name": "@getopenpost/sdk",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "devDependencies": {
         "typescript": "5.9.3",
         "vitest": "4.1.11",
