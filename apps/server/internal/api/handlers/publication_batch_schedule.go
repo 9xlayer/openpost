@@ -163,7 +163,7 @@ func (h *PublicationHandler) previewBatchScheduleItem(ctx context.Context, post 
 	}
 	if item.Error == "" {
 		month := at.UTC().Format("2006-01")
-		if _, err := h.checkScheduledPublicationQuotaAmount(ctx, post.WorkspaceID, at, selection.plannedMonthly[month]+1); err != nil {
+		if err := h.checkScheduledPublicationQuotaAmount(ctx, post.WorkspaceID, at, selection.plannedMonthly[month]+1); err != nil {
 			item.Error = err.Error()
 		} else {
 			selection.plannedMonthly[month]++
