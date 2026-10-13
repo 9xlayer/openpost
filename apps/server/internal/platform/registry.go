@@ -26,6 +26,7 @@ type RegistryOptions struct {
 	DisableLinkedInThreadReplies bool
 	EnableLinkedInOrganizations  bool
 	EnableLinkedInMemberReads    bool
+	EnableLinkedInMemberAnalytics bool
 	DisableTikTokDisplayAPI      bool
 }
 
@@ -110,6 +111,7 @@ var appBuilders = map[string]appBuilder{
 		}
 		adapter := NewLinkedInAdapter(app.ClientID, app.ClientSecret, app.RedirectURI, opts.DisableLinkedInThreadReplies, opts.EnableLinkedInOrganizations)
 		adapter.enableMemberReads = opts.EnableLinkedInMemberReads
+		adapter.enableMemberAnalytics = opts.EnableLinkedInMemberAnalytics
 		return adapter, nil
 	},
 	providerThreads: func(app AppConfig, _ RegistryOptions) (Adapter, error) {

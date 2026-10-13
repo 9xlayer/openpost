@@ -145,12 +145,13 @@ type Config struct {
 	MastodonServers     []MastodonServerConfig
 	PixelfedServers     []MastodonServerConfig
 
-	LinkedInClientID             string
-	LinkedInClientSecret         string
-	LinkedInRedirectURI          string
-	DisableLinkedInThreadReplies bool
-	EnableLinkedInOrganizations  bool
-	EnableLinkedInMemberReads    bool
+	LinkedInClientID              string
+	LinkedInClientSecret          string
+	LinkedInRedirectURI           string
+	DisableLinkedInThreadReplies  bool
+	EnableLinkedInOrganizations   bool
+	EnableLinkedInMemberReads     bool
+	EnableLinkedInMemberAnalytics bool
 
 	ThreadsClientID     string
 	ThreadsClientSecret string
@@ -355,12 +356,13 @@ func Load() *Config {
 		// Operators who need a real URL can still override via env.
 		MastodonRedirectURI: getEnvDefault("MASTODON_REDIRECT_URI", "urn:ietf:wg:oauth:2.0:oob"),
 
-		LinkedInClientID:             getEnvWithFallbacks("LINKEDIN_CLIENT_ID", ""),
-		LinkedInClientSecret:         getEnvWithFallbacks("LINKEDIN_CLIENT_SECRET", ""),
-		LinkedInRedirectURI:          oauthRedirectFromFrontend("LINKEDIN_REDIRECT_URI", "", frontendURL, "/api/v1/accounts/linkedin/callback"),
-		DisableLinkedInThreadReplies: getEnvBoolWithAliases(false, "OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES", "LINKEDIN_DISABLE_THREAD_REPLIES"),
-		EnableLinkedInOrganizations:  getEnvBoolWithAliases(false, "OPENPOST_LINKEDIN_ORGANIZATIONS_ENABLED"),
-		EnableLinkedInMemberReads:    getEnvBoolWithAliases(false, "OPENPOST_LINKEDIN_MEMBER_READS_ENABLED"),
+		LinkedInClientID:              getEnvWithFallbacks("LINKEDIN_CLIENT_ID", ""),
+		LinkedInClientSecret:          getEnvWithFallbacks("LINKEDIN_CLIENT_SECRET", ""),
+		LinkedInRedirectURI:           oauthRedirectFromFrontend("LINKEDIN_REDIRECT_URI", "", frontendURL, "/api/v1/accounts/linkedin/callback"),
+		DisableLinkedInThreadReplies:  getEnvBoolWithAliases(false, "OPENPOST_DISABLE_LINKEDIN_THREAD_REPLIES", "LINKEDIN_DISABLE_THREAD_REPLIES"),
+		EnableLinkedInOrganizations:   getEnvBoolWithAliases(false, "OPENPOST_LINKEDIN_ORGANIZATIONS_ENABLED"),
+		EnableLinkedInMemberReads:     getEnvBoolWithAliases(false, "OPENPOST_LINKEDIN_MEMBER_READS_ENABLED"),
+		EnableLinkedInMemberAnalytics: getEnvBoolWithAliases(false, "OPENPOST_LINKEDIN_MEMBER_ANALYTICS_ENABLED"),
 
 		ThreadsClientID:               getEnvWithFallbacks("THREADS_CLIENT_ID", ""),
 		ThreadsClientSecret:           getEnvWithFallbacks("THREADS_CLIENT_SECRET", ""),
