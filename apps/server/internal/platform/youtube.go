@@ -560,7 +560,7 @@ func (y *YouTubeAdapter) finalizeYouTubeUpload(
 			return err
 		}
 	}
-	if err := y.finalizeYouTubePlaylist(ctx, accessToken, videoID, settingString(req.Settings, "playlist_id"), resuming, providerState, state, checkpoint); err != nil {
+	if err := y.finalizeYouTubePlaylist(ctx, accessToken, videoID, settingString(req.Settings, "playlist_id"), req, resuming, providerState, state, checkpoint); err != nil {
 		return err
 	}
 	if err := y.finalizeYouTubeCaption(ctx, accessToken, videoID, req, resuming, providerState, state, checkpoint); err != nil {
@@ -572,6 +572,7 @@ func (y *YouTubeAdapter) finalizeYouTubeUpload(
 func (y *YouTubeAdapter) finalizeYouTubePlaylist(
 	ctx context.Context,
 	accessToken, videoID, playlistID string,
+	req UploadMediaRequest,
 	resuming bool,
 	providerState *youtubeResumableUploadState,
 	state *ResumableMediaUploadState,
@@ -589,6 +590,9 @@ func (y *YouTubeAdapter) finalizeYouTubePlaylist(
 			providerState.PlaylistApplied = true
 			return checkpointYouTubeProviderState(state, *providerState, checkpoint)
 		}
+	}
+	if err := checkUploadWrite(ctx, req); err != nil {
+		return err
 	}
 	if err := y.insertYouTubePlaylistItem(ctx, accessToken, playlistID, videoID); err != nil {
 		return err
@@ -698,6 +702,9 @@ func (y *YouTubeAdapter) youtubeCaptionExists(ctx context.Context, accessToken, 
 }
 
 func (y *YouTubeAdapter) insertYouTubeCaption(ctx context.Context, accessToken, videoID string, req UploadMediaRequest) error {
+	if err := checkUploadWrite(ctx, req); err != nil {
+		return err
+	}
 	body, contentType, err := buildYouTubeCaptionRequest(videoID, req)
 	if err != nil {
 		return err
@@ -785,6 +792,9 @@ func youtubeErrorReason(body []byte) string {
 }
 
 func (y *YouTubeAdapter) setYouTubeThumbnail(ctx context.Context, accessToken, videoID string, req UploadMediaRequest) error {
+	if err := checkUploadWrite(ctx, req); err != nil {
+		return err
+	}
 	thumbnailBytes, err := io.ReadAll(req.ThumbnailReader)
 	if err != nil {
 		return fmt.Errorf("reading youtube thumbnail: %w", err)
@@ -809,6 +819,9 @@ func (y *YouTubeAdapter) setYouTubeThumbnail(ctx context.Context, accessToken, v
 }
 
 func (y *YouTubeAdapter) startYouTubeResumableUpload(ctx context.Context, accessToken string, req UploadMediaRequest, metadata youtubeVideoInsertRequest, mediaSize int64) (string, error) {
+	if err := checkUploadWrite(ctx, req); err != nil {
+		return "", err
+	}
 	metaBytes, err := jsonMarshal(metadata)
 	if err != nil {
 		return "", fmt.Errorf("marshaling youtube metadata: %w", err)
@@ -921,6 +934,9 @@ func (y *YouTubeAdapter) uploadYouTubeChunk(
 	sessionURL string,
 	offset int64,
 ) (*youtubeHTTPResponse, error) {
+	if err := checkUploadWrite(ctx, req); err != nil {
+		return nil, err
+	}
 	end := min(offset+youtubeUploadChunkSize-1, req.Size-1)
 	reader, err := req.OpenReaderAt(offset)
 	if err != nil {

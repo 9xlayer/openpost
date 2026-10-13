@@ -1971,6 +1971,12 @@ func (s *Service) requireProviderWriteReadiness(
 			Decision: providerreadiness.UnavailableDecision(providerreadiness.OperationPublishImmediate),
 		}
 	}
+	if writeScope.publicationID != "" {
+		if err := publicationauth.RequireReview(ctx, s.db, writeScope.publicationID); err != nil {
+			return err
+		}
+	}
+
 	var account models.SocialAccount
 	if err := s.db.NewSelect().Model(&account).
 		Where("id = ?", writeScope.socialAccountID).
@@ -2083,6 +2089,9 @@ func (s *Service) uploadRenditionMediaToPlatform(ctx context.Context, account *m
 	if requiresPublicMedia(account.Platform, rendition.Profile) && !usesTikTokFileUpload(account.Platform, settings) {
 		return s.getPublicMediaURL(media), nil
 	}
+	if err := publicationauth.RequireReview(ctx, s.db, rendition.PublicationID); err != nil {
+		return "", err
+	}
 	if uploader, ok := provider.(platform.MetadataMediaUploader); ok {
 		req, closeReaders, err := s.renditionUploadRequest(ctx, rendition, media, settings, true)
 		if err != nil {
@@ -2167,6 +2176,12 @@ func (s *Service) renditionUploadRequest(ctx context.Context, rendition *models.
 		readers = append(readers, captionReader)
 	}
 	req := platform.UploadMediaRequest{
+		BeforeWrite: func(writeCtx context.Context) error {
+			if err := publicationauth.RequireReview(writeCtx, s.db, rendition.PublicationID); err != nil {
+				return &platform.MediaUploadError{RetryClassification: platform.MediaRetrySafeResume, Err: err}
+			}
+			return nil
+		},
 		MimeType:    media.MimeType,
 		Filename:    firstNonEmptyPublisherString(media.OriginalFilename, storageKey),
 		Size:        media.Size,

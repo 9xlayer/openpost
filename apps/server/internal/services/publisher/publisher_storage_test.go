@@ -117,7 +117,10 @@ func (f *fakePublisherAdapter) Publish(_ context.Context, _, _ string, req *plat
 func TestUploadRenditionMediaToPlatformReadsFromBlobStorage(t *testing.T) {
 	storage := &fakePublisherStorage{body: "stored-media"}
 	adapter := &fakePublisherAdapter{}
-	service := NewService(nil, nil)
+	srv := newPublisherMediaStateTestServer(t, "youtube", &fakePublisherAdapter{})
+	_, err := srv.db.NewInsert().Model(&models.Publication{ID: "storage-post", WorkspaceID: "ws-1"}).Exec(t.Context())
+	require.NoError(t, err)
+	service := srv.service
 	service.SetStorage(storage)
 
 	got, err := service.uploadRenditionMediaToPlatform(
@@ -125,7 +128,7 @@ func TestUploadRenditionMediaToPlatformReadsFromBlobStorage(t *testing.T) {
 		&models.SocialAccount{Platform: "x", AccountID: "acct-1"},
 		adapter,
 		"token",
-		&models.Rendition{Body: "Launch\nDescription", Profile: models.ContentProfileShortText, SettingsJSON: "{}"},
+		&models.Rendition{PublicationID: "storage-post", Body: "Launch\nDescription", Profile: models.ContentProfileShortText, SettingsJSON: "{}"},
 		models.MediaAttachment{FilePath: "media/example.png", MimeType: "image/png"},
 	)
 
@@ -184,14 +187,17 @@ func TestResumableUploadReadsStoredMediaAtRequestedOffsets(t *testing.T) {
 	storage := &rangedPublisherStorage{fakePublisherStorage: &fakePublisherStorage{}, content: media}
 	uploader := &resumableStorageFixture{chunkSize: chunkSize}
 
-	service := NewService(nil, nil)
+	srv := newPublisherMediaStateTestServer(t, "youtube", &fakePublisherAdapter{})
+	_, err := srv.db.NewInsert().Model(&models.Publication{ID: "storage-post", WorkspaceID: "ws-1"}).Exec(t.Context())
+	require.NoError(t, err)
+	service := srv.service
 	service.SetStorage(storage)
 	got, err := service.uploadRenditionMediaResumable(
 		context.Background(),
 		&models.SocialAccount{AccountID: "demos"},
 		uploader,
 		"token",
-		&models.Rendition{Title: "Launch demo", SettingsJSON: `{"privacy":"public"}`},
+		&models.Rendition{PublicationID: "storage-post", Title: "Launch demo", SettingsJSON: `{"privacy":"public"}`},
 		models.MediaAttachment{FilePath: "media/video.mp4", OriginalFilename: "video.mp4", MimeType: "video/mp4", Size: int64(len(media))},
 		platform.ResumableMediaUploadState{},
 		func(platform.ResumableMediaUploadState) error { return nil },

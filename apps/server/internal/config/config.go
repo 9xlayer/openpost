@@ -1326,3 +1326,10 @@ func (c *Config) validateSecurityRuntime() error {
 	}
 	return nil
 }
+
+// ClientReviewsEnabled is a rollout gate, not a permission. Enable only after
+// every web and worker process enforces publication reviews. Existing reviews
+// remain enforced even when admission is disabled.
+func ClientReviewsEnabled() bool {
+	return getEnvBoolWithAliases(false, "OPENPOST_CLIENT_REVIEWS_ENABLED")
+}

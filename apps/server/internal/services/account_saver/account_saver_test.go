@@ -227,6 +227,22 @@ func TestSaveAccountsFromInputsConnectsLinkedInIdentitiesAtomically(t *testing.T
 	require.Equal(t, "member-token", decrypted)
 }
 
+func TestClientConnectionPersistsGrantAndRejectsRevokedMembership(t *testing.T) {
+	db := createTestDB(t)
+	saver := NewAccountSaver(db, crypto.NewTokenEncryptor("test-secret-key-for-testing-only"))
+	seedWorkspaceMember(t, db, "workspace-client", "client")
+	_, err := db.NewUpdate().Model((*models.WorkspaceMember)(nil)).Set("role = ?", models.WorkspaceRoleClient).Where("workspace_id = ? AND user_id = ?", "workspace-client", "client").Exec(t.Context())
+	require.NoError(t, err)
+	input := SaveAccountInput{Actor: accountSaverActor("client"), UserID: "client", WorkspaceID: "workspace-client", PlatformName: "linkedin", AccountID: "urn:li:person:client", AccountUsername: "Client", Token: &platform.TokenResult{AccessToken: "client-token", Extra: map[string]string{"user_id": "client", "scope": "w_member_social"}}}
+	account, err := saver.SaveAccountFromInput(t.Context(), input)
+	require.NoError(t, err)
+	require.NotEmpty(t, loadAccountGrant(t, db, account).ID)
+	_, err = db.NewUpdate().Model((*models.WorkspaceMember)(nil)).Set("role = ?", models.WorkspaceRoleViewer).Where("workspace_id = ? AND user_id = ?", "workspace-client", "client").Exec(t.Context())
+	require.NoError(t, err)
+	_, err = saver.SaveAccountFromInput(t.Context(), input)
+	require.Error(t, err)
+}
+
 func TestSaveAccountsFromInputsRollsBackEveryIdentity(t *testing.T) {
 	db := createTestDB(t)
 	encryptor := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
