@@ -17,28 +17,36 @@
 		accounts
 	}: { publication: components['schemas']['PublicationResponse']; accounts: SocialAccount[] } =
 		$props();
-	const scalarSchema = z.union([z.string(), z.number(), z.boolean()]);
+
 	const catalog = createQuery(() => capabilityCatalogQueryOptions(queryAPI));
-	function settingRows(rendition: components['schemas']['RenditionResponse']) {
+	function settingRows(
+		rendition: components['schemas']['RenditionResponse'],
+		values: Record<string, unknown>
+	) {
 		const definitions =
 			catalog.data?.capabilities?.find(
 				(item) =>
 					item.provider === rendition.platform && item.output_profile === rendition.output_profile
 			)?.settings ?? [];
-		return Object.entries(rendition.settings ?? {}).flatMap(([key, value]) => {
-			const parsed = scalarSchema.safeParse(value);
-			if (!parsed.success || parsed.data === '') return [];
+		return Object.entries(values).flatMap(([key, value]) => {
+			if (value == null || value === '') return [];
 			const definition = definitions.find((item) => item.key === key);
 			return [
 				{
 					key,
-					label: definition ? settingLabel(definition) : key.replaceAll('_', ' '),
+					label: definition
+						? settingLabel(definition)
+						: key === 'first_comment'
+							? m.publishing_setting_first_comment()
+							: key.replaceAll('_', ' '),
 					value:
-						parsed.data === true
+						value === true
 							? m.compose_setting_yes()
-							: parsed.data === false
+							: value === false
 								? m.compose_setting_no()
-								: String(parsed.data)
+								: typeof value === 'object'
+									? JSON.stringify(value, null, 2)
+									: String(value)
 				}
 			];
 		});
@@ -75,7 +83,7 @@
 		{@const account = accounts.find((item) => item.id === rendition.social_account_id)}
 		<section class="grid min-w-0 gap-2">
 			<h3 class="text-sm font-semibold">
-				{account?.alias || account?.account_username || getPlatformName(rendition.platform)} · {getPlatformName(
+				{account?.alias || account?.account_username || rendition.social_account_id} · {getPlatformName(
 					rendition.platform
 				)}
 			</h3>
@@ -90,8 +98,12 @@
 						account,
 						mode: (rendition.segments?.length ?? 0) > 1 ? 'thread' : 'post',
 						outputProfile: rendition.output_profile,
-						title: rendition.title,
-						subtitle: rendition.description,
+						title: rendition.segments?.[0]?.title?.trim()
+							? rendition.segments[0].title
+							: rendition.title || publication.title,
+						subtitle: rendition.segments?.[0]?.description?.trim()
+							? rendition.segments[0].description
+							: rendition.description,
 						destinationSettings: settings(rendition.settings),
 						segments: (rendition.segments ?? []).map((segment) => ({
 							id: segment.id,
@@ -112,16 +124,34 @@
 				<p class="whitespace-pre-wrap">{rendition.body}</p>
 				<p class="text-sm text-destructive">{m.review_account_missing()}</p>
 			{/if}
-			{#if Object.keys(rendition.settings ?? {}).length}
-				<dl class="grid gap-2 text-sm">
-					{#each settingRows(rendition) as row (row.key)}
+			{#each rendition.segments?.length ? rendition.segments : [null] as segment, index (segment?.id ?? rendition.id)}
+				{@const title = segment?.title?.trim()
+					? segment.title
+					: rendition.title || publication.title}
+				{@const description = segment?.description?.trim()
+					? segment.description
+					: rendition.description}
+				{@const values = { ...rendition.settings, ...segment?.settings }}
+				<dl
+					class="grid gap-2 text-sm"
+					aria-label={(rendition.segments?.length ?? 0) > 1 ? String(index + 1) : undefined}
+				>
+					{#if title}<div class="grid min-w-0 gap-1">
+							<dt class="font-medium">{m.workflows_sample_title()}</dt>
+							<dd class="break-words whitespace-pre-wrap">{title}</dd>
+						</div>{/if}
+					{#if description}<div class="grid min-w-0 gap-1">
+							<dt class="font-medium">{m.compose_description()}</dt>
+							<dd class="break-words whitespace-pre-wrap">{description}</dd>
+						</div>{/if}
+					{#each settingRows(rendition, values).filter((row) => row.key !== 'first_comment' || index === 0) as row (row.key)}
 						<div class="grid min-w-0 gap-1">
 							<dt class="font-medium">{row.label}</dt>
 							<dd class="break-words whitespace-pre-wrap">{row.value}</dd>
 						</div>
 					{/each}
 				</dl>
-			{/if}
+			{/each}
 		</section>
 	{/each}
 </div>
