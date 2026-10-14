@@ -18,10 +18,12 @@
 	}: { publication: components['schemas']['PublicationResponse']; accounts: SocialAccount[] } =
 		$props();
 
+	const scalarSchema = z.union([z.string(), z.number(), z.boolean()]);
+	const jsonSchema = z.json();
 	const catalog = createQuery(() => capabilityCatalogQueryOptions(queryAPI));
 	function settingRows(
 		rendition: components['schemas']['RenditionResponse'],
-		values: Record<string, unknown>
+		values: components['schemas']['RenditionResponse']['settings']
 	) {
 		const definitions =
 			catalog.data?.capabilities?.find(
@@ -29,7 +31,9 @@
 					item.provider === rendition.platform && item.output_profile === rendition.output_profile
 			)?.settings ?? [];
 		return Object.entries(values).flatMap(([key, value]) => {
-			if (value == null || value === '') return [];
+			const parsed = jsonSchema.safeParse(value);
+			if (!parsed.success || parsed.data == null || parsed.data === '') return [];
+			const scalar = scalarSchema.safeParse(parsed.data);
 			const definition = definitions.find((item) => item.key === key);
 			return [
 				{
@@ -44,9 +48,9 @@
 							? m.compose_setting_yes()
 							: value === false
 								? m.compose_setting_no()
-								: typeof value === 'object'
-									? JSON.stringify(value, null, 2)
-									: String(value)
+								: scalar.success
+									? String(scalar.data)
+									: JSON.stringify(parsed.data, null, 2)
 				}
 			];
 		});
