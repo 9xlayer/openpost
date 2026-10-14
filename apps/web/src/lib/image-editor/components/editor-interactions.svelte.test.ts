@@ -498,3 +498,31 @@ it('ungroups selected nested groups into the surviving ancestor and preserves it
 		await deleteGuestImageEditorDesign(stored.id);
 	}
 });
+
+it('resolves group destinations when opening a layer menu and follows changed locks', async () => {
+	const editor = setup();
+	const screen = await render(Fixture, { editor });
+	const other = screen.getByRole('treeitem', { name: /Other, shape/ });
+	await other.click({ button: 'right' });
+	const move = screen.getByRole('menuitem', { name: 'Move into group', exact: true });
+	await expect.element(move).toBeVisible();
+	editor.updateLayer('Group', { locked: true });
+	await expect.element(move).not.toBeInTheDocument();
+	editor.updateLayer('Group', { locked: false });
+	await expect.element(move).toBeVisible();
+	await userEvent.hover(move);
+	await screen.getByRole('menuitem', { name: 'Move into Group', exact: true }).click();
+	expect(editor.activePage?.layers.find((layer) => layer.id === 'Other')?.parent_id).toBe('Group');
+	editor.undo();
+	editor.updateLayer('Group', { locked: true });
+	await other.click({ button: 'right' });
+	await expect
+		.element(screen.getByRole('menuitem', { name: 'Rename layer', exact: true }))
+		.toBeVisible();
+	await expect.element(move).not.toBeInTheDocument();
+	await userEvent.keyboard('{Escape}');
+	editor.updateLayer('Group', { locked: false });
+	await other.click({ button: 'right' });
+	await expect.element(move).toBeVisible();
+	await userEvent.keyboard('{Escape}');
+});
