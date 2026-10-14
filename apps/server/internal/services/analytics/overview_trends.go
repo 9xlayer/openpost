@@ -190,9 +190,14 @@ func appendRenditionTrend(
 	daily := make([]models.AnalyticsRenditionSnapshot, 0, len(history))
 	for _, snapshot := range history {
 		date := snapshot.CapturedAt.UTC().Format("2006-01-02")
-		if len(daily) > 0 && daily[len(daily)-1].CapturedAt.UTC().Format("2006-01-02") == date {
-			daily[len(daily)-1] = snapshot
-			continue
+		if len(daily) > 0 {
+			last := daily[len(daily)-1]
+			// A range can begin mid-day. Keep its earlier baseline separate
+			// from that day's latest in-range measurement.
+			if last.CapturedAt.Before(start) == snapshot.CapturedAt.Before(start) && last.CapturedAt.UTC().Format("2006-01-02") == date {
+				daily[len(daily)-1] = snapshot
+				continue
+			}
 		}
 		daily = append(daily, snapshot)
 	}
