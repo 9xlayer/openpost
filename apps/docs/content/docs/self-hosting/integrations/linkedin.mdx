@@ -58,11 +58,23 @@ Page imports use `r_organization_social` and the existing `OPENPOST_LINKEDIN_ORG
 
 ## Enable analytics
 
-For personal profile analytics, obtain Community Management approval for `r_member_profileAnalytics` and `r_member_postAnalytics`. Set `OPENPOST_LINKEDIN_MEMBER_ANALYTICS_ENABLED=true` and restart OpenPost or recreate the container. Reconnect the member account if its existing authorization lacks either scope, then enable **Analytics** in its account details. Member analytics work independently of `OPENPOST_LINKEDIN_ORGANIZATIONS_ENABLED`.
+For personal profile analytics, obtain Community Management approval for `r_member_profileAnalytics` and `r_member_postAnalytics`. Enable member analytics in your deployment:
 
-For Organization Page analytics, keep `OPENPOST_LINKEDIN_ORGANIZATIONS_ENABLED=true` and confirm the connected account has `rw_organization_admin`. The member analytics setting does not control Page analytics.
+```sh
+OPENPOST_LINKEDIN_MEMBER_ANALYTICS_ENABLED=true
+```
 
-When upgrading an installation that already uses member analytics, explicitly set `OPENPOST_LINKEDIN_MEMBER_ANALYTICS_ENABLED=true`. It defaults to false, so leaving it unset stops member analytics collection even for accounts with existing analytics permissions. Existing permissions do not need to be granted again unless they are missing. Stored metrics are preserved.
+Restart OpenPost or recreate the container. Reconnect the member account if its existing authorization lacks either scope, then enable **Analytics** in its account details. Member analytics do not require Organization Page support.
+
+For Organization Page analytics, enable Organization Page support and confirm the connected account has `rw_organization_admin`:
+
+```sh
+OPENPOST_LINKEDIN_ORGANIZATIONS_ENABLED=true
+```
+
+The member analytics setting does not control Page analytics.
+
+When upgrading an installation that already uses member analytics, explicitly enable the member analytics setting above. It defaults to false, so leaving it unset stops member analytics collection even for accounts with existing analytics permissions. Existing permissions do not need to be granted again unless they are missing. Stored metrics are preserved.
 
 LinkedIn requires a new app without other products for initial Community Management Development Tier access. After approval for Standard Tier, Community Management access can be added to an existing Advertising API app. Follow [LinkedIn's access guidance](https://learn.microsoft.com/en-us/linkedin/marketing/community-management/community-management-overview#frequently-asked-questions).
 
