@@ -141,7 +141,9 @@ describe('Image Editor full-resolution rendering', () => {
 			return result;
 		});
 		try {
-			await expect.poll(() => complete).toBe(true);
+			// Canvas encoding may wait for browser idle time on a busy runner.
+			// A bounded wait still catches an export blocked on the paused frames.
+			await expect.poll(() => complete, { timeout: 5_000 }).toBe(true);
 			const rendered = await rendering;
 			expect(rendered.map((page) => page.page.id)).toEqual(authored.pages.map((page) => page.id));
 			for (const page of rendered) expect(page.blob.size).toBeGreaterThan(0);
