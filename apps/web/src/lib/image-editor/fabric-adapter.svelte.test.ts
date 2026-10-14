@@ -182,6 +182,78 @@ it('resolves selection against current ancestors after sync, canvas edits, and p
 	}
 });
 
+it.each([true, false])(
+	'keeps grouped paint and its stroke correct across ancestor visibility, locking, and later edits (initially visible: %s)',
+	async (initiallyVisible) => {
+		const root: ImageEditorLayer = { ...renderLayer('root', 0, 0, 64, 64), type: 'group' };
+		let paint: ImageEditorLayer = {
+			...renderLayer('paint', 0, 0, 64, 64),
+			type: 'paint',
+			parent_id: root.id,
+			paint: {
+				kind: 'fill',
+				color: '#ff0000',
+				size: 1,
+				opacity: 1,
+				source_width: 64,
+				source_height: 64,
+				points: [],
+				spans: Array.from({ length: 20 }, (_, y) => ({ x: 20, y: 20 + y, width: 20 }))
+			},
+			effects: {
+				blend_mode: 'normal',
+				stroke: { color: '#000000', width: 2, opacity: 1, position: 'outside' }
+			}
+		};
+		let page = pageFixture([paint, { ...root, visible: initiallyVisible }]);
+		const live = await mountAdapter(documentFixture(page, 64, 64), page);
+		try {
+			for (const state of [
+				{ visible: false, locked: false },
+				{ visible: true, locked: true },
+				{ visible: false, locked: true },
+				{ visible: true, locked: false }
+			]) {
+				page = { ...page, layers: [paint, { ...root, ...state }] };
+				await live.adapter.sync(documentFixture(page, 64, 64), page);
+				await settleCanvas();
+				const fresh = await mountAdapter(documentFixture(page, 64, 64), page, {
+					staticCanvas: true
+				});
+				try {
+					expect(pixelDigest(live.canvas)).toBe(pixelDigest(fresh.canvas));
+					const context = live.canvas.getContext('2d')!;
+					expect([...context.getImageData(30, 30, 1, 1).data]).toEqual(
+						state.visible ? [255, 0, 0, 255] : [255, 255, 255, 255]
+					);
+					expect([...context.getImageData(19, 30, 1, 1).data]).toEqual(
+						state.visible ? [0, 0, 0, 255] : [255, 255, 255, 255]
+					);
+					expect(live.adapter.layerIDsAtPoint({ x: 30, y: 30 })).toEqual(
+						state.visible && !state.locked ? ['root'] : []
+					);
+				} finally {
+					fresh.adapter.dispose();
+					fresh.canvas.remove();
+				}
+			}
+			paint = { ...paint, paint: { ...paint.paint!, color: '#00ff00' } };
+			page = { ...page, layers: [paint, root] };
+			await live.adapter.sync(documentFixture(page, 64, 64), page);
+			await settleCanvas();
+			expect([...live.canvas.getContext('2d')!.getImageData(30, 30, 1, 1).data]).toEqual([
+				0, 255, 0, 255
+			]);
+			expect([...live.canvas.getContext('2d')!.getImageData(19, 30, 1, 1).data]).toEqual([
+				0, 0, 0, 255
+			]);
+		} finally {
+			live.adapter.dispose();
+			live.canvas.remove();
+		}
+	}
+);
+
 it('finds the first visible pixel when the top layer has transparent paint', async () => {
 	const paint: ImageEditorLayer = {
 		...renderLayer('paint', 0, 0, 100, 100),

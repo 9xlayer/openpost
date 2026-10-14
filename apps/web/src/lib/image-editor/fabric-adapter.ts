@@ -430,6 +430,7 @@ export class OpenPostFabricAdapter {
 	private readonly staticMode: boolean;
 	private readonly renderScale: number;
 	private readonly curvedTextVersions = new WeakMap<FabricObject, number>();
+	private readonly curvedTextNeedsRefresh = new WeakSet<FabricObject>();
 	private readonly selectionColor: string;
 	private readonly handleColor: string;
 	private onSelection: FabricAdapterOptions['onSelection'];
@@ -650,7 +651,17 @@ export class OpenPostFabricAdapter {
 			for (const layer of imageEditorLayerRenderOrder(page.layers)) {
 				const previous = this.layerSnapshots.get(layer.id);
 				let object = this.objectByLayerID.get(layer.id);
-				if (previous === layer && object && !hierarchyChanged) continue;
+				if (previous === layer && object && !this.curvedTextNeedsRefresh.has(object)) {
+					// Ancestor edits change inherited flags without changing the child artwork.
+					if (hierarchyChanged) {
+						const interaction = this.layerInteractionOptions(layer);
+						object.set(interaction);
+						for (const decoration of this.decorationsByLayerID.get(layer.id) ?? []) {
+							decoration.set({ visible: interaction.visible });
+						}
+					}
+					continue;
+				}
 				if (previous && alphaHitFingerprint(previous) !== alphaHitFingerprint(layer)) {
 					this.alphaHitMasks.delete(layer.id);
 				}
@@ -671,11 +682,12 @@ export class OpenPostFabricAdapter {
 					this.canvas.add(object);
 					this.refreshDecorations(layer, object);
 				} else if (
+					this.curvedTextNeedsRefresh.has(object) ||
 					JSON.stringify(previous) !== JSON.stringify(layer) ||
 					layerIsVisibleIn(previous, previousLayers) !== this.layerIsVisible(layer) ||
 					layerIsLockedIn(previous, previousLayers) !== this.layerIsLocked(layer)
 				) {
-					this.updateObject(object, previous, layer);
+					this.updateObject(object, layer);
 					await this.refreshCurvedText(object, layer);
 					if (sequence !== this.renderSequence) return;
 					this.refreshDecorations(layer, object);
@@ -1026,7 +1038,7 @@ export class OpenPostFabricAdapter {
 		const current = this.layerByID.get(id);
 		const target = preview ?? current;
 		if (!object || !current || target?.type !== 'image' || !target.image) return;
-		this.updateObject(object, current, target);
+		this.updateObject(object, target);
 		object.setCoords();
 		this.canvas.requestRenderAll();
 	}
@@ -1513,13 +1525,31 @@ export class OpenPostFabricAdapter {
 			const layer = this.layerByID.get(layerID);
 			if (layer?.text?.curve) {
 				void this.refreshCurvedText(target, { ...layer, text: value })
-					.then(() => this.canvas?.requestRenderAll())
+					.then((rendered) => {
+						if (
+							!rendered ||
+							this.disposed ||
+							this.curvedTextNeedsRefresh.has(target) ||
+							this.objectByLayerID.get(layerID) !== target
+						)
+							return;
+						const current = this.layerByID.get(layerID);
+						if (current && (current.effects?.stroke || current.effects?.inner_shadow)) {
+							this.refreshDecorations(current, target);
+							this.syncObjectOrder();
+						}
+						this.canvas?.requestRenderAll();
+					})
 					.catch(() => this.onRenderError(layerID));
 			}
 		}
 		this.onTextSelectionChange(layerID, target.selectionStart, target.selectionEnd);
 		const layer = this.layerByID.get(layerID);
-		if (layer && (layer.effects?.stroke || layer.effects?.inner_shadow)) {
+		if (
+			layer &&
+			!this.curvedTextNeedsRefresh.has(target) &&
+			(layer.effects?.stroke || layer.effects?.inner_shadow)
+		) {
 			// Canvas-origin edits are accepted without a document render to preserve the caret.
 			this.refreshDecorations(layer, target);
 			this.syncObjectOrder();
@@ -2004,33 +2034,20 @@ export class OpenPostFabricAdapter {
 		if (!object) return null;
 		object.__imageEditorLayerID = layer.id;
 		this.applyLayerEffects(object, layer);
-		const effectivelyLocked = this.layerIsLocked(layer);
-		const emptyPaintLayer = isEmptyImageEditorPaintLayer(layer);
-		const interactive =
-			!this.readOnly && !this.usesAreaSelection() && !effectivelyLocked && !emptyPaintLayer;
-		object.set({
-			visible: this.layerIsVisible(layer),
-			selectable: interactive,
-			evented: interactive,
-			hasControls: !emptyPaintLayer,
-			hasBorders: !emptyPaintLayer,
-			lockMovementX: effectivelyLocked,
-			lockMovementY: effectivelyLocked,
-			lockRotation: effectivelyLocked,
-			lockScalingX: effectivelyLocked,
-			lockScalingY: effectivelyLocked
-		});
+		object.set(this.layerInteractionOptions(layer));
 		return object;
 	}
 
-	private async refreshCurvedText(object: FabricObject, layer: ImageEditorLayer): Promise<void> {
-		if (!layer.text?.curve || layer.text.curve.type === 'none' || !('path' in object)) return;
+	private async refreshCurvedText(object: FabricObject, layer: ImageEditorLayer): Promise<boolean> {
+		if (!layer.text?.curve || layer.text.curve.type === 'none' || !('path' in object)) return false;
 		// SAFETY: curved text is created as Fabric IText by this adapter.
 		const textObject = object as InstanceType<FabricModule['IText']>;
 		const version = (this.curvedTextVersions.get(object) ?? 0) + 1;
 		this.curvedTextVersions.set(object, version);
+		// Accepted canvas edits can outlive their render signal. Retry until their pixels are installed.
+		this.curvedTextNeedsRefresh.add(object);
 		const signal = this.renderSignal;
-		if (signal.aborted) return;
+		if (signal.aborted) return false;
 		let rendered: Awaited<ReturnType<typeof renderCurvedText>>;
 		try {
 			rendered = await abortable(
@@ -2043,10 +2060,10 @@ export class OpenPostFabricAdapter {
 				() => new DOMException('Rendering cancelled.', 'AbortError')
 			);
 		} catch (error) {
-			if (signal.aborted) return;
+			if (signal.aborted) return false;
 			throw error;
 		}
-		if (signal.aborted || this.curvedTextVersions.get(object) !== version) return;
+		if (signal.aborted || this.curvedTextVersions.get(object) !== version) return false;
 		Object.assign(textObject, {
 			_renderText: (context: CanvasRenderingContext2D) => {
 				context.drawImage(
@@ -2060,6 +2077,8 @@ export class OpenPostFabricAdapter {
 			_renderTextDecoration: () => {}
 		});
 		textObject.dirty = true;
+		this.curvedTextNeedsRefresh.delete(object);
+		return true;
 	}
 
 	private requiresObjectRebuild(previous: ImageEditorLayer, next: ImageEditorLayer): boolean {
@@ -2093,21 +2112,12 @@ export class OpenPostFabricAdapter {
 		);
 	}
 
-	private updateObject(
-		object: FabricObject,
-		_previous: ImageEditorLayer,
-		layer: ImageEditorLayer
-	): void {
-		if (!this.fabric) return;
+	private layerInteractionOptions(layer: ImageEditorLayer) {
 		const effectivelyLocked = this.layerIsLocked(layer);
 		const emptyPaintLayer = isEmptyImageEditorPaintLayer(layer);
 		const interactive =
 			!this.readOnly && !this.usesAreaSelection() && !effectivelyLocked && !emptyPaintLayer;
-		const common = {
-			angle: layer.transform.rotation,
-			flipX: layer.transform.flip_x,
-			flipY: layer.transform.flip_y,
-			opacity: layer.opacity,
+		return {
 			visible: this.layerIsVisible(layer),
 			selectable: interactive,
 			evented: interactive,
@@ -2118,6 +2128,17 @@ export class OpenPostFabricAdapter {
 			lockRotation: effectivelyLocked,
 			lockScalingX: effectivelyLocked,
 			lockScalingY: effectivelyLocked
+		};
+	}
+
+	private updateObject(object: FabricObject, layer: ImageEditorLayer): void {
+		if (!this.fabric) return;
+		const common = {
+			angle: layer.transform.rotation,
+			flipX: layer.transform.flip_x,
+			flipY: layer.transform.flip_y,
+			opacity: layer.opacity,
+			...this.layerInteractionOptions(layer)
 		};
 
 		if (layer.type === 'image' && layer.image) {
@@ -2445,9 +2466,10 @@ export class OpenPostFabricAdapter {
 		);
 		let source: HTMLCanvasElement;
 		const opacity = object.opacity;
+		const visible = object.visible;
 		try {
-			// Layer opacity belongs to the decoration, not the alpha used to find its edge.
-			object.set({ opacity: 1 });
+			// Visibility and opacity belong to the decoration, not its retained alpha geometry.
+			object.set({ opacity: 1, visible: true });
 			source = object.toCanvasElement({
 				multiplier,
 				withoutTransform: true,
@@ -2457,7 +2479,7 @@ export class OpenPostFabricAdapter {
 		} catch {
 			return null;
 		} finally {
-			object.set({ opacity });
+			object.set({ opacity, visible });
 		}
 		const bitmap = createAlphaStrokeBitmap(
 			source,
