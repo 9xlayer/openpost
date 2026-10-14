@@ -1074,7 +1074,7 @@
 
 	function workspaceDotStyle(workspaceId: string) {
 		const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
-		return `background-color: ${workspace ? workspaceColor(workspace) : '#f97316'};`;
+		return `background-color: ${workspace ? workspaceColor(workspace) : 'var(--action-focal)'};`;
 	}
 
 	function platformLabel(platform: string) {

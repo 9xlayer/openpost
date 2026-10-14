@@ -114,7 +114,7 @@
 	let inspectorElement = $state<HTMLDivElement | null>(null);
 	let runContexts = $state.raw<Record<string, { definition: Definition; data: WorkflowData }>>({});
 	let pendingSave: Promise<void> | undefined;
-	const canEdit = $derived(workspaceCtx.currentWorkspace?.role !== 'viewer');
+	const canEdit = $derived(workspaceCtx.currentWorkspace?.role === 'admin');
 	const canAdmin = $derived(workspaceCtx.currentWorkspace?.role === 'admin');
 	const dirty = $derived(JSON.stringify(doc) !== saved);
 	// Only a matching published revision identifies the live interval; drafts may differ.

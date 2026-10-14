@@ -28,6 +28,7 @@
 	}: { workspaceID: string; runID: string; accounts: SocialAccount[] } = $props();
 	const usageSchema = z.object({ total_tokens: z.number(), cost_usd: z.number().nullish() });
 	const canAdmin = $derived(workspaceCtx.currentWorkspace?.role === 'admin');
+	const canApprove = $derived(workspaceCtx.currentWorkspace?.can_approve ?? false);
 	const runQuery = createQuery(() => ({
 		...workflowRunQueryOptions(workflowQueryAPI, workspaceID, runID),
 		refetchInterval: (query) =>
@@ -168,7 +169,10 @@
 						<Button variant="outline" href={`/publications/${publicationID}`}
 							>{m.workflows_edit()}</Button
 						><Button
-							disabled={!canAdmin || busy || refreshing || publicationQuery.data.status !== 'draft'}
+							disabled={!canApprove ||
+								busy ||
+								refreshing ||
+								publicationQuery.data.status !== 'draft'}
 							onclick={() => act('approve')}>{m.workflows_approve()}</Button
 						>
 					</div>

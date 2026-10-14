@@ -23,6 +23,8 @@
 		type SharedPoll
 	} from './compose/polls';
 	import { onDestroy, onMount, tick } from 'svelte';
+	import PublicationReviewControl from '$lib/components/publication-review-control.svelte';
+	import { ideate } from '$lib/post-builder/ideate.svelte';
 	import { z } from 'zod';
 	import { captureTelemetryEvent } from '@openpost/telemetry';
 	import { page } from '$app/stores';
@@ -300,6 +302,8 @@
 	});
 	type AIPlatformStrategy = z.infer<typeof aiPlatformStrategySchema>;
 	interface AIComposerCheckpoint {
+		selectedAccountIds: string[];
+		selectedSocialSetId: string;
 		posts: PostItem[];
 		variants: Array<[string, Record<string, VariantPost>]>;
 		linkUrl: string;
@@ -355,6 +359,7 @@
 	let activePostIndex = $state(0);
 	let publicationId = $state('');
 	let revision = $state(1);
+	let reviewState = $state('');
 	let lastInitializedPublicationId = $state<string | null>(null);
 	let appliedInitialMediaKey = $state('');
 	let isSaving = $state(false);
@@ -419,6 +424,7 @@
 	let workspaceRequestSequence = 0;
 	let accountRequestSequence = 0;
 	let composerDestroyed = false;
+	let modalApply: import('$lib/post-builder/ideate.svelte').IdeateEntry['apply'];
 	let nextSlotRequestSequence = 0;
 	let saveGeneration = 0;
 	let saveOperationSequence = 0;
@@ -659,7 +665,6 @@
 	const canBuildPost = $derived(
 		!isThread &&
 			!activeVariantAccountId &&
-			selectedAccountIds.length > 0 &&
 			!isSubmitting &&
 			!isSaving &&
 			!buildingPost &&
@@ -2203,6 +2208,7 @@
 	function hydrateCanonicalSettings(publication: Publication) {
 		publicationId = publication.id;
 		revision = publication.revision;
+		reviewState = publication.review_state ?? '';
 		repostOverride = publication.repost_override ?? { mode: 'inherit' };
 		const builderMetadata = aiBuildMetadataSchema.safeParse(
 			publication.metadata?.[AI_BUILD_METADATA_KEY]
@@ -3162,6 +3168,7 @@
 		postBuilderError = '';
 		publicationId = publication.id;
 		revision = publication.revision;
+		reviewState = publication.review_state ?? '';
 		lastInitializedPublicationId = publication.id;
 		selectedWorkspaceId = publication.workspace_id;
 		selectedAccountIds = (publication.renditions ?? []).map(
@@ -3357,6 +3364,8 @@
 
 	onDestroy(() => {
 		composerDestroyed = true;
+		if (ideate.entry?.apply === modalApply && ideate.entry)
+			ideate.entry = { ...ideate.entry, apply: undefined };
 		void composerSession?.decideWorkspaceSwitch('stay');
 		invalidatePendingComposerRequests();
 		pasteMediaUploadQueue.reset();
@@ -4067,6 +4076,7 @@
 			const createdPublication = !startingPublicationId;
 			publicationId = savedPublicationId;
 			revision = saved.revision;
+			reviewState = saved.review_state ?? '';
 			savedCardPreviews = savedTextCardPreviews(saved.renditions ?? []);
 			draftConflict = null;
 			lastSavedSnapshot = snapshot;
@@ -4127,12 +4137,47 @@
 		error = '';
 	}
 
+	let reviewBaseline: { id: string; workspaceId: string; snapshot: string } | undefined;
+	async function applyClientReview(post: Publication) {
+		if (
+			composerDestroyed ||
+			!reviewBaseline ||
+			post.id !== publicationId ||
+			post.id !== reviewBaseline.id ||
+			selectedWorkspaceId !== reviewBaseline.workspaceId ||
+			getSaveSnapshot() !== reviewBaseline.snapshot
+		)
+			throw new Error(m.compose_ai_build_failed());
+		await initializeFromPublication(post);
+		reviewBaseline = { id: post.id, workspaceId: selectedWorkspaceId, snapshot: getSaveSnapshot() };
+	}
+	async function prepareClientReview(): Promise<Publication> {
+		clearAutoSaveTimer();
+		if (!(await flushPendingTextDraft())) throw new Error(m.compose_save_draft_failed());
+		const id = publicationId || (await saveDraft({ allowEmpty: true }));
+		if (!id) throw new Error(m.compose_save_draft_failed());
+		const baseline = { id, workspaceId: selectedWorkspaceId, snapshot: getSaveSnapshot() };
+		const result = await client.GET('/publications/{id}', { params: { path: { id } } });
+		if (!result.data || result.error)
+			throw new Error(result.error?.detail || m.compose_save_draft_failed());
+		if (
+			composerDestroyed ||
+			publicationId !== id ||
+			selectedWorkspaceId !== baseline.workspaceId ||
+			getSaveSnapshot() !== baseline.snapshot
+		)
+			throw new Error(m.compose_ai_build_failed());
+		reviewBaseline = baseline;
+		return result.data;
+	}
+
 	async function overwriteSavedTextDraft() {
 		if (!draftConflict) return;
 		const session = await sessionFor(selectedWorkspaceId, publicationId);
 		const saved = await session.overwriteConflict();
 		publicationId = saved.id;
 		revision = saved.revision;
+		reviewState = saved.review_state ?? '';
 		savedCardPreviews = savedTextCardPreviews(saved.renditions ?? []);
 		lastSavedSnapshot = getSaveSnapshot();
 		draftConflict = null;
@@ -5052,41 +5097,32 @@
 	}
 
 	async function buildPostWithAI() {
-		if (buildingPost || isThread || activeVariantAccountId) return;
+		if (buildingPost || isThread || activeVariantAccountId || hasPendingPasteMediaUploads) return;
 		const sourcePost = posts[0];
-		if (!selectedWorkspaceId || selectedAccountIds.length === 0) {
-			postBuilderError = m.compose_ai_destinations_required();
-			return;
-		}
-		if (!sourcePost || hasPendingPasteMediaUploads) {
-			postBuilderError = hasPendingPasteMediaUploads
-				? pasteMediaUploadBlocker()
-				: m.compose_ai_build_failed();
-			return;
-		}
-
-		if (!sourcePost.content.trim() && sourcePost.mediaIds.length === 0) {
-			await goto(resolveAppPath('/ideate'));
-			return;
-		}
+		if (!sourcePost || !selectedWorkspaceId) return;
 		const workspaceID = selectedWorkspaceId;
-		repurposeReviewActive = false;
-		aiPostOptions = [];
-		aiOptionMedia = undefined;
-		aiWorkspaceOpen = true;
-		aiWorkspaceEntry = sourcePost.content.trim() ? 'build' : 'ideate';
-		aiWorkspaceStep = 'brief';
-		aiGenerationIdea = sourcePost.content.trim();
-		aiIdeationBrief = sourcePost.content.trim();
-		aiSelectedOpportunityID = '';
-		aiSelectedAngleID = '';
-		aiAngles = [];
-		aiBuildCreateRejected = false;
-		postBuilderError = '';
-		buildingPost = false;
-		aiOpportunityLoading = false;
-		await loadAIWorkspaceVoice(workspaceID);
-		if (workspaceID !== selectedWorkspaceId) return;
+		const targetID = publicationId;
+		const baseline = composerAISnapshot();
+		const request = publicationBuildRequest(sourcePost.content.trim());
+		modalApply = async (option, media) => {
+			if (
+				composerDestroyed ||
+				workspaceID !== selectedWorkspaceId ||
+				(targetID && targetID !== publicationId) ||
+				composerAISnapshot() !== baseline
+			) {
+				throw new Error(m.compose_ai_progress_conflict());
+			}
+			aiPendingResult = option;
+			aiOptionMedia = media;
+			applyReadyPublicationBuild(option.destinations.map((destination) => destination.account_id));
+		};
+		ideate.show({
+			workspaceId: workspaceID,
+			contextKey: `composer:${targetID || sourcePost.key}`,
+			input: request,
+			apply: modalApply
+		});
 	}
 
 	function persistActivePublicationBuild(
@@ -5282,6 +5318,8 @@
 
 	function captureAIComposerCheckpoint(): AIComposerCheckpoint {
 		return {
+			selectedAccountIds: [...selectedAccountIds],
+			selectedSocialSetId,
 			posts: posts.map((post) => ({ ...post, mediaIds: [...post.mediaIds] })),
 			variants: Array.from(variants.entries()).map(([accountID, record]) => [
 				accountID,
@@ -5296,6 +5334,8 @@
 	}
 
 	function restoreAIComposerCheckpoint(checkpoint: AIComposerCheckpoint): void {
+		selectedAccountIds = [...checkpoint.selectedAccountIds];
+		selectedSocialSetId = checkpoint.selectedSocialSetId;
 		posts = checkpoint.posts.map((post) => ({ ...post, mediaIds: [...post.mediaIds] }));
 		variants = new SvelteMap(
 			checkpoint.variants.map(([accountID, record]) => [accountID, structuredClone(record)])
@@ -5315,13 +5355,17 @@
 		scheduleAutoSave();
 	}
 
-	function applyReadyPublicationBuild(): void {
+	function applyReadyPublicationBuild(destinations?: string[]): void {
 		const result = aiPendingResult;
 		const sourcePost = posts[0];
 		if (!result || !sourcePost) return;
 		const checkpoint = captureAIComposerCheckpoint();
 		if (!generationUndo) generationUndo = checkpoint;
 		latestGenerationUndo = checkpoint;
+		if (destinations) {
+			selectedAccountIds = destinations;
+			selectedSocialSetId = '';
+		}
 		const applied = applyPublicationBuildResult(result, sourcePost, aiOptionMedia);
 		posts = applied.posts;
 		variants = new SvelteMap(Object.entries(applied.variants));
@@ -7200,9 +7244,6 @@
 															: m.compose_ai_build()}
 														buildingLabel={m.compose_ai_building()}
 														onclick={buildPostWithAI}
-														title={selectedAccountIds.length === 0
-															? m.compose_ai_destinations_required()
-															: undefined}
 													/>
 												{/if}
 											</div>
@@ -7343,7 +7384,7 @@
 			: aiWorkspaceStep === 'opportunities'
 				? () => void loadPublicationOpportunities()
 				: () => void loadPublicationAngles(aiGenerationIdea)}
-	onApply={applyReadyPublicationBuild}
+	onApply={() => applyReadyPublicationBuild()}
 	onKeepEditing={keepCurrentComposerEdits}
 	onDismissError={() => (postBuilderError = '')}
 >
@@ -7569,6 +7610,15 @@
 				{/if}
 			</div>
 		{/if}
+		<div class="px-5">
+			<PublicationReviewControl
+				workspaceId={selectedWorkspaceId}
+				{publicationId}
+				{reviewState}
+				prepare={prepareClientReview}
+				onChanged={applyClientReview}
+			/>
+		</div>
 		<div class="p-5">
 			<ComposerRepostControl
 				workspaceID={selectedWorkspaceId}

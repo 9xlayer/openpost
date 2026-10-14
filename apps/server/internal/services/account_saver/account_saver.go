@@ -653,7 +653,7 @@ func (s *AccountSaver) validateSaveAccountInput(ctx context.Context, input SaveA
 		return fmt.Errorf("token response is required")
 	}
 
-	decision, err := workspaceaccess.NewAuthorizer(s.db).Authorize(ctx, input.WorkspaceID, input.Actor, workspaceaccess.LevelEdit)
+	decision, err := workspaceaccess.NewAuthorizer(s.db).Authorize(ctx, input.WorkspaceID, input.Actor, workspaceaccess.LevelConnect)
 	if err != nil {
 		return fmt.Errorf("validating workspace access: %w", err)
 	}

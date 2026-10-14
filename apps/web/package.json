@@ -3,7 +3,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"assets:sync": "bun ../../scripts/sync-assets.mjs --surface frontend",
+		"assets:sync": "bun ../../scripts/sync-assets.mjs --surface frontend && bun ../../scripts/sync-static-ui.mjs",
 		"dev": "bun run assets:sync && vite dev",
 		"build": "bun run assets:sync && bun run generate:i18n:build && node ../../scripts/frontend-vite-build.mjs && bun ../../scripts/generate-app-route-manifest.mjs --output-directory build && bun ../../scripts/precompress-static.mjs --directory build && bun ../../scripts/immutable-frontend-assets.mjs web",
 		"package": "bun ../../scripts/package-frontend.mjs",

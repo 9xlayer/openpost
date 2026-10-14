@@ -317,6 +317,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	publicationHandler.SetRepostService(deps.RepostService)
 	publicationHandler.SetProviderReadiness(deps.ProviderReadinessService)
 	publicationHandler.SetTelemetry(deps.Telemetry)
+	publicationHandler.SetNotificationService(deps.NotificationService)
 	publicationHandler.RegisterRoutes(api)
 	publicationBuildHandler := handlers.NewPublicationBuildHandler(deps.DB, deps.Authenticator, deps.PublicationBuilder)
 	publicationBuildHandler.SetPublicationApplication(publicationHandler.BuilderApplication())
