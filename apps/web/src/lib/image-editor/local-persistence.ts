@@ -285,10 +285,10 @@ export async function listGuestImageEditorDesigns(limit = 12): Promise<LocalImag
 	}
 }
 
-export async function warmGuestImageEditorDesignMedia(
+export async function warmGuestImageEditorPreviewMedia(
 	document: ImageEditorDocument
 ): Promise<string[]> {
-	return await warmGuestImageEditorMedia(document);
+	return await warmGuestImageEditorMedia({ ...document, pages: document.pages.slice(0, 1) });
 }
 
 export async function deleteGuestImageEditorDesign(id: string): Promise<void> {

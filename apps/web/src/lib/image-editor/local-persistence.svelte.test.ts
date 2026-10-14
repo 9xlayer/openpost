@@ -1,7 +1,14 @@
 import { afterEach, expect, it } from 'vitest';
 import { blankImageEditorDocument } from './document';
+import { localImageEditorMediaURL, releaseLocalImageEditorMediaForDesign } from './local-media-url';
 import {
 	listGuestImageEditorDesigns,
+	createGuestImageEditorDesign,
+	storeGuestImageEditorMedia,
+	saveGuestImageEditorDesign,
+	loadGuestImageEditorDesign,
+	deleteGuestImageEditorDesign,
+	warmGuestImageEditorPreviewMedia,
 	openImageEditorDatabase,
 	type LocalImageEditorDesign
 } from './local-persistence';
@@ -69,4 +76,50 @@ it('lists recent local designs with stable timestamp ties and load-more ordering
 	expect(await listGuestImageEditorDesigns(0)).toEqual([]);
 	await replaceDesigns([]);
 	expect(await listGuestImageEditorDesigns()).toEqual([]);
+});
+
+it('loads only the cover assets for the gallery and loads later pages when the design opens', async () => {
+	const created = await createGuestImageEditorDesign(
+		{
+			key: 'custom',
+			name: 'Custom',
+			width_px: 800,
+			height_px: 600,
+			default_format: 'png',
+			profiles: []
+		},
+		'Two pages'
+	);
+	try {
+		const canvas = new OffscreenCanvas(2, 2);
+		const context = canvas.getContext('2d')!;
+		context.fillStyle = '#ff0000';
+		context.fillRect(0, 0, 2, 2);
+		const blob = await canvas.convertToBlob({ type: 'image/png' });
+		const cover = await storeGuestImageEditorMedia(
+			created.id,
+			new File([blob], 'cover.png', { type: 'image/png' })
+		);
+		const later = await storeGuestImageEditorMedia(
+			created.id,
+			new File([blob], 'later.png', { type: 'image/png' })
+		);
+		const document = created.document;
+		document.pages = [cover, later].map((media, index) => ({
+			...document.pages[0],
+			id: `page-${index}`,
+			name: `Page ${index + 1}`,
+			background: { type: 'image', opacity: 1, image: { media_id: media.id, fit: 'cover' } }
+		}));
+		await saveGuestImageEditorDesign(created.id, document);
+		releaseLocalImageEditorMediaForDesign(created.id);
+		expect(await warmGuestImageEditorPreviewMedia(document)).toEqual([]);
+		expect(localImageEditorMediaURL(cover.id)).toMatch(/^blob:/);
+		expect(localImageEditorMediaURL(later.id)).toBeUndefined();
+		const opened = await loadGuestImageEditorDesign(created.id);
+		expect(opened.document.pages[1].background?.image?.media_id).toBe(later.id);
+		expect(localImageEditorMediaURL(later.id)).toMatch(/^blob:/);
+	} finally {
+		await deleteGuestImageEditorDesign(created.id);
+	}
 });
