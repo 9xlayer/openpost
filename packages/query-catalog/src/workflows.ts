@@ -131,6 +131,12 @@ function reconcileWorkflowRun(client: QueryClient, workspaceID: string, incoming
     );
   }
   updateWorkflowRunSummaries(client, workspaceID, summarizeWorkflowRun(run));
+  const summary = cachedWorkflowRunSummary(client, workspaceID, run);
+  if (summary && summary.revision > run.revision) {
+    // A late full-list response may seed an older snapshot. Keep its complete
+    // payload available, but require a fresh detail read when it is inspected.
+    void client.invalidateQueries({ queryKey: detailKey, exact: true });
+  }
   return run;
 }
 
@@ -148,6 +154,21 @@ function summaryKeys(workspaceID: string, workflowID: string) {
 
 function sameRun(a: WorkflowRunSummary, b: WorkflowRunSummary) {
   return a.id === b.id && a.workspace_id === b.workspace_id && a.workflow_id === b.workflow_id;
+}
+
+function cachedWorkflowRunSummary(
+  client: QueryClient,
+  workspaceID: string,
+  run: WorkflowRunSummary,
+) {
+  let latest: WorkflowRunSummary | undefined;
+  for (const key of summaryKeys(workspaceID, run.workflow_id)) {
+    const cached = client
+      .getQueryData<WorkflowRunSummary[]>(key)
+      ?.find((listed) => sameRun(listed, run));
+    if (cached && (!latest || cached.revision > latest.revision)) latest = cached;
+  }
+  return latest;
 }
 
 function updateWorkflowRunSummaries(
@@ -172,13 +193,8 @@ function reconcileWorkflowRunSummary(
   if (incoming.workspace_id !== workspaceID) return incoming;
   const detailKey = workflowQueryKeys.run(workspaceID, incoming.id);
   const detail = client.getQueryData<WorkflowRun>(detailKey);
-  let run = incoming;
-  for (const key of summaryKeys(workspaceID, incoming.workflow_id)) {
-    const cached = client
-      .getQueryData<WorkflowRunSummary[]>(key)
-      ?.find((listed) => sameRun(listed, run));
-    if (cached && cached.revision > run.revision) run = cached;
-  }
+  const previous = cachedWorkflowRunSummary(client, workspaceID, incoming);
+  let run = previous && previous.revision > incoming.revision ? previous : incoming;
   if (detail && sameRun(detail, run)) {
     if (detail.revision > run.revision) run = summarizeWorkflowRun(detail);
     else if (detail.revision < run.revision || detail.state !== run.state) {
@@ -186,6 +202,15 @@ function reconcileWorkflowRunSummary(
       // and refresh active inspectors when their recorded execution advances.
       void client.invalidateQueries({ queryKey: detailKey, exact: true });
     }
+  } else if (
+    !detail &&
+    (!previous || previous.revision < run.revision || previous.state !== run.state) &&
+    client.getQueryState(detailKey)?.fetchStatus === "fetching"
+  ) {
+    // Invalidation deduplicates a cold fetch instead of cancelling it. Reset
+    // that older request before refetching active inspectors; unchanged summary
+    // polls must not continually restart a slow request.
+    void client.resetQueries({ queryKey: detailKey, exact: true });
   }
   updateWorkflowRunSummaries(client, workspaceID, run);
   return run;

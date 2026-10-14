@@ -166,6 +166,63 @@ it("refreshes an active inspector for equal-revision queued to running changes",
   client.clear();
 });
 
+it("restarts a cold inspector when a newer summary arrives before its full snapshot", async () => {
+  const client = new QueryClient();
+  const older = { ...run(2, "cancelled"), source: { body: "Original source" } };
+  const newer = {
+    ...older,
+    revision: 3,
+    steps: [
+      {
+        step_id: "draft",
+        state: "succeeded",
+        kind: "create_draft",
+        name: "Draft",
+        inputs: { body: "Retained input" },
+        output: { body: "Completed output" },
+        started_at: "2026-10-02T00:00:00Z",
+      },
+    ],
+  };
+  const transport = api(newer);
+  let finishOlder: (value: WorkflowRun) => void = () => {
+    throw new Error("Request has not started");
+  };
+  vi.mocked(transport.run).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishOlder = resolve;
+      }),
+  );
+  const observer = new QueryObserver(
+    client,
+    workflowRunQueryOptions(transport, "workspace-a", "run"),
+  );
+  const snapshots: WorkflowRun[] = [];
+  const unsubscribe = observer.subscribe(({ data }) => {
+    if (data) snapshots.push(data);
+  });
+  try {
+    await vi.waitFor(() => expect(transport.run).toHaveBeenCalledOnce());
+    await client.fetchQuery(
+      workflowRunSummariesQueryOptions(
+        { runSummaries: async () => [summary(3, "cancelled")] },
+        "workspace-a",
+      ),
+    );
+    finishOlder(older);
+    await vi.waitFor(() => expect(observer.getCurrentResult().data).toEqual(newer));
+    expect(transport.run).toHaveBeenCalledTimes(2);
+    expect(snapshots.every((snapshot) => snapshot.revision === 3)).toBe(true);
+    expect(client.getQueryData(workflowQueryKeys.runSummaries("workspace-a"))).toEqual([
+      summary(3, "cancelled"),
+    ]);
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
+});
+
 it("does not regress newer run lists or leak payloads when a late summary or detail completes", async () => {
   const client = new QueryClient();
   const allKey = workflowQueryKeys.runSummaries("workspace-a");
@@ -217,6 +274,76 @@ it("does not regress newer run lists or leak payloads when a late summary or det
     }),
   ).toEqual(client.getQueryData(filteredKey));
   client.clear();
+});
+
+it("refreshes an inactive detail seeded by a full list older than the known summary", async () => {
+  const client = new QueryClient();
+  const older = run(2, "cancelled");
+  const newer = { ...run(3, "cancelled"), source: { body: "Complete snapshot" } };
+  const transport = api(newer);
+  let finishList: (value: WorkflowRun[]) => void = () => {
+    throw new Error("Request has not started");
+  };
+  vi.mocked(transport.runs).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishList = resolve;
+      }),
+  );
+  try {
+    const pending = client.fetchQuery(workflowRunsQueryOptions(transport, "workspace-a"));
+    await vi.waitFor(() => expect(transport.runs).toHaveBeenCalledOnce());
+    await client.fetchQuery(
+      workflowRunSummariesQueryOptions(
+        { runSummaries: async () => [summary(3, "cancelled")] },
+        "workspace-a",
+      ),
+    );
+    finishList([older]);
+    await pending;
+    const opened = await client.fetchQuery(
+      workflowRunQueryOptions(transport, "workspace-a", "run"),
+    );
+    expect(opened).toEqual(newer);
+    expect(transport.run).toHaveBeenCalledOnce();
+  } finally {
+    client.clear();
+  }
+});
+
+it("keeps an in-flight cold snapshot when summary polling has not advanced", async () => {
+  const client = new QueryClient();
+  const current = run(3, "cancelled");
+  const transport = api(current);
+  const summaries = workflowRunSummariesQueryOptions(
+    { runSummaries: async () => [summary(3, "cancelled")] },
+    "workspace-a",
+  );
+  await client.fetchQuery(summaries);
+  let finish: (value: WorkflowRun) => void = () => {
+    throw new Error("Request has not started");
+  };
+  vi.mocked(transport.run).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const observer = new QueryObserver(
+    client,
+    workflowRunQueryOptions(transport, "workspace-a", "run"),
+  );
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    await vi.waitFor(() => expect(transport.run).toHaveBeenCalledOnce());
+    await client.fetchQuery({ ...summaries, staleTime: 0 });
+    finish(current);
+    await vi.waitFor(() => expect(observer.getCurrentResult().data).toEqual(current));
+    expect(transport.run).toHaveBeenCalledOnce();
+  } finally {
+    unsubscribe();
+    client.clear();
+  }
 });
 
 it("discards a cancelled summary response without invalidating or seeding caches", async () => {
