@@ -127,7 +127,7 @@ func (x *XAdapter) resumeMediaProcessing(ctx context.Context, token string, stat
 	if info == nil || (state.OpaqueState == "append_started" && info.State != "succeeded") {
 		return "", &MediaUploadError{RetryClassification: MediaRetryReconcile, Err: fmt.Errorf("x media operation remains unresolved")}
 	}
-	if err := x.waitForMediaProcessing(ctx, token, state.ProviderMediaID, info); err != nil {
+	if err := x.waitForMediaProcessing(ctx, token, state.ProviderMediaID, info, state.SessionExpiresAt); err != nil {
 		return "", err
 	}
 	return state.ProviderMediaID, nil

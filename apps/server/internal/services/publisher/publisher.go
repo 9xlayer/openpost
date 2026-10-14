@@ -246,6 +246,7 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 			models.RenditionStatusDraft,
 			models.RenditionStatusReady,
 			models.RenditionStatusScheduled,
+			models.RenditionStatusPublishing,
 			models.RenditionStatusFailed,
 		})).
 		Where("(status != ? OR error_retryable = ?)", models.RenditionStatusFailed, true).
@@ -300,6 +301,12 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 				(retryFailure == nil || failure.RetryAfter > retryFailure.Failure.RetryAfter) {
 				retryFailure = &RetryableError{Failure: failure, Provider: rendition.Platform, RenditionID: rendition.ID}
 			}
+			if _, pending := providerwrite.IsPending(err); pending {
+				if stateErr := s.persistRenditionOutcome(ctx, rendition.ID, failure); stateErr != nil {
+					return stateErr
+				}
+				continue
+			}
 			log.Printf(
 				"[Publisher] Rendition %s failed (%s, status=%d, code=%s)",
 				rendition.ID,
@@ -310,7 +317,7 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 			if diagnostic := platform.ProviderErrorDiagnostic(err); diagnostic != "" {
 				log.Printf("[Publisher] Rendition %s provider diagnostics (%s)", rendition.ID, diagnostic)
 			}
-			if dbErr := s.persistRenditionFailure(ctx, rendition.ID, failure); dbErr != nil {
+			if dbErr := s.persistRenditionOutcome(ctx, rendition.ID, failure); dbErr != nil {
 				log.Printf("[Publisher] Failed to mark rendition %s failed: %v", rendition.ID, dbErr)
 			}
 			s.recordPublicationLifecycleEvent(ctx, publication.WorkspaceID, publication.ID, rendition.ID, lifecycle.EventFailed, lifecycle.StatusFailed, "rendition publish failed", map[string]any{
@@ -428,7 +435,7 @@ func (s *Service) persistTerminalPreflightFailure(
 	return s.finalizePublication(ctx, &publication)
 }
 
-func (s *Service) persistRenditionFailure(
+func (s *Service) persistRenditionOutcome(
 	ctx context.Context,
 	renditionID string,
 	failure Failure,
@@ -443,7 +450,7 @@ func (s *Service) persistRenditionFailure(
 	}
 	query := s.db.NewUpdate().
 		Model((*models.Rendition)(nil)).
-		Set("status = ?", models.RenditionStatusFailed).
+		Set("status = ?", renditionOutcomeStatus(failure)).
 		Set("error_message = ?", failure.Message).
 		Set("error_kind = ?", failure.Kind).
 		Set("error_code = ?", failure.Code).
@@ -459,6 +466,13 @@ func (s *Service) persistRenditionFailure(
 	}
 	_, err := query.Exec(ctx)
 	return err
+}
+
+func renditionOutcomeStatus(failure Failure) string {
+	if failure.Code == "provider_submission_pending" || failure.Code == "tiktok_inbox_delivered" {
+		return models.RenditionStatusPublishing
+	}
+	return models.RenditionStatusFailed
 }
 
 //nolint:gocyclo
@@ -754,7 +768,7 @@ func (s *Service) publishRenditionSegments(
 			continue
 		}
 		if err := s.checkMonthlyQuota(ctx, publication.WorkspaceID, entitlements.LimitPublishedPostsMonthly); err != nil {
-			return s.failRenditionSegment(ctx, segment, err)
+			return s.persistRenditionSegmentOutcome(ctx, segment, err)
 		}
 
 		segmentSettings := map[string]interface{}{}
@@ -762,7 +776,7 @@ func (s *Service) publishRenditionSegments(
 		settings := mergePublisherSettings(destinationSettings, segmentSettings)
 		mediaAttachments, mediaAltTexts, mediaSettings, err := s.loadRenditionSegmentMedia(ctx, segment.ID)
 		if err != nil {
-			return s.failRenditionSegment(ctx, segment, err)
+			return s.persistRenditionSegmentOutcome(ctx, segment, err)
 		}
 		requiredMedia := make([]capabilities.MediaItem, 0, len(mediaAttachments))
 		for _, media := range mediaAttachments {
@@ -771,11 +785,11 @@ func (s *Service) publishRenditionSegments(
 			}
 		}
 		if issues := capabilities.ValidateAttachmentRequirement(account.Platform, rendition.OutputProfile, requiredMedia, settings); len(issues) > 0 {
-			return s.failRenditionSegment(ctx, segment, fmt.Errorf("attachment validation: %s", issues[0].Message))
+			return s.persistRenditionSegmentOutcome(ctx, segment, fmt.Errorf("attachment validation: %s", issues[0].Message))
 		}
 		settings = capabilities.NormalizeMediaTextLinkSettings(account.Platform, len(mediaAttachments), settings)
 		if err := s.hydratePublicSettingMediaURLs(ctx, publication.WorkspaceID, account.Platform, settings); err != nil {
-			return s.failRenditionSegment(ctx, segment, err)
+			return s.persistRenditionSegmentOutcome(ctx, segment, err)
 		}
 		platformMediaIDs := make([]string, 0, len(mediaAttachments))
 		mediaItems := make([]platform.MediaItem, 0, len(mediaAttachments))
@@ -791,7 +805,7 @@ func (s *Service) publishRenditionSegments(
 			if !publishesMediaDirectly {
 				mediaID, uploadErr := s.platformMediaIDForRendition(ctx, publication, &uploadRendition, account, provider, token, media)
 				if uploadErr != nil {
-					return s.failRenditionSegment(ctx, segment, fmt.Errorf("media upload failed for %s: %w", media.ID, uploadErr))
+					return s.persistRenditionSegmentOutcome(ctx, segment, fmt.Errorf("media upload failed for %s: %w", media.ID, uploadErr))
 				}
 				platformMediaIDs = append(platformMediaIDs, mediaID)
 			}
@@ -856,7 +870,7 @@ func (s *Service) publishRenditionSegments(
 		if publishErr != nil && isExpiredTokenError(publishErr) {
 			token, err = s.tm.ForceRefreshAccessToken(ctx, account.ID)
 			if err != nil {
-				return s.failRenditionSegment(ctx, segment, fmt.Errorf("%s token refresh failed after expiry: %w", providerKey, err))
+				return s.persistRenditionSegmentOutcome(ctx, segment, fmt.Errorf("%s token refresh failed after expiry: %w", providerKey, err))
 			}
 			publishResult, publishErr = s.publishProviderWithUsage(
 				ctx,
@@ -873,7 +887,7 @@ func (s *Service) publishRenditionSegments(
 			)
 		}
 		if publishErr != nil {
-			return s.failRenditionSegment(ctx, segment, publishErr)
+			return s.persistRenditionSegmentOutcome(ctx, segment, publishErr)
 		}
 
 		externalID := publishResult.ExternalID
@@ -972,7 +986,7 @@ func (s *Service) scheduleReposts(ctx context.Context, renditionID string) {
 	}
 }
 
-func (s *Service) failRenditionSegment(ctx context.Context, segment *models.RenditionSegment, failure error) error {
+func (s *Service) persistRenditionSegmentOutcome(ctx context.Context, segment *models.RenditionSegment, failure error) error {
 	if failure == nil {
 		return nil
 	}
@@ -986,7 +1000,7 @@ func (s *Service) failRenditionSegment(ctx context.Context, segment *models.Rend
 		retryAt = time.Now().UTC().Add(delay)
 	}
 	query := s.db.NewUpdate().Model(segment).
-		Set("status = ?", models.RenditionStatusFailed).
+		Set("status = ?", renditionOutcomeStatus(classified)).
 		Set("error_message = ?", classified.Message).
 		Set("error_kind = ?", classified.Kind).
 		Set("error_code = ?", classified.Code).
@@ -2358,10 +2372,14 @@ func (s *Service) finalizePublication(ctx context.Context, publication *models.P
 		return fmt.Errorf("load renditions for publication %s: %w", publication.ID, err)
 	}
 	hasFailed := false
+	hasPublishing := false
 	allPublished := len(renditions) > 0
 	for _, rendition := range renditions {
 		if rendition.Status == models.RenditionStatusFailed {
 			hasFailed = true
+		}
+		if rendition.Status == models.RenditionStatusPublishing {
+			hasPublishing = true
 		}
 		if rendition.Status != models.RenditionStatusPublished {
 			allPublished = false
@@ -2371,6 +2389,8 @@ func (s *Service) finalizePublication(ctx context.Context, publication *models.P
 	switch {
 	case allPublished:
 		status = models.PublicationStatusPublished
+	case hasPublishing:
+		status = models.PublicationStatusPublishing
 	case hasFailed:
 		status = models.PublicationStatusFailed
 	}

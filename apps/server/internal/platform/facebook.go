@@ -501,7 +501,7 @@ func (f *FacebookAdapter) waitForFacebookVideoUpload(ctx context.Context, access
 		if statusResponse.Status.failed() {
 			return &HTTPError{StatusCode: http.StatusBadRequest, Code: "facebook_video_processing_failed"}
 		}
-		if statusResponse.Status.complete() {
+		if statusResponse.Status.uploadComplete() {
 			return nil
 		}
 	}
@@ -528,8 +528,9 @@ func (s facebookVideoStatus) failed() bool {
 		s.VideoStatus == "error" || s.VideoStatus == "expired"
 }
 
-func (s facebookVideoStatus) complete() bool {
-	return !s.failed() && (s.VideoStatus == "ready" || s.ProcessingPhase.Status == "complete")
+func (s facebookVideoStatus) uploadComplete() bool {
+	// Finish starts provider processing, so upload readiness cannot wait for it.
+	return !s.failed() && (s.UploadingPhase.Status == "complete" || s.VideoStatus == "upload_complete" || s.VideoStatus == "ready")
 }
 
 func isTransientFacebookVideoPollError(err error) bool {
@@ -941,15 +942,15 @@ func (f *FacebookAdapter) ResumePublish(ctx context.Context, token, pageID strin
 		pending.RetrySafety = PublishRetryNever
 		return pending, &HTTPError{StatusCode: http.StatusBadRequest, Code: "facebook_video_processing_failed"}
 	}
+	if status.PublishingPhase.Status == "complete" || status.VideoStatus == "published" {
+		result := AcceptedPublishResult(publishedID)
+		result.ProviderReference = reference
+		return result, nil
+	}
 	if stage == "publishing" {
-		if status.PublishingPhase.Status == "complete" || status.VideoStatus == "published" {
-			result := AcceptedPublishResult(publishedID)
-			result.ProviderReference = reference
-			return result, nil
-		}
 		return pending, nil
 	}
-	if !status.complete() {
+	if !status.uploadComplete() {
 		return pending, nil
 	}
 	edge, label, values := facebookVideoFinishRequest(req)
