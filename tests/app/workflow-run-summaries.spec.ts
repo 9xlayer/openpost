@@ -84,12 +84,33 @@ test("run cards load summaries and recover a failed full snapshot without losing
       });
     await route.fulfill({ status: 503, json: { detail: "Snapshot temporarily unavailable" } });
   });
+  let releaseAccounts: () => void = () => {
+    throw new Error("accounts have not started");
+  };
+  let accountsStarted = false;
+  await page.route("**/api/v1/accounts?**", async (route) => {
+    accountsStarted = true;
+    await new Promise<void>((resolve) => {
+      releaseAccounts = resolve;
+    });
+    await route.continue();
+  });
   await card.click();
   await expect(page.getByTestId("page-loading")).toBeVisible();
+  await expect.poll(() => accountsStarted && fullReads.length === 1).toBe(true);
   release();
+  await expect.poll(() => fullReads.length).toBe(2);
+  // Keep accounts pending until the snapshot has exhausted its one automatic retry.
+  await page.waitForTimeout(250);
+  releaseAccounts();
+  await page.unroute("**/api/v1/accounts?**");
   await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
   await expect(page.getByText("Snapshot temporarily unavailable", { exact: true })).toBeVisible();
   await expect(page.getByTestId("page-loading")).toBeHidden();
+  const failedReads = fullReads.length;
+  await page.waitForTimeout(3500);
+  expect(fullReads).toHaveLength(failedReads);
+  await expect(page.getByText("Snapshot temporarily unavailable", { exact: true })).toBeVisible();
   await page.unroute(`**${detailPath}?**`);
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   const details = page

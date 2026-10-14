@@ -49,6 +49,8 @@
 	import { stepFields } from './fields';
 	import { connectionWouldLoop, type Port } from './graph';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
+	import PageLoading from '$lib/components/page-loading.svelte';
+	import { readQueryErrorMessage } from '$lib/query/error-message';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
@@ -205,9 +207,10 @@
 	const references = $derived(
 		availableReferences(doc.definition.steps ?? [], selectedID, inputData.source)
 	);
-	const runsQuery = createQuery(() =>
-		workflowRunSummariesQueryOptions(workflowQueryAPI, initial.workspace_id, initial.id)
-	);
+	const runsQuery = createQuery(() => ({
+		...workflowRunSummariesQueryOptions(workflowQueryAPI, initial.workspace_id, initial.id),
+		enabled: Boolean(initial.workspace_id && panel === 'runs')
+	}));
 	function snapshot() {
 		return JSON.stringify({ doc, positions, selectedID });
 	}
@@ -649,6 +652,19 @@
 							: ''}"
 					>
 						<h2 class="mb-3 text-sm font-medium">{m.workflows_runs()}</h2>
+						{#if runsQuery.error}<InlineNotice
+								tone="error"
+								message={readQueryErrorMessage(runsQuery.error) || m.workflows_load_failed()}
+								>{#snippet actions()}<Button
+										variant="outline"
+										size="sm"
+										onclick={() => runsQuery.refetch()}>{m.common_retry()}</Button
+									>{/snippet}</InlineNotice
+							>{:else if runsQuery.isPending}<PageLoading
+								layout="list"
+								items={3}
+								label={m.common_loading()}
+							/>{/if}
 						{#each runsQuery.data ?? [] as run}<button
 								type="button"
 								class="mb-2 w-full rounded-lg border p-3 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring {selectedRun ===
@@ -669,7 +685,7 @@
 								><span class="block text-xs text-muted-foreground"
 									>{new Date(run.created_at).toLocaleString()}</span
 								></button
-							>{/each}{#if !runsQuery.data?.length}<p
+							>{/each}{#if !runsQuery.data?.length && runsQuery.isSuccess}<p
 								class="text-sm leading-6 text-muted-foreground"
 							>
 								{noRunsHelp}
