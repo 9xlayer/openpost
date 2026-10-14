@@ -466,9 +466,11 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Build canonical marketing artifact and source maps
         env:
-          VITE_POSTHOG_PROJECT_TOKEN: ${{ vars.POSTHOG_PROJECT_TOKEN }}
-          VITE_POSTHOG_API_HOST: ${{ vars.POSTHOG_BROWSER_HOST }}
-          VITE_POSTHOG_UI_HOST: ${{ vars.POSTHOG_UI_HOST }}
+          # Fork pull requests cannot read repository variables. Their prebuilt
+          # browser artifact needs analytics enabled against the local fixture.
+          VITE_POSTHOG_PROJECT_TOKEN: ${{ github.event_name == 'pull_request' && 'phc_browser_fixture' || vars.POSTHOG_PROJECT_TOKEN }}
+          VITE_POSTHOG_API_HOST: ${{ github.event_name == 'pull_request' && 'http://127.0.0.1:4322' || vars.POSTHOG_BROWSER_HOST }}
+          VITE_POSTHOG_UI_HOST: ${{ github.event_name == 'pull_request' && 'http://127.0.0.1:4322' || vars.POSTHOG_UI_HOST }}
           VITE_OPENPOST_ENVIRONMENT: ${{ github.event_name == 'push' && 'production' || 'ci' }}
           VITE_OPENPOST_REVISION: ${{ github.sha }}
           POSTHOG_SOURCEMAPS_ENABLED: ${{ github.event_name == 'push' && secrets.POSTHOG_PERSONAL_API_KEY != '' && vars.POSTHOG_PROJECT_ID != '' && '1' || '0' }}
