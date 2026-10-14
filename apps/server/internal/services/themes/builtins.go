@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -70,8 +71,8 @@ func loadBuiltInCatalog() map[string]json.RawMessage {
 	if err := decoder.Decode(&decoded); err != nil {
 		panic(fmt.Sprintf("decode built-in theme fixture: %v", err))
 	}
-	if decoder.Decode(&struct{}{}) == nil {
-		panic("decode built-in theme fixture: multiple JSON values")
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		panic("decode built-in theme fixture: expected exactly one JSON array")
 	}
 	if len(decoded) != len(builtInOrder) {
 		panic(fmt.Sprintf("decode built-in theme fixture: got %d themes, want %d", len(decoded), len(builtInOrder)))
