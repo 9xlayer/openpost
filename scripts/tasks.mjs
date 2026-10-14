@@ -167,9 +167,7 @@ const checks = {
   "ui-consistency": stage("UI consistency", [
     bun("scripts/check-ui-consistency.mjs"),
     bun("scripts/sync-static-ui.mjs", "--check"),
-    commandStep("bun", "scripts/sync-static-404.mjs", "--check", {
-      cwd: "apps/marketing",
-    }),
+    commandStep("bun", "scripts/sync-static-404.mjs", "--check", { cwd: "apps/marketing" }),
   ]),
   "query-migration": stage("Query migration", [
     bunTest("scripts/check-query-migration.test.mjs"),
@@ -215,9 +213,7 @@ if (import.meta.main) {
     if (options.has("--plan")) {
       console.log(JSON.stringify(publicPlan(plan), null, 2));
     } else {
-      const cacheDirectory = resolveTurboCacheDirectory({
-        repositoryRoot: root,
-      });
+      const cacheDirectory = resolveTurboCacheDirectory({ repositoryRoot: root });
       if (process.env.OPENPOST_ROOT_TASK_LOCKED === "1") {
         await execute(plan, { cacheDirectory, enforceCacheLimit: false });
       } else {
@@ -764,24 +760,14 @@ function stage(label, steps) {
 
 function taskStage(label, task, scope) {
   return stage(label, [
-    {
-      type: "task",
-      task,
-      scope,
-      display: `bun run ${task}${scope ? ` -- ${scope}` : ""}`,
-    },
+    { type: "task", task, scope, display: `bun run ${task}${scope ? ` -- ${scope}` : ""}` },
   ]);
 }
 
 function commandStep(...values) {
   let options = {};
   if (typeof values.at(-1) === "object") options = values.pop();
-  return {
-    type: "command",
-    argv: values,
-    display: values.join(" "),
-    ...options,
-  };
+  return { type: "command", argv: values, display: values.join(" "), ...options };
 }
 
 function bun(...args) {

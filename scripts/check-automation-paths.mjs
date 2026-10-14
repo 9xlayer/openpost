@@ -104,13 +104,22 @@ export function validateAutomationPaths(root, files) {
     });
     for (const [id, job] of Object.entries(workflow.jobs ?? {})) {
       const label = `${file} job ${id}`;
+      if (job.uses?.startsWith("./")) requireInput(job.uses, `${label} local workflow`);
       const defaultDirectory =
         job.defaults?.run?.["working-directory"] ?? workflow.defaults?.run?.["working-directory"];
       requireInput(defaultDirectory, `${label} defaults`, { directory: true });
       for (const step of job.steps ?? []) {
         requireInput(step["working-directory"], label, { directory: true });
-        if (step.uses?.startsWith("./"))
-          requireInput(step.uses, `${label} local action`, { directory: true });
+        if (step.uses?.startsWith("./")) {
+          const directory = path.posix.normalize(step.uses);
+          if (
+            !["action.yml", "action.yaml", "Dockerfile"].some((entrypoint) =>
+              files.includes(path.posix.join(directory, entrypoint)),
+            )
+          ) {
+            problems.push(`${label} local action: no tracked entrypoint in ${step.uses}`);
+          }
+        }
         for (const key of [
           "go-version-file",
           "node-version-file",
