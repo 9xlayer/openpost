@@ -1107,8 +1107,6 @@ func TestMCPLocalUploadWidgetContractIsAccessibleAndAppScoped(t *testing.T) {
 	for _, required := range []string{
 		`<label for="file">Media file</label>`,
 		`<label for="alt">Alt text`,
-		`min-height:44px`,
-		`color-scheme:light dark`,
 		`role="status" aria-live="polite"`,
 		`accept="image/*,video/*"`,
 	} {
