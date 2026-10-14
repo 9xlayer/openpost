@@ -121,3 +121,31 @@ test.each([200, 404, 403, 503])(
     expect(requests.every((request) => request.signal.aborted)).toBe(true);
   },
 );
+
+test("loads the submitted review snapshots through the publication review route", async () => {
+  let received: Request | undefined;
+  const transport = createClient<paths>({
+    baseUrl: "https://review.invalid/api/v1",
+    fetch: async (request) => {
+      received = request;
+      return Response.json([
+        {
+          id: "review-a",
+          publication_id: "post-a",
+          workspace_id: "workspace-a",
+          snapshot: { title: "Submitted version" },
+        },
+      ]);
+    },
+  });
+  const controller = new AbortController();
+  const rows = await createMobileQueryAPI(() => transport).listPublicationReviews(
+    "workspace-a",
+    "post-a",
+    controller.signal,
+  );
+  expect(new URL(received!.url).pathname).toBe("/api/v1/publications/post-a/reviews");
+  expect(rows[0]?.snapshot.title).toBe("Submitted version");
+  controller.abort();
+  expect(received!.signal.aborted).toBe(true);
+});

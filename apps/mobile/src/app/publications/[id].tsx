@@ -1,3 +1,4 @@
+import { PublicationReviews } from "@/components/publication-reviews";
 import { NativeText as Text } from "@/components/native-text";
 import { PlatformIcon } from "@/components/platform-icon";
 import { MediaImage } from "@/components/media-image";
@@ -378,6 +379,10 @@ export default function PostScreen() {
             );
           })}
         </View>
+
+        {pub.review_state ? (
+          <PublicationReviews key={`${pub.workspace_id}:${pub.id}`} publication={pub} />
+        ) : null}
 
         {canEdit ? (
           <>

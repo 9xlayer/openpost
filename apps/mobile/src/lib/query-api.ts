@@ -6,6 +6,7 @@ import {
   type AnalyticsQueryAPI,
   type PublicationBuild,
   type VoiceProfileQueryAPI,
+  type PublicationReview,
 } from "@openpost/query-catalog";
 
 import { api, captureApiRequestIdentity, settleApiUnauthorized, type Api } from "./api/client";
@@ -23,6 +24,11 @@ type MobileQueryAPI = Pick<
   Pick<VideoProjectQueryAPI, "listVideoProjectSummaries"> &
   AnalyticsQueryAPI &
   VoiceProfileQueryAPI & {
+    listPublicationReviews(
+      workspaceId: string,
+      publicationId: string,
+      signal: AbortSignal,
+    ): Promise<PublicationReview[]>;
     getPublicationBuild(
       workspaceId: string,
       id: string,
@@ -48,6 +54,22 @@ export async function mobileQueryTransportRequest<T>(
 
 export function createMobileQueryAPI(getTransport: () => QueryTransport): MobileQueryAPI {
   return {
+    async listPublicationReviews(workspaceId, publicationId, signal) {
+      const { data } = await queryGET({
+        signal,
+        fallback: "Could not load client reviews",
+        request: (requestSignal) =>
+          getTransport().GET("/publications/{id}/reviews", {
+            signal: requestSignal,
+            params: { path: { id: publicationId } },
+          }),
+      });
+      if (
+        data.some((row) => row.workspace_id !== workspaceId || row.publication_id !== publicationId)
+      )
+        throw new Error("Review workspace does not match this post.");
+      return data;
+    },
     async getPublicationBuild(workspaceId, id, signal) {
       const { data } = await queryGET({
         signal,
