@@ -225,6 +225,10 @@ it('reorders from the rendered thumbnail without importing it and commits one hi
 		const first = screen.getByRole('button', { name: /Page 1: First/ });
 		const third = screen.getByRole('button', { name: /Page 3: Third/ });
 		await expect.poll(() => third.element().querySelector('img')).not.toBeNull();
+		const thumbnail = third.element().querySelector('img')!;
+		// The element exists before its blob image has decoded. Start the native
+		// drag only once the rendered thumbnail has its final image dimensions.
+		await thumbnail.decode();
 		const source = third.element();
 		let dragOwner: EventTarget | null = null;
 		source.addEventListener(
@@ -234,7 +238,7 @@ it('reorders from the rendered thumbnail without importing it and commits one hi
 			},
 			{ once: true }
 		);
-		await userEvent.dragAndDrop(source.querySelector('img')!, first);
+		await userEvent.dragAndDrop(thumbnail, first);
 		await expect.element(screen.getByRole('button', { name: /Page 1: Third/ })).toHaveFocus();
 		await Promise.all(
 			screen.container
