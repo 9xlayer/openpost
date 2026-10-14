@@ -65,4 +65,25 @@ test("workflow tabs read only their data and distinguish failed history from an 
   await page.getByRole("button", { name: "Try again", exact: true }).click();
   await expect(page.getByText("No runs yet", { exact: true })).toBeVisible();
   expect(unrelatedReads.filter((path) => path === "/api/v1/accounts")).toEqual([]);
+  const readsBeforeEditor = unrelatedReads.filter((path) =>
+    path.endsWith("workflow-run-summaries"),
+  ).length;
+  await page.goto(`/workflows/${workflow.id}`);
+  await expect(page.getByRole("button", { name: "Runs", exact: true })).toBeVisible();
+  expect(unrelatedReads.filter((path) => path.endsWith("workflow-run-summaries"))).toHaveLength(
+    readsBeforeEditor,
+  );
+  await page.route("**/api/v1/workflow-run-summaries?**", async (route) => {
+    await route.fulfill({ status: 503, json: { detail: "Editor history unavailable" } });
+  });
+  await page.getByRole("button", { name: "Runs", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Editor history unavailable");
+  await expect(
+    page.getByText("Preview a workflow to inspect its steps without making changes.", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.unroute("**/api/v1/workflow-run-summaries?**");
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
