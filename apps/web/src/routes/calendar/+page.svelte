@@ -25,6 +25,7 @@
 	import type { components } from '$lib/api/types';
 	import { publicationCalendarOccurrence } from '$lib/publication-calendar';
 	import CalendarDragOverlay from '$lib/calendar/calendar-drag-overlay.svelte';
+	import { createCalendarTimeIndex } from '$lib/calendar/calendar-time-index';
 	import {
 		resolveWeekCalendarTarget,
 		WeekCalendarDragController,
@@ -270,6 +271,7 @@
 		}
 		return map;
 	});
+	const calendarTimeIndex = $derived(createCalendarTimeIndex(itemsByDay, viewerTimeZone));
 	const selectedMonthDay = $derived(days.find((day) => day.key === selectedMonthDayKey) ?? null);
 	const selectedMonthDayItems = $derived(
 		selectedMonthDay ? (itemsByDay.get(selectedMonthDay.key) ?? []) : []
@@ -1125,20 +1127,11 @@
 	}
 
 	function timeParts(value: string) {
-		const parts = new Intl.DateTimeFormat('en-GB', {
-			hour: '2-digit',
-			minute: '2-digit',
-			hourCycle: 'h23',
-			timeZone: viewerTimeZone
-		}).formatToParts(new Date(value));
-		return {
-			hour: Number(parts.find((part) => part.type === 'hour')?.value ?? 0),
-			minute: Number(parts.find((part) => part.type === 'minute')?.value ?? 0)
-		};
+		return calendarTimeIndex.timeParts(value);
 	}
 
 	function itemsForHour(day: CalendarDay, hour: number) {
-		return (itemsByDay.get(day.key) ?? []).filter((item) => timeParts(item.occursAt).hour === hour);
+		return calendarTimeIndex.itemsForHour(day.key, hour);
 	}
 
 	function formatAgendaDate(value: Date) {
