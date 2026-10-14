@@ -56,6 +56,21 @@ test("Media browsing stays within its JavaScript budget before editing video", a
   expect(scriptBytes).toBeLessThan(1_900_000);
 });
 
+test("Quick Cut stays within its JavaScript budget before opening a source", async ({
+  page,
+  request,
+}) => {
+  const { token } = await registerUser(request, `quick-cut-budget-${randomUUID()}@example.com`);
+  await createWorkspace(request, token, "Quick Cut performance");
+  await authenticatePage(page, token);
+  await page.goto("/quick-cut");
+  await expect(page.getByRole("button", { name: "Open videos", exact: true })).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const scriptBytes = await downloadedScriptBytes(page);
+  expect(scriptBytes).toBeGreaterThan(0);
+  expect(scriptBytes).toBeLessThan(1_900_000);
+});
+
 test("a failed settings download leaves navigation usable and can recover", async ({
   page,
   request,
