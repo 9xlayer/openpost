@@ -35,6 +35,7 @@ export function workflowGraph(
 	run?: Run,
 	issues: Issue[] = workflowIssues(definition, run?.source)
 ) {
+	const catalog = new Map(actionCatalog().map((entry) => [entry.kind, entry]));
 	const nodes: GraphNode[] = [
 		{
 			id: 'source',
@@ -64,7 +65,7 @@ export function workflowGraph(
 	type SequenceTail = { x: number; ends: End[] };
 	function sequence(steps: Step[], x: number, y: number, ends: End[]): SequenceTail {
 		for (const step of steps) {
-			const entry = actionCatalog().find((item) => item.kind === step.kind);
+			const entry = catalog.get(step.kind);
 			const branch = step.kind === 'condition' || step.kind === 'ai_decision';
 			nodes.push({
 				id: step.id,
