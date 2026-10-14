@@ -4,6 +4,21 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.21.1] - 2026-10-14
+
+### Added
+
+- Italian interface translations, language selection, regional formatting, and offline recovery copy in the web app.
+
+### Fixed
+
+- Backup restore drills count the current Publication inventory and clean up their temporary database after failed restores.
+
+### Maintenance
+
+- Remove the README demo-maintenance note and the retired VitePress link-checking branch. Point the superseded composer proposal to the maintained Ideate and review contracts.
+- Remove obsolete web dependency declarations after the shared UI extraction and keep theme-icon generator dependencies with repository tooling.
+
 ## [7.20.8] - 2026-10-14
 
 ### Fixed
