@@ -268,6 +268,7 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 		receiptByRendition[receipts[index].RenditionID] = &receipts[index]
 	}
 	var retryFailure *RetryableError
+	var pendingContinuation *RetryableError
 	var terminalWriteFailure error
 	readinessIntent := publisherReadinessIntent(receipts[0].ExecutionIntent)
 	for i := range renditions {
@@ -302,6 +303,7 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 				retryFailure = &RetryableError{Failure: failure, Provider: rendition.Platform, RenditionID: rendition.ID}
 			}
 			if _, pending := providerwrite.IsPending(err); pending {
+				pendingContinuation = &RetryableError{Failure: failure, Provider: rendition.Platform, RenditionID: rendition.ID}
 				if stateErr := s.persistRenditionOutcome(ctx, rendition.ID, failure); stateErr != nil {
 					return stateErr
 				}
@@ -341,6 +343,14 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 
 	if err := s.finalizePublication(ctx, publication); err != nil {
 		return err
+	}
+	if pendingContinuation != nil {
+		// A pending provider receipt still needs reconciliation. Keep this job a
+		// continuation even when another destination has a longer retry delay.
+		if retryFailure != nil && retryFailure.Failure.RetryAfter > pendingContinuation.Failure.RetryAfter {
+			pendingContinuation.Failure.RetryAfter = retryFailure.Failure.RetryAfter
+		}
+		return pendingContinuation
 	}
 	if retryFailure != nil {
 		return retryFailure
