@@ -24,6 +24,11 @@ export const offlineTranslations = {
 		'Diese Seite ist auf diesem Gerät noch nicht verfügbar. Stelle die Verbindung wieder her, um sie zu öffnen. Deine lokal gespeicherten Projekte bleiben auf diesem Gerät.',
 		'Erneut versuchen'
 	],
+	it: [
+		'Sei offline',
+		'Questa pagina non è ancora disponibile su questo dispositivo. Riconnettiti per aprirla. I tuoi progetti locali salvati restano su questo dispositivo.',
+		'Riprova'
+	],
 	ja: [
 		'オフラインです',
 		'このページはまだこのデバイスで利用できません。再接続して開いてください。保存したローカルプロジェクトはこのデバイスに残っています。',
