@@ -43,6 +43,13 @@ test("Week grid retains both posts in a repeated local hour and changes timezone
       await page.reload();
       await page.getByRole("button", { name: "Week", exact: true }).click();
       const grid = page.getByRole("region", { name: "Weekly publishing calendar" });
+      await expect
+        .poll(() =>
+          grid
+            .getByText(timezone, { exact: true })
+            .evaluate((element) => element.scrollWidth <= element.clientWidth),
+        )
+        .toBe(true);
       const firstHour = timezone === "UTC" ? "05:00" : "01:00";
       const secondHour = timezone === "UTC" ? "06:00" : "01:00";
       const first = grid

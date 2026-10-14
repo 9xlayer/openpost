@@ -1779,7 +1779,9 @@
 							<div
 								class="sticky top-0 z-30 grid grid-cols-[4.5rem_repeat(7,minmax(0,1fr))] border-b bg-background/95 backdrop-blur"
 							>
-								<div class="border-r p-2 text-xs text-muted-foreground">{viewerTimeZone}</div>
+								<div class="border-r px-1 py-2 text-xs wrap-anywhere text-muted-foreground">
+									{viewerTimeZone}
+								</div>
 								{#each weekDays as day (day.key)}
 									<div
 										class={cn(
