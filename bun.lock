@@ -223,7 +223,7 @@
     },
     "packages/cli": {
       "name": "@getopenpost/cli",
-      "version": "0.1.17",
+      "version": "0.1.18",
       "bin": {
         "openpost": "./bin/openpost.js",
         "openpost-mcp": "./bin/openpost-mcp.js",
@@ -252,7 +252,7 @@
     },
     "packages/n8n-nodes-openpost": {
       "name": "@getopenpost/n8n-nodes-openpost",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "devDependencies": {
         "@n8n/node-cli": "0.44.3",
         "n8n-workflow": "2.35.3",
@@ -289,7 +289,7 @@
     },
     "packages/sdk": {
       "name": "@getopenpost/sdk",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "devDependencies": {
         "typescript": "5.9.3",
         "vitest": "4.1.11",

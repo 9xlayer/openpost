@@ -163,7 +163,7 @@ func (h *PublicationHandler) previewBatchScheduleItem(ctx context.Context, post 
 	}
 	if item.Error == "" {
 		month := at.UTC().Format("2006-01")
-		if _, err := h.checkScheduledPublicationQuotaAmount(ctx, post.WorkspaceID, at, selection.plannedMonthly[month]+1); err != nil {
+		if err := h.checkScheduledPublicationQuotaAmount(ctx, post.WorkspaceID, at, selection.plannedMonthly[month]+1); err != nil {
 			item.Error = err.Error()
 		} else {
 			selection.plannedMonthly[month]++
@@ -316,7 +316,7 @@ func (h *PublicationHandler) batchSchedulePreflight(ctx context.Context, post *m
 	if err := h.requirePublicationReadinessWithDB(ctx, h.db, post, providerreadiness.OperationPublishScheduled, providerreadiness.ExecutionIntentProduction, false); err != nil {
 		return err
 	}
-	_, err = h.checkScheduledPublicationQuota(ctx, post.WorkspaceID, at)
+	err = h.checkScheduledPublicationQuota(ctx, post.WorkspaceID, at)
 	return err
 }
 func (h *PublicationHandler) confirmBatchSchedule(ctx context.Context, input *BatchScheduleConfirmInput) (*BatchScheduleConfirmOutput, error) {
@@ -363,7 +363,7 @@ func (h *PublicationHandler) confirmBatchScheduleItem(ctx context.Context, works
 	if err != nil {
 		return err
 	}
-	reservation, err := h.prepareScheduledUsage(ctx, workspaceID, at)
+	err = h.checkScheduledPublicationQuota(ctx, workspaceID, at)
 	if err != nil {
 		return err
 	}
@@ -389,7 +389,7 @@ func (h *PublicationHandler) confirmBatchScheduleItem(ctx context.Context, works
 		if err != nil {
 			return publicationEnqueueResult{}, err
 		}
-		return h.queueScheduledPublicationTx(ctx, tx, post.ID, updated.Revision, providerreadiness.ExecutionIntentProduction, reservation)
+		return h.queueScheduledPublicationTx(ctx, tx, post.ID, updated.Revision, providerreadiness.ExecutionIntentProduction)
 	}, func(value publicationEnqueueResult) (string, string) { return post.ID, value.JobID })
 	return err
 }

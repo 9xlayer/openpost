@@ -34,7 +34,11 @@
 	import { MediaQuery, SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { client, type SocialAccount, type Workspace } from '$lib/api/client';
 	import { loadCapabilityCatalog, loadWorkspaceAccounts } from '$lib/api/performance-cache';
-	import { publishingOptionsQueryOptions } from '@openpost/query-catalog';
+	import {
+		publicationDetailQueryOptions,
+		publishingOptionsQueryOptions
+	} from '@openpost/query-catalog';
+	import { queryAPI } from '$lib/query/api';
 	import { queryClient } from '$lib/query/client';
 	import { queryMediaMetadata } from '$lib/query/media';
 	import { queryVoiceProfiles } from '$lib/query/voice-profiles';
@@ -4157,9 +4161,11 @@
 		const id = publicationId || (await saveDraft({ allowEmpty: true }));
 		if (!id) throw new Error(m.compose_save_draft_failed());
 		const baseline = { id, workspaceId: selectedWorkspaceId, snapshot: getSaveSnapshot() };
-		const result = await client.GET('/publications/{id}', { params: { path: { id } } });
-		if (!result.data || result.error)
-			throw new Error(result.error?.detail || m.compose_save_draft_failed());
+		const post = await queryClient.query({
+			...publicationDetailQueryOptions(queryAPI, baseline.workspaceId, id),
+			staleTime: 0
+		});
+		if (!post) throw new Error(m.compose_save_draft_failed());
 		if (
 			composerDestroyed ||
 			publicationId !== id ||
@@ -4168,7 +4174,7 @@
 		)
 			throw new Error(m.compose_ai_build_failed());
 		reviewBaseline = baseline;
-		return result.data;
+		return post;
 	}
 
 	async function overwriteSavedTextDraft() {

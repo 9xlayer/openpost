@@ -26,6 +26,11 @@ func TestYouTubeGenerateAuthURL(t *testing.T) {
 		t.Fatalf("unexpected auth url %s", authURL)
 	}
 	query := parsed.Query()
+	for _, scope := range strings.Fields(query.Get("scope")) {
+		if scope == "https://www.googleapis.com/auth/userinfo.email" || scope == "https://www.googleapis.com/auth/userinfo.profile" {
+			t.Fatalf("YouTube channel connection requested unrelated identity scope %s", scope)
+		}
+	}
 	if query.Get(oauthParamClientID) != "client-id" {
 		t.Fatalf("expected client id, got %q", query.Get(oauthParamClientID))
 	}

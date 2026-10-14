@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/openpost/backend/internal/legalpolicy"
+	"github.com/openpost/backend/internal/netguard"
 	"github.com/openpost/backend/internal/platform"
 )
 
@@ -53,6 +54,9 @@ type Config struct {
 	FrontendURL              string
 	PublicURL                string
 	CORSOrigins              []string
+	TrustedProxyCIDRs        []string
+	WorkflowsAIEnabled       bool
+	WorkflowsAIMonthlyCalls  int64
 	WebAuthnRPID             string
 	LegalAcceptanceRequired  bool
 	TermsURL                 string
@@ -423,6 +427,14 @@ func finalizeLoadedConfig(cfg *Config, encryptionKeyIDErr error) {
 	mediaSigningKey, mediaSigningKeyErr := getEncryptionKeyringEnvDefault("OPENPOST_MEDIA_SIGNING_KEY", cfg.EncryptionKey)
 	cfg.MediaSigningKey = mediaSigningKey
 	cfg.setEncryptionKeyringLoadError(mediaSigningKeyErr)
+	cfg.TrustedProxyCIDRs = nil
+	for _, cidr := range strings.Split(getEnvDefault("OPENPOST_TRUSTED_PROXY_CIDRS", ""), ",") {
+		if cidr = strings.TrimSpace(cidr); cidr != "" {
+			cfg.TrustedProxyCIDRs = append(cfg.TrustedProxyCIDRs, cidr)
+		}
+	}
+	cfg.WorkflowsAIEnabled = getEnvBoolWithAliases(true, "OPENPOST_WORKFLOWS_AI_ENABLED")
+	cfg.WorkflowsAIMonthlyCalls = getEnvInt64("OPENPOST_WORKFLOWS_AI_MONTHLY_CALL_LIMIT", 1000)
 	cfg.CORSOrigins = buildCORSOrigins(
 		cfg.Edition,
 		cfg.FrontendURL,
@@ -698,6 +710,10 @@ func (c *Config) ValidateRuntime() error {
 	if _, err := platform.NormalizeDiscordPresenceStreamURL(c.DiscordPresenceStreamURL); err != nil {
 		return fmt.Errorf("OPENPOST_DISCORD_PRESENCE_STREAM_URL: %w", err)
 	}
+	if err := c.validateSecurityRuntime(); err != nil {
+		return err
+	}
+
 	if c.Edition != EditionCloud {
 		return nil
 	}
@@ -1292,6 +1308,21 @@ func validateBootstrapSecrets(jwtSecret, encryptionKey string) error {
 		if strings.HasPrefix(normalized, "change-this-") || normalized == documentedRandomSecretPlaceholder {
 			return fmt.Errorf("FATAL: %s must not use a public example placeholder", secret.name)
 		}
+	}
+	return nil
+}
+
+func (c *Config) validateSecurityRuntime() error {
+	for _, cidr := range c.TrustedProxyCIDRs {
+		if _, err := netguard.ParseTrustedProxyPrefix(cidr); err != nil {
+			return fmt.Errorf("OPENPOST_TRUSTED_PROXY_CIDRS contains an invalid CIDR")
+		}
+	}
+	if c.WorkflowsAIMonthlyCalls < 0 {
+		return fmt.Errorf("OPENPOST_WORKFLOWS_AI_MONTHLY_CALL_LIMIT must be >= 0")
+	}
+	if invalid := c.invalidCloudCORSConfig(); len(invalid) > 0 {
+		return fmt.Errorf("%s", strings.Join(invalid, ", "))
 	}
 	return nil
 }

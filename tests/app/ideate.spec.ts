@@ -492,11 +492,6 @@ test("clients review submitted posts without entering authoring", async ({
     databasePath,
     `INSERT INTO social_accounts(id,workspace_id,slug,platform,account_id,account_username,access_token_encrypted,is_active) VALUES(${sql(accountID)},${sql(workspace.id)},${sql(accountID)},'x',${sql(accountID)},'client-brand',X'00',1); INSERT INTO workspace_members(workspace_id,user_id,role,status) VALUES(${sql(workspace.id)},(SELECT id FROM users WHERE email=${sql(clientEmail)}),'client','active');`,
   ]);
-  const reviewerID = execFileSync(
-    "sqlite3",
-    [databasePath, `SELECT id FROM users WHERE email=${sql(clientEmail)};`],
-    { encoding: "utf8" },
-  ).trim();
   const created = await request.post("/api/v1/publications", {
     headers: { Authorization: `Bearer ${owner.token}` },
     data: {
@@ -509,15 +504,24 @@ test("clients review submitted posts without entering authoring", async ({
   });
   expect(created.ok(), await created.text()).toBe(true);
   const post = await created.json();
-  const submitted = await request.post(`/api/v1/publications/${post.id}/reviews`, {
-    headers: { Authorization: `Bearer ${owner.token}` },
-    data: {
-      expected_revision: post.revision,
-      reviewer_id: reviewerID,
-      note: "Please check the launch claim.",
-    },
-  });
-  expect(submitted.ok(), await submitted.text()).toBe(true);
+  await authenticatePage(page, owner.token);
+  await page.goto(`/publications/${post.id}?workspace_id=${workspace.id}`);
+  await page.getByRole("button", { name: "Post settings", exact: true }).click();
+  await page.getByRole("button", { name: "Send to client", exact: true }).click();
+  const ownerReview = page.getByRole("dialog", { name: "Client review", exact: true });
+  await expect(
+    ownerReview.getByText("Offline drafts are now available.", { exact: true }),
+  ).toBeVisible();
+  await ownerReview.getByRole("button", { name: "Choose a client", exact: true }).click();
+  await page.getByRole("option", { name: clientEmail, exact: true }).click();
+  await ownerReview
+    .getByRole("textbox", { name: "Note to the client", exact: true })
+    .fill("Please check the launch claim.");
+  await ownerReview.getByRole("button", { name: "Send to client", exact: true }).click();
+  await expect(
+    ownerReview.getByText("Awaiting client approval", { exact: true }).first(),
+  ).toBeVisible();
+  await ownerReview.getByRole("button", { name: "Close", exact: true }).click();
   await authenticatePage(page, reviewer.token);
   await page.goto("/ideate");
   await expect(page).toHaveURL(/\/publications$/);

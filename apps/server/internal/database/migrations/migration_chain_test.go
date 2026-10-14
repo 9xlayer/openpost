@@ -197,10 +197,7 @@ func TestMultiStageRepostMigrationPreservesLegacyExecutions(t *testing.T) {
 		Intent: models.PublishingIntentPost, ContentProfile: models.ContentProfileShortText,
 		SourceContent: "Legacy post", Status: models.PublicationStatusPublished,
 	}
-	_, err = db.ExecContext(ctx, `INSERT INTO publications (
-		id, workspace_id, created_by, title, intent, content_profile, source_content, status
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, publication.ID, publication.WorkspaceID, publication.CreatedByID, publication.Title,
-		publication.Intent, publication.ContentProfile, publication.SourceContent, publication.Status)
+	_, err = db.NewInsert().Model(publication).Column("id", "workspace_id", "created_by", "title", "intent", "content_profile", "source_content", "status").Returning("").Exec(ctx)
 	require.NoError(t, err)
 	// Seed the historical schema without fields introduced by later migrations.
 	_, err = db.ExecContext(ctx, `INSERT INTO renditions (

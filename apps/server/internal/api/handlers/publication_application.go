@@ -719,7 +719,7 @@ func (commands publicationApplication) Schedule(
 	if err := commands.validateForEnqueue(ctx, userID, publication.ID); err != nil {
 		return publicationEnqueueResult{}, err
 	}
-	reservation, err := commands.handler.prepareScheduledUsage(ctx, publication.WorkspaceID, publication.ScheduledAt)
+	err = commands.handler.checkScheduledPublicationQuota(ctx, publication.WorkspaceID, publication.ScheduledAt)
 	if err != nil {
 		return publicationEnqueueResult{}, err
 	}
@@ -728,7 +728,7 @@ func (commands publicationApplication) Schedule(
 	}
 	err = commands.handler.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 		var queueErr error
-		result, queueErr = commands.handler.queueScheduledPublicationTx(txCtx, tx, publication.ID, expectedRevision, intent, reservation)
+		result, queueErr = commands.handler.queueScheduledPublicationTx(txCtx, tx, publication.ID, expectedRevision, intent)
 		return queueErr
 	})
 	if err == nil {
@@ -758,7 +758,7 @@ func (commands publicationApplication) ScheduleIdempotent(
 	if err := commands.validateForEnqueue(ctx, userID, publication.ID); err != nil {
 		return publicationEnqueueResult{}, false, err
 	}
-	reservation, err := commands.handler.prepareScheduledUsage(ctx, publication.WorkspaceID, publication.ScheduledAt)
+	err = commands.handler.checkScheduledPublicationQuota(ctx, publication.WorkspaceID, publication.ScheduledAt)
 	if err != nil {
 		return publicationEnqueueResult{}, false, err
 	}
@@ -770,7 +770,7 @@ func (commands publicationApplication) ScheduleIdempotent(
 		commands.handler.db,
 		request,
 		func(txCtx context.Context, tx bun.Tx) (publicationEnqueueResult, error) {
-			return commands.handler.queueScheduledPublicationTx(txCtx, tx, publication.ID, expectedRevision, intent, reservation)
+			return commands.handler.queueScheduledPublicationTx(txCtx, tx, publication.ID, expectedRevision, intent)
 		},
 		func(value publicationEnqueueResult) (string, string) { return publication.ID, value.JobID },
 	)

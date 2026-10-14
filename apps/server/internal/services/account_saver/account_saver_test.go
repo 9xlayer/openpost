@@ -397,3 +397,33 @@ func TestSaveAccountBackfillsLegacyBlueskyInstanceWithoutChangingIdentity(t *tes
 	require.NoError(t, db.NewSelect().Model(grant).Where("id = ?", grant.ID).Scan(t.Context()))
 	require.Equal(t, platform.BlueskyDefaultPDSURL, grant.InstanceURL)
 }
+
+type interleavedEntitlement struct {
+	entitlements.Service
+	beforeCheck func()
+}
+
+func (s *interleavedEntitlement) Check(ctx context.Context, req entitlements.Request) (entitlements.Decision, error) {
+	if s.beforeCheck != nil {
+		fn := s.beforeCheck
+		s.beforeCheck = nil
+		fn()
+	}
+	return s.Service.Check(ctx, req)
+}
+func TestSaveAccountRechecksQuotaAfterCompetingConnection(t *testing.T) {
+	db := createTestDB(t)
+	seedWorkspaceMember(t, db, "ws", "user")
+	encryptor := crypto.NewTokenEncryptor("test")
+	policy := &interleavedEntitlement{Service: entitlements.NewStaticService(entitlements.PlanSnapshot{PlanID: "limited", Limits: map[entitlements.LimitKey]int64{entitlements.LimitSocialAccounts: 1}})}
+	saver := NewAccountSaver(db, encryptor, policy)
+	policy.beforeCheck = func() {
+		_, err := NewAccountSaver(db, encryptor).SaveAccount(t.Context(), accountSaverActor("user"), "x", "ws", "competitor", "competitor", "", &platform.TokenResult{AccessToken: "token"})
+		require.NoError(t, err)
+	}
+	_, err := saver.SaveAccount(t.Context(), accountSaverActor("user"), "x", "ws", "late", "late", "", &platform.TokenResult{AccessToken: "token"})
+	require.ErrorContains(t, err, "limit")
+	count, err := db.NewSelect().Model((*models.SocialAccount)(nil)).Where("workspace_id = ? AND is_active = ?", "ws", true).Count(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+}

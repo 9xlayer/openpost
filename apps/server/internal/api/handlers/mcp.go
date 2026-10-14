@@ -39,6 +39,7 @@ import (
 	"github.com/openpost/backend/internal/services/publicationauth"
 	publicationservice "github.com/openpost/backend/internal/services/publications"
 	"github.com/openpost/backend/internal/services/publicurl"
+	"github.com/openpost/backend/internal/services/sessions"
 	"github.com/openpost/backend/internal/services/usage"
 	"github.com/uptrace/bun"
 )
@@ -676,6 +677,11 @@ func (h *MCPHandler) authenticate(r *http.Request) (*middleware.Principal, error
 	if err != nil {
 		return nil, err
 	}
+	expectedOrigin, err := url.Parse(h.externalBaseURL(r))
+	if err != nil || middleware.SessionOriginRejected(principal, r.Header.Get("Origin"), expectedOrigin.Host, expectedOrigin.Scheme) {
+		return nil, fmt.Errorf("cross-site session request rejected")
+	}
+
 	if principal.Audience != "" && strings.TrimRight(principal.Audience, "/") != h.externalBaseURL(r)+"/mcp" {
 		return nil, fmt.Errorf("api token audience %q cannot access this mcp resource", principal.Audience)
 	}
@@ -6043,12 +6049,22 @@ func (h *MCPHandler) handleLocalMediaUpload(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to validate upload ticket"})
 	}
+	principal, err := h.localUploadTicketPrincipal(c.Request().Context(), ticket, now)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{fieldError: err.Error()})
+	}
+
+	uploadCtx := contextWithMCPPrincipal(c.Request().Context(), principal)
+	if err := h.ensureWorkspaceEditAccess(uploadCtx, ticket.UserID, ticket.WorkspaceID); err != nil {
+		return c.JSON(http.StatusForbidden, map[string]string{fieldError: "upload workspace is no longer accessible"})
+	}
+
 	if c.Request().ContentLength >= 0 && c.Request().ContentLength != ticket.Size {
 		return c.JSON(http.StatusBadRequest, map[string]string{fieldError: "uploaded media size does not match declared size"})
 	}
 	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, ticket.Size+1)
 	result, uploadErr := h.mediaHandler.processUploadStream(
-		c.Request().Context(), ticket.WorkspaceID, ticket.Filename, ticket.MimeType, ticket.Size, c.Request().Body,
+		uploadCtx, ticket.WorkspaceID, ticket.Filename, ticket.MimeType, ticket.Size, c.Request().Body,
 		mediaUploadBytesInput{AltText: ticket.AltText},
 	)
 	if uploadErr != nil {
@@ -6209,4 +6225,24 @@ func boolFromMap(values map[string]interface{}, key string) bool {
 
 func newUUID() string {
 	return uuid.New().String()
+}
+
+func (h *MCPHandler) localUploadTicketPrincipal(ctx context.Context, ticket models.MCPMediaUploadTicket, now time.Time) (*middleware.Principal, error) {
+	principal := &middleware.Principal{UserID: ticket.UserID, SessionID: ticket.SessionID, TokenID: ticket.TokenID, ClientID: ticket.ClientID, WorkspaceID: ticket.WorkspaceID}
+	switch {
+	case ticket.SessionID != "":
+		if _, err := sessions.NewService(h.db).ValidateSession(ctx, ticket.UserID, ticket.SessionID); err != nil {
+			return nil, errors.New("upload session is no longer active")
+		}
+	case ticket.TokenID != "":
+		var token models.APIToken
+		err := h.db.NewSelect().Model(&token).Where("id = ? AND user_id = ? AND revoked_at IS NULL", ticket.TokenID, ticket.UserID).Where("expires_at IS NULL OR expires_at > ?", now).Scan(ctx)
+		if err != nil || !mcpScopeAllowed(token.Scope) || mcpScopeIsReadOnly(token.Scope) || (token.WorkspaceID != "" && token.WorkspaceID != ticket.WorkspaceID) {
+			return nil, errors.New("upload credential is no longer active")
+		}
+		principal.Scope = token.Scope
+	default:
+		return nil, errors.New("upload credential is unavailable")
+	}
+	return principal, nil
 }

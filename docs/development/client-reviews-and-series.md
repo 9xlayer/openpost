@@ -36,7 +36,7 @@ Automatic native reposts of reviewed posts are blocked because a new placement i
 
 ## Upgrade and rollback
 
-Migration 156 is additive for SQLite and PostgreSQL. `OPENPOST_CLIENT_REVIEWS_ENABLED` defaults to false and controls admission of new review requests, not enforcement of existing reviews.
+Migration 158 is additive for SQLite and PostgreSQL. `OPENPOST_CLIENT_REVIEWS_ENABLED` defaults to false and controls admission of new review requests, not enforcement of existing reviews.
 
 1. Keep review admission disabled while migrating and upgrading.
 2. Drain and replace every old web process, worker and `all` process that can author or publish posts. Do not enable reviews during a mixed-version rollout.

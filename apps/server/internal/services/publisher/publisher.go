@@ -505,9 +505,6 @@ func (s *Service) publishRendition(
 	if err != nil {
 		return err
 	}
-	if err := s.checkMonthlyQuota(ctx, publication.WorkspaceID, entitlements.LimitPublishedPostsMonthly); err != nil {
-		return err
-	}
 	token := ""
 	_, usesInstanceCredential := provider.(platform.InstanceCredentialPublisher)
 	if !connectorBacked && !usesInstanceCredential {
@@ -621,7 +618,7 @@ func (s *Service) publishRendition(
 	if err := s.completeRendition(ctx, publication, rendition, externalID, externalURL, publishedAt); err != nil {
 		return err
 	}
-	s.recordPublishedPost(ctx, publication.WorkspaceID)
+	s.recordPublishedPost(ctx, publication.WorkspaceID, writeScope.operationID)
 	s.captureRenditionEvent(ctx, telemetry.EventRenditionPublished, publication, rendition, nil, rendition.ID, publishedAt)
 	s.scheduleReposts(ctx, rendition.ID)
 	s.publishFirstCommentBestEffort(ctx, publication, rendition, provider, token, account.AccountID, externalID, settings)
@@ -766,9 +763,6 @@ func (s *Service) publishRenditionSegments(
 			}
 			parentExternalID = segment.ExternalID
 			continue
-		}
-		if err := s.checkMonthlyQuota(ctx, publication.WorkspaceID, entitlements.LimitPublishedPostsMonthly); err != nil {
-			return s.persistRenditionSegmentOutcome(ctx, segment, err)
 		}
 
 		segmentSettings := map[string]interface{}{}
@@ -921,7 +915,7 @@ func (s *Service) publishRenditionSegments(
 			rootExternalURL = externalURL
 		}
 		parentExternalID = externalID
-		s.recordPublishedPost(ctx, publication.WorkspaceID)
+		s.recordPublishedPost(ctx, publication.WorkspaceID, writeScope.operationID)
 		s.recordPublicationLifecycleEvent(ctx, publication.WorkspaceID, publication.ID, rendition.ID, lifecycle.EventPublished, lifecycle.StatusSucceeded, "rendition segment published", map[string]any{
 			"platform":     rendition.Platform,
 			"segment_id":   segment.ID,
@@ -1155,33 +1149,29 @@ func (s *Service) publishRenditionReply(
 	return err
 }
 
-func (s *Service) checkMonthlyQuota(ctx context.Context, workspaceID string, limit entitlements.LimitKey) error {
-	if s.quota == nil || s.usage == nil || workspaceID == "" {
-		return nil
-	}
-	current, err := s.usage.CurrentMonthly(ctx, workspaceID, limit, time.Now().UTC())
-	if err != nil {
-		return fmt.Errorf("loading usage for %s: %w", limit, err)
-	}
-	decision, err := s.quota.Check(ctx, entitlements.Request{
-		WorkspaceID: workspaceID,
-		Limit:       limit,
-		Current:     current,
-		Amount:      1,
-	})
-	if err != nil {
-		return fmt.Errorf("checking quota for %s: %w", limit, err)
-	}
-	if !decision.Allowed {
-		if decision.Reason != "" {
-			return fmt.Errorf("quota exceeded: %s", decision.Reason)
+func (s *Service) recordPublishedPost(ctx context.Context, workspaceID, operationID string) {
+	if s.quota != nil {
+		if _, stored := s.quota.(*entitlements.SubscriptionService); stored {
+			// A plan can change while the provider is processing the original write.
+			exists, err := s.db.NewSelect().Model((*models.MonthlyUsageReservation)(nil)).Where("operation_key = ? AND workspace_id = ? AND state <> ?", operationID, workspaceID, "released").Exists(ctx)
+			if err != nil {
+				log.Printf("[Publisher] Failed to resolve published usage receipt: %v", err)
+				return
+			}
+			if exists {
+				return
+			}
+		} else {
+			policy, err := s.providerUsagePolicy(ctx, s.db, workspaceID, entitlements.LimitPublishedPostsMonthly)
+			if err != nil {
+				log.Printf("[Publisher] Failed to resolve published usage policy: %v", err)
+				return
+			}
+			if !policy.Unlimited {
+				return
+			}
 		}
-		return fmt.Errorf("quota exceeded: %s", limit)
 	}
-	return nil
-}
-
-func (s *Service) recordPublishedPost(ctx context.Context, workspaceID string) {
 	s.recordUsage(ctx, workspaceID, entitlements.LimitPublishedPostsMonthly)
 }
 
@@ -1937,16 +1927,12 @@ func (s *Service) publishProviderWithUsage(
 		if readinessErr := s.requireProviderWriteReadiness(sendCtx, workspaceID, providerName, writeScope, req); readinessErr != nil {
 			return platform.PublishResult{}, readinessErr
 		}
-		if quotaErr := s.checkMonthlyQuota(sendCtx, workspaceID, entitlements.LimitProviderWriteCallsMonthly); quotaErr != nil {
-			return platform.PublishResult{}, quotaErr
-		}
-		reservation, reserveErr := s.reserveProviderPublishCost(sendCtx, workspaceID, providerName, subject, phase, req)
+		reservation, reserveErr := s.reserveProviderDispatch(sendCtx, workspaceID, providerName, subject, phase, writeScope, req)
 		if reserveErr != nil {
 			return platform.PublishResult{}, reserveErr
 		}
 		requestCopy := *req
 		control.BindPublishRequest(&requestCopy)
-		s.recordProviderWriteCall(sendCtx, workspaceID)
 		result, publishErr := s.publishProvider(sendCtx, provider, token, accountID, &requestCopy, media)
 		s.settleProviderPublishCost(sendCtx, reservation, publishErr)
 		return result, publishErr
@@ -1968,22 +1954,24 @@ func (s *Service) publishProviderWithUsage(
 			if readinessErr := s.requireProviderWriteReadiness(resumeCtx, workspaceID, providerName, writeScope, req); readinessErr != nil {
 				return platform.PublishResult{}, readinessErr
 			}
-			if quotaErr := s.checkMonthlyQuota(resumeCtx, workspaceID, entitlements.LimitProviderWriteCallsMonthly); quotaErr != nil {
-				return platform.PublishResult{}, quotaErr
-			}
-			reservation, reserveErr := s.reserveProviderPublishCost(resumeCtx, workspaceID, providerName, subject, phase+"-resume", req)
+			reservation, reserveErr := s.reserveProviderDispatch(resumeCtx, workspaceID, providerName, subject, phase+"-resume", writeScope, req)
 			if reserveErr != nil {
 				return platform.PublishResult{}, reserveErr
 			}
 			requestCopy := *req
 			control.BindPublishRequest(&requestCopy)
-			s.recordProviderWriteCall(resumeCtx, workspaceID)
 			result, resumeErr := resumer.ResumePublish(resumeCtx, token, accountID, &requestCopy, reference)
 			s.settleProviderPublishCost(resumeCtx, reservation, resumeErr)
 			return result, resumeErr
 		}
 	}
-	return providerwrite.New(s.db).Execute(ctx, input, send, reconcile, resume)
+	result, err := providerwrite.New(s.db).Execute(ctx, input, send, reconcile, resume)
+	settleCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if settleErr := s.settleProviderUsage(settleCtx, workspaceID, writeScope); settleErr != nil {
+		log.Printf("[Publisher] monthly usage settlement failed; reservation retained: %v", settleErr)
+	}
+	return result, err
 }
 
 func (s *Service) requireProviderWriteReadiness(

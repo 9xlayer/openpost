@@ -17,6 +17,7 @@
 		accounts
 	}: { publication: components['schemas']['PublicationResponse']; accounts: SocialAccount[] } =
 		$props();
+	const scalarSchema = z.union([z.string(), z.number(), z.boolean()]);
 	const catalog = createQuery(() => capabilityCatalogQueryOptions(queryAPI));
 	function settingRows(rendition: components['schemas']['RenditionResponse']) {
 		const definitions =
@@ -25,19 +26,19 @@
 					item.provider === rendition.platform && item.output_profile === rendition.output_profile
 			)?.settings ?? [];
 		return Object.entries(rendition.settings ?? {}).flatMap(([key, value]) => {
-			if (value === null || value === undefined || value === '' || typeof value === 'object')
-				return [];
+			const parsed = scalarSchema.safeParse(value);
+			if (!parsed.success || parsed.data === '') return [];
 			const definition = definitions.find((item) => item.key === key);
 			return [
 				{
 					key,
 					label: definition ? settingLabel(definition) : key.replaceAll('_', ' '),
 					value:
-						typeof value === 'boolean'
-							? value
-								? m.compose_setting_yes()
-								: m.compose_setting_no()
-							: String(value)
+						parsed.data === true
+							? m.compose_setting_yes()
+							: parsed.data === false
+								? m.compose_setting_no()
+								: String(parsed.data)
 				}
 			];
 		});
@@ -51,7 +52,9 @@
 		z.array(z.number()),
 		z.array(z.boolean())
 	]);
-	function settings(value: Record<string, unknown> | null | undefined): ComposerSettings {
+	function settings(
+		value: components['schemas']['RenditionResponse']['settings'] | null | undefined
+	): ComposerSettings {
 		const entries: Array<[string, ComposerSettingValue]> = [];
 		for (const [key, item] of Object.entries(value ?? {})) {
 			const parsed = valueSchema.safeParse(item);

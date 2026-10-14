@@ -490,6 +490,10 @@ func (h *WorkspaceHandler) CreateWorkspace(api huma.API) {
 
 		err := h.insertWorkspaceBoundary(ctx, organization, organizationMember, workspace, member, userID)
 		if err != nil {
+			var statusError huma.StatusError
+			if errors.As(err, &statusError) {
+				return nil, err
+			}
 			if errors.Is(err, errOrganizationChangedDuringWorkspaceCreation) {
 				return nil, huma.Error409Conflict("Organization access changed; review the Workspace destination and try again")
 			}
@@ -508,10 +512,25 @@ var errOrganizationChangedDuringWorkspaceCreation = errors.New("organization cha
 
 func (h *WorkspaceHandler) insertWorkspaceBoundary(ctx context.Context, organization *models.Organization, organizationMember *models.OrganizationMember, workspace *models.Workspace, member *models.WorkspaceMember, userID string) error {
 	return h.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		quotaOrganizationID := workspace.OrganizationID
+		if organization != nil {
+			// Serialize first-Organization creation by actor, before counting memberships.
+			locked, err := tx.NewUpdate().Model((*models.User)(nil)).Set("email = email").Where("id = ?", userID).Exec(txCtx)
+			if err != nil {
+				return err
+			}
+			if rows, err := locked.RowsAffected(); err != nil || rows != 1 {
+				return errOrganizationChangedDuringWorkspaceCreation
+			}
+			quotaOrganizationID = ""
+		}
 		if organization == nil {
 			if err := lockOrganizationForWorkspaceCreation(txCtx, tx, workspace.OrganizationID, userID); err != nil {
 				return err
 			}
+		}
+		if err := h.checkCreateWorkspaceEntitlementWithDB(txCtx, tx, quotaOrganizationID, userID); err != nil {
+			return err
 		}
 		return workspaceprovisioning.Create(txCtx, tx, workspaceprovisioning.Boundary{
 			Organization:       organization,
@@ -906,9 +925,12 @@ func (h *WorkspaceHandler) acceptWorkspaceInvitation(
 }
 
 func (h *WorkspaceHandler) checkCreateWorkspaceEntitlement(ctx context.Context, organizationID, userID string) error {
+	return h.checkCreateWorkspaceEntitlementWithDB(ctx, h.db, organizationID, userID)
+}
+func (h *WorkspaceHandler) checkCreateWorkspaceEntitlementWithDB(ctx context.Context, db bun.IDB, organizationID, userID string) error {
 	var current int
 	if organizationID != "" {
-		if err := h.db.NewSelect().
+		if err := db.NewSelect().
 			ColumnExpr("COUNT(*)").
 			Model((*models.Workspace)(nil)).
 			Where("organization_id = ?", organizationID).
@@ -916,7 +938,7 @@ func (h *WorkspaceHandler) checkCreateWorkspaceEntitlement(ctx context.Context, 
 			return huma.Error500InternalServerError("failed to check workspace limit")
 		}
 	} else {
-		if err := h.db.NewSelect().
+		if err := db.NewSelect().
 			ColumnExpr("COUNT(*)").
 			Model((*models.WorkspaceMember)(nil)).
 			Where("user_id = ? AND status = ?", userID, models.WorkspaceMemberStatusActive).
@@ -925,7 +947,7 @@ func (h *WorkspaceHandler) checkCreateWorkspaceEntitlement(ctx context.Context, 
 		}
 	}
 
-	decision, err := h.entitlement.Check(ctx, entitlements.Request{
+	decision, err := entitlements.CheckWithDB(ctx, h.entitlement, db, entitlements.Request{
 		OrganizationID: organizationID,
 		UserID:         userID,
 		Limit:          entitlements.LimitWorkspaces,

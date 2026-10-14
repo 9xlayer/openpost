@@ -214,6 +214,9 @@ func main() {
 	}
 	readiness := apiroutes.NewReadiness()
 	e := echo.New()
+	e.Pre(apimiddleware.TrustedProxyMiddleware(cfg.TrustedProxyCIDRs))
+	e.Server.ReadHeaderTimeout = 15 * time.Second
+	e.Server.IdleTimeout = 60 * time.Second
 	e.Use(echo.WrapMiddleware(telemetryRecorder.WrapHTTP))
 	e.Use(middleware.RequestID())
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
@@ -744,6 +747,7 @@ func main() {
 	workflowService := workflows.NewService(db, nil, tokenEncryptor)
 	workflowService.SetTelemetry(telemetryRecorder)
 	workflowService.SetAI(contentGenerator, cfg.TextGenerationModel)
+	workflowService.SetAILimits(cfg.WorkflowsAIEnabled, cfg.WorkflowsAIMonthlyCalls)
 	workflowService.SetDecisionAI(decisionGenerator, cfg.WorkflowDecisionModel)
 	var worker *queue.BackgroundWorker
 	var discordPresenceService *discordpresence.Service
