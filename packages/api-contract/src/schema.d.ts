@@ -5859,6 +5859,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflow-run-summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the latest 50 workflow runs without source data or step payloads */
+        get: operations["list-workflow-run-summaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/workflow-runs": {
         parameters: {
             query?: never;
@@ -16689,6 +16706,28 @@ export interface components {
             workflow_revision: number;
             workspace_id: string;
         };
+        WorkflowRunSummary: {
+            /** Format: date-time */
+            created_at: string;
+            current_step_id?: string;
+            definition: components["schemas"]["WorkflowDefinition"];
+            error?: string;
+            id: string;
+            mode: string;
+            /** Format: int64 */
+            revision: number;
+            state: string;
+            steps: components["schemas"]["WorkflowStepSummary"][] | null;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            wake_at?: string;
+            workflow_id: string;
+            workflow_name: string;
+            /** Format: int64 */
+            workflow_revision: number;
+            workspace_id: string;
+        };
         WorkflowSaveRequest: {
             /**
              * Format: uri
@@ -16770,6 +16809,10 @@ export interface components {
             };
             /** Format: date-time */
             started_at: string;
+            state: string;
+            step_id: string;
+        };
+        WorkflowStepSummary: {
             state: string;
             step_id: string;
         };
@@ -41631,6 +41674,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowDeleteOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-workflow-run-summaries": {
+        parameters: {
+            query: {
+                workspace_id: string;
+                workflow_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunSummary"][] | null;
                 };
             };
             /** @description Bad Request */

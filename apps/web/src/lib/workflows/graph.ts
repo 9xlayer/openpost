@@ -10,6 +10,10 @@ import {
 } from './catalog';
 import { workflowIssues, type Issue } from './validation';
 import { m } from '$lib/paraglide/messages';
+export type GraphRun = {
+	source?: Run['source'];
+	steps?: { step_id: string; state: string }[] | null;
+};
 export type Port = 'after' | 'then' | 'else';
 export type GraphNode = {
 	id: string;
@@ -32,7 +36,7 @@ type GraphEdge = {
 };
 export function workflowGraph(
 	definition: Definition,
-	run?: Run,
+	run?: GraphRun,
 	issues: Issue[] = workflowIssues(definition, run?.source)
 ) {
 	const catalog = new Map(actionCatalog().map((entry) => [entry.kind, entry]));

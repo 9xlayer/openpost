@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { workflowGraph } from './graph';
-	import type { Definition, Run } from './api';
+	import { workflowGraph, type GraphRun } from './graph';
+	import type { Definition } from './api';
 	import NodeIcon from './node-icon.svelte';
-	let { definition, run }: { definition: Definition; run?: Run } = $props();
+	let { definition, run }: { definition: Definition; run?: GraphRun } = $props();
 	const NODE_SIZE = 36;
 	const COLUMN_GAP = 58;
 	let width = $state(240);

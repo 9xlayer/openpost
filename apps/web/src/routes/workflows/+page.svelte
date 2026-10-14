@@ -5,7 +5,7 @@
 	import {
 		repostAutomationQueryOptions,
 		workflowsQueryOptions,
-		workflowRunsQueryOptions,
+		workflowRunSummariesQueryOptions,
 		workspaceAccountsQueryOptions
 	} from '@openpost/query-catalog';
 	import { workflowQueryAPI } from '$lib/query/workflows';
@@ -32,7 +32,9 @@
 	const repostsQuery = createQuery(() =>
 		repostAutomationQueryOptions(schedulingQueryAPI, workspaceID)
 	);
-	const runsQuery = createQuery(() => workflowRunsQueryOptions(workflowQueryAPI, workspaceID));
+	const runsQuery = createQuery(() =>
+		workflowRunSummariesQueryOptions(workflowQueryAPI, workspaceID)
+	);
 	let tab = $state<'workflows' | 'runs' | 'templates'>('workflows'),
 		selectedRun = $state(''),
 		busy = $state(false),

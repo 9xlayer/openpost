@@ -5,7 +5,10 @@
 	import { onMount, tick, untrack } from 'svelte';
 
 	import { createQuery } from '@tanstack/svelte-query';
-	import { workflowRunQueryOptions, workflowRunsQueryOptions } from '@openpost/query-catalog';
+	import {
+		workflowRunQueryOptions,
+		workflowRunSummariesQueryOptions
+	} from '@openpost/query-catalog';
 	import type { SocialAccount } from '@openpost/query-catalog';
 	import { workflowQueryAPI } from '$lib/query/workflows';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
@@ -203,7 +206,7 @@
 		availableReferences(doc.definition.steps ?? [], selectedID, inputData.source)
 	);
 	const runsQuery = createQuery(() =>
-		workflowRunsQueryOptions(workflowQueryAPI, initial.workspace_id, initial.id)
+		workflowRunSummariesQueryOptions(workflowQueryAPI, initial.workspace_id, initial.id)
 	);
 	function snapshot() {
 		return JSON.stringify({ doc, positions, selectedID });
@@ -676,7 +679,7 @@
 						{#if selectedRun}<Button variant="ghost" size="sm" onclick={() => (selectedRun = '')}
 								>{m.workflows_runs()}</Button
 							>
-							<div class="h-60 overflow-hidden rounded-lg border">
+							<div class="h-60 overflow-hidden rounded-lg border" hidden={!inspectedRun}>
 								<!-- Keep the immutable run alive while its canvas is torn down after query selection changes. -->
 								{#each inspectedRun ? [inspectedRun] : [] as run (run.id)}<Canvas
 										definition={run.definition}

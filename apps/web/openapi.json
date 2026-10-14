@@ -25164,6 +25164,79 @@
 				],
 				"type": "object"
 			},
+			"WorkflowRunSummary": {
+				"additionalProperties": false,
+				"properties": {
+					"created_at": {
+						"format": "date-time",
+						"type": "string"
+					},
+					"current_step_id": {
+						"type": "string"
+					},
+					"definition": {
+						"$ref": "#/components/schemas/WorkflowDefinition"
+					},
+					"error": {
+						"type": "string"
+					},
+					"id": {
+						"type": "string"
+					},
+					"mode": {
+						"type": "string"
+					},
+					"revision": {
+						"format": "int64",
+						"type": "integer"
+					},
+					"state": {
+						"type": "string"
+					},
+					"steps": {
+						"items": {
+							"$ref": "#/components/schemas/WorkflowStepSummary"
+						},
+						"type": ["array", "null"]
+					},
+					"updated_at": {
+						"format": "date-time",
+						"type": "string"
+					},
+					"wake_at": {
+						"format": "date-time",
+						"type": "string"
+					},
+					"workflow_id": {
+						"type": "string"
+					},
+					"workflow_name": {
+						"type": "string"
+					},
+					"workflow_revision": {
+						"format": "int64",
+						"type": "integer"
+					},
+					"workspace_id": {
+						"type": "string"
+					}
+				},
+				"required": [
+					"id",
+					"workflow_id",
+					"workspace_id",
+					"workflow_name",
+					"workflow_revision",
+					"mode",
+					"state",
+					"revision",
+					"definition",
+					"steps",
+					"created_at",
+					"updated_at"
+				],
+				"type": "object"
+			},
 			"WorkflowSaveRequest": {
 				"additionalProperties": false,
 				"properties": {
@@ -25407,6 +25480,19 @@
 					}
 				},
 				"required": ["step_id", "kind", "name", "state", "inputs", "output", "started_at"],
+				"type": "object"
+			},
+			"WorkflowStepSummary": {
+				"additionalProperties": false,
+				"properties": {
+					"state": {
+						"type": "string"
+					},
+					"step_id": {
+						"type": "string"
+					}
+				},
+				"required": ["step_id", "state"],
 				"type": "object"
 			},
 			"WorkflowValue": {
@@ -58681,6 +58767,124 @@
 					"exposure": "disabled",
 					"idempotency": "none",
 					"retry": "never"
+				}
+			}
+		},
+		"/workflow-run-summaries": {
+			"get": {
+				"operationId": "list-workflow-run-summaries",
+				"parameters": [
+					{
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					},
+					{
+						"explode": false,
+						"in": "query",
+						"name": "workflow_id",
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"items": {
+										"$ref": "#/components/schemas/WorkflowRunSummary"
+									},
+									"type": ["array", "null"]
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"409": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Conflict"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					},
+					"503": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Service Unavailable"
+					}
+				},
+				"summary": "List the latest 50 workflow runs without source data or step payloads",
+				"tags": ["Workflows"],
+				"x-openpost-automation": {
+					"access": "read",
+					"effect": "query",
+					"exposure": "disabled",
+					"idempotency": "none",
+					"retry": "transient"
 				}
 			}
 		},
