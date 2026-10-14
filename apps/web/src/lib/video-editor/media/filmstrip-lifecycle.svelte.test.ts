@@ -244,7 +244,9 @@ it('retains existing frames while refinement is waiting for source bytes under c
 	});
 	const requests = holdExtractions();
 	const pending = filmstripCache.getFilmstrip(firstMedia);
-	await expect.poll(() => sourceRequested).toBe(true);
+	// Refinement restores 1,300 real persisted bitmaps before requesting the source.
+	// Wait for that boundary without imposing the default one-second decode budget.
+	await expect.poll(() => sourceRequested, { timeout: 10_000 }).toBe(true);
 	await filmstripCache.getFilmstrip(secondMedia, { allowExtraction: false });
 	await filmstripCache.getFilmstrip(thirdMedia, { allowExtraction: false });
 	const retainedDuringRead = filmstripCache.cachedFilmstrip(firstMedia.id) !== null;
