@@ -73,6 +73,7 @@ export function PublicationReviews({ publication }: { publication: Publication }
       return;
     const scope = captureWorkspaceQueryScope(publication.workspace_id);
     const current = () => mounted.current && workspaceQueryScopeIsCurrent(scope, getWorkspaceId());
+    if (!current()) return;
     setBusy(true);
     setError("");
     try {
