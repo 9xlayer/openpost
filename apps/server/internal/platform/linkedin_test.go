@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -130,40 +131,64 @@ func TestLinkedInGenerateAuthURLScopeSeparation(t *testing.T) {
 }
 
 func TestLinkedInAnalyticsSupportRespectsMemberAnalyticsToggle(t *testing.T) {
-	// Organizations disabled, member analytics disabled → no analytics
-	adapter := NewLinkedInAdapter("", "", "", false)
-	support := adapter.AnalyticsSupport()
-	if support.Account || support.Content {
-		t.Fatalf("expected no analytics support when both toggles are off, got %+v", support)
+	cases := []struct {
+		name       string
+		options    RegistryOptions
+		wantAny    bool
+		wantPerson bool
+		wantOrg    bool
+	}{
+		{name: "disabled"},
+		{name: "organizations only", options: RegistryOptions{EnableLinkedInOrganizations: true}, wantAny: true, wantOrg: true},
+		{name: "member analytics only", options: RegistryOptions{EnableLinkedInMemberAnalytics: true}, wantAny: true, wantPerson: true},
+		{name: "organizations and member analytics", options: RegistryOptions{EnableLinkedInOrganizations: true, EnableLinkedInMemberAnalytics: true}, wantAny: true, wantPerson: true, wantOrg: true},
 	}
-
-	// Organizations enabled, member analytics disabled → org analytics only
-	orgAdapter := NewLinkedInAdapter("", "", "", false, true)
-	support = orgAdapter.AnalyticsSupport()
-	if !support.Account || !support.Content {
-		t.Fatalf("expected analytics support with organizations enabled, got %+v", support)
-	}
-	personSupport := orgAdapter.AnalyticsSupportForAccount(AnalyticsAccountContext{AccountID: "urn:li:person:123"})
-	if personSupport.Account || personSupport.Content {
-		t.Fatalf("expected no member analytics when member analytics toggle is off, got %+v", personSupport)
-	}
-	orgSupport := orgAdapter.AnalyticsSupportForAccount(AnalyticsAccountContext{AccountID: "urn:li:organization:42"})
-	if !orgSupport.Account || !orgSupport.Content {
-		t.Fatalf("expected org analytics with organizations enabled, got %+v", orgSupport)
-	}
-
-	// Organizations enabled + member analytics enabled → both work
-	fullAdapter := NewLinkedInAdapter("", "", "", false, true)
-	fullAdapter.enableMemberAnalytics = true
-	personSupport = fullAdapter.AnalyticsSupportForAccount(AnalyticsAccountContext{AccountID: "urn:li:person:123"})
-	if !personSupport.Account || !personSupport.Content {
-		t.Fatalf("expected member analytics when toggle is on, got %+v", personSupport)
-	}
-	if len(personSupport.AccountRequiredScopes) == 0 || personSupport.AccountRequiredScopes[0] != "r_member_profileAnalytics" {
-		t.Fatalf("expected r_member_profileAnalytics required scope, got %+v", personSupport.AccountRequiredScopes)
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			adapters, _, err := BuildAdapterRegistry([]AppConfig{{
+				Provider: "linkedin", ClientID: "id", ClientSecret: "secret", RedirectURI: "https://app.example/callback",
+			}}, tt.options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			adapter := adapters["linkedin"].(*LinkedInAdapter)
+			support := adapter.AnalyticsSupport()
+			if support.Account != tt.wantAny || support.Content != tt.wantAny {
+				t.Fatalf("unexpected overall analytics support: %+v", support)
+			}
+			accounts := []struct {
+				name         string
+				id           string
+				want         bool
+				accountScope string
+				contentScope string
+			}{
+				{name: "person", id: "urn:li:person:123", want: tt.wantPerson, accountScope: "r_member_profileAnalytics", contentScope: "r_member_postAnalytics"},
+				{name: "organization", id: "urn:li:organization:42", want: tt.wantOrg, accountScope: "rw_organization_admin", contentScope: "rw_organization_admin"},
+			}
+			for _, account := range accounts {
+				t.Run(account.name, func(t *testing.T) {
+					support := adapter.AnalyticsSupportForAccount(AnalyticsAccountContext{AccountID: account.id})
+					if support.Account != account.want || support.Content != account.want {
+						t.Fatalf("unexpected account analytics support: %+v", support)
+					}
+					if !account.want {
+						if support.AccountUnavailable == "" || support.ContentUnavailable == "" {
+							t.Fatalf("missing analytics unavailability explanation: %+v", support)
+						}
+						return
+					}
+					if !reflect.DeepEqual(support.AccountRequiredScopes, []string{account.accountScope}) {
+						t.Errorf("account scopes = %v, want %s", support.AccountRequiredScopes, account.accountScope)
+					}
+					if !reflect.DeepEqual(support.ContentRequiredScopes, []string{account.contentScope}) {
+						t.Errorf("content scopes = %v, want %s", support.ContentRequiredScopes, account.contentScope)
+					}
+				})
+			}
+		})
 	}
 }
-
 
 func TestLinkedInCreatePostValidatesPostIDShape(t *testing.T) {
 	originalClient := httpClient

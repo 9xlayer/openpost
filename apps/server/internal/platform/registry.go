@@ -23,11 +23,11 @@ type AppConfig struct {
 }
 
 type RegistryOptions struct {
-	DisableLinkedInThreadReplies bool
-	EnableLinkedInOrganizations  bool
-	EnableLinkedInMemberReads    bool
+	DisableLinkedInThreadReplies  bool
+	EnableLinkedInOrganizations   bool
+	EnableLinkedInMemberReads     bool
 	EnableLinkedInMemberAnalytics bool
-	DisableTikTokDisplayAPI      bool
+	DisableTikTokDisplayAPI       bool
 }
 
 type RegistryEntry struct {
