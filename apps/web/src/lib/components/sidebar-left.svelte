@@ -64,7 +64,11 @@
 				(item.id !== 'ideate' || workspaceCtx.currentWorkspace?.can_edit)
 		)
 	);
-	const showDesktopPlanner = $derived(!sidebar.isMobile && sidebar.state === 'expanded');
+	const showDesktopPlanner = $derived(
+		!sidebar.isMobile &&
+			sidebar.state === 'expanded' &&
+			(currentPath === '/' || /^\/publications\/[^/]+$/.test(currentPath))
+	);
 
 	function navigationIcon(id: PrimaryNavigationItem['id']): ThemeIconRole {
 		switch (id) {
@@ -252,49 +256,30 @@
 		{/if}
 	</Sidebar.Header>
 
-	<Sidebar.Content class={showDesktopPlanner ? 'overflow-y-auto pt-2' : 'px-2 py-3'}>
-		{#if showDesktopPlanner}
-			<SidebarPlanner onNavigate={navigate} />
-		{:else}
-			<Sidebar.Group class="p-0">
-				<Sidebar.GroupContent>
-					<Sidebar.Menu class="gap-0.5">
-						{#each sidebarNavigationItems as item (item.id)}
-							<Sidebar.MenuItem>
-								<Sidebar.MenuButton
-									isActive={isSidebarNavigationItemActive(item)}
-									class="h-10 text-sm"
-									tooltipContent={item.label}
-									onclick={() => navigate(item.href)}
-								>
-									<ThemeIcon role={item.icon} class="size-4" />
-									<span>{item.label}</span>
-								</Sidebar.MenuButton>
-							</Sidebar.MenuItem>
-						{/each}
-					</Sidebar.Menu>
-				</Sidebar.GroupContent>
-			</Sidebar.Group>
-		{/if}
+	<Sidebar.Content class="overflow-hidden px-2 py-3">
+		<Sidebar.Group class="shrink-0 p-0">
+			<Sidebar.GroupContent>
+				<Sidebar.Menu class="gap-0.5" data-testid="sidebar-workspace-navigation">
+					{#each sidebarNavigationItems as item (item.id)}
+						<Sidebar.MenuItem>
+							<Sidebar.MenuButton
+								isActive={isSidebarNavigationItemActive(item)}
+								class="h-10 text-sm [@media(pointer:coarse)]:h-11"
+								tooltipContent={item.label}
+								onclick={() => navigate(item.href)}
+							>
+								<ThemeIcon role={item.icon} class="size-4" />
+								<span>{item.label}</span>
+							</Sidebar.MenuButton>
+						</Sidebar.MenuItem>
+					{/each}
+				</Sidebar.Menu>
+			</Sidebar.GroupContent>
+		</Sidebar.Group>
+		{#if showDesktopPlanner}<SidebarPlanner onNavigate={navigate} />{/if}
 	</Sidebar.Content>
 
 	<Sidebar.Footer class="border-t border-sidebar-border p-2" data-testid="sidebar-workspace-footer">
-		{#if showDesktopPlanner}
-			<Sidebar.Menu class="gap-0.5" data-testid="sidebar-workspace-navigation">
-				{#each workspaceNavigationItems as item (item.id)}
-					<Sidebar.MenuItem
-						><Sidebar.MenuButton
-							class="h-9 text-sm [@media(pointer:coarse)]:h-11"
-							tooltipContent={item.label}
-							isActive={isSidebarNavigationItemActive(item)}
-							onclick={() => navigate(item.href)}
-							><ThemeIcon role={item.icon} class="size-4" /><span>{item.label}</span
-							></Sidebar.MenuButton
-						></Sidebar.MenuItem
-					>
-				{/each}
-			</Sidebar.Menu>
-		{/if}
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}<Sidebar.MenuButton
@@ -323,15 +308,6 @@
 			{#if sidebar.state === 'collapsed'}
 				<NotificationBell />
 			{/if}
-			<Sidebar.MenuItem>
-				<Sidebar.MenuButton
-					class="h-9 [@media(pointer:coarse)]:h-11"
-					tooltipContent={m.feedback_open()}
-					onclick={() => ui.openFeedback()}
-					><ThemeIcon role="feedback" class="size-4" /><span>{m.feedback_open()}</span
-					></Sidebar.MenuButton
-				></Sidebar.MenuItem
-			>
 			<Sidebar.MenuItem>
 				<DropdownMenu.Root bind:open={profileMenuOpen}>
 					<DropdownMenu.Trigger>
@@ -370,6 +346,9 @@
 						align="end"
 						sideOffset={6}
 					>
+						<DropdownMenu.Item onclick={() => ui.openFeedback()}
+							><ThemeIcon role="feedback" class="size-4" />{m.feedback_open()}</DropdownMenu.Item
+						>
 						<AccountPreferencesMenu
 							onNavigate={() => {
 								profileMenuOpen = false;

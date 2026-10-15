@@ -1,6 +1,6 @@
 <script lang="ts">
 	import BatchScheduleDialog from '$lib/components/batch-schedule-dialog.svelte';
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	import PublicationDraftGallery from '$lib/components/publication-draft-gallery.svelte';
 	import PublicationViewSwitch from '$lib/components/publication-view-switch.svelte';
 	import CopyButton from '$lib/components/copy-button.svelte';
 	import { goto } from '$app/navigation';
@@ -53,6 +53,7 @@
 	type ActivityTab = 'scheduled' | 'published' | 'failed' | 'drafts';
 	type ActivityPageState = { total: number; nextCursor: string };
 	type ActivityItem = {
+		publication: Publication;
 		id: string;
 		publication_id: string;
 		href: string;
@@ -414,6 +415,7 @@
 			m.activity_untitled_post();
 		const isThread = publication.intent === 'thread' || segments.length > 1;
 		return {
+			publication,
 			id: publication.id,
 			publication_id: publication.id,
 			href: `/publications/${encodeURIComponent(publication.id)}`,
@@ -785,6 +787,13 @@
 			onAction={searchTerm ? () => (searchQuery = '') : undefined}
 			variant="muted"
 		/>
+	{:else if activeTab === 'drafts'}
+		<PublicationDraftGallery
+			publications={items.map((post) => post.publication)}
+			{accounts}
+			{selecting}
+			bind:selectedIds
+		/>
 	{:else if items.length > 0}
 		<div class="divide-y overflow-hidden rounded-xl border bg-card" data-testid="publication-list">
 			{#each items as post (post.id)}
@@ -796,16 +805,6 @@
 				]}
 				<article class="group p-3 transition-colors hover:bg-muted/30 sm:p-4">
 					<div class="flex items-start gap-3 sm:gap-4">
-						{#if selecting && activeTab === 'drafts'}<Checkbox
-								aria-label={m.batch_select_post()}
-								checked={selectedIds.includes(post.publication_id)}
-								onCheckedChange={(checked) => {
-									selectedIds = checked
-										? [...selectedIds, post.publication_id]
-										: selectedIds.filter((id) => id !== post.publication_id);
-								}}
-								disabled={!selectedIds.includes(post.publication_id) && selectedIds.length >= 20}
-							/>{/if}
 						<div
 							class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/50"
 						>
@@ -956,9 +955,7 @@
 <Tabs value={activeTab} onValueChange={selectActivityTab} class="min-w-0 flex-1">
 	<PageContainer
 		title={m.activity_title()}
-		headerActionLayout={activeTab === 'drafts' && workspaceCtx.currentWorkspace?.can_edit
-			? 'responsive'
-			: 'inline'}
+		headerActionLayout={selecting ? 'responsive' : 'inline'}
 		themeIconRole="publications"
 		loading={initialLoading}
 		loadingLayout="list"
@@ -1016,10 +1013,6 @@
 							publicationIds={selectedIds}
 						/>{/if}
 				{/if}
-				<Button variant="focal" size="sm" onclick={() => goto(resolveAppPath('/'))}>
-					<ThemeIcon role="add" class="mr-1.5 size-3.5" />
-					{m.activity_new_post()}
-				</Button>
 			{/if}
 		{/snippet}
 
@@ -1048,7 +1041,7 @@
 				dismissLabel={m.common_dismiss()}
 			/>
 		{/if}
-		{#if currentViewLoaded}
+		{#if currentViewLoaded && (searchTerm || publicationsInfinite.hasNextPage)}
 			<div class="mb-3 flex items-center justify-between gap-3">
 				<div class="min-w-0">
 					<p class="mt-0.5 text-xs text-muted-foreground">

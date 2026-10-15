@@ -229,43 +229,40 @@ for (const width of [390, 1440]) {
   });
 }
 
-test("short desktop planner keeps drafts reachable without scrolling the navigation", async ({
+test("short desktop keeps navigation and contextual draft resume reachable", async ({
   page,
   request,
 }, testInfo) => {
   const auth = await registerUser(request, `nav-short-${randomUUID()}@example.com`);
-  await createWorkspace(request, auth.token, "Short navigation workspace");
+  const workspace = await createWorkspace(request, auth.token, "Short navigation workspace");
+  const response = await request.post("/api/v1/publications", {
+    headers: { Authorization: `Bearer ${auth.token}` },
+    data: {
+      workspace_id: workspace.id,
+      title: "A recent thought to resume",
+      source_text: "A recent thought to resume",
+      content_profile: "short_text",
+      social_account_ids: [],
+    },
+  });
+  expect(response.ok(), await response.text()).toBeTruthy();
   await authenticatePage(page, auth.token);
   await page.setViewportSize({ width: 1280, height: 600 });
-  await page.goto("/publications");
+  await page.goto("/");
   const planner = page.getByTestId("desktop-sidebar-planner");
   const viewAll = planner.getByRole("button", { name: "View all", exact: true });
-  const month = page.getByTestId("sidebar-calendar-month");
-  await expect(month).toBeVisible();
-  const monthBounds = await month.boundingBox();
-  await page.mouse.move(monthBounds!.x + 5, monthBounds!.y + 5);
-  await page.mouse.wheel(0, 350);
-  await expect
-    .poll(async () => {
-      const control = await viewAll.boundingBox();
-      const viewport = await page.locator('[data-sidebar="content"]').boundingBox();
-      return (
-        control !== null &&
-        viewport !== null &&
-        control.y >= viewport.y &&
-        control.y + control.height <= viewport.y + viewport.height
-      );
-    })
-    .toBe(true);
-  for (const name of ["Posts", "Inbox", "Analytics", "Media"]) {
+  await expect(viewAll).toBeInViewport();
+  await expect(page.getByTestId("sidebar-calendar-month")).toHaveCount(0);
+  for (const name of ["Posts", "Inbox", "Analytics", "Media"])
     await expect(
       page.getByTestId("sidebar-workspace-navigation").getByRole("button", { name, exact: true }),
     ).toBeInViewport();
-  }
   await page.screenshot({
-    path: testInfo.outputPath("short-planner-reachable.png"),
+    path: testInfo.outputPath("short-draft-resume.png"),
     animations: "disabled",
   });
   await viewAll.click();
   await expect(page).toHaveURL(/publications\?tab=drafts$/);
+  await expect(page.getByTestId("draft-gallery")).toBeVisible();
+  await expect(planner).toHaveCount(0);
 });
