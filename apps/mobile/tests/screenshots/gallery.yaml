@@ -97,9 +97,11 @@ appId: com.openpost.app
 
 - openLink: com.openpost.app:///publications/client-review
 - extendedWaitUntil:
-    visible: Approve this version
+    visible: Client review
     timeout: 20000
-- assertVisible: Please review this launch version.
+- scrollUntilVisible:
+    element: Please review this launch version.
+    direction: DOWN
 - scrollUntilVisible:
     element: ".*Submitted launch title.*"
     direction: DOWN
@@ -109,8 +111,9 @@ appId: com.openpost.app
     element: Approve this version
     direction: DOWN
 - tapOn: Approve this version
-- extendedWaitUntil:
-    visible: Client approved.*
+- scrollUntilVisible:
+    element: Client approved.*
+    direction: UP
     timeout: 20000
 - assertNotVisible: Approve this version
 - takeScreenshot: client-approved-${SCHEME}

@@ -4,6 +4,7 @@ import {
   copyFileSync,
   chmodSync,
   existsSync,
+  globSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -179,6 +180,27 @@ test("the screenshot refresh checks out its canonical immutable frontend assets"
     checkout.with?.["sparse-checkout"] ?? "",
     /!\/apps\/web\/static\/image-editor-models\//u,
   );
+});
+
+test("the native screenshot artifact includes the galleries displayed in the README", () => {
+  const jobs = load(screenshotRefresh).jobs;
+  const download = jobs.refresh.steps.find((step) =>
+    step.uses?.startsWith("actions/download-artifact@"),
+  );
+  const upload = jobs.mobile.steps.find(
+    (step) =>
+      step.uses?.startsWith("actions/upload-artifact@") && step.with?.name === download?.with?.name,
+  );
+  assert.ok(upload?.with?.path, "the mobile gallery must reach the refresh job");
+  const uploadedFiles = new Set(globSync(upload.with.path.trim().split(/\r?\n/u)));
+  const readme = readFileSync("README.md", "utf8");
+  const galleries = [
+    ...readme.matchAll(/(?:srcset|src)="\.\/(assets\/screenshots\/mobile-gallery-[^"]+)"/gu),
+  ];
+  assert.ok(galleries.length > 0, "the README must identify its native galleries");
+  for (const [, gallery] of galleries) {
+    assert.ok(uploadedFiles.has(gallery), `Native artifact upload omits ${gallery}`);
+  }
 });
 
 test("container candidates run and publish on native amd64 and arm64 runners", () => {
