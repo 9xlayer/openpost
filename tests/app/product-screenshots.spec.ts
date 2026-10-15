@@ -12,6 +12,7 @@ const screenshotDirectory =
 import {
   fixtureDirectory,
   captureViewport,
+  assertCaptureViewport,
   fixedNow,
   rasterFixtureFiles,
   connectionReadiness,
@@ -745,17 +746,7 @@ async function capture(page: Page, filename: string, landmarks: Locator[]) {
   await expect(
     page.getByRole("region", { name: /Notifications/u }).getByRole("listitem"),
   ).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate(() => ({
-        documentWidth: document.documentElement.scrollWidth,
-        viewportWidth: window.innerWidth,
-      })),
-    )
-    .toEqual({
-      documentWidth: captureViewport.width,
-      viewportWidth: captureViewport.width,
-    });
+  await assertCaptureViewport(page);
   for (const landmark of landmarks) await expect(landmark).toBeInViewport();
   await page.screenshot({
     path: join(screenshotDirectory, filename),

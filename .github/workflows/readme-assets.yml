@@ -77,7 +77,9 @@ jobs:
       - name: Apply OpenPost Dither styles
         if: steps.star-history.outputs.changed == 'true'
         run: |
-          bun install --frozen-lockfile --filter openpost
+          # Root postinstall builds UI workspace dependencies, so install their
+          # declared tooling too instead of filtering it out of the workspace.
+          bun install --frozen-lockfile
           bun scripts/style-star-history.mjs
 
       - name: Commit refreshed assets

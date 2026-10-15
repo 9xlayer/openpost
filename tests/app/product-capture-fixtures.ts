@@ -8,6 +8,20 @@ export const fixtureDirectory = fileURLToPath(
   new URL("./fixtures/product-screenshots/", import.meta.url),
 );
 export const captureViewport = { width: 1440, height: 960 };
+export async function assertCaptureViewport(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        horizontalOverflow:
+          document.documentElement.scrollWidth > document.documentElement.clientWidth,
+        viewportWidth: window.innerWidth,
+      })),
+    )
+    .toEqual({
+      horizontalOverflow: false,
+      viewportWidth: captureViewport.width,
+    });
+}
 export const fixedNow = "2026-08-20T14:30:00.000Z";
 export const rasterFixtureFiles = {
   "rodrigo-avatar": "rodrigo-avatar.png",

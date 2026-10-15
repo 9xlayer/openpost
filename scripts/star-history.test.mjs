@@ -15,9 +15,9 @@ test("no same-day marker guard gates the refresh", () => {
   assert.doesNotMatch(workflow, /readme-assets-refreshed-on/u);
 });
 
-test("three daily schedules keep badges fresh", () => {
+test("one refresh every two days limits asset-only commits", () => {
   const crons = [...workflow.matchAll(/- cron: "([^"]+)"/g)].map((match) => match[1]);
-  assert.equal(crons.length, 3);
+  assert.deepEqual(crons, ["17 9 */2 * *"]);
 });
 
 for (const [name, previous, current, expected] of [
