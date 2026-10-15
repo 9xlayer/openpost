@@ -11,14 +11,21 @@ appId: com.openpost.app
     visible: Recent drafts
     timeout: 120000
 - takeScreenshot: drafts-${SCHEME}
-- tapOn: Calendar
-- assertVisible: October 2026
+# Open page captures through their public routes, independently of native
+# tab-bar gesture timing after the development-client launch.
+- openLink: com.openpost.app:///calendar
+- extendedWaitUntil:
+    visible: October 2026
+    timeout: 20000
 - takeScreenshot: calendar-${SCHEME}
-- tapOn: Analytics
+- openLink: com.openpost.app:///analytics
 - assertVisible: Followers
 - assertVisible: Trends
 - takeScreenshot: analytics-${SCHEME}
-- tapOn: Drafts
+- openLink: com.openpost.app:///drafts
+- extendedWaitUntil:
+    visible: Recent drafts
+    timeout: 20000
 - tapOn: ".*A few thoughts on building in public.*"
 - assertVisible: ".*Social Set.*"
 - assertVisible: Queue next slot
@@ -94,9 +101,9 @@ appId: com.openpost.app
     timeout: 20000
 - assertVisible: Please review this launch version.
 - scrollUntilVisible:
-    element: Submitted launch title
+    element: ".*Submitted launch title.*"
     direction: DOWN
-- assertVisible: Submitted launch description
+- assertVisible: ".*Submitted launch description.*"
 - takeScreenshot: client-review-${SCHEME}
 - scrollUntilVisible:
     element: Approve this version

@@ -53,6 +53,21 @@ jobs:
         with:
           name: mobile-capture-diagnostics
           path: apps/mobile/artifacts/screenshots
+      - name: Preserve the built simulator app for capture recovery
+        if: failure()
+        run: |
+          apps=("$HOME"/Library/Developer/Xcode/DerivedData/OpenPost-*/Build/Products/Debug-iphonesimulator/OpenPost.app)
+          if [ ! -d "${apps[0]}" ]; then
+            exit 0
+          fi
+          tar -czf "$RUNNER_TEMP/mobile-screenshot-app.tar.gz" -C "$(dirname "${apps[0]}")" OpenPost.app
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: mobile-screenshot-app
+          path: ${{ runner.temp }}/mobile-screenshot-app.tar.gz
+          if-no-files-found: ignore
+          retention-days: 3
 
   refresh:
     needs: mobile
