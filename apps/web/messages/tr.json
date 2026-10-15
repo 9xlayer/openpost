@@ -2201,6 +2201,7 @@
 	"compose_saving_changes": "Kaydediliyor...",
 	"compose_changes_saved": "Değişiklikler kaydedildi.",
 	"compose_unsaved_changes": "Kaydedilmemiş değişiklikler",
+	"compose_leave_without_saving": "Bu gönderideki değişiklikleri kaydetmeden çıkılsın mı?",
 	"compose_saved_state": "Kaydedildi",
 	"compose_editing_post": "{status} gönderi düzenleniyor",
 	"compose_clear_schedule": "Planı temizle",

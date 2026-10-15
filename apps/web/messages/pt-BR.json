@@ -2237,6 +2237,7 @@
 	"compose_saving_changes": "Salvando...",
 	"compose_changes_saved": "Alterações salvas.",
 	"compose_unsaved_changes": "Alterações não salvas",
+	"compose_leave_without_saving": "Sair sem salvar as alterações nesta publicação?",
 	"compose_saved_state": "Salvo",
 	"compose_editing_post": "Editando publicação {status}",
 	"compose_clear_schedule": "Limpar agendamento",

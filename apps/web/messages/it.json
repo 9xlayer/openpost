@@ -2237,6 +2237,7 @@
 	"compose_saving_changes": "Salvataggio...",
 	"compose_changes_saved": "Modifiche salvate.",
 	"compose_unsaved_changes": "Modifiche non salvate",
+	"compose_leave_without_saving": "Uscire senza salvare le modifiche a questo post?",
 	"compose_saved_state": "Salvato",
 	"compose_editing_post": "Modifica del post {status}",
 	"compose_clear_schedule": "Rimuovi la pianificazione",

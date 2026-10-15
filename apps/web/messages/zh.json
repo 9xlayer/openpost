@@ -2201,6 +2201,7 @@
 	"compose_saving_changes": "正在保存…",
 	"compose_changes_saved": "更改已保存。",
 	"compose_unsaved_changes": "未保存的更改",
+	"compose_leave_without_saving": "不保存此帖子的更改就离开吗？",
 	"compose_saved_state": "已保存",
 	"compose_editing_post": "正在编辑{status}帖子",
 	"compose_clear_schedule": "清除排期",
