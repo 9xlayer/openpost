@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -219,21 +220,9 @@ func (l *LinkedInAdapter) RefreshAccountMetadata(ctx context.Context, accessToke
 }
 
 func (l *LinkedInAdapter) organizationMetadata(ctx context.Context, accessToken, accountID, organizationID string) (*UserProfile, error) {
-	endpoint := "https://api.linkedin.com/rest/organizations?ids=List(" + url.QueryEscape(organizationID) + ")&projection=" + url.QueryEscape(linkedInOrganizationLogoProjection)
-	body, err := DoRequest(ctx, http.MethodGet, endpoint, nil, linkedinHeaders(accessToken, linkedInAPIVersion()))
+	result, err := fetchLinkedInOrganizations(ctx, accessToken, []string{organizationID})
 	if err != nil {
 		return nil, err
-	}
-	var result struct {
-		Results map[string]struct {
-			LocalizedName string                   `json:"localizedName"`
-			VanityName    string                   `json:"vanityName"`
-			LogoV2        linkedInOrganizationLogo `json:"logoV2"`
-		} `json:"results"`
-		Statuses map[string]int `json:"statuses"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("decoding linkedin organization: %w", err)
 	}
 	organization, ok := result.Results[organizationID]
 	if !ok || (result.Statuses[organizationID] != 0 && result.Statuses[organizationID] != http.StatusOK) {
@@ -268,6 +257,12 @@ func (l *LinkedInAdapter) ListAccountSelections(ctx context.Context, token *Toke
 	if err != nil {
 		// Organization discovery depends on restricted LinkedIn products.
 		// Personal publishing remains usable when discovery is unavailable.
+		var providerErr *HTTPError
+		var diagnostics []any
+		if errors.As(err, &providerErr) {
+			diagnostics = append(diagnostics, "status", providerErr.StatusCode, "code", providerErr.Code)
+		}
+		slog.WarnContext(ctx, "LinkedIn organization discovery failed; offering personal profile only", diagnostics...)
 		return []AccountSelectionOption{personal}, nil
 	}
 	options := make([]AccountSelectionOption, 0, 1+len(organizations))
@@ -358,21 +353,9 @@ func (l *LinkedInAdapter) administeredOrganizations(ctx context.Context, accessT
 	for _, urn := range urns {
 		ids = append(ids, urn[strings.LastIndex(urn, ":")+1:])
 	}
-	endpoint := "https://api.linkedin.com/rest/organizations?ids=List(" + strings.Join(ids, ",") + ")&projection=" + url.QueryEscape(linkedInOrganizationLogoProjection)
-	body, err := DoRequest(ctx, http.MethodGet, endpoint, nil, headers)
+	result, err := fetchLinkedInOrganizations(ctx, accessToken, ids)
 	if err != nil {
 		return nil, err
-	}
-	var result struct {
-		Results map[string]struct {
-			LocalizedName string                   `json:"localizedName"`
-			VanityName    string                   `json:"vanityName"`
-			LogoV2        linkedInOrganizationLogo `json:"logoV2"`
-		} `json:"results"`
-		Statuses map[string]int `json:"statuses"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("decoding linkedin organizations: %w", err)
 	}
 	options := make([]AccountSelectionOption, 0, len(ids))
 	for _, id := range ids {
@@ -390,6 +373,39 @@ func (l *LinkedInAdapter) administeredOrganizations(ctx context.Context, accessT
 		})
 	}
 	return options, nil
+}
+
+type linkedInOrganizations struct {
+	Results map[string]struct {
+		LocalizedName string                   `json:"localizedName"`
+		VanityName    string                   `json:"vanityName"`
+		LogoV2        linkedInOrganizationLogo `json:"logoV2"`
+	} `json:"results"`
+	Statuses map[string]int `json:"statuses"`
+}
+
+func fetchLinkedInOrganizations(ctx context.Context, accessToken string, ids []string) (*linkedInOrganizations, error) {
+	escapedIDs := make([]string, len(ids))
+	for i, id := range ids {
+		escapedIDs[i] = url.QueryEscape(id)
+	}
+	endpoint := "https://api.linkedin.com/rest/organizations?ids=List(" + strings.Join(escapedIDs, ",") + ")"
+	headers := linkedinHeaders(accessToken, linkedInAPIVersion())
+	body, err := DoRequest(ctx, http.MethodGet, endpoint+"&projection="+url.QueryEscape(linkedInOrganizationLogoProjection), nil, headers)
+	var providerErr *HTTPError
+	if errors.As(err, &providerErr) && providerErr.StatusCode == http.StatusBadRequest && providerErr.Code == "ILLEGAL_ARGUMENT" {
+		// Some LinkedIn apps can read organizations but cannot use projections.
+		// The optional logo expansion must not prevent connecting or refreshing a Page.
+		body, err = DoRequest(ctx, http.MethodGet, endpoint, nil, headers)
+	}
+	if err != nil {
+		return nil, err
+	}
+	var result linkedInOrganizations
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("decoding linkedin organizations: %w", err)
+	}
+	return &result, nil
 }
 
 type linkedInOrganizationLogo struct {

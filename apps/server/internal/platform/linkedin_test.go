@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLinkedInGenerateAuthURLEncodesScopesWithPercentSpaces(t *testing.T) {
@@ -238,70 +239,174 @@ func TestLinkedInCreatePostValidatesPostIDShape(t *testing.T) {
 }
 
 func TestLinkedInOrganizationSelectionUsesOrganizationURN(t *testing.T) {
-	originalClient := httpClient
-	defer func() { httpClient = originalClient }()
+	for _, tt := range []struct {
+		name             string
+		rejectProjection bool
+		logo             string
+		wantAvatar       string
+	}{
+		{
+			name:       "projected logo",
+			logo:       `{"original":"urn:li:digitalmediaAsset:logo","original~":{"elements":[{"identifiers":[{"identifier":"https://media.linkedin.example/openpost.png"}]}]}}`,
+			wantAvatar: "https://media.linkedin.example/openpost.png",
+		},
+		{
+			name:             "projection rejected with plain logo URL",
+			rejectProjection: true,
+			logo:             `{"original":"https://media.linkedin.example/openpost.png"}`,
+			wantAvatar:       "https://media.linkedin.example/openpost.png",
+		},
+		{
+			name:             "projection rejected with unresolved logo URN",
+			rejectProjection: true,
+			logo:             `{"original":"urn:li:digitalmediaAsset:logo"}`,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			originalClient := httpClient
+			defer func() { httpClient = originalClient }()
 
-	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		switch req.URL.Path {
-		case "/v2/userinfo":
-			return jsonResponse(req, `{"sub":"member-1","name":"Ada Member","given_name":"Ada","picture":"https://media.linkedin.example/ada.jpg"}`), nil
-		case "/rest/organizationAcls":
-			if req.URL.Query().Get("role") != "ADMINISTRATOR" || req.URL.Query().Get("state") != "APPROVED" {
-				t.Fatalf("unexpected organization ACL query %s", req.URL.RawQuery)
-			}
-			return jsonResponse(req, `{"elements":[{"organization":"urn:li:organization:42"}],"paging":{"links":[]}}`), nil
-		case "/rest/organizations":
-			if !strings.Contains(req.URL.Query().Get("projection"), "logoV2(original,original~:playableStreams)") {
-				t.Fatalf("organization lookup omitted logo projection: %s", req.URL.RawQuery)
-			}
-			return jsonResponse(req, `{"results":{"42":{"localizedName":"OpenPost","vanityName":"openpost","logoV2":{"original":"urn:li:digitalmediaAsset:logo","original~":{"elements":[{"identifiers":[{"identifier":"https://media.linkedin.example/openpost.png"}]}]}}}},"statuses":{"42":200}}`), nil
-		default:
-			t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
-			return nil, nil
-		}
-	})}
+			organizationRequests := 0
+			httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				switch req.URL.Path {
+				case "/v2/userinfo":
+					return jsonResponse(req, `{"sub":"member-1","name":"Ada Member","given_name":"Ada","picture":"https://media.linkedin.example/ada.jpg"}`), nil
+				case "/rest/organizationAcls":
+					if req.URL.Query().Get("role") != "ADMINISTRATOR" || req.URL.Query().Get("state") != "APPROVED" {
+						t.Fatalf("unexpected organization ACL query %s", req.URL.RawQuery)
+					}
+					return jsonResponse(req, `{"elements":[{"organization":"urn:li:organization:42"}],"paging":{"links":[]}}`), nil
+				case "/rest/organizations":
+					organizationRequests++
+					if req.Header.Get("Authorization") != "Bearer member-token" || req.Header.Get("Linkedin-Version") == "" || req.Header.Get("X-Restli-Protocol-Version") != "2.0.0" {
+						t.Fatal("organization lookup lost authentication or API version headers")
+					}
+					if req.URL.Query().Get("ids") != "List(42)" {
+						t.Fatalf("unexpected organization IDs: %s", req.URL.RawQuery)
+					}
+					if tt.rejectProjection && req.URL.Query().Has("projection") {
+						response := jsonResponse(req, `{"status":400,"code":"ILLEGAL_ARGUMENT","message":"projection parameter is not allowed for this endpoint"}`)
+						response.StatusCode = http.StatusBadRequest
+						return response, nil
+					}
+					return jsonResponse(req, `{"results":{"42":{"localizedName":"OpenPost","vanityName":"openpost","logoV2":`+tt.logo+`}},"statuses":{"42":200}}`), nil
+				default:
+					t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
+					return nil, nil
+				}
+			})}
 
-	adapter := NewLinkedInAdapter("", "", "", false, true)
-	token := &TokenResult{AccessToken: "member-token", Extra: map[string]string{"user_id": "member-1"}}
-	options, err := adapter.ListAccountSelections(context.Background(), token)
-	if err != nil {
-		t.Fatalf("ListAccountSelections returned error: %v", err)
+			adapter := NewLinkedInAdapter("", "", "", false, true)
+			token := &TokenResult{AccessToken: "member-token", Extra: map[string]string{"user_id": "member-1"}}
+			wantRequests := 1
+			if tt.rejectProjection {
+				wantRequests = 2
+			}
+			t.Run("selection", func(t *testing.T) {
+				options, err := adapter.ListAccountSelections(context.Background(), token)
+				if err != nil {
+					t.Fatalf("ListAccountSelections returned error: %v", err)
+				}
+				if len(options) != 2 || options[0].ID != "person:member-1" || options[1].ID != "organization:42" {
+					t.Fatalf("unexpected options %#v", options)
+				}
+				if options[0].AvatarURL != "https://media.linkedin.example/ada.jpg" {
+					t.Fatalf("unexpected personal profile avatar %#v", options[0])
+				}
+				if options[1].AvatarURL != tt.wantAvatar {
+					t.Fatalf("unexpected organization avatar %#v", options[1])
+				}
+				personal, err := adapter.SelectAccount(context.Background(), token, "person:member-1")
+				if err != nil {
+					t.Fatalf("SelectAccount returned error: %v", err)
+				}
+				if personal.AccountAvatarURL != "https://media.linkedin.example/ada.jpg" {
+					t.Fatalf("unexpected selected personal profile %#v", personal)
+				}
+				selected, err := adapter.SelectAccount(context.Background(), token, "organization:42")
+				if err != nil {
+					t.Fatalf("SelectAccount returned error: %v", err)
+				}
+				if selected.AccountID != "urn:li:organization:42" || selected.Token != token {
+					t.Fatalf("unexpected selected organization %#v", selected)
+				}
+				if selected.AccountAvatarURL != tt.wantAvatar {
+					t.Fatalf("unexpected selected organization avatar %#v", selected)
+				}
+				if selected.CapabilityState["linkedin_account_type"] != "organization" {
+					t.Fatalf("missing organization capability state %#v", selected.CapabilityState)
+				}
+				if organizationRequests != 3*wantRequests {
+					t.Fatalf("listing and selecting accounts made %d organization requests, want %d", organizationRequests, 3*wantRequests)
+				}
+			})
+			t.Run("metadata refresh", func(t *testing.T) {
+				organizationRequests = 0
+				profile, err := adapter.RefreshAccountMetadata(context.Background(), "member-token", AccountMetadataRequest{AccountID: "urn:li:organization:42"})
+				if err != nil {
+					t.Fatalf("RefreshAccountMetadata returned error: %v", err)
+				}
+				if profile.ID != "urn:li:organization:42" || profile.Username != "openpost" || profile.AvatarURL != tt.wantAvatar {
+					t.Fatalf("unexpected refreshed LinkedIn organization profile %#v", profile)
+				}
+				if organizationRequests != wantRequests {
+					t.Fatalf("refresh made %d organization requests, want %d", organizationRequests, wantRequests)
+				}
+			})
+		})
 	}
-	if len(options) != 2 || options[0].ID != "person:member-1" || options[1].ID != "organization:42" {
-		t.Fatalf("unexpected options %#v", options)
-	}
-	if options[0].AvatarURL != "https://media.linkedin.example/ada.jpg" {
-		t.Fatalf("unexpected personal profile avatar %#v", options[0])
-	}
-	if options[1].AvatarURL != "https://media.linkedin.example/openpost.png" {
-		t.Fatalf("unexpected organization avatar %#v", options[1])
-	}
-	personal, err := adapter.SelectAccount(context.Background(), token, "person:member-1")
-	if err != nil {
-		t.Fatalf("SelectAccount returned error: %v", err)
-	}
-	if personal.AccountAvatarURL != "https://media.linkedin.example/ada.jpg" {
-		t.Fatalf("unexpected selected personal profile %#v", personal)
-	}
-	selected, err := adapter.SelectAccount(context.Background(), token, "organization:42")
-	if err != nil {
-		t.Fatalf("SelectAccount returned error: %v", err)
-	}
-	if selected.AccountID != "urn:li:organization:42" || selected.Token != token {
-		t.Fatalf("unexpected selected organization %#v", selected)
-	}
-	if selected.AccountAvatarURL != "https://media.linkedin.example/openpost.png" {
-		t.Fatalf("unexpected selected organization avatar %#v", selected)
-	}
-	if selected.CapabilityState["linkedin_account_type"] != "organization" {
-		t.Fatalf("missing organization capability state %#v", selected.CapabilityState)
-	}
-	profile, err := adapter.RefreshAccountMetadata(context.Background(), "member-token", AccountMetadataRequest{AccountID: "urn:li:organization:42"})
-	if err != nil {
-		t.Fatalf("RefreshAccountMetadata returned error: %v", err)
-	}
-	if profile.ID != "urn:li:organization:42" || profile.Username != "openpost" || profile.AvatarURL != "https://media.linkedin.example/openpost.png" {
-		t.Fatalf("unexpected refreshed LinkedIn organization profile %#v", profile)
+}
+
+func TestLinkedInOrganizationLookupPreservesFailures(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		status       int
+		code         string
+		fallback     bool
+		wantRequests int
+	}{
+		{name: "expired token", status: http.StatusUnauthorized, code: "EXPIRED_ACCESS_TOKEN", wantRequests: 1},
+		{name: "missing permission", status: http.StatusForbidden, code: "ACCESS_DENIED", wantRequests: 1},
+		{name: "rate limited", status: http.StatusTooManyRequests, code: "TOO_MANY_REQUESTS", wantRequests: 1},
+		{name: "other bad request", status: http.StatusBadRequest, code: "INVALID_REQUEST", wantRequests: 1},
+		{name: "fallback denied", status: http.StatusForbidden, code: "ACCESS_DENIED", fallback: true, wantRequests: 2},
+		{name: "fallback still invalid", status: http.StatusBadRequest, code: "ILLEGAL_ARGUMENT", fallback: true, wantRequests: 2},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			originalClient := httpClient
+			defer func() { httpClient = originalClient }()
+			requests := 0
+			httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/rest/organizations" {
+					t.Fatalf("unexpected request %s", req.URL.Path)
+				}
+				requests++
+				if requests > tt.wantRequests {
+					t.Fatal("organization lookup exceeded its request budget")
+				}
+				status, code := tt.status, tt.code
+				if tt.fallback && req.URL.Query().Has("projection") {
+					status, code = http.StatusBadRequest, "ILLEGAL_ARGUMENT"
+				}
+				body, err := json.Marshal(map[string]any{"status": status, "code": code})
+				if err != nil {
+					t.Fatal(err)
+				}
+				response := jsonResponse(req, string(body))
+				response.StatusCode = status
+				response.Header.Set("Retry-After", "60")
+				return response, nil
+			})}
+			adapter := NewLinkedInAdapter("", "", "", false, true)
+			_, err := adapter.RefreshAccountMetadata(t.Context(), "member-token", AccountMetadataRequest{AccountID: "urn:li:organization:42"})
+			var providerErr *HTTPError
+			if !errors.As(err, &providerErr) || providerErr.StatusCode != tt.status || providerErr.Code != tt.code || providerErr.RetryAfter != 60*time.Second {
+				t.Fatalf("organization lookup lost the provider failure: %v", err)
+			}
+			if requests != tt.wantRequests {
+				t.Fatalf("organization lookup made %d requests, want %d", requests, tt.wantRequests)
+			}
+		})
 	}
 }
 
