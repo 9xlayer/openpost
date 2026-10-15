@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SidebarCalendar from '$lib/components/sidebar-calendar.svelte';
+	import { sidebarPreferences } from '$lib/stores/sidebar-preferences.svelte';
 	import { publicationView } from '$lib/stores/publication-view.svelte';
 	import { ideate } from '$lib/post-builder/ideate.svelte';
 	import { page } from '$app/state';
@@ -276,6 +278,8 @@
 				</Sidebar.Menu>
 			</Sidebar.GroupContent>
 		</Sidebar.Group>
+		{#if !sidebar.isMobile && sidebar.state === 'expanded' && sidebarPreferences.calendarVisible}<SidebarCalendar
+			/>{/if}
 		{#if showDesktopPlanner}<SidebarPlanner onNavigate={navigate} />{/if}
 	</Sidebar.Content>
 

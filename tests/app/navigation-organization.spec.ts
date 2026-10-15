@@ -266,3 +266,80 @@ test("short desktop keeps navigation and contextual draft resume reachable", asy
   await expect(page.getByTestId("draft-gallery")).toBeVisible();
   await expect(planner).toHaveCount(0);
 });
+
+test("sidebar calendar is optional and remembers its visibility", async ({
+  page,
+  request,
+  browser,
+}, info) => {
+  const auth = await registerUser(request, `sidebar-calendar-${randomUUID()}@example.com`);
+  await createWorkspace(request, auth.token, "Calendar preference");
+  await authenticatePage(page, auth.token);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/publications?tab=drafts");
+  const calendar = page.getByTestId("sidebar-rolling-calendar");
+  await expect(calendar).toHaveCount(0);
+  const openPreferences = async () => {
+    await page.getByTestId("profile-menu-trigger").click();
+    await page.getByRole("menuitem", { name: "Preferences", exact: true }).click();
+  };
+  await openPreferences();
+  const toggle = page.getByRole("checkbox", { name: "Sidebar calendar", exact: true });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await page.keyboard.press("Escape");
+  await expect(calendar).toBeVisible();
+  await page.reload();
+  await expect(calendar).toBeVisible();
+  const touch = await browser.newContext({
+    hasTouch: true,
+    viewport: { width: 1440, height: 900 },
+    storageState: await page.context().storageState(),
+  });
+  try {
+    const touchPage = await touch.newPage();
+    await touchPage.goto(page.url());
+    await expect(touchPage.getByTestId("sidebar-rolling-calendar")).toBeHidden();
+    const shortcut = touchPage
+      .getByRole("region", { name: "Calendar", exact: true })
+      .getByRole("link", { name: "Calendar", exact: true });
+    await expect(shortcut).toBeVisible();
+    expect((await shortcut.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await shortcut.click();
+    await expect(touchPage).toHaveURL(/\/calendar$/);
+  } finally {
+    await touch.close();
+  }
+  for (const width of [1440, 390, 320]) {
+    for (const scheme of ["light", "dark"] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      if (width === 1440) await expect(calendar).toBeVisible();
+      else await expect(calendar).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
+        false,
+      );
+      await page.screenshot({
+        path: info.outputPath(`sidebar-calendar-${width}-${scheme}.png`),
+        animations: "disabled",
+      });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 600 });
+  for (const name of ["Posts", "Inbox", "Analytics", "Media"])
+    await expect(
+      page.getByTestId("sidebar-workspace-navigation").getByRole("button", { name, exact: true }),
+    ).toBeInViewport();
+  const today = calendar.locator('button[aria-current="date"]');
+  await today.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await openPreferences();
+  await toggle.uncheck();
+  await page.keyboard.press("Escape");
+  await expect(calendar).toHaveCount(0);
+  await page.reload();
+  await expect(calendar).toHaveCount(0);
+});
