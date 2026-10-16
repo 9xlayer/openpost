@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/openpost/backend/internal/diagnostics"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/providerwrite"
 )
@@ -71,9 +72,8 @@ func ClassifyFailure(err error) Failure {
 	if err == nil {
 		return Failure{}
 	}
-	var completion *renditionCompletionError
-	if errors.As(err, &completion) {
-		return Failure{Kind: FailureUnknown, Code: "publication_finalization_pending", Retryable: true, Action: FailureActionRetry, Message: "The provider accepted this post. OpenPost will retry saving its result without sending it again."}
+	if failure, ok := classifyLocalPublicationFailure(err); ok {
+		return failure
 	}
 	if retryAfter, pending := providerwrite.IsPending(err); pending {
 		return pendingProviderFailure(err, retryAfter)
@@ -108,6 +108,22 @@ func ClassifyFailure(err error) Failure {
 		return failureForKind(FailureNetwork, "", 0, 0)
 	}
 	return classifyFailureMessage(lower)
+}
+
+func classifyLocalPublicationFailure(err error) (Failure, bool) {
+	var recovery *renditionRecoveryError
+	if errors.As(err, &recovery) {
+		return Failure{Kind: FailureUnknown, Code: "publication_recovery_pending", Retryable: true, Action: FailureActionRetry, Message: "Publishing was interrupted. OpenPost will check the saved delivery before sending again."}, true
+	}
+	var recovered *diagnostics.PanicError
+	if errors.As(err, &recovered) {
+		return Failure{Kind: FailureUnknown, Code: "publication_panic", Action: FailureActionEdit, Message: "OpenPost could not finish publishing this destination."}, true
+	}
+	var completion *renditionCompletionError
+	if errors.As(err, &completion) {
+		return Failure{Kind: FailureUnknown, Code: "publication_finalization_pending", Retryable: true, Action: FailureActionRetry, Message: "The provider accepted this post. OpenPost will retry saving its result without sending it again."}, true
+	}
+	return Failure{}, false
 }
 
 func classifyAmbiguousWrite(err error) Failure {

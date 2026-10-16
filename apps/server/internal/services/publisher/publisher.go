@@ -16,6 +16,7 @@ import (
 
 	"github.com/openpost/backend/internal/capabilities"
 	"github.com/openpost/backend/internal/connectors"
+	"github.com/openpost/backend/internal/diagnostics"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
@@ -270,6 +271,7 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 	var retryFailure *RetryableError
 	var pendingContinuation *RetryableError
 	var terminalWriteFailure error
+	var panicFailure error
 	readinessIntent := publisherReadinessIntent(receipts[0].ExecutionIntent)
 	for i := range renditions {
 		rendition := renditions[i]
@@ -294,6 +296,9 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 			log.Printf("[Publisher] Failed to mark rendition %s as publishing: %v", rendition.ID, err)
 		}
 		if err := s.publishRendition(ctx, publication, &rendition, receiptByRendition[rendition.ID], readinessIntent); err != nil {
+			if recovered := (*diagnostics.PanicError)(nil); errors.As(err, &recovered) {
+				panicFailure = errors.Join(panicFailure, err)
+			}
 			if providerwrite.IsAmbiguous(err) {
 				terminalWriteFailure = err
 			}
@@ -342,7 +347,7 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 	}
 
 	if err := s.finalizePublication(ctx, publication); err != nil {
-		return err
+		return errors.Join(err, panicFailure)
 	}
 	if pendingContinuation != nil {
 		// A pending provider receipt still needs reconciliation. Keep this job a
@@ -350,15 +355,15 @@ func (s *Service) HandlePublishPublicationJob(ctx context.Context, jobPayload st
 		if retryFailure != nil && retryFailure.Failure.RetryAfter > pendingContinuation.Failure.RetryAfter {
 			pendingContinuation.Failure.RetryAfter = retryFailure.Failure.RetryAfter
 		}
-		return pendingContinuation
+		return errors.Join(pendingContinuation, panicFailure)
 	}
 	if retryFailure != nil {
-		return retryFailure
+		return errors.Join(retryFailure, panicFailure)
 	}
 	if terminalWriteFailure != nil {
-		return terminalWriteFailure
+		return errors.Join(terminalWriteFailure, panicFailure)
 	}
-	return nil
+	return panicFailure
 }
 
 // persistTerminalPreflightFailure keeps an authorized queued publication from
@@ -492,7 +497,14 @@ func (s *Service) publishRendition(
 	rendition *models.Rendition,
 	authorization *models.PublicationAuthorization,
 	readinessIntent providerreadiness.ExecutionIntent,
-) error {
+) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = s.recoverRenditionPanic(ctx, rendition.ID, authorization, &diagnostics.PanicError{
+				Recovered: recovered, Frames: diagnostics.CaptureFrames(2),
+			})
+		}
+	}()
 	var segments []models.RenditionSegment
 	if err := s.db.NewSelect().
 		Model(&segments).
@@ -1049,6 +1061,9 @@ func (s *Service) loadRenditionSegmentMedia(ctx context.Context, segmentID strin
 		altTexts = append(altTexts, firstNonEmptyPublisherString(row.AltText, row.MediaAttachment.AltText))
 		itemSettings := map[string]interface{}{}
 		_ = json.Unmarshal([]byte(row.SettingsJSON), &itemSettings)
+		if itemSettings == nil {
+			itemSettings = map[string]interface{}{}
+		}
 		if row.ThumbnailTimestampMS > 0 {
 			itemSettings["thumbnail_timestamp_ms"] = row.ThumbnailTimestampMS
 		}

@@ -1649,7 +1649,7 @@ func (h *PublicationHandler) insertPublicationSegments(
 				DisplayOrder:         order,
 				AltText:              media.AltText,
 				ThumbnailTimestampMS: media.ThumbnailTimestampMS,
-				SettingsJSON:         mustJSON(media.Settings),
+				SettingsJSON:         publicationMediaSettingsJSON(media.Settings),
 			}
 			if _, err := tx.NewInsert().Model(&row).Exec(ctx); err != nil {
 				return nil, err
@@ -1759,7 +1759,7 @@ func (h *PublicationHandler) replacePublicationSegments(
 				DisplayOrder:         order,
 				AltText:              media.AltText,
 				ThumbnailTimestampMS: media.ThumbnailTimestampMS,
-				SettingsJSON:         mustJSON(media.Settings),
+				SettingsJSON:         publicationMediaSettingsJSON(media.Settings),
 			}
 			if _, err := tx.NewInsert().Model(row).Exec(ctx); err != nil {
 				return err
@@ -2095,7 +2095,7 @@ func (h *PublicationHandler) insertRenditionSegments(
 				DisplayOrder:         order,
 				AltText:              media.AltText,
 				ThumbnailTimestampMS: media.ThumbnailTimestampMS,
-				SettingsJSON:         mustJSON(media.Settings),
+				SettingsJSON:         publicationMediaSettingsJSON(media.Settings),
 			}
 			if _, err := tx.NewInsert().Model(&row).Exec(ctx); err != nil {
 				return err
@@ -4576,6 +4576,13 @@ func isMissingPublicationSegmentTable(err error) bool {
 	message := strings.ToLower(err.Error())
 	return strings.Contains(message, "no such table") ||
 		(strings.Contains(message, "relation") && strings.Contains(message, "does not exist"))
+}
+
+func publicationMediaSettingsJSON(settings map[string]interface{}) string {
+	if settings == nil {
+		return "{}"
+	}
+	return mustJSON(settings)
 }
 
 func mustJSON(value interface{}) string {

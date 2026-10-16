@@ -260,25 +260,13 @@ func (w *BackgroundWorker) SetDiagnosticsReporter(reporter *diagnostics.Reporter
 	w.diagnostics = reporter
 }
 
-// workerPanicError carries a recovered worker panic through the normal
-// failure path so panicking jobs fail durably instead of crashing the
-// worker, and are reported once with their original stack.
-type workerPanicError struct {
-	recovered any
-	frames    []diagnostics.Frame
-}
-
-func (e *workerPanicError) Error() string {
-	return fmt.Sprintf("worker panic: %v", e.recovered)
-}
-
 // executeJobGuarded runs one job, converting panics into durable failures.
 // Without this boundary a panicking job would take down the worker before
 // any failure — or diagnostic — could be recorded.
 func (w *BackgroundWorker) executeJobGuarded(ctx context.Context, job *models.Job) (err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			err = &workerPanicError{recovered: recovered, frames: diagnostics.CaptureFrames(2)}
+			err = &diagnostics.PanicError{Recovered: recovered, Frames: diagnostics.CaptureFrames(2)}
 		}
 	}()
 	return w.executeJob(ctx, job)
@@ -314,8 +302,8 @@ func (w *BackgroundWorker) reportWorkerDiagnostic(job *models.Job, processErr er
 		FirstSeen:    time.Now().UTC(),
 		LastSeen:     time.Now().UTC(),
 	}
-	if panicErr := (*workerPanicError)(nil); errors.As(processErr, &panicErr) {
-		report.Frames = panicErr.frames
+	if panicErr := (*diagnostics.PanicError)(nil); errors.As(processErr, &panicErr) {
+		report.Frames = panicErr.Frames
 	} else if !expected {
 		report.Frames = diagnostics.CaptureFrames(2)
 	}
@@ -326,7 +314,7 @@ func (w *BackgroundWorker) reportWorkerDiagnostic(job *models.Job, processErr er
 // code. The second return reports whether the failure is an expected
 // condition (counted, not alerted). Empty code means "do not report".
 func classifyWorkerDiagnostic(processErr error, jobType string) (string, bool) {
-	if panicErr := (*workerPanicError)(nil); errors.As(processErr, &panicErr) {
+	if panicErr := (*diagnostics.PanicError)(nil); errors.As(processErr, &panicErr) {
 		return diagnostics.CodeWorkerPanic, false
 	}
 	if directed := (*publisher.RetryableError)(nil); errors.As(processErr, &directed) {
