@@ -8,7 +8,6 @@
     "scheme": "openpost",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.openpost.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
