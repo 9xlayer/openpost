@@ -208,6 +208,9 @@ func TestTextCardCarouselKeepsAttachmentOrderAndExplicitOverrides(t *testing.T) 
 	require.Equal(t, "photo-b", output[1].ID)
 	require.Equal(t, "photo-a", output[2].ID)
 	require.Nil(t, output[0].Settings, "internal render receipts are not client settings")
+	// Existing posts may contain JSON null from omitted media settings.
+	_, err = srv.db.NewUpdate().Model((*models.PublicationSegmentMedia)(nil)).Set("settings_json = ?", "null").Where("segment_id = ?", created.Segments[0].ID).Exec(ctx)
+	require.NoError(t, err)
 	// Explicitly empty text removes the card; it must not inherit the source.
 	empty := ""
 	inherit := true
@@ -216,6 +219,12 @@ func TestTextCardCarouselKeepsAttachmentOrderAndExplicitOverrides(t *testing.T) 
 	require.NoError(t, err)
 	require.Empty(t, updated.Renditions[0].Segments[0].Body)
 	require.Len(t, updated.Renditions[0].Segments[0].OutputMedia, 2)
+	var authoredRows []models.RenditionSegmentMedia
+	require.NoError(t, srv.db.NewSelect().Model(&authoredRows).Where("rendition_segment_id = ? AND role != ?", updated.Renditions[0].Segments[0].ID, "text_card").Scan(ctx))
+	require.Len(t, authoredRows, 2)
+	for _, row := range authoredRows {
+		require.Equal(t, "{}", row.SettingsJSON, "refreshing inherited attachments must preserve object settings")
+	}
 }
 
 func TestMCPTextCardPreviewIsReadOnlyAndWorkspaceAuthorized(t *testing.T) {

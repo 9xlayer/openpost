@@ -332,6 +332,9 @@ func TestCreatePublicationReplacesClientPlaceholderSegmentIDs(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 		var edited PublicationResponse
 		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &edited))
+		var refreshedMedia models.RenditionSegmentMedia
+		require.NoError(t, db.NewSelect().Model(&refreshedMedia).Where("rendition_segment_id = ? AND media_id = ?", edited.Renditions[0].Segments[0].ID, "media-custom").Scan(ctx))
+		require.Equal(t, "{}", refreshedMedia.SettingsJSON, "refreshing joined source media must preserve object settings")
 		historyRequest := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/publications/"+joined.ID+"/events", nil)
 		historyRequest.Header.Set("Authorization", "Bearer web-token")
 		historyResponse := httptest.NewRecorder()

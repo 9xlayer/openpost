@@ -167,7 +167,7 @@ func refreshTextCardInheritedMedia(ctx context.Context, db bun.IDB, segment *mod
 			if seen[media.MediaID] {
 				continue
 			}
-			row := models.RenditionSegmentMedia{RenditionSegmentID: segment.ID, MediaID: media.MediaID, Role: publicationFirstNonEmpty(media.Role, "attachment"), DisplayOrder: len(seen), AltText: media.AltText, SettingsJSON: mustJSON(media.Settings), ThumbnailTimestampMS: media.ThumbnailTimestampMS}
+			row := models.RenditionSegmentMedia{RenditionSegmentID: segment.ID, MediaID: media.MediaID, Role: publicationFirstNonEmpty(media.Role, "attachment"), DisplayOrder: len(seen), AltText: media.AltText, SettingsJSON: publicationMediaSettingsJSON(media.Settings), ThumbnailTimestampMS: media.ThumbnailTimestampMS}
 			seen[media.MediaID] = true
 			if _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {
 				return err

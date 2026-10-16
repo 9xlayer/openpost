@@ -2846,6 +2846,9 @@ func (h *OAuthHandler) handleFeatureMessagingUpdate(ctx context.Context, account
 func (h *OAuthHandler) handleLegacyMessagingUpdate(ctx context.Context, account models.SocialAccount, enabled bool) error {
 	capabilityState := map[string]string{}
 	_ = json.Unmarshal([]byte(account.CapabilityState), &capabilityState)
+	if capabilityState == nil {
+		capabilityState = map[string]string{}
+	}
 	if enabled && !accountMessagingSupported(account.Platform) {
 		return huma.Error400BadRequest("messages are not supported for this provider")
 	}
