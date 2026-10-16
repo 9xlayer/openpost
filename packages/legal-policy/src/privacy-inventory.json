@@ -551,6 +551,18 @@
       ]
     },
     {
+      "id": "local-sidebar-calendar",
+      "technology": "localStorage",
+      "owner": "OpenPost sidebar preferences",
+      "identifier_kind": "exact",
+      "identifier": "openpost-sidebar-calendar",
+      "purpose": "Keeps the user's choice to show or hide the sidebar calendar.",
+      "scope": "Application origin and current browser profile.",
+      "duration": "Until the preference is changed or site data is cleared.",
+      "necessity": "functional",
+      "source_refs": ["apps/web/src/lib/stores/sidebar-preferences.svelte.ts"]
+    },
+    {
       "id": "local-theme-name",
       "technology": "localStorage",
       "owner": "mode-watcher theme runtime",

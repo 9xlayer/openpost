@@ -5,12 +5,13 @@ export function publicationMasonry(node: HTMLElement, enabled = true) {
 	let stop = () => {};
 	function configure(active: boolean) {
 		stop();
-		if (!active || typeof ResizeObserver === 'undefined') return;
+		if (!active) return;
 		const cards = new Set<HTMLElement>();
 		const resize = new ResizeObserver((entries) => {
 			const gap = Number.parseFloat(getComputedStyle(node).columnGap) || 0;
 			for (const entry of entries) {
-				const card = entry.target as HTMLElement;
+				if (!(entry.target instanceof HTMLElement)) continue;
+				const card = entry.target;
 				if (!cards.has(card)) continue;
 				const height = entry.borderBoxSize[0]?.blockSize ?? card.getBoundingClientRect().height;
 				card.style.gridRowEnd = `span ${Math.ceil(height + gap)}`;

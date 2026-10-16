@@ -48,7 +48,7 @@ test("workspace switcher creates and selects a workspace", async ({ page, reques
   await page.getByRole("menuitem", { name: new RegExp(firstName) }).click();
   await expect(workspaceButton).toContainText(firstName);
   await page
-    .getByTestId("sidebar-workspace-footer")
+    .getByTestId("sidebar-workspace-navigation")
     .getByRole("button", { name: "Inbox", exact: true })
     .click();
   await expect(page).toHaveURL(/\/inbox\/engagement/);
