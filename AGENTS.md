@@ -203,6 +203,7 @@ Free-tool draft transfer uses `@openpost/draft-transfer`. Keep content and files
 ## Delivery
 
 - Commit directly to `main` with Conventional Commits, one concern per commit. Stage only files owned by the current work.
+- Reference the issue number in every issue-fixing commit title, for example `(#342)`.
 - Release assets are user downloads. Keep scan reports in Actions; use Git SHAs, image digests, OCI labels, and native signatures instead of custom release manifests. Validate workflows with `bun run check -- workflows`.
 - Push only when asked. A push is not a deployment.
 - A request to release authorizes the required commits, pushes, tags, artifact publication, and deployment. State the revision and effect, run the required checks, and finish without another approval prompt. Ask separately for destructive live actions outside that release workflow.
