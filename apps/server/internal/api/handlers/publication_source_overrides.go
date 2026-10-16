@@ -43,7 +43,7 @@ func refreshJoinedSourceMedia(ctx context.Context, db bun.IDB, segment *models.R
 			RenditionSegmentID: segment.ID, MediaID: media.MediaID,
 			Role: publicationFirstNonEmpty(media.Role, "attachment"), DisplayOrder: order,
 			AltText: media.AltText, ThumbnailTimestampMS: media.ThumbnailTimestampMS,
-			SettingsJSON: mustJSON(media.Settings),
+			SettingsJSON: publicationMediaSettingsJSON(media.Settings),
 		}
 		if _, err := db.NewInsert().Model(&row).Exec(ctx); err != nil {
 			return err
