@@ -84,6 +84,13 @@ test("draft gallery keeps content, selection and search without repeated row chr
     workspace.id,
     "مرحبا بمشروعنا الجديد، وهذه بعض الأفكار للمشاركة",
   );
+  for (const content of [
+    "A short launch note",
+    "What changed this week\nA practical improvement that came from listening to our customers.\nOne less step before sharing an update.",
+    "A useful detail from our latest release",
+    "What we learned from shipping a smaller feature\nThe result was easier to explain, easier to use, and easier to maintain.\nWe will keep that lesson for the next launch.",
+  ])
+    await createPublication(request, auth.token, workspace.id, content);
   await page.route(
     (url) => url.pathname === "/api/v1/publications",
     async (route) => {
@@ -127,10 +134,22 @@ test("draft gallery keeps content, selection and search without repeated row chr
   await authenticatePage(page, auth.token);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await page.goto(`/publications?tab=drafts&workspace_id=${workspace.id}`);
+  const views = page.getByRole("navigation", { name: "Post view" });
+  await expect.soft(page.getByTestId("publication-list")).toBeVisible();
+  await page.screenshot({ path: info.outputPath("list-1440-light.png"), animations: "disabled" });
+
+  await views.getByRole("link", { name: "Grid", exact: true }).click();
   const gallery = page.getByTestId("draft-gallery");
-  await expect(gallery.locator("article")).toHaveCount(3);
-  await expect(gallery.getByRole("link")).toHaveCount(3);
+  await expect(views.getByRole("link", { name: "Grid", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  await expect(gallery.locator("article")).toHaveCount(7);
+  await expect(gallery.getByRole("link")).toHaveCount(7);
   await expect.soft(gallery.getByText("Needs a new review", { exact: true })).toBeVisible();
   await expect.soft(gallery.getByText("Delivery failed.", { exact: true })).toBeVisible();
   await expect(gallery.getByText("Delivery details", { exact: true })).toHaveCount(0);
@@ -150,6 +169,22 @@ test("draft gallery keeps content, selection and search without repeated row chr
       await page.setViewportSize({ width, height: 960 });
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await settleCardContrast(page);
+      if (width === 1440)
+        await expect
+          .poll(() =>
+            gallery.locator("article").evaluateAll((cards) => {
+              const boxes = cards.map((card) => card.getBoundingClientRect());
+              return boxes.every((box) => {
+                const previous = boxes
+                  .filter((other) => Math.abs(other.x - box.x) < 1 && other.top < box.top)
+                  .sort((a, b) => b.top - a.top)[0];
+                return (
+                  !previous || (box.top - previous.bottom >= 15 && box.top - previous.bottom <= 18)
+                );
+              });
+            }),
+          )
+          .toBe(true);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(
         false,
       );
@@ -159,8 +194,25 @@ test("draft gallery keeps content, selection and search without repeated row chr
       });
     }
   }
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: "ja", url: page.url() }]);
+  await page.reload();
+  await expect(page.getByRole("link", { name: "グリッド", exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
+  await page.screenshot({ path: info.outputPath("drafts-320-ja.png"), animations: "disabled" });
+  await page.context().addCookies([{ name: "PARAGLIDE_LOCALE", value: "en", url: page.url() }]);
+  await page.reload();
   await page.getByRole("button", { name: "Select drafts", exact: true }).click();
   await gallery.getByRole("checkbox").first().check();
+  await expect(gallery.getByRole("checkbox").first()).toBeChecked();
+  await views.getByRole("link", { name: "List", exact: true }).click();
+  await expect(page.getByTestId("publication-list").locator(":scope > article")).toHaveCount(7);
+  await expect(page.getByTestId("publication-list").getByRole("checkbox").first()).toBeChecked();
+  await page.screenshot({
+    path: info.outputPath("list-320-selection.png"),
+    animations: "disabled",
+  });
+
+  await views.getByRole("link", { name: "Grid", exact: true }).click();
   await expect(gallery.getByRole("checkbox").first()).toBeChecked();
   await expect(page.getByRole("button", { name: "Schedule selected", exact: false })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
@@ -171,6 +223,19 @@ test("draft gallery keeps content, selection and search without repeated row chr
     animations: "disabled",
   });
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await page.goto("/media");
+  await page
+    .getByTestId("sidebar-workspace-navigation")
+    .getByRole("button", { name: "Posts", exact: true })
+    .click();
+  await expect(page).toHaveURL(/view=grid/);
+  await expect(gallery.locator("article")).toHaveCount(7);
+  await page.reload();
+  await expect(gallery.locator("article")).toHaveCount(7);
+  await page.goto(`/publications?tab=drafts&view=list&workspace_id=${workspace.id}`);
+  await expect(page.getByTestId("publication-list")).toBeVisible();
+  await views.getByRole("link", { name: "Grid", exact: true }).click();
   const search = page.getByRole("textbox", { name: "Search posts", exact: true });
   await search.fill("customer interview");
   await expect(gallery.locator("article")).toHaveCount(1);

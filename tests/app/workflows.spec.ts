@@ -156,7 +156,7 @@ test("workflow editor saves, previews without writes, and approves a native draf
   await page.goto("/publications?tab=drafts");
   await expect(
     page
-      .getByTestId("draft-gallery")
+      .getByTestId("publication-list")
       .getByText("Shipping version 2: Smaller daily tasks.", { exact: true }),
   ).toBeVisible();
 });

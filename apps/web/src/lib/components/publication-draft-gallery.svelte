@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { publicationMasonry } from '$lib/publication-masonry';
 	import type { components } from '$lib/api/types';
 	import type { SocialAccount } from '$lib/api/client';
 	import { resolveAppPath } from '$lib/app-path';
@@ -8,6 +9,7 @@
 	import { formatSocialAccountName } from '$lib/utils';
 	import { m } from '$lib/paraglide/messages';
 	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Label } from '$lib/components/ui/label';
 	import MediaPreviewImage from '$lib/components/media-preview-image.svelte';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -32,7 +34,7 @@
 	}
 </script>
 
-<div class="draft-gallery" data-testid="draft-gallery">
+<div class="publication-masonry" use:publicationMasonry data-testid="draft-gallery">
 	{#each publications as publication (publication.id)}
 		{@const text = publicationPreviewText(publication) || m.activity_untitled_post()}
 		{@const media = publicationPreviewMedia(publication)}
@@ -105,12 +107,17 @@
 				class="flex min-h-12 items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground"
 			>
 				{#if selecting}
-					<Checkbox
-						aria-label={m.batch_select_post()}
-						checked={selectedIds.includes(publication.id)}
-						onCheckedChange={(checked) => select(publication.id, checked === true)}
-						disabled={!selectedIds.includes(publication.id) && selectedIds.length >= 20}
-					/>
+					<Label
+						for={`post-select-${publication.id}`}
+						class="flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+						><Checkbox
+							id={`post-select-${publication.id}`}
+							aria-label={m.batch_select_post()}
+							checked={selectedIds.includes(publication.id)}
+							onCheckedChange={(checked) => select(publication.id, checked === true)}
+							disabled={!selectedIds.includes(publication.id) && selectedIds.length >= 20}
+						/></Label
+					>
 				{/if}
 				<div class="flex min-w-0 flex-1 items-center gap-2">
 					{#each destinations.slice(0, 2) as destination (destination.social_account_id)}
@@ -151,12 +158,3 @@
 		</article>
 	{/each}
 </div>
-
-<style>
-	.draft-gallery {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr));
-		gap: 1rem;
-		align-items: start;
-	}
-</style>

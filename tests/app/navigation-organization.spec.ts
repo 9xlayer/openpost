@@ -263,7 +263,7 @@ test("short desktop keeps navigation and contextual draft resume reachable", asy
   });
   await viewAll.click();
   await expect(page).toHaveURL(/publications\?tab=drafts$/);
-  await expect(page.getByTestId("draft-gallery")).toBeVisible();
+  await expect(page.getByTestId("publication-list")).toBeVisible();
   await expect(planner).toHaveCount(0);
 });
 

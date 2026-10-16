@@ -24,6 +24,7 @@
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import type { DestructiveActionOutcome } from '$lib/destructive-action-outcome';
 	import { Skeleton } from '$lib/components/ui/skeleton';
+	import { publicationView } from '$lib/stores/publication-view.svelte';
 	import { ui } from '$lib/stores/ui.svelte';
 	import { publicationInvalidationForWorkspace } from '$lib/publication-invalidation';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
@@ -277,7 +278,12 @@
 				<button
 					type="button"
 					class="rounded-sm px-1.5 py-1 text-xs font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-					onclick={() => onNavigate('/publications?tab=drafts')}
+					onclick={() =>
+						onNavigate(
+							publicationView.current === 'grid'
+								? '/publications?tab=drafts&view=grid'
+								: '/publications?tab=drafts'
+						)}
 				>
 					{m.sidebar_view_all()}
 				</button>

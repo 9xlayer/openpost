@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { publicationMasonry } from '$lib/publication-masonry';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { Label } from '$lib/components/ui/label';
 	import BatchScheduleDialog from '$lib/components/batch-schedule-dialog.svelte';
 	import PublicationDraftGallery from '$lib/components/publication-draft-gallery.svelte';
 	import PublicationViewSwitch from '$lib/components/publication-view-switch.svelte';
@@ -99,6 +102,7 @@
 	let dataRequestSequence = 0;
 	let destinationActionSequence = 0;
 	const failureDismissalToastIDs = new Set<string | number>();
+	const inventoryView = $derived(page.url.searchParams.get('view') === 'grid' ? 'grid' : 'list');
 	const requestedTab = page.url.searchParams.get('tab');
 	let activeTab = $state<ActivityTab>(
 		isPublicationListTab(requestedTab) ? requestedTab : publicationView.listTab
@@ -787,7 +791,7 @@
 			onAction={searchTerm ? () => (searchQuery = '') : undefined}
 			variant="muted"
 		/>
-	{:else if activeTab === 'drafts'}
+	{:else if activeTab === 'drafts' && inventoryView === 'grid'}
 		<PublicationDraftGallery
 			publications={items.map((post) => post.publication)}
 			{accounts}
@@ -795,7 +799,13 @@
 			bind:selectedIds
 		/>
 	{:else if items.length > 0}
-		<div class="divide-y overflow-hidden rounded-xl border bg-card" data-testid="publication-list">
+		<div
+			class={inventoryView === 'grid'
+				? 'publication-masonry'
+				: 'divide-y overflow-hidden rounded-xl border bg-card text-card-foreground'}
+			use:publicationMasonry={inventoryView === 'grid'}
+			data-testid={inventoryView === 'grid' ? 'publication-grid' : 'publication-list'}
+		>
 			{#each items as post (post.id)}
 				{@const statusIconValue = statusIcon(post)}
 				{@const accountDestinations = [
@@ -803,23 +813,63 @@
 						post.destinations.map((destination) => [destination.social_account_id, destination])
 					).values()
 				]}
-				<article class="group p-3 transition-colors hover:bg-muted/30 sm:p-4">
+				<article
+					class={[
+						'group min-w-0 p-3 hover:bg-muted/30 sm:p-4',
+						inventoryView === 'grid' &&
+							'overflow-hidden rounded-xl border bg-card text-card-foreground'
+					]}
+				>
 					<div class="flex items-start gap-3 sm:gap-4">
-						<div
-							class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/50"
-						>
-							{#if statusIconValue.kind === 'protected'}
-								<ProtectedIcon icon={statusIconValue.role} class={`size-4 ${statusClass(post)}`} />
-							{:else}
-								<ThemeIcon role={statusIconValue.role} class={`size-4 ${statusClass(post)}`} />
-							{/if}
-						</div>
+						{#if activeTab === 'drafts' && selecting}
+							<Label
+								for={`post-select-${post.id}`}
+								class="flex min-h-11 min-w-11 shrink-0 items-center justify-center"
+								><Checkbox
+									id={`post-select-${post.id}`}
+									aria-label={m.batch_select_post()}
+									checked={selectedIds.includes(post.id)}
+									disabled={!selectedIds.includes(post.id) && selectedIds.length >= 20}
+									onCheckedChange={(checked) => {
+										selectedIds =
+											checked === true
+												? [...selectedIds, post.id]
+												: selectedIds.filter((id) => id !== post.id);
+									}}
+								/></Label
+							>
+						{:else if activeTab !== 'drafts'}
+							<div
+								class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/50"
+							>
+								{#if statusIconValue.kind === 'protected'}
+									<ProtectedIcon
+										icon={statusIconValue.role}
+										class={`size-4 ${statusClass(post)}`}
+									/>
+								{:else}
+									<ThemeIcon role={statusIconValue.role} class={`size-4 ${statusClass(post)}`} />
+								{/if}
+							</div>
+						{/if}
 						<div class="min-w-0 flex-1">
 							<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-								<span class={['font-medium', statusClass(post)]}>{statusLabel(post)}</span>
+								{#if activeTab !== 'drafts'}<span class={['font-medium', statusClass(post)]}
+										>{statusLabel(post)}</span
+									>{/if}
 								<span class="text-muted-foreground">
 									{formatDateTime(publicationActivityOccurrence(post))}
 								</span>
+								{#if post.publication.review_state === 'pending'}<span>{m.review_pending()}</span>
+								{:else if post.publication.review_state === 'needs_review'}<span
+										>{m.review_needs_review()}</span
+									>
+								{:else if post.publication.review_state === 'changes_requested'}<span
+										class="text-destructive">{m.review_changes_requested()}</span
+									>
+								{:else if post.publication.review_state === 'approved'}<span
+										>{m.review_approved()}</span
+									>{/if}
 								{#if post.isThread}
 									<span class="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
 										{threadPostCount(post.postCount)}
@@ -828,6 +878,7 @@
 							</div>
 							<a
 								href={resolveAppPath(post.href)}
+								dir="auto"
 								class="mt-1.5 block max-w-[72ch] rounded-sm text-sm leading-6 text-foreground focus-visible:outline-2 focus-visible:outline-ring"
 							>
 								{truncate(postText(post))}
@@ -856,7 +907,7 @@
 									{/if}
 								</div>
 							{/if}
-							{#if post.destinations?.length}
+							{#if post.destinations?.length && (activeTab !== 'drafts' || post.destinations.length > accountDestinations.length || post.destinations.some((destination) => destination.status === 'failed'))}
 								<details
 									class="group/delivery mt-3 max-w-2xl rounded-lg border bg-background/60"
 									open={post.status === 'failed'}
@@ -924,23 +975,25 @@
 								</details>
 							{/if}
 						</div>
-						<Button
-							variant="ghost"
-							size="sm"
-							class="min-h-10 shrink-0"
-							onclick={() => goto(resolveAppPath(post.href))}
-							aria-label={post.status === 'published' || post.status === 'publishing'
-								? m.activity_view_post({ title: truncate(postText(post), 40) })
-								: m.activity_edit_post({ title: truncate(postText(post), 40) })}
-						>
-							{#if post.status === 'published' || post.status === 'publishing'}
-								<ThemeIcon role="eye" class="size-4 sm:mr-1.5" />
-								<span class="hidden sm:inline">{m.activity_view_details()}</span>
-							{:else}
-								<ThemeIcon role="edit" class="size-4 sm:mr-1.5" />
-								<span class="hidden sm:inline">{m.common_edit()}</span>
-							{/if}
-						</Button>
+						{#if activeTab !== 'drafts'}
+							<Button
+								variant="ghost"
+								size="sm"
+								class="min-h-10 shrink-0"
+								onclick={() => goto(resolveAppPath(post.href))}
+								aria-label={post.status === 'published' || post.status === 'publishing'
+									? m.activity_view_post({ title: truncate(postText(post), 40) })
+									: m.activity_edit_post({ title: truncate(postText(post), 40) })}
+							>
+								{#if post.status === 'published' || post.status === 'publishing'}
+									<ThemeIcon role="eye" class="size-4 sm:mr-1.5" />
+									<span class="hidden sm:inline">{m.activity_view_details()}</span>
+								{:else}
+									<ThemeIcon role="edit" class="size-4 sm:mr-1.5" />
+									<span class="hidden sm:inline">{m.common_edit()}</span>
+								{/if}
+							</Button>
+						{/if}
 					</div>
 				</article>
 			{/each}
@@ -958,11 +1011,11 @@
 		headerActionLayout={selecting ? 'responsive' : 'inline'}
 		themeIconRole="publications"
 		loading={initialLoading}
-		loadingLayout="list"
+		loadingLayout={inventoryView === 'grid' ? 'grid' : 'list'}
 		loadingMessage={offlinePaused ? m.app_offline_title() : m.common_loading()}
 	>
 		{#snippet navigation()}
-			<div class="mb-3"><PublicationViewSwitch view="list" /></div>
+			<div class="mb-3"><PublicationViewSwitch view={inventoryView} /></div>
 			<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<TabsList
 					class="no-scrollbar w-full justify-start overflow-x-auto overflow-y-hidden sm:w-auto"
