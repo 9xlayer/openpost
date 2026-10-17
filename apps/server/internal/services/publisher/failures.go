@@ -169,6 +169,10 @@ func classifyProviderHTTPFailure(err error) (Failure, bool) {
 		failure.Message = "This Pinterest account cannot publish to the selected board. Choose another board or reconnect the account if its access changed."
 		failure.Action = FailureActionEdit
 	}
+	if code == "youtube:thumbnail_channel_verification_required" {
+		failure.Message = "YouTube published the video but requires channel phone verification before it accepts a custom thumbnail. Verify the channel at youtube.com/verify, then set the thumbnail manually or retry it."
+		failure.Action = FailureActionProvider
+	}
 	if kind == FailurePermission && code == "discord_attach_files_permission_lost" {
 		failure.Message = "Allow Attach Files for the bot in this Discord channel, or remove the attachments."
 	}

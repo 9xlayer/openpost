@@ -196,6 +196,21 @@ func TestYouTubeThumbnailRetryDoesNotUploadVideoAgain(t *testing.T) {
 	}
 }
 
+func TestYouTubeThumbnailPhoneVerificationUsesStableError(t *testing.T) {
+	originalClient := httpClient
+	t.Cleanup(func() { httpClient = originalClient })
+	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponseWithStatus(req, http.StatusForbidden, `{"error":{"errors":[{"domain":"youtube.thumbnail","reason":"forbidden"}],"message":"private provider detail"}}`), nil
+	})}
+	err := NewYouTubeAdapter("client", "secret", "https://app.example/callback").setYouTubeThumbnail(t.Context(), "token", "video-1", UploadMediaRequest{
+		ThumbnailMimeType: "image/jpeg", ThumbnailSize: 5, ThumbnailReader: strings.NewReader("cover"),
+	})
+	var providerErr *HTTPError
+	if !errors.As(err, &providerErr) || providerErr.Code != "youtube:thumbnail_channel_verification_required" || strings.Contains(err.Error(), "private provider detail") {
+		t.Fatalf("unexpected thumbnail error: %v", err)
+	}
+}
+
 func TestYouTubeUploadMediaWithMetadata(t *testing.T) {
 	originalClient := httpClient
 	defer func() { httpClient = originalClient }()

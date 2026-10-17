@@ -780,17 +780,23 @@ func buildYouTubeCaptionRequest(videoID string, req UploadMediaRequest) (*bytes.
 }
 
 func youtubeErrorReason(body []byte) string {
+	reason, _ := youtubeErrorDetail(body)
+	return reason
+}
+
+func youtubeErrorDetail(body []byte) (string, string) {
 	var payload struct {
 		Error struct {
 			Errors []struct {
 				Reason string `json:"reason"`
+				Domain string `json:"domain"`
 			} `json:"errors"`
 		} `json:"error"`
 	}
 	if json.Unmarshal(body, &payload) != nil || len(payload.Error.Errors) == 0 {
-		return ""
+		return "", ""
 	}
-	return strings.TrimSpace(payload.Error.Errors[0].Reason)
+	return strings.TrimSpace(payload.Error.Errors[0].Reason), strings.TrimSpace(payload.Error.Errors[0].Domain)
 }
 
 func (y *YouTubeAdapter) setYouTubeThumbnail(ctx context.Context, accessToken, videoID string, req UploadMediaRequest) error {
@@ -816,6 +822,12 @@ func (y *YouTubeAdapter) setYouTubeThumbnail(ctx context.Context, accessToken, v
 	})
 	if err != nil {
 		return fmt.Errorf("youtube thumbnail upload: %w", err)
+	}
+	if resp.statusCode < 200 || resp.statusCode >= 300 {
+		_, domain := youtubeErrorDetail(resp.body)
+		if domain == "youtube.thumbnail" {
+			return &HTTPError{StatusCode: resp.statusCode, Code: "youtube:thumbnail_channel_verification_required"}
+		}
 	}
 	return youtubeAPIError(resp)
 }

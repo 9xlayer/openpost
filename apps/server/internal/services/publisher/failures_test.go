@@ -23,6 +23,7 @@ func TestClassifyFailureUsesStableTaxonomyAndRetryPolicy(t *testing.T) {
 		{"expired auth", &platform.HTTPError{StatusCode: 401, Code: "token_expired"}, FailureAuthExpired, false, FailureActionReconnect},
 		{"reconnect", &platform.HTTPError{StatusCode: 401}, FailureReconnectRequired, false, FailureActionReconnect},
 		{"permission", &platform.HTTPError{StatusCode: 403}, FailurePermission, false, FailureActionProvider},
+		{"youtube thumbnail verification", &platform.HTTPError{StatusCode: 403, Code: "youtube:thumbnail_channel_verification_required"}, FailurePermission, false, FailureActionProvider},
 		{"billing", &platform.HTTPError{StatusCode: 402}, FailureBillingRequired, false, FailureActionBilling},
 		{"duplicate", &platform.HTTPError{StatusCode: 409}, FailureDuplicateContent, false, FailureActionEdit},
 		{"rate limit", &platform.HTTPError{StatusCode: 429, RetryAfter: time.Minute}, FailureRateLimited, true, FailureActionRetry},
@@ -43,6 +44,7 @@ func TestClassifyFailureUsesStableTaxonomyAndRetryPolicy(t *testing.T) {
 		})
 	}
 	require.Equal(t, http.StatusTooManyRequests, ClassifyFailure(&platform.HTTPError{StatusCode: 429}).HTTPStatus)
+	require.Contains(t, ClassifyFailure(&platform.HTTPError{StatusCode: 403, Code: "youtube:thumbnail_channel_verification_required"}).Message, "youtube.com/verify")
 }
 
 func TestRetryDelayIsBoundedAndHonorsRetryAfter(t *testing.T) {
