@@ -37,6 +37,9 @@ func TestYouTubeGenerateAuthURL(t *testing.T) {
 	if query.Get("access_type") != "offline" || query.Get("prompt") != "consent" {
 		t.Fatalf("expected offline consent auth URL, got %s", authURL)
 	}
+	if query.Has("include_granted_scopes") {
+		t.Fatalf("YouTube connection must request only its current scope set: %s", authURL)
+	}
 	if !strings.Contains(query.Get("scope"), "youtube.upload") {
 		t.Fatalf("expected youtube.upload scope, got %q", query.Get("scope"))
 	}

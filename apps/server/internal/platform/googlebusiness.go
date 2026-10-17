@@ -114,7 +114,6 @@ func (g *GoogleBusinessAdapter) GenerateAuthURL(state string) (string, map[strin
 	params.Set("state", state)
 	params.Set("access_type", "offline")
 	params.Set("prompt", "consent")
-	params.Set("include_granted_scopes", "true")
 	return googleOAuthURL + "?" + params.Encode(), nil
 }
 
