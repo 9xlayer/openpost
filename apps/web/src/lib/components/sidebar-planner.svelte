@@ -327,7 +327,6 @@
 										<a
 											{...props}
 											href={resolve(draft.href as '/')}
-											data-sveltekit-preload-code="eager"
 											class={[
 												'group/draft flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
 												activeDraft && 'bg-sidebar-accent/60'
