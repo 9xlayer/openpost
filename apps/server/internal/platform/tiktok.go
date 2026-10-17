@@ -467,26 +467,9 @@ func (t *TikTokAdapter) initInboxVideoUpload(ctx context.Context, accessToken st
 }
 
 func (t *TikTokAdapter) publishPhotoPost(ctx context.Context, accessToken string, req *PublishRequest) (string, error) {
-	if len(req.PlatformMediaIDs) < 1 || len(req.PlatformMediaIDs) > 35 {
-		return "", fmt.Errorf("tiktok photo posts require 1-35 images")
-	}
-	if !allTikTokPhotoImages(req.Media) {
-		return "", fmt.Errorf("tiktok photo posts support JPEG or WebP images only")
-	}
-	if issues := validateTikTokMedia(req.Media); len(issues) > 0 {
-		return "", errors.New(issues[0].Message)
-	}
-	postingMethod, err := tiktokPostingMethod(req.Settings)
+	postingMethod, title, description, err := validateTikTokPhotoPost(req)
 	if err != nil {
 		return "", err
-	}
-	title := settingString(req.Settings, "photo_title")
-	description := strings.TrimSpace(req.Content)
-	if utf16Length(title) > 90 {
-		return "", fmt.Errorf("tiktok photo titles support at most 90 UTF-16 code units")
-	}
-	if utf16Length(description) > 4000 {
-		return "", fmt.Errorf("tiktok photo descriptions support at most 4000 UTF-16 code units")
 	}
 	postInfo := map[string]any{
 		"title":       title,
@@ -542,6 +525,31 @@ func (t *TikTokAdapter) publishPhotoPost(ctx context.Context, accessToken string
 		return "", err
 	}
 	return t.waitForPublishID(ctx, accessToken, initResp.Data.PublishID, req)
+}
+
+func validateTikTokPhotoPost(req *PublishRequest) (postingMethod, title, description string, err error) {
+	if len(req.PlatformMediaIDs) < 1 || len(req.PlatformMediaIDs) > 35 {
+		return "", "", "", fmt.Errorf("tiktok photo posts require 1-35 images")
+	}
+	if !allTikTokPhotoImages(req.Media) {
+		return "", "", "", fmt.Errorf("tiktok photo posts support JPEG or WebP images only")
+	}
+	if issues := validateTikTokMedia(req.Media); len(issues) > 0 {
+		return "", "", "", errors.New(issues[0].Message)
+	}
+	postingMethod, err = tiktokPostingMethod(req.Settings)
+	if err != nil {
+		return "", "", "", err
+	}
+	title = settingString(req.Settings, "photo_title")
+	description = strings.TrimSpace(req.Content)
+	if utf16Length(title) > 90 {
+		return "", "", "", fmt.Errorf("tiktok photo titles support at most 90 UTF-16 code units")
+	}
+	if utf16Length(description) > 4000 {
+		return "", "", "", fmt.Errorf("tiktok photo descriptions support at most 4000 UTF-16 code units")
+	}
+	return postingMethod, title, description, nil
 }
 
 func checkpointTikTokSubmission(req *PublishRequest, publishID string) error {
