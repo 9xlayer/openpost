@@ -160,6 +160,9 @@ func applyMetaMapping(providerErr *HTTPError, mapping metaMapping) {
 // changes the recovery action (Postiz #2127).
 var metaExactMappings = map[metaCodeKey]metaMapping{
 	{code: "9007", subcode: "2207027"}: {status: http.StatusServiceUnavailable, code: "meta:media_not_ready:9007:2207027"},
+	{code: "9004", subcode: "2207052"}: {status: http.StatusBadRequest, code: "meta:media_not_ready:9004:2207052"},
+	{code: "110", subcode: "2207018"}:  {status: http.StatusBadRequest, code: "meta:invalid_collaborator:110:2207018"},
+	{code: "20", subcode: "1772107"}:   {status: http.StatusBadRequest, code: "meta:first_comment_rejected:20:1772107"},
 	{code: "9", subcode: "2207078"}:    {status: http.StatusTooManyRequests, code: "meta:trial_reel_limit:2207078"},
 	{code: "368", subcode: "1390008"}:  {status: http.StatusTooManyRequests, code: "meta:rate_limit:368:1390008"},
 	// Meta put the account behind a security checkpoint. The token is still
@@ -197,7 +200,7 @@ var metaCodeMappings = map[string]metaMapping{
 func isMetaTerminalMediaCode(code string) bool {
 	switch code {
 	case "2207001", "2207005", "2207009", "2207023", "2207027",
-		"2207042", "2207051", "2207077", "36001", "36003":
+		"2207042", "2207051", "2207053", "2207077", "36001", "36003":
 		return true
 	default:
 		return false
@@ -222,14 +225,17 @@ func MetaFailureMessage(code string) string {
 }
 
 var metaFailureMessages = map[string]string{
-	"meta:trial_reel_limit:2207078":   "Instagram has temporarily limited Trial Reels for this account. Wait for the limit to reset or turn off Trial Reel before publishing again.",
-	"meta:rate_limit:368:1390008":     "Facebook temporarily limited posting for this account. OpenPost will retry later.",
-	"meta:checkpoint:190:459":         "Facebook asked for a security check. Log in at facebook.com, complete it, then reconnect this account and try again.",
-	"meta:checkpoint:instagram":       "Instagram asked for a login check. Log in at instagram.com, follow its instructions, then reconnect this account.",
-	"meta:missing_page_role:190:492":  "Your Facebook user no longer has a role on this Page. Ask a Page admin to grant you a role, then reconnect this account.",
-	metaUnavailableTargetCode:         "The Facebook Page or post this was targeting no longer exists. Reconnect this account and schedule again.",
-	"meta:media_silent_audio:2207082": "Instagram could not process this video. If you attached audio to a video that has no sound track, set the original video volume to 0 and try again.",
-	"meta:media_format:2207085":       "Instagram could not process the video. Check the video format, duration, and resolution, then try again.",
+	"meta:trial_reel_limit:2207078":          "Instagram has temporarily limited Trial Reels for this account. Wait for the limit to reset or turn off Trial Reel before publishing again.",
+	"meta:rate_limit:368:1390008":            "Facebook temporarily limited posting for this account. OpenPost will retry later.",
+	"meta:checkpoint:190:459":                "Facebook asked for a security check. Log in at facebook.com, complete it, then reconnect this account and try again.",
+	"meta:checkpoint:instagram":              "Instagram asked for a login check. Log in at instagram.com, follow its instructions, then reconnect this account.",
+	"meta:missing_page_role:190:492":         "Your Facebook user no longer has a role on this Page. Ask a Page admin to grant you a role, then reconnect this account.",
+	metaUnavailableTargetCode:                "The Facebook Page or post this was targeting no longer exists. Reconnect this account and schedule again.",
+	"meta:media_silent_audio:2207082":        "Instagram could not process this video. If you attached audio to a video that has no sound track, set the original video volume to 0 and try again.",
+	"meta:media_format:2207085":              "Instagram could not process the video. Check the video format, duration, and resolution, then try again.",
+	"meta:media_not_ready:9004:2207052":      "Instagram did not finish preparing the media container. OpenPost retried the safe creation step. You can try again later.",
+	"meta:invalid_collaborator:110:2207018":  "Instagram rejected a collaborator. Check that each collaborator is eligible and accepts collaboration invites, then edit the post.",
+	"meta:first_comment_rejected:20:1772107": "Instagram published the post but rejected its first comment. Review the comment and add it manually.",
 }
 
 var metaMediaRejectedMessages = map[string]string{
@@ -240,6 +246,7 @@ var metaMediaRejectedMessages = map[string]string{
 	"2207027": "Instagram could not process the media. Try again later or contact support.",
 	"2207042": "You have reached the maximum of 25 posts per day for this account.",
 	"2207051": "Instagram blocked this request.",
+	"2207053": "Instagram rejected this video because it exceeded one or more video limits. Check the file size, resolution, bitrate, and format, then try again.",
 	"2207077": "Instagram video download failed.",
 	"36001":   "Invalid Instagram image resolution, max 1920x1080px.",
 	"36003":   "Aspect ratio not supported, must be between 4:5 and 1.91:1.",

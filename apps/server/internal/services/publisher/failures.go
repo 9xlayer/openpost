@@ -220,6 +220,10 @@ func classifyMetaFailure(providerErr *platform.HTTPError) (Failure, bool) {
 	case code == "meta:media_silent_audio:2207082":
 		kind = FailureProviderProcessing
 		retryable = true
+	case code == "meta:media_not_ready:9004:2207052":
+		kind = FailureProviderProcessing
+	case code == "meta:invalid_collaborator:110:2207018" || code == "meta:first_comment_rejected:20:1772107":
+		kind = FailureValidation
 	case code == "meta:media_format:2207085" || strings.HasPrefix(code, "meta:media_rejected:"):
 		kind = FailureValidation
 	default:
