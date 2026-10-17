@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, createPublication, createWorkspace, registerUser } from "./helpers";
 
 test("navigation separates work, workspace management, and personal preferences", async ({
   page,
@@ -252,7 +252,18 @@ test("short desktop keeps navigation and contextual draft resume reachable", asy
   const planner = page.getByTestId("desktop-sidebar-planner");
   const viewAll = planner.getByRole("button", { name: "View all", exact: true });
   await expect(viewAll).toBeInViewport();
-  await expect(page.getByTestId("sidebar-calendar-month")).toHaveCount(0);
+  const draft = planner.getByRole("link", {
+    name: "Resume draft: A recent thought to resume",
+    exact: true,
+  });
+  await expect(draft).toBeVisible();
+  const draftBounds = await draft.boundingBox();
+  const contentBounds = await page.locator('[data-sidebar="content"]').boundingBox();
+  expect(draftBounds!.y).toBeGreaterThanOrEqual(contentBounds!.y);
+  expect(draftBounds!.y + draftBounds!.height).toBeLessThanOrEqual(
+    contentBounds!.y + contentBounds!.height,
+  );
+  await expect(page.getByTestId("sidebar-calendar-month")).toBeVisible();
   for (const name of ["Posts", "Inbox", "Analytics", "Media"])
     await expect(
       page.getByTestId("sidebar-workspace-navigation").getByRole("button", { name, exact: true }),
@@ -264,7 +275,7 @@ test("short desktop keeps navigation and contextual draft resume reachable", asy
   await viewAll.click();
   await expect(page).toHaveURL(/publications\?tab=drafts$/);
   await expect(page.getByTestId("publication-list")).toBeVisible();
-  await expect(planner).toHaveCount(0);
+  await expect(planner).toBeVisible();
 });
 
 test("sidebar calendar is optional and remembers its visibility", async ({
@@ -278,14 +289,20 @@ test("sidebar calendar is optional and remembers its visibility", async ({
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/publications?tab=drafts");
   const calendar = page.getByTestId("sidebar-rolling-calendar");
-  await expect(calendar).toHaveCount(0);
+  await expect(calendar).toBeVisible();
   const openPreferences = async () => {
     await page.getByTestId("profile-menu-trigger").click();
     await page.getByRole("menuitem", { name: "Preferences", exact: true }).click();
   };
   await openPreferences();
   const toggle = page.getByRole("checkbox", { name: "Sidebar calendar", exact: true });
-  await expect(toggle).not.toBeChecked();
+  await expect(toggle).toBeChecked();
+  await toggle.uncheck();
+  await page.keyboard.press("Escape");
+  await expect(calendar).toHaveCount(0);
+  await page.reload();
+  await expect(calendar).toHaveCount(0);
+  await openPreferences();
   await toggle.check();
   await page.keyboard.press("Escape");
   await expect(calendar).toBeVisible();
@@ -343,3 +360,56 @@ test("sidebar calendar is optional and remembers its visibility", async ({
   await page.reload();
   await expect(calendar).toHaveCount(0);
 });
+
+for (const calendar of [true, false]) {
+  test(`drafts fill the sidebar on every workspace page with calendar ${calendar}`, async ({
+    page,
+    request,
+  }, testInfo) => {
+    const auth = await registerUser(request, `nav-drafts-${randomUUID()}@example.com`);
+    const workspace = await createWorkspace(request, auth.token, "Draft navigation");
+    for (let index = 1; index <= 12; index++) {
+      await createPublication(request, auth.token, workspace.id, `Sidebar draft ${index}`);
+    }
+    await authenticatePage(page, auth.token);
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto("/publications");
+    await expect(page.getByTestId("sidebar-draft-list").getByRole("link")).toHaveCount(12);
+    await page.getByTestId("profile-menu-trigger").click();
+    await page.getByRole("menuitem", { name: "Preferences", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Preferences", exact: true });
+    const preference = dialog.getByRole("checkbox", { name: "Sidebar calendar" });
+    await expect(preference).toBeChecked();
+    if (!calendar) await preference.click();
+    await page.keyboard.press("Escape");
+    await page.reload();
+    const drafts = page.getByTestId("sidebar-draft-list");
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    for (const route of ["/", "/publications", "/inbox/engagement", "/analytics", "/media"]) {
+      await page.goto(route);
+      await expect(page.getByTestId("sidebar-rolling-calendar")).toHaveCount(calendar ? 1 : 0);
+      await expect(drafts.getByRole("link")).toHaveCount(12);
+      const visibleCount = await drafts.getByRole("link").evaluateAll((links) => {
+        const viewport = links[0].closest("ul")!.getBoundingClientRect();
+        return links.filter((link) => {
+          const bounds = link.getBoundingClientRect();
+          return bounds.top >= viewport.top && bounds.bottom <= viewport.bottom;
+        }).length;
+      });
+      expect(visibleCount).toBeGreaterThan(3);
+    }
+    await page.screenshot({ path: testInfo.outputPath(`sidebar-calendar-${calendar}.png`) });
+    await page.setViewportSize({ width: 1280, height: 600 });
+    await drafts.getByRole("link").last().scrollIntoViewIfNeeded();
+    await expect(drafts.getByRole("link").last()).toBeInViewport();
+    const lastDraft = await drafts.getByRole("link").last().boundingBox();
+    const sidebarContent = await page.locator('[data-sidebar="content"]').boundingBox();
+    expect(lastDraft!.y).toBeGreaterThanOrEqual(sidebarContent!.y);
+    expect(lastDraft!.y + lastDraft!.height).toBeLessThanOrEqual(
+      sidebarContent!.y + sidebarContent!.height,
+    );
+    await expect(page.getByRole("button", { name: "Media", exact: true })).toBeInViewport();
+    expect(errors).toEqual([]);
+  });
+}

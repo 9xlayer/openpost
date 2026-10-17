@@ -42,6 +42,31 @@ describe('sidebar draft mutation ownership', () => {
 		);
 	});
 
+	it('keeps drafts beyond the first three and the first API page available', async () => {
+		getMock.mockImplementation(
+			async (_path, request: { params?: { query?: { offset?: number } } }) => {
+				const offset = request.params?.query?.offset ?? 0;
+				// SAFETY: These are complete publication fixtures returned by the draft-list endpoint.
+				return {
+					data: Array.from({ length: offset === 0 ? 50 : 5 }, (_, index) => ({
+						...publication('workspace-a'),
+						id: `draft-${offset + index}`,
+						source_text: `Draft ${offset + index}`
+					})),
+					error: undefined,
+					response: new Response(null, {
+						status: 200,
+						headers: { 'X-Has-More': String(offset === 0), 'X-Next-Offset': '50' }
+					})
+				} as never;
+			}
+		);
+		const screen = await render(SidebarPlanner, { onNavigate: vi.fn() });
+		await expect
+			.element(screen.getByRole('link', { name: 'Resume draft: Draft 54', exact: true }))
+			.toBeInTheDocument();
+	});
+
 	it('does not remove a new Workspace draft when an old delete completes', async () => {
 		const deletion = deferred<{ error: undefined; response: Response }>();
 		// SAFETY: The deferred value matches the endpoint response used by this test.

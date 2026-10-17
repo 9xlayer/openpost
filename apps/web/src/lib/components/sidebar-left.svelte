@@ -66,11 +66,8 @@
 				(item.id !== 'ideate' || workspaceCtx.currentWorkspace?.can_edit)
 		)
 	);
-	const showDesktopPlanner = $derived(
-		!sidebar.isMobile &&
-			sidebar.state === 'expanded' &&
-			(currentPath === '/' || /^\/publications\/[^/]+$/.test(currentPath))
-	);
+	const showDesktopPlanner = $derived(!sidebar.isMobile && sidebar.state === 'expanded');
+	const showPlannerCalendar = $derived(showDesktopPlanner && sidebarPreferences.calendarVisible);
 
 	function navigationIcon(id: PrimaryNavigationItem['id']): ThemeIconRole {
 		switch (id) {
@@ -170,6 +167,28 @@
 	}
 </script>
 
+{#snippet workspaceNavigation()}
+	<Sidebar.Group class="shrink-0 p-0">
+		<Sidebar.GroupContent>
+			<Sidebar.Menu class="gap-0.5" data-testid="sidebar-workspace-navigation">
+				{#each sidebarNavigationItems as item (item.id)}
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton
+							isActive={isSidebarNavigationItemActive(item)}
+							class="h-10 text-sm [@media(pointer:coarse)]:h-11"
+							tooltipContent={item.label}
+							onclick={() => navigate(item.href)}
+						>
+							<ThemeIcon role={item.icon} class="size-4" />
+							<span>{item.label}</span>
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
+				{/each}
+			</Sidebar.Menu>
+		</Sidebar.GroupContent>
+	</Sidebar.Group>
+{/snippet}
+
 <Sidebar.Root collapsible="icon" class="pt-[env(safe-area-inset-top)]">
 	<Sidebar.Header class="gap-2 border-b border-sidebar-border p-2" data-testid="app-sidebar">
 		<div class="flex items-center gap-2 group-data-[collapsible=icon]:flex-col">
@@ -258,32 +277,14 @@
 		{/if}
 	</Sidebar.Header>
 
-	<Sidebar.Content class="overflow-hidden px-2 py-3">
-		<Sidebar.Group class="shrink-0 p-0">
-			<Sidebar.GroupContent>
-				<Sidebar.Menu class="gap-0.5" data-testid="sidebar-workspace-navigation">
-					{#each sidebarNavigationItems as item (item.id)}
-						<Sidebar.MenuItem>
-							<Sidebar.MenuButton
-								isActive={isSidebarNavigationItemActive(item)}
-								class="h-10 text-sm [@media(pointer:coarse)]:h-11"
-								tooltipContent={item.label}
-								onclick={() => navigate(item.href)}
-							>
-								<ThemeIcon role={item.icon} class="size-4" />
-								<span>{item.label}</span>
-							</Sidebar.MenuButton>
-						</Sidebar.MenuItem>
-					{/each}
-				</Sidebar.Menu>
-			</Sidebar.GroupContent>
-		</Sidebar.Group>
-		{#if !sidebar.isMobile && sidebar.state === 'expanded' && sidebarPreferences.calendarVisible}<SidebarCalendar
-			/>{/if}
+	<Sidebar.Content class="overflow-y-auto px-2 py-3">
+		{#if !showPlannerCalendar}{@render workspaceNavigation()}{/if}
+		{#if showPlannerCalendar}<SidebarCalendar />{/if}
 		{#if showDesktopPlanner}<SidebarPlanner onNavigate={navigate} />{/if}
 	</Sidebar.Content>
 
 	<Sidebar.Footer class="border-t border-sidebar-border p-2" data-testid="sidebar-workspace-footer">
+		{#if showPlannerCalendar}{@render workspaceNavigation()}{/if}
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}<Sidebar.MenuButton

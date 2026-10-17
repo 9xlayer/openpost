@@ -115,7 +115,8 @@
 		try {
 			const options = schedulingPublicationsQueryOptions(schedulingQueryAPI, currentWorkspaceId, {
 				status: 'draft',
-				limit: 50
+				limit: 50,
+				allPages: true
 			});
 			const cached = queryClient.getQueryData<Publication[]>(options.queryKey);
 			if (cached !== undefined && request === draftsRequest) {
@@ -264,7 +265,7 @@
 </script>
 
 {#if loadingDrafts || drafts.length > 0 || draftsError}
-	<div class="flex min-h-0 flex-1 flex-col" data-testid="desktop-sidebar-planner">
+	<div class="flex min-h-20 flex-1 flex-col" data-testid="desktop-sidebar-planner">
 		<section class="flex min-h-0 flex-1 flex-col px-2 pt-2">
 			<div class="mb-1 flex h-7 shrink-0 items-center justify-between px-2">
 				<div class="flex items-center gap-1.5">
@@ -317,7 +318,7 @@
 					class="sidebar-planner-scrollbar min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain pr-1"
 					data-testid="sidebar-draft-list"
 				>
-					{#each drafts.slice(0, 3) as draft (draft.id)}
+					{#each drafts as draft (draft.id)}
 						{@const activeDraft = page.url.pathname === draft.href}
 						<li>
 							<ContextMenu.Root>

@@ -1,11 +1,11 @@
 import { browser } from '$app/environment';
 const storageKey = 'openpost-sidebar-calendar';
 function savedVisibility(): boolean {
-	if (!browser) return false;
+	if (!browser) return true;
 	try {
-		return localStorage.getItem(storageKey) === 'true';
+		return localStorage.getItem(storageKey) !== 'false';
 	} catch {
-		return false;
+		return true;
 	}
 }
 class SidebarPreferences {
