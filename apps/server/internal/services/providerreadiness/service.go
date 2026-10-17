@@ -308,6 +308,10 @@ func (s *Service) DecideAccountOperation(ctx context.Context, account models.Soc
 }
 
 func accountConfigurationRef(account models.SocialAccount) string {
+	if account.Platform == capabilities.ProviderInstagram &&
+		platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState) == capabilities.ProviderInstagram+":"+platform.ConnectionModeInstagramLogin {
+		return platform.ConnectionModeInstagramLogin
+	}
 	if account.Platform == capabilities.ProviderDiscord &&
 		platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState) == capabilities.ProviderDiscord+":"+platform.ConnectionModeBot {
 		return platform.ConnectionModeBot

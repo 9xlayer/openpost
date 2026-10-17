@@ -1135,7 +1135,10 @@
 		}
 	}
 
-	async function connectOAuthProvider(platform: string) {
+	async function connectOAuthProvider(
+		platform: string,
+		connectionMode?: 'oauth' | 'instagram_login'
+	) {
 		const request = beginConnectionRequest();
 		if (!request) {
 			showToast(m.accounts_create_workspace_first());
@@ -1146,7 +1149,8 @@
 				params: {
 					path: { platform },
 					query: {
-						workspace_id: request.workspaceID
+						workspace_id: request.workspaceID,
+						connection_mode: connectionMode
 					}
 				}
 			});
@@ -1371,10 +1375,14 @@
 		beginProviderConnection(provider);
 	}
 
-	function confirmOAuthConnection() {
+	function confirmOAuthConnection(connectionMode?: 'oauth' | 'instagram_login') {
 		const provider = oauthConfirmProvider;
 		if (!provider) return;
 		oauthConfirmOpen = false;
+		if (provider.platform === 'instagram') {
+			void connectOAuthProvider('instagram', connectionMode);
+			return;
+		}
 		beginProviderConnection(provider);
 	}
 

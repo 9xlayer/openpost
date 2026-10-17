@@ -1901,7 +1901,7 @@
 	"accounts_provider_bluesky": "Post to Bluesky",
 	"accounts_provider_discord": "Send scheduled posts to a Discord channel",
 	"accounts_provider_linkedin": "Post to LinkedIn",
-	"accounts_provider_instagram": "Post to Instagram Business",
+	"accounts_provider_instagram": "Post to Instagram",
 	"accounts_provider_facebook": "Post to Facebook Pages",
 	"accounts_provider_youtube": "Upload YouTube videos and Shorts",
 	"accounts_provider_tiktok": "Post short-form video to TikTok",
@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Confirm remaining dates",
 	"batch_edit_dates": "Change dates",
 	"batch_select_post": "Select post for scheduling",
-	"batch_select": "Select drafts"
+	"batch_select": "Select drafts",
+	"accounts_instagram_choose_method": "Choose how to connect your Instagram account.",
+	"accounts_instagram_professional_required": "Both methods require a Business or Creator account. Personal accounts are not supported.",
+	"accounts_instagram_direct": "Continue with Instagram",
+	"accounts_instagram_direct_description": "Sign in directly. No Facebook Page needed.",
+	"accounts_instagram_facebook": "Continue with Facebook",
+	"accounts_instagram_facebook_description": "Sign in with Facebook to choose an Instagram account linked to a Page you manage.",
+	"accounts_instagram_method_unavailable": "This method is not set up on this server.",
+	"accounts_instagram_direct_app": "Instagram (direct login)"
 }

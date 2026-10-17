@@ -20,15 +20,18 @@ import (
 )
 
 type commentProviderKeyCase struct {
-	name        string
-	platform    string
-	instanceURL string
-	renditionID string
+	name            string
+	platform        string
+	instanceURL     string
+	renditionID     string
+	capabilityState string
+	providerKey     string
 }
 
 var commentProviderKeyCases = []commentProviderKeyCase{
-	{name: "mastodon instance", platform: "mastodon", instanceURL: "https://mastodon.example/", renditionID: "rendition-mastodon"},
-	{name: "self-hosted bluesky PDS", platform: "bluesky", instanceURL: "https://pds.example", renditionID: "rendition-bluesky"},
+	{name: "mastodon instance", platform: "mastodon", instanceURL: "https://mastodon.example/", renditionID: "rendition-mastodon", providerKey: "mastodon:https://mastodon.example"},
+	{name: "self-hosted bluesky PDS", platform: "bluesky", instanceURL: "https://pds.example", renditionID: "rendition-bluesky", providerKey: "bluesky:https://pds.example"},
+	{name: "Instagram direct login", platform: "instagram", renditionID: "rendition-instagram", capabilityState: `{"connection_type":"instagram_login"}`, providerKey: "instagram:instagram_login"},
 }
 
 // newFederatedCommentsTestDB seeds accounts whose adapters are registered
@@ -54,10 +57,10 @@ func newFederatedCommentsTestDB(t *testing.T) (*bun.DB, map[string]platform.Adap
 	for _, tc := range commentProviderKeyCases {
 		accountID := "account-" + tc.platform
 		rows = append(rows,
-			&models.SocialAccount{ID: accountID, WorkspaceID: "ws-1", Slug: accountID, Platform: tc.platform, AccountID: "provider-" + accountID, InstanceURL: tc.instanceURL, AccessTokenEnc: token, IsActive: true, CreatedAt: now},
+			&models.SocialAccount{ID: accountID, WorkspaceID: "ws-1", Slug: accountID, Platform: tc.platform, AccountID: "provider-" + accountID, InstanceURL: tc.instanceURL, CapabilityState: tc.capabilityState, AccessTokenEnc: token, IsActive: true, CreatedAt: now},
 			&models.Rendition{ID: tc.renditionID, PublicationID: "publication-1", SocialAccountID: accountID, Platform: tc.platform, Profile: models.ContentProfileShortText, Body: "Launch", SettingsJSON: "{}", Status: models.RenditionStatusPublished, ExternalID: "external-" + tc.platform},
 		)
-		key := platform.AccountProviderKey(tc.platform, tc.instanceURL, "")
+		key := tc.providerKey
 		require.NotEqual(t, tc.platform, key, "fixture must use an instance-specific provider key")
 		providers[key] = fakeCommentAdapter{comments: []platform.Comment{{ID: "comment-" + tc.platform, Text: "Nice launch"}}}
 	}

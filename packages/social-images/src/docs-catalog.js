@@ -1180,7 +1180,7 @@ export const docsPageCatalog = Object.freeze([
   {
     "page": "self-hosting/integrations/instagram.mdx",
     "title": "Instagram",
-    "description": "Connect a Page-linked Instagram professional account through Meta OAuth.",
+    "description": "Connect Instagram directly or through a linked Facebook Page.",
     "route": "/self-hosting/integrations/instagram",
     "agentRepresentation": {
       "membership": "ordinary"

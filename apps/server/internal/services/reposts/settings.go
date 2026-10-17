@@ -794,7 +794,7 @@ func (s *Service) repostAdapter(account models.SocialAccount) platform.RepostAda
 }
 
 func repostProviderKey(account models.SocialAccount) string {
-	return platform.AccountProviderKey(account.Platform, account.InstanceURL, "")
+	return platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState)
 }
 
 func firstNonEmpty(values ...string) string {

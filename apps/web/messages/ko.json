@@ -9963,5 +9963,13 @@
 	"batch_confirm": "남은 날짜 확정",
 	"batch_edit_dates": "날짜 변경",
 	"batch_select_post": "예약할 게시물 선택",
-	"batch_select": "초안 선택"
+	"batch_select": "초안 선택",
+	"accounts_instagram_choose_method": "Instagram 계정 연결 방법을 선택하세요.",
+	"accounts_instagram_professional_required": "두 방법 모두 비즈니스 또는 크리에이터 계정이 필요합니다. 개인 계정은 지원되지 않습니다.",
+	"accounts_instagram_direct": "Instagram으로 계속",
+	"accounts_instagram_direct_description": "직접 로그인하세요. Facebook 페이지가 필요하지 않습니다.",
+	"accounts_instagram_facebook": "Facebook으로 계속",
+	"accounts_instagram_facebook_description": "Facebook에 로그인하여 관리하는 페이지에 연결된 Instagram 계정을 선택하세요.",
+	"accounts_instagram_method_unavailable": "이 방법은 이 서버에 설정되어 있지 않습니다.",
+	"accounts_instagram_direct_app": "Instagram (직접 로그인)"
 }

@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Conferma le date rimanenti",
 	"batch_edit_dates": "Modifica le date",
 	"batch_select_post": "Seleziona il post per la pianificazione",
-	"batch_select": "Seleziona bozze"
+	"batch_select": "Seleziona bozze",
+	"accounts_instagram_choose_method": "Scegli come collegare il tuo account Instagram.",
+	"accounts_instagram_professional_required": "Entrambi i metodi richiedono un account Business o Creator. Gli account personali non sono supportati.",
+	"accounts_instagram_direct": "Continua con Instagram",
+	"accounts_instagram_direct_description": "Accedi direttamente. Non serve una Pagina Facebook.",
+	"accounts_instagram_facebook": "Continua con Facebook",
+	"accounts_instagram_facebook_description": "Accedi con Facebook per scegliere un account Instagram collegato a una Pagina che gestisci.",
+	"accounts_instagram_method_unavailable": "Questo metodo non è configurato su questo server.",
+	"accounts_instagram_direct_app": "Instagram (accesso diretto)"
 }

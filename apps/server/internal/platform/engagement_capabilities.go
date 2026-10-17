@@ -11,6 +11,9 @@ func (f *FacebookAdapter) EngagementSupport() EngagementSupport {
 }
 
 func (i *InstagramAdapter) EngagementSupport() EngagementSupport {
+	if i.instagramLogin {
+		return EngagementSupport{Enabled: true, RequiredScopes: []string{"instagram_business_manage_comments"}, CanReply: true, CanHide: true, CanDelete: true}
+	}
 	return EngagementSupport{
 		Enabled:        true,
 		RequiredScopes: []string{"instagram_manage_comments", "pages_read_engagement"},

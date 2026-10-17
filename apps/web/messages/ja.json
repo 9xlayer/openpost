@@ -9963,5 +9963,13 @@
 	"batch_confirm": "残りの日時を確定",
 	"batch_edit_dates": "日時を変更",
 	"batch_select_post": "予約する投稿を選択",
-	"batch_select": "下書きを選択"
+	"batch_select": "下書きを選択",
+	"accounts_instagram_choose_method": "Instagramアカウントの接続方法を選択してください。",
+	"accounts_instagram_professional_required": "どちらの方法もビジネスまたはクリエイターアカウントが必要です。個人アカウントには対応していません。",
+	"accounts_instagram_direct": "Instagramで続行",
+	"accounts_instagram_direct_description": "直接ログインします。Facebookページは不要です。",
+	"accounts_instagram_facebook": "Facebookで続行",
+	"accounts_instagram_facebook_description": "Facebookにログインし、管理するページにリンクされたInstagramアカウントを選択します。",
+	"accounts_instagram_method_unavailable": "この方法はこのサーバーで設定されていません。",
+	"accounts_instagram_direct_app": "Instagram（直接ログイン）"
 }

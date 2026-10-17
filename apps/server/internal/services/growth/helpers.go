@@ -92,7 +92,7 @@ func firstNonEmpty(values ...string) string {
 }
 
 func providerKeyForAccount(account models.SocialAccount) string {
-	return platform.AccountProviderKey(account.Platform, account.InstanceURL, "")
+	return platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState)
 }
 
 func mutualCountBucket(count int) string {

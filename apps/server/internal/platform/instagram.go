@@ -43,10 +43,11 @@ const (
 var ErrNoInstagramProfessionalAccount = errors.New("instagram has no Page-linked professional account")
 
 type InstagramAdapter struct {
-	clientID     string
-	clientSecret string
-	redirectURI  string
-	graphVersion string
+	clientID       string
+	clientSecret   string
+	redirectURI    string
+	graphVersion   string
+	instagramLogin bool
 }
 
 func NewInstagramAdapter(clientID, clientSecret, redirectURI string) *InstagramAdapter {
@@ -67,10 +68,16 @@ func (i *InstagramAdapter) AuthorizationGrantDescriptor() AuthorizationGrantDesc
 }
 
 func (i *InstagramAdapter) graphURL(path string) string {
+	if i.instagramLogin {
+		return "https://graph.instagram.com/" + i.graphVersion + "/" + strings.TrimPrefix(path, "/")
+	}
 	return facebookGraphBaseURL + "/" + i.graphVersion + "/" + strings.TrimPrefix(path, "/")
 }
 
 func (i *InstagramAdapter) SearchPublishingOptions(ctx context.Context, accessToken string, input PublishingOptionsInput) (PublishingOptionsPage, error) {
+	if i.instagramLogin {
+		return PublishingOptionsPage{}, fmt.Errorf("instagram location search requires a Facebook Login connection")
+	}
 	if input.Source != "instagram_locations" {
 		return PublishingOptionsPage{}, fmt.Errorf("instagram publishing option source %q is not supported", input.Source)
 	}
@@ -129,6 +136,9 @@ func (i *InstagramAdapter) SearchPublishingOptions(ctx context.Context, accessTo
 }
 
 func (i *InstagramAdapter) GenerateAuthURL(state string) (string, map[string]string) {
+	if i.instagramLogin {
+		return i.instagramLoginAuthURL(state), nil
+	}
 	params := url.Values{}
 	params.Set(oauthParamClientID, i.clientID)
 	params.Set(oauthParamRedirectURI, i.redirectURI)
@@ -140,6 +150,9 @@ func (i *InstagramAdapter) GenerateAuthURL(state string) (string, map[string]str
 }
 
 func (i *InstagramAdapter) ExchangeCode(ctx context.Context, code string, _ map[string]string) (*TokenResult, error) {
+	if i.instagramLogin {
+		return i.exchangeInstagramLoginCode(ctx, code)
+	}
 	token, err := exchangeMetaAuthCode(ctx, i.graphURL, i.clientID, i.clientSecret, i.redirectURI, "instagram", code)
 	if err != nil {
 		return nil, err
@@ -152,14 +165,23 @@ func (i *InstagramAdapter) ExchangeCode(ctx context.Context, code string, _ map[
 }
 
 func (i *InstagramAdapter) RefreshCapability() RefreshCapability {
+	if i.instagramLogin {
+		return RefreshCapability{Supported: true, CredentialSource: RefreshCredentialAccessToken}
+	}
 	return RefreshCapability{}
 }
 
-func (i *InstagramAdapter) RefreshToken(_ context.Context, _ RefreshTokenInput) (*TokenResult, error) {
+func (i *InstagramAdapter) RefreshToken(ctx context.Context, input RefreshTokenInput) (*TokenResult, error) {
+	if i.instagramLogin {
+		return i.refreshInstagramLoginToken(ctx, input)
+	}
 	return nil, fmt.Errorf("instagram page tokens do not support OpenPost refresh yet")
 }
 
 func (i *InstagramAdapter) GetProfile(ctx context.Context, accessToken string) (*UserProfile, error) {
+	if i.instagramLogin {
+		return i.instagramLoginProfile(ctx, accessToken)
+	}
 	respBody, err := doMetaRequest(ctx, http.MethodGet, i.graphURL("me?fields=id,name&access_token="+url.QueryEscape(accessToken)), nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("instagram facebook profile: %w", err)
@@ -181,6 +203,13 @@ func (i *InstagramAdapter) GetProfile(ctx context.Context, accessToken string) (
 }
 
 func (i *InstagramAdapter) RefreshAccountMetadata(ctx context.Context, accessToken string, input AccountMetadataRequest) (*UserProfile, error) {
+	if i.instagramLogin {
+		profile, err := i.instagramLoginProfile(ctx, accessToken)
+		if err == nil && profile.ID != input.AccountID {
+			return nil, fmt.Errorf("instagram account identity mismatch")
+		}
+		return profile, err
+	}
 	accountID := strings.TrimSpace(input.AccountID)
 	if accountID == "" {
 		return nil, fmt.Errorf("instagram account id is required")
@@ -300,6 +329,9 @@ func (i *InstagramAdapter) Publish(ctx context.Context, accessToken, instagramUs
 }
 
 func (i *InstagramAdapter) publish(ctx context.Context, accessToken, instagramUserID string, req *PublishRequest) (string, error) {
+	if err := i.validateLoginSettings(req); err != nil {
+		return "", err
+	}
 	if req.ReplyToID != "" {
 		return i.publishCommentReply(ctx, accessToken, req.ReplyToID, req.Content)
 	}
@@ -960,6 +992,9 @@ func validateInstagramCheckpointID(value string) error {
 }
 
 func (i *InstagramAdapter) ResumePublish(ctx context.Context, accessToken, instagramUserID string, req *PublishRequest, providerReference string) (PublishResult, error) {
+	if err := i.validateLoginSettings(req); err != nil {
+		return PublishResult{}, err
+	}
 	checkpoint, err := parseInstagramPublishCheckpoint(providerReference)
 	if err != nil {
 		return PublishResult{SubmissionState: PublishSubmissionRejected, RetrySafety: PublishRetryNever}, err

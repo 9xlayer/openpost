@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Kalan tarihleri onayla",
 	"batch_edit_dates": "Tarihleri değiştir",
 	"batch_select_post": "Zamanlanacak gönderiyi seç",
-	"batch_select": "Taslakları seç"
+	"batch_select": "Taslakları seç",
+	"accounts_instagram_choose_method": "Instagram hesabınızı nasıl bağlayacağınızı seçin.",
+	"accounts_instagram_professional_required": "Her iki yöntem de İşletme veya İçerik Üretici hesabı gerektirir. Kişisel hesaplar desteklenmez.",
+	"accounts_instagram_direct": "Instagram ile devam et",
+	"accounts_instagram_direct_description": "Doğrudan giriş yapın. Facebook Sayfası gerekmez.",
+	"accounts_instagram_facebook": "Facebook ile devam et",
+	"accounts_instagram_facebook_description": "Yönettiğiniz bir Sayfaya bağlı Instagram hesabını seçmek için Facebook ile giriş yapın.",
+	"accounts_instagram_method_unavailable": "Bu yöntem bu sunucuda ayarlanmamış.",
+	"accounts_instagram_direct_app": "Instagram (doğrudan giriş)"
 }

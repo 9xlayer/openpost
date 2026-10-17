@@ -334,6 +334,71 @@ describe('account management modes', () => {
 		await expect.element(dialog.getByRole('button', { name: 'Continue to X' })).toBeVisible();
 	});
 
+	it.each(['instagram_login', 'oauth'] as const)(
+		'connects Instagram with the chosen %s method and disables an unconfigured method',
+		async (mode) => {
+			queryClient.setQueryData(openPostQueryKeys.accounts(workspace.id), []);
+			queryClient.setQueryData(accountCatalogQueryKeys.providers(workspace.id), [
+				{
+					platform: 'instagram',
+					display_name: 'Instagram',
+					auth_mode: 'oauth',
+					configured: true,
+					status: 'available',
+					configured_connection_modes: [mode],
+					readiness: { state: 'healthy', connectable: true, facts: {} }
+				}
+			]);
+			getMock.mockImplementation((path: string) =>
+				Promise.resolve(
+					path === '/accounts/{platform}/auth-url'
+						? { data: { url: 'https://provider.example/oauth' }, error: null }
+						: { data: [], error: null }
+				)
+			);
+			const onContinue = vi.fn();
+			const screen = await render(
+				AccountManagement,
+				{
+					workspace,
+					workspaces: [workspace],
+					links,
+					onContinue,
+					onAccountsChanged: vi.fn()
+				},
+				{ wrapper: QueryClientProvider, wrapperProps: { client: queryClient } }
+			);
+			await screen
+				.getByTestId('provider-card-instagram')
+				.getByRole('button', { name: 'Connect' })
+				.click();
+			const dialog = screen.getByRole('dialog', { name: 'Connect Instagram' });
+			await expect
+				.element(dialog.getByText('Sign in directly. No Facebook Page needed.'))
+				.toBeVisible();
+			expect(onContinue).not.toHaveBeenCalled();
+			const selected =
+				mode === 'instagram_login' ? /^Continue with Instagram/ : /^Continue with Facebook/;
+			const unavailable =
+				mode === 'instagram_login' ? /^Continue with Facebook/ : /^Continue with Instagram/;
+			await expect.element(dialog.getByRole('button', { name: unavailable })).toBeDisabled();
+			await dialog.getByRole('button', { name: selected }).click();
+			await vi.waitFor(() =>
+				expect(onContinue).toHaveBeenCalledWith({
+					kind: 'external-oauth',
+					url: 'https://provider.example/oauth',
+					workspaceID: workspace.id
+				})
+			);
+			expect(getMock).toHaveBeenCalledWith('/accounts/{platform}/auth-url', {
+				params: {
+					path: { platform: 'instagram' },
+					query: { workspace_id: workspace.id, connection_mode: mode }
+				}
+			});
+		}
+	);
+
 	it('does not offer provider refresh for connector accounts', async () => {
 		getMock.mockImplementation((path: string) => {
 			if (path === '/accounts') {

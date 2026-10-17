@@ -55,7 +55,7 @@ func (t *ThreadsAdapter) NativePostSupport() NativePostSupport {
 	return nativePostSupport("threads_basic")
 }
 func (i *InstagramAdapter) NativePostSupport() NativePostSupport {
-	return nativePostSupport("instagram_basic")
+	return nativePostSupport(i.instagramScope("instagram_basic"))
 }
 func (f *FacebookAdapter) NativePostSupport() NativePostSupport {
 	return nativePostSupport("pages_read_engagement")

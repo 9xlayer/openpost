@@ -18882,6 +18882,8 @@ export interface operations {
     "get-auth-url": {
         parameters: {
             query: {
+                /** @description Instagram login method. Omitted or oauth uses Facebook Login; instagram_login signs in directly with Instagram. */
+                connection_mode?: "oauth" | "instagram_login";
                 /** @description Workspace ID to link account to */
                 workspace_id: string;
                 /** @description Mastodon server name from config (required for mastodon) */

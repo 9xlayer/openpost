@@ -106,6 +106,9 @@ func (s *Service) reader(account models.SocialAccount) (platform.NativePostReade
 	if configured {
 		return nil, false
 	}
+	if key == "instagram:"+platform.ConnectionModeInstagramLogin {
+		return platform.NewInstagramLoginAdapter("", "", ""), true
+	}
 	return platform.NewNativePostReader(account.Platform, account.InstanceURL)
 }
 

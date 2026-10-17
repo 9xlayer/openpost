@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Confirmar datas restantes",
 	"batch_edit_dates": "Alterar datas",
 	"batch_select_post": "Selecionar publicação para agendar",
-	"batch_select": "Selecionar rascunhos"
+	"batch_select": "Selecionar rascunhos",
+	"accounts_instagram_choose_method": "Escolhe como ligar a tua conta do Instagram.",
+	"accounts_instagram_professional_required": "Ambos os métodos exigem uma conta profissional ou de criador. As contas pessoais não são suportadas.",
+	"accounts_instagram_direct": "Continuar com o Instagram",
+	"accounts_instagram_direct_description": "Inicia sessão diretamente. Não precisas de uma Página do Facebook.",
+	"accounts_instagram_facebook": "Continuar com o Facebook",
+	"accounts_instagram_facebook_description": "Inicia sessão com o Facebook para escolher uma conta do Instagram ligada a uma Página que geres.",
+	"accounts_instagram_method_unavailable": "Este método não está configurado neste servidor.",
+	"accounts_instagram_direct_app": "Instagram (acesso direto)"
 }

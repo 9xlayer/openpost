@@ -109,6 +109,10 @@ func (c *ConfigurationCatalog) Resolve(provider, instanceURL string, environment
 		app.ConnectionMode = platform.ConnectionModeBot
 		fingerprintInstanceURL = ""
 	}
+	if provider == capabilities.ProviderInstagram && instanceURL == platform.ConnectionModeInstagramLogin {
+		app.ConnectionMode = platform.ConnectionModeInstagramLogin
+		fingerprintInstanceURL = ""
+	}
 	key := platform.AppConfigMergeKey(app)
 	if c != nil {
 		c.mu.RLock()
@@ -158,6 +162,7 @@ func AppFingerprint(config platform.AppConfig) (string, error) {
 		return "", errors.New("provider app is invalid")
 	}
 	if config.Provider == capabilities.ProviderPinterest || config.Provider == capabilities.ProviderTelegram ||
+		(config.Provider == capabilities.ProviderInstagram && config.ConnectionMode == platform.ConnectionModeInstagramLogin) ||
 		(config.Provider == capabilities.ProviderDiscord && config.ConnectionMode == platform.ConnectionModeBot) {
 		return digestJSON(struct {
 			Provider       string `json:"provider"`
@@ -416,6 +421,9 @@ func RequiredScopesForSubject(subject Subject) []string {
 	case capabilities.ProviderPinterest:
 		return []string{"boards:read", "boards:write", "pins:read", "pins:write", "user_accounts:read"}
 	case capabilities.ProviderInstagram:
+		if strings.HasPrefix(subject.PolicyMode, "instagram.instagram_login.") {
+			return []string{"instagram_business_basic", "instagram_business_content_publish"}
+		}
 		return []string{"instagram_basic", "instagram_content_publish"}
 	case capabilities.ProviderYouTube:
 		return []string{"https://www.googleapis.com/auth/youtube", "https://www.googleapis.com/auth/youtube.upload"}

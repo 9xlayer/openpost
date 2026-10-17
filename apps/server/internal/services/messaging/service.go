@@ -209,5 +209,5 @@ func (s *Service) enqueue(ctx context.Context, workspaceID, jobType, payload str
 
 func providerKey(account models.SocialAccount) string {
 	key := strings.ToLower(strings.TrimSpace(account.Platform))
-	return platform.AccountProviderKey(key, account.InstanceURL, "")
+	return platform.AccountProviderKey(key, account.InstanceURL, account.CapabilityState)
 }

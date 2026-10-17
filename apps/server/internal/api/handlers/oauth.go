@@ -310,11 +310,12 @@ type ListMastodonServersOutput struct {
 }
 
 type GetAuthURLInput struct {
-	Platform    string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok, youtube, pinterest)"`
-	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID to link account to"`
-	ServerName  string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
-	InstanceURL string `query:"instance_url" doc:"Mastodon instance URL to dynamically register"`
-	Intent      string `query:"intent" enum:"production,certification_test" default:"production" doc:"Typed execution intent; certification_test requires an unscoped instance administrator"`
+	ConnectionMode string `query:"connection_mode" enum:"oauth,instagram_login" doc:"Instagram login method. Omitted or oauth uses Facebook Login; instagram_login signs in directly with Instagram."`
+	Platform       string `path:"platform" doc:"Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok, youtube, pinterest)"`
+	WorkspaceID    string `query:"workspace_id" required:"true" doc:"Workspace ID to link account to"`
+	ServerName     string `query:"server_name" doc:"Mastodon server name from config (required for mastodon)"`
+	InstanceURL    string `query:"instance_url" doc:"Mastodon instance URL to dynamically register"`
+	Intent         string `query:"intent" enum:"production,certification_test" default:"production" doc:"Typed execution intent; certification_test requires an unscoped instance administrator"`
 }
 
 type GetAuthURLOutput struct {
@@ -544,11 +545,12 @@ var providerCatalog = []ProviderInfo{
 		Capabilities: coreProviderCapabilities,
 	},
 	{
-		Platform:     "instagram",
-		DisplayName:  "Instagram",
-		AuthMode:     "oauth",
-		Description:  "Meta OAuth connection for Instagram Business and Creator publishing.",
-		Capabilities: []string{"Images", "Reels", "Scheduling", "Platform variants", "MCP workflows"},
+		Platform:        "instagram",
+		DisplayName:     "Instagram",
+		AuthMode:        "oauth",
+		ConnectionModes: []string{platform.ConnectionModeInstagramLogin, platform.ConnectionModeOAuth},
+		Description:     "Connect a Business or Creator account directly with Instagram or through a linked Facebook Page.",
+		Capabilities:    []string{"Images", "Reels", "Scheduling", "Platform variants", "MCP workflows"},
 	},
 	{
 		Platform:     "facebook",
@@ -594,6 +596,9 @@ func (h *OAuthHandler) getProvider(platform, serverName string) (platform.Adapte
 	}
 
 	key := platform
+	if platform == "instagram" && serverName == "instagram_login" {
+		key = "instagram:instagram_login"
+	}
 	if platform == "discord" {
 		key = "discord:bot"
 	}
@@ -692,7 +697,7 @@ func firstNonEmpty(values ...string) string {
 }
 
 func selectedAccountInstanceURL(provider string, values ...string) string {
-	if provider == "discord" {
+	if provider == "discord" || provider == "instagram" {
 		return ""
 	}
 	return firstNonEmpty(values...)
@@ -798,6 +803,22 @@ func applyProviderAvailabilityReadiness(
 				infos[index].ConfiguredConnectionModes = append(infos[index].ConfiguredConnectionModes, platform.ConnectionModeBot)
 			}
 		}
+		if infos[index].Platform == "instagram" {
+			direct := readiness.DecideConnection(ctx, "instagram", platform.ConnectionModeInstagramLogin, providerreadiness.ExecutionIntentProduction)
+			infos[index].ConnectionReadiness = map[string]providerreadiness.Decision{
+				platform.ConnectionModeOAuth: decision, platform.ConnectionModeInstagramLogin: direct,
+			}
+			infos[index].ConfiguredConnectionModes = nil
+			if decision.Connectable {
+				infos[index].ConfiguredConnectionModes = append(infos[index].ConfiguredConnectionModes, platform.ConnectionModeOAuth)
+			}
+			if direct.Connectable {
+				infos[index].ConfiguredConnectionModes = append(infos[index].ConfiguredConnectionModes, platform.ConnectionModeInstagramLogin)
+				if !decision.Connectable {
+					decision = direct
+				}
+			}
+		}
 		infos[index].Readiness = decision
 		infos[index].Configured = decision.Connectable
 		infos[index].Status = string(decision.State)
@@ -828,6 +849,15 @@ func providerInfoWithStatus(providers map[string]platform.Adapter, item Provider
 		return item
 	}
 	item.Configured = providers[item.Platform] != nil
+	if item.Platform == "instagram" {
+		if item.Configured {
+			item.ConfiguredConnectionModes = append(item.ConfiguredConnectionModes, platform.ConnectionModeOAuth)
+		}
+		if providers["instagram:"+platform.ConnectionModeInstagramLogin] != nil {
+			item.Configured = true
+			item.ConfiguredConnectionModes = append(item.ConfiguredConnectionModes, platform.ConnectionModeInstagramLogin)
+		}
+	}
 	if item.Platform == "discord" {
 		if providers["discord:"+platform.ConnectionModeWebhook] != nil || providers["discord"] != nil {
 			item.ConfiguredConnectionModes = append(item.ConfiguredConnectionModes, platform.ConnectionModeWebhook)
@@ -1085,6 +1115,12 @@ func (h *OAuthHandler) authURLProvider(
 	ctx context.Context,
 	input *GetAuthURLInput,
 ) (platform.Adapter, string, error) {
+	if input.ConnectionMode != "" && input.ConnectionMode != platform.ConnectionModeOAuth && input.Platform != "instagram" {
+		return nil, "", huma.Error400BadRequest("connection_mode is only supported for Instagram")
+	}
+	if input.Platform == "instagram" {
+		return h.instagramAuthURLProvider(input)
+	}
 	if isCompatOAuthProvider(input.Platform) {
 		if input.ServerName == "" && input.InstanceURL == "" {
 			return nil, "", huma.Error400BadRequest(fmt.Sprintf("server_name or instance_url required for %s", input.Platform))
@@ -1103,6 +1139,21 @@ func (h *OAuthHandler) authURLProvider(
 		return adapter, platform.ConnectionModeBot, nil
 	}
 	return adapter, "", nil
+}
+
+func (h *OAuthHandler) instagramAuthURLProvider(input *GetAuthURLInput) (platform.Adapter, string, error) {
+	if input.ConnectionMode != "" && input.ConnectionMode != platform.ConnectionModeOAuth && input.ConnectionMode != platform.ConnectionModeInstagramLogin {
+		return nil, "", huma.Error400BadRequest("unsupported Instagram connection mode")
+	}
+	mode := input.ConnectionMode
+	if mode == "" {
+		mode = platform.ConnectionModeOAuth
+	}
+	adapter, err := h.getProvider(input.Platform, mode)
+	if err != nil {
+		return nil, "", huma.Error400BadRequest(err.Error())
+	}
+	return adapter, mode, nil
 }
 
 func (h *OAuthHandler) generateProviderAuthURL(
@@ -1196,7 +1247,7 @@ func (h *OAuthHandler) finishOAuthCallback(ctx context.Context, input *OAuthCall
 		return h.redirectWithError(err.Error(), session.workspaceID)
 	}
 
-	if selector, ok := session.adapter.(platform.AccountSelectionAdapter); ok {
+	if selector, ok := session.adapter.(platform.AccountSelectionAdapter); ok && (input.Platform != "instagram" || session.instanceRef != platform.ConnectionModeInstagramLogin) {
 		if profile, profileErr := session.adapter.GetProfile(ctx, tokenResp.AccessToken); profileErr == nil && profile != nil && profile.ID != "" {
 			if tokenResp.Extra == nil {
 				tokenResp.Extra = map[string]string{}
@@ -1307,6 +1358,9 @@ func (h *OAuthHandler) resolveOAuthCallbackSession(ctx context.Context, input *O
 			instanceRef = statePayload.ServerName
 		case "discord":
 			instanceRef = platform.ConnectionModeBot
+		case "instagram":
+			input.ServerName = statePayload.ServerName
+			instanceRef = statePayload.ServerName
 		}
 	}
 
@@ -1538,7 +1592,7 @@ func (h *OAuthHandler) saveAccountAndRedirect(
 	adapter platform.Adapter,
 ) (*huma.StreamResponse, error) {
 	accountID := profile.ID
-	if platformName == "threads" && tokenResp.Extra != nil {
+	if (platformName == "threads" || (platformName == "instagram" && profile.CapabilityState["connection_type"] == platform.ConnectionModeInstagramLogin)) && tokenResp.Extra != nil {
 		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {
 			if profile.ID != "" && uid != profile.ID {
 				return h.redirectWithError("provider account identity mismatch", workspaceID)
@@ -1560,7 +1614,7 @@ func (h *OAuthHandler) saveAccountAndRedirect(
 		AccountID:        accountID,
 		AccountUsername:  profile.Username,
 		AccountAvatarURL: profile.AvatarURL,
-		InstanceURL:      instanceURL,
+		InstanceURL:      selectedAccountInstanceURL(platformName, instanceURL),
 		Token:            tokenResp,
 		CapabilityState:  h.fediverseCapabilityState(ctx, platformName, instanceURL, profile),
 		Grant:            authorizationGrantInput(adapter, accountID),

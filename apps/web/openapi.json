@@ -28483,6 +28483,17 @@
 				"operationId": "get-auth-url",
 				"parameters": [
 					{
+						"description": "Instagram login method. Omitted or oauth uses Facebook Login; instagram_login signs in directly with Instagram.",
+						"explode": false,
+						"in": "query",
+						"name": "connection_mode",
+						"schema": {
+							"description": "Instagram login method. Omitted or oauth uses Facebook Login; instagram_login signs in directly with Instagram.",
+							"enum": ["oauth", "instagram_login"],
+							"type": "string"
+						}
+					},
+					{
 						"description": "Social platform (x, mastodon, bluesky, linkedin, threads, instagram, facebook, tiktok, youtube, pinterest)",
 						"in": "path",
 						"name": "platform",

@@ -12,6 +12,10 @@ func isDiscordBotAccount(account models.SocialAccount) bool {
 	return platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState) == capabilities.ProviderDiscord+":"+platform.ConnectionModeBot
 }
 
+func isInstagramLoginAccount(account models.SocialAccount) bool {
+	return platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState) == "instagram:"+platform.ConnectionModeInstagramLogin
+}
+
 func discordChannelIssue(account models.SocialAccount, profile, outputProfile string, settings map[string]any) *capabilities.ValidationIssue {
 	if !isDiscordBotAccount(account) {
 		return nil
@@ -30,6 +34,10 @@ func discordChannelIssue(account models.SocialAccount, profile, outputProfile st
 }
 
 func applyAccountDestinationSettings(account models.SocialAccount, settings map[string]any, resolved *capabilities.ResolvedCapability) {
+	if isInstagramLoginAccount(account) {
+		capabilities.ApplyInstagramLoginSettings(resolved, settings)
+		return
+	}
 	if account.Platform != capabilities.ProviderDiscord {
 		return
 	}

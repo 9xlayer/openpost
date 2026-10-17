@@ -92,10 +92,17 @@ func (s *Service) UpsertProviderApp(ctx context.Context, input UpsertInput) (mod
 	})
 
 	var existing models.ProviderApp
-	err := s.db.NewSelect().
+	query := s.db.NewSelect().
 		Model(&existing).
-		Where("provider = ? AND instance_url = ?", app.Provider, app.InstanceURL).
-		Scan(ctx)
+		Where("provider = ? AND instance_url = ?", app.Provider, app.InstanceURL)
+	if app.Provider == "instagram" {
+		if app.ConnectionMode == platform.ConnectionModeInstagramLogin {
+			query.Where("connection_mode = ?", platform.ConnectionModeInstagramLogin)
+		} else {
+			query.Where("connection_mode != ?", platform.ConnectionModeInstagramLogin)
+		}
+	}
+	err := query.Scan(ctx)
 	exists := err == nil
 	if err != nil && err != sql.ErrNoRows {
 		return models.ProviderApp{}, false, fmt.Errorf("failed to load provider app: %w", err)
@@ -254,7 +261,7 @@ func isFederatedProviderApp(provider string) bool {
 
 func providerUsesSharedAppValidation(provider string) bool {
 	switch provider {
-	case "pinterest", "telegram", "discord", "pixelfed", "peertube", "lemmy", "piefed", "googlebusiness":
+	case "pinterest", "telegram", "discord", "pixelfed", "peertube", "lemmy", "piefed", "googlebusiness", "instagram":
 		return true
 	default:
 		return false

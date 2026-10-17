@@ -217,7 +217,7 @@ func (h *ProviderAppHandler) saveProviderApp(ctx context.Context, input *SavePro
 		switch {
 		case appConfig.Provider == "mastodon":
 			appConfig.RedirectURI = "urn:ietf:wg:oauth:2.0:oob"
-		case appConfig.ConnectionMode == platform.ConnectionModeOAuth || (appConfig.Provider == "discord" && appConfig.ConnectionMode == platform.ConnectionModeBot):
+		case appConfig.ConnectionMode == platform.ConnectionModeOAuth || appConfig.ConnectionMode == platform.ConnectionModeInstagramLogin || (appConfig.Provider == "discord" && appConfig.ConnectionMode == platform.ConnectionModeBot):
 			appConfig.RedirectURI = h.frontendURL + "/api/v1/accounts/" + appConfig.Provider + "/callback"
 		}
 	}

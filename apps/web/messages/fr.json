@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Confirmer les dates restantes",
 	"batch_edit_dates": "Modifier les dates",
 	"batch_select_post": "Sélectionner une publication à planifier",
-	"batch_select": "Sélectionner des brouillons"
+	"batch_select": "Sélectionner des brouillons",
+	"accounts_instagram_choose_method": "Choisissez comment connecter votre compte Instagram.",
+	"accounts_instagram_professional_required": "Les deux méthodes nécessitent un compte professionnel ou créateur. Les comptes personnels ne sont pas pris en charge.",
+	"accounts_instagram_direct": "Continuer avec Instagram",
+	"accounts_instagram_direct_description": "Connectez-vous directement. Aucune Page Facebook nécessaire.",
+	"accounts_instagram_facebook": "Continuer avec Facebook",
+	"accounts_instagram_facebook_description": "Connectez-vous avec Facebook pour choisir un compte Instagram lié à une Page que vous gérez.",
+	"accounts_instagram_method_unavailable": "Cette méthode n’est pas configurée sur ce serveur.",
+	"accounts_instagram_direct_app": "Instagram (connexion directe)"
 }

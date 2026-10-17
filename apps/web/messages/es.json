@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Confirmar fechas restantes",
 	"batch_edit_dates": "Cambiar fechas",
 	"batch_select_post": "Seleccionar publicación para programar",
-	"batch_select": "Seleccionar borradores"
+	"batch_select": "Seleccionar borradores",
+	"accounts_instagram_choose_method": "Elige cómo conectar tu cuenta de Instagram.",
+	"accounts_instagram_professional_required": "Ambos métodos requieren una cuenta de empresa o de creador. No se admiten cuentas personales.",
+	"accounts_instagram_direct": "Continuar con Instagram",
+	"accounts_instagram_direct_description": "Inicia sesión directamente. No necesitas una página de Facebook.",
+	"accounts_instagram_facebook": "Continuar con Facebook",
+	"accounts_instagram_facebook_description": "Inicia sesión con Facebook para elegir una cuenta de Instagram vinculada a una página que administras.",
+	"accounts_instagram_method_unavailable": "Este método no está configurado en este servidor.",
+	"accounts_instagram_direct_app": "Instagram (acceso directo)"
 }

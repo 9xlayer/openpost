@@ -9963,5 +9963,13 @@
 	"batch_confirm": "Verbleibende Termine bestätigen",
 	"batch_edit_dates": "Termine ändern",
 	"batch_select_post": "Beitrag zur Planung auswählen",
-	"batch_select": "Entwürfe auswählen"
+	"batch_select": "Entwürfe auswählen",
+	"accounts_instagram_choose_method": "Wähle, wie du dein Instagram-Konto verbinden möchtest.",
+	"accounts_instagram_professional_required": "Beide Methoden erfordern ein Business- oder Creator-Konto. Persönliche Konten werden nicht unterstützt.",
+	"accounts_instagram_direct": "Mit Instagram fortfahren",
+	"accounts_instagram_direct_description": "Melde dich direkt an. Keine Facebook-Seite erforderlich.",
+	"accounts_instagram_facebook": "Mit Facebook fortfahren",
+	"accounts_instagram_facebook_description": "Melde dich mit Facebook an und wähle ein Instagram-Konto, das mit einer von dir verwalteten Seite verknüpft ist.",
+	"accounts_instagram_method_unavailable": "Diese Methode ist auf diesem Server nicht eingerichtet.",
+	"accounts_instagram_direct_app": "Instagram (direkte Anmeldung)"
 }

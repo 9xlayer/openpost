@@ -152,7 +152,7 @@ func (i *InstagramAdapter) AnalyticsSupport() AnalyticsSupport {
 	return AnalyticsSupport{
 		Account:               true,
 		Content:               true,
-		ContentRequiredScopes: []string{"instagram_manage_insights"},
+		ContentRequiredScopes: []string{i.instagramScope("instagram_manage_insights")},
 	}
 }
 

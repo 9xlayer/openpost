@@ -37,6 +37,13 @@ func (f *FacebookAdapter) SendMessage(ctx context.Context, token string, input S
 }
 
 func (i *InstagramAdapter) MessagingSupport() MessagingSupport {
+	if i.instagramLogin {
+		return MessagingSupport{
+			Enabled: true, CanSend: true, RequiresOptIn: true, ReplyWindow: 24 * time.Hour,
+			RequiredScopes: []string{"instagram_business_basic", "instagram_business_manage_messages"}, ConversationModel: "professional_message",
+			Unavailable: "Instagram messages require approved Instagram Login permissions. A person must message the professional account first.",
+		}
+	}
 	return MessagingSupport{
 		Enabled: true, CanSend: true, RequiresOptIn: true, ReplyWindow: 24 * time.Hour,
 		RequiredScopes: []string{"instagram_basic", "instagram_manage_messages", "pages_manage_metadata"}, ConversationModel: "professional_message",
@@ -45,25 +52,41 @@ func (i *InstagramAdapter) MessagingSupport() MessagingSupport {
 }
 
 func (i *InstagramAdapter) FetchMessages(ctx context.Context, token string, input FetchMessagesRequest) (FetchMessagesResult, error) {
-	return metaMessagingAdapter{graphURL: i.graphURL, platformParam: "instagram", requiredScope: "instagram_manage_messages", instagram: true}.
+	return i.messagingAdapter().
 		fetch(ctx, token, input)
 }
 
 func (i *InstagramAdapter) SendMessage(ctx context.Context, token string, input SendMessageRequest) (SendMessageResult, error) {
-	return metaMessagingAdapter{graphURL: i.graphURL, platformParam: "instagram", requiredScope: "instagram_manage_messages", instagram: true}.
+	return i.messagingAdapter().
 		send(ctx, token, input)
 }
 
-func (m metaMessagingAdapter) fetch(ctx context.Context, token string, input FetchMessagesRequest) (FetchMessagesResult, error) {
+func (i *InstagramAdapter) messagingAdapter() metaMessagingAdapter {
+	param := "instagram"
+	if i.instagramLogin {
+		param = ""
+	}
+	return metaMessagingAdapter{graphURL: i.graphURL, platformParam: param, requiredScope: i.instagramScope("instagram_manage_messages"), instagram: true}
+}
+
+func (m metaMessagingAdapter) conversationsQuery(token, cursor string) url.Values {
 	query := url.Values{
 		"platform":     {m.platformParam},
 		"fields":       {"participants,updated_time,messages.limit(100){id,from,message,created_time,attachments}"},
 		"limit":        {"50"},
 		"access_token": {token},
 	}
-	if input.Cursor != "" {
-		query.Set("after", input.Cursor)
+	if m.platformParam == "" {
+		query.Del("platform")
 	}
+	if cursor != "" {
+		query.Set("after", cursor)
+	}
+	return query
+}
+
+func (m metaMessagingAdapter) fetch(ctx context.Context, token string, input FetchMessagesRequest) (FetchMessagesResult, error) {
+	query := m.conversationsQuery(token, input.Cursor)
 	body, err := DoRequest(ctx, http.MethodGet, m.graphURL(input.AccountID+"/conversations")+"?"+query.Encode(), nil, nil)
 	if err != nil {
 		return FetchMessagesResult{}, fmt.Errorf("fetching Meta conversations: %w", err)

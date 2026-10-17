@@ -43,6 +43,11 @@ func Mode(account models.SocialAccount, capability capabilities.Capability, sett
 	case capabilities.ProviderLinkedIn:
 		return "linkedin." + NormalizeToken(AccountKind(account), "standard")
 	case capabilities.ProviderInstagram:
+		var state map[string]string
+		_ = json.Unmarshal([]byte(account.CapabilityState), &state)
+		if state["connection_type"] == "instagram_login" {
+			return "instagram.instagram_login." + NormalizeToken(AccountKind(account), "standard")
+		}
 		return "instagram." + NormalizeToken(AccountKind(account), "standard")
 	case capabilities.ProviderFacebook:
 		return "facebook.page"

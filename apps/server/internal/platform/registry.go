@@ -103,6 +103,9 @@ var appBuilders = map[string]appBuilder{
 		if strings.TrimSpace(app.ClientID) == "" {
 			return nil, fmt.Errorf("instagram provider app requires client_id")
 		}
+		if app.ConnectionMode == ConnectionModeInstagramLogin {
+			return NewInstagramLoginAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
+		}
 		return NewInstagramAdapter(app.ClientID, app.ClientSecret, app.RedirectURI), nil
 	},
 	providerLinkedIn: func(app AppConfig, opts RegistryOptions) (Adapter, error) {
@@ -222,6 +225,9 @@ func MergeAppConfigs(base []AppConfig, overrides ...AppConfig) []AppConfig {
 
 func AppConfigMergeKey(app AppConfig) string {
 	app = NormalizeAppConfig(app)
+	if app.Provider == providerInstagram && app.ConnectionMode == ConnectionModeInstagramLogin {
+		return app.Provider + ":" + app.ConnectionMode
+	}
 	if app.Provider == providerMastodon || app.Provider == providerPixelfed {
 		return app.Provider + ":" + app.InstanceURL
 	}
@@ -236,6 +242,13 @@ func AppConfigMergeKey(app AppConfig) string {
 // continue to resolve to the canonical incoming-webhook adapter.
 func AccountProviderKey(provider, instanceURL, capabilityStateJSON string) string {
 	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == providerInstagram {
+		state := map[string]string{}
+		_ = json.Unmarshal([]byte(capabilityStateJSON), &state)
+		if state["connection_type"] == ConnectionModeInstagramLogin {
+			return provider + ":" + ConnectionModeInstagramLogin
+		}
+	}
 	if provider == providerMastodon || provider == providerPixelfed {
 		return provider + ":" + strings.TrimRight(strings.TrimSpace(instanceURL), "/")
 	}
@@ -279,6 +292,9 @@ func NormalizeAppConfig(app AppConfig) AppConfig {
 }
 
 func adapterKeys(app AppConfig) []string {
+	if app.Provider == providerInstagram && app.ConnectionMode == ConnectionModeInstagramLogin {
+		return []string{AppConfigMergeKey(app)}
+	}
 	if app.Provider == providerDiscord {
 		if app.ConnectionMode == ConnectionModeBot {
 			return []string{providerDiscord + ":" + ConnectionModeBot}

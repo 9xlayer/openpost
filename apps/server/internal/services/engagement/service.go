@@ -1619,7 +1619,7 @@ func (s *Service) adapter(account models.SocialAccount) platform.EngagementAdapt
 }
 
 func engagementProviderKey(account models.SocialAccount) string {
-	return platform.AccountProviderKey(account.Platform, account.InstanceURL, "")
+	return platform.AccountProviderKey(account.Platform, account.InstanceURL, account.CapabilityState)
 }
 
 func xBudgetWindow(now time.Time) (time.Time, time.Time) {

@@ -3181,6 +3181,7 @@ func (h *PublicationHandler) validatePublicationByIDWithDB(ctx context.Context, 
 				mediaItems,
 				segmentSettings,
 			)
+			segmentIssues = append(segmentIssues, instagramLoginSettingsIssues(accountsByID[rendition.SocialAccountID], rendition, segmentSettings)...)
 			for index := range segmentIssues {
 				segmentIssues[index].SegmentID = segment.ID
 				segmentIssues[index].Scope = capabilities.SettingScopeSegment
@@ -3201,6 +3202,7 @@ func (h *PublicationHandler) validatePublicationByIDWithDB(ctx context.Context, 
 					capabilityMediaFromSummary(media),
 					media.Settings,
 				)
+				mediaIssues = append(mediaIssues, instagramLoginMediaSettingsIssues(accountsByID[rendition.SocialAccountID], rendition, media)...)
 				for index := range mediaIssues {
 					mediaIssues[index].SegmentID = segment.ID
 					mediaIssues[index].Parameters = mergeIssueParameters(mediaIssues[index].Parameters, map[string]any{
@@ -3220,6 +3222,24 @@ func (h *PublicationHandler) validatePublicationByIDWithDB(ctx context.Context, 
 		issues = append(issues, renditionProcessingIssues(rendition)...)
 	}
 	return issues, nil
+}
+
+func instagramLoginSettingsIssues(account models.SocialAccount, rendition models.Rendition, settings map[string]any) []capabilities.ValidationIssue {
+	if !isInstagramLoginAccount(account) {
+		return nil
+	}
+	return capabilities.InstagramLoginSettingsIssues(capabilities.Capability{
+		Provider: rendition.Platform, Profile: rendition.Profile, OutputProfile: rendition.OutputProfile,
+	}, settings)
+}
+
+func instagramLoginMediaSettingsIssues(account models.SocialAccount, rendition models.Rendition, media MediaSummary) []capabilities.ValidationIssue {
+	issues := instagramLoginSettingsIssues(account, rendition, media.Settings)
+	for index := range issues {
+		issues[index].MediaID = media.ID
+		issues[index].ScopeID = media.ID
+	}
+	return issues
 }
 
 func capabilityMediaFromSummary(item MediaSummary) capabilities.MediaItem {

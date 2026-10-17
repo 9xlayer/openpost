@@ -51,16 +51,17 @@
 		active: boolean;
 	}
 
-	const providerDefinitions = [
+	const providerDefinitions = $derived([
 		{ value: 'x', label: 'X' },
 		{ value: 'linkedin', label: 'LinkedIn' },
 		{ value: 'threads', label: 'Threads' },
 		{ value: 'facebook', label: 'Facebook Pages' },
 		{ value: 'instagram', label: 'Instagram' },
+		{ value: 'instagram:instagram_login', label: m.accounts_instagram_direct_app() },
 		{ value: 'youtube', label: 'YouTube' },
 		{ value: 'tiktok', label: 'TikTok' },
 		{ value: 'mastodon', label: 'Mastodon' }
-	];
+	]);
 
 	let { active }: Props = $props();
 	const unsavedChanges = getOptionalUnsavedChanges();
@@ -134,7 +135,7 @@
 			disabled:
 				definition.value !== 'mastodon' &&
 				providerApps.some(
-					(app) => app.provider === definition.value && app.id !== editingProviderID
+					(app) => providerDefinitionValue(app) === definition.value && app.id !== editingProviderID
 				)
 		}))
 	);
@@ -290,6 +291,12 @@
 		return providerDefinitions.find((definition) => definition.value === value)?.label ?? value;
 	}
 
+	function providerDefinitionValue(app: ProviderApp) {
+		return app.provider === 'instagram' && app.connection_mode === 'instagram_login'
+			? 'instagram:instagram_login'
+			: app.provider;
+	}
+
 	function providerFormSnapshot() {
 		return JSON.stringify({
 			provider,
@@ -308,7 +315,7 @@
 			providerDefinitions.find(
 				(definition) =>
 					definition.value === 'mastodon' ||
-					!providerApps.some((app) => app.provider === definition.value)
+					!providerApps.some((app) => providerDefinitionValue(app) === definition.value)
 			)?.value ?? 'mastodon';
 		providerName = '';
 		providerClientID = '';
@@ -323,7 +330,7 @@
 
 	function editProvider(app: ProviderApp) {
 		if (!app.editable) return;
-		provider = app.provider;
+		provider = providerDefinitionValue(app);
 		providerName = app.name ?? '';
 		providerClientID = app.client_id;
 		providerClientSecret = '';
@@ -365,7 +372,8 @@
 		try {
 			const { data, error: saveError } = await client.POST('/admin/provider-apps', {
 				body: {
-					provider,
+					provider: provider.split(':')[0],
+					connection_mode: provider === 'instagram:instagram_login' ? 'instagram_login' : undefined,
 					name: provider === 'mastodon' ? providerName.trim() : undefined,
 					client_id: providerClientID.trim(),
 					client_secret: providerClientSecret.trim() || undefined,
@@ -750,7 +758,7 @@
 								<div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
 									<div class="min-w-0">
 										<div class="flex flex-wrap items-center gap-2">
-											<p class="font-medium">{providerLabel(app.provider)}</p>
+											<p class="font-medium">{providerLabel(providerDefinitionValue(app))}</p>
 											<Badge>
 												{app.source === 'environment'
 													? m.settings_configuration_source_environment()
