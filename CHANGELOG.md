@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.22.9] - 2026-10-17
+
+### Fixed
+
+- Opening or editing generated mobile drafts no longer crashes when a destination segment has empty settings.
+- Removed the duplicate Ideate shortcut from the mobile draft header. Ideate remains available beside quick capture.
+- The bottom Ideate button opens the AI workspace even before you enter an idea, preserving the shortcut removed from the header.
+- Drafts remain available in the desktop sidebar across Posts, Inbox, Analytics, Media, and other workspace pages. The list fills the available space and scrolls through all drafts.
+- Changing pages or languages with sidebar drafts no longer causes background composer-import errors.
+
+### Changed
+
+- The sidebar calendar is visible by default, with workspace navigation below the drafts. Turn off Sidebar calendar in Preferences to use the compact layout. Existing saved choices are preserved.
+
 ## [7.22.4] - 2026-10-17
 
 ### Changed
