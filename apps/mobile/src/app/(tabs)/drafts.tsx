@@ -269,11 +269,7 @@ export default function DraftsScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ headerShown: false }} />
-      <WorkspaceHeader>
-        {canEdit ? (
-          <IconButton role="sparkles" label="Ideate" onPress={() => router.push("/ideate")} />
-        ) : null}
-      </WorkspaceHeader>
+      <WorkspaceHeader />
 
       <ScrollView
         contentContainerStyle={{
