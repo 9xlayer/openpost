@@ -150,6 +150,7 @@ type MediaConstraint struct {
 	MaxWidth               int      `json:"max_width,omitempty"`
 	MinHeight              int      `json:"min_height,omitempty"`
 	MaxHeight              int      `json:"max_height,omitempty"`
+	MaxShortSide           int      `json:"max_short_side,omitempty" doc:"Maximum image dimension on its shorter side"`
 	AllowedVideoCodecs     []string `json:"allowed_video_codecs,omitempty"`
 	AllowedAudioCodecs     []string `json:"allowed_audio_codecs,omitempty"`
 	MaxFrameRate           float64  `json:"max_frame_rate,omitempty"`
@@ -361,6 +362,7 @@ func All() []Capability {
 		MaxCount:               35,
 		AllowedMIMEs:           []string{"image/jpeg", "image/webp"},
 		MaxSizeBytes:           20 * 1024 * 1024,
+		MaxShortSide:           providerlimits.TikTokPhotoMaxShortSidePixels,
 		RequiresPublicURL:      true,
 		RequiresHTTPSFetchable: true,
 	}
@@ -2304,6 +2306,7 @@ func validateMediaItem(capability Capability, item MediaItem) []ValidationIssue 
 		{capability.Media.MaxWidth > 0 && item.Width > capability.Media.MaxWidth, "media_width_max", fmt.Sprintf("Media width must be at most %d pixels", capability.Media.MaxWidth)},
 		{capability.Media.MinHeight > 0 && item.Height < capability.Media.MinHeight, "media_height_min", fmt.Sprintf("Media height must be at least %d pixels", capability.Media.MinHeight)},
 		{capability.Media.MaxHeight > 0 && item.Height > capability.Media.MaxHeight, "media_height_max", fmt.Sprintf("Media height must be at most %d pixels", capability.Media.MaxHeight)},
+		{capability.Media.MaxShortSide > 0 && item.Width > 0 && item.Height > 0 && min(item.Width, item.Height) > capability.Media.MaxShortSide, "media_short_side_max", fmt.Sprintf("Media is %dx%d; images support at most %d pixels on the shorter side", item.Width, item.Height, capability.Media.MaxShortSide)},
 	} {
 		if boundary.invalid {
 			issues = append(issues, ValidationIssue{Severity: "error", Code: boundary.code, Message: boundary.message, Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})

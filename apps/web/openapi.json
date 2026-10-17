@@ -12272,6 +12272,11 @@
 						"format": "int64",
 						"type": "integer"
 					},
+					"max_short_side": {
+						"description": "Maximum image dimension on its shorter side",
+						"format": "int64",
+						"type": "integer"
+					},
 					"max_size_bytes": {
 						"format": "int64",
 						"type": "integer"

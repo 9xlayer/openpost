@@ -147,6 +147,8 @@ type MediaItem struct {
 	ID               string
 	MimeType         string
 	Size             int64
+	Width            int
+	Height           int
 	DurationMS       int64
 	OriginalFilename string
 }

@@ -305,6 +305,18 @@ func TestResolveRequiresFormatOnlyForGenuinelyAmbiguousDestinations(t *testing.T
 	}
 }
 
+func TestValidateTikTokPhotoShortSideLimit(t *testing.T) {
+	issues := ValidateOutput(ProviderTikTok, "tiktok.photo", models.ContentProfileCarousel, "Caption", "", "", []MediaItem{
+		{ID: "portrait", MimeType: "image/jpeg", Size: 1024, Width: 1080, Height: 1440, PublicURLReady: true, PublicURLStatus: 200},
+		{ID: "oversized", MimeType: "image/jpeg", Size: 1024, Width: 2172, Height: 2896, PublicURLReady: true, PublicURLStatus: 200},
+	}, map[string]any{"content_posting_method": "DIRECT_POST", "privacy_level": "SELF_ONLY", "music_usage_confirmed": true})
+	require.Len(t, issues, 1)
+	require.Equal(t, "media_short_side_max", issues[0].Code)
+	require.Equal(t, "oversized", issues[0].MediaID)
+	require.Contains(t, issues[0].Message, "2172x2896")
+	require.Contains(t, issues[0].Message, "1080 pixels on the shorter side")
+}
+
 func TestBlueskyImageValidationEnforcesProviderByteLimit(t *testing.T) {
 	for _, test := range []struct {
 		name      string

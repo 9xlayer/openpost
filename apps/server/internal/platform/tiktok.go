@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+
+	"github.com/openpost/backend/internal/providerlimits"
 )
 
 const (
@@ -471,6 +473,9 @@ func (t *TikTokAdapter) publishPhotoPost(ctx context.Context, accessToken string
 	if !allTikTokPhotoImages(req.Media) {
 		return "", fmt.Errorf("tiktok photo posts support JPEG or WebP images only")
 	}
+	if issues := validateTikTokMedia(req.Media); len(issues) > 0 {
+		return "", errors.New(issues[0].Message)
+	}
 	postingMethod, err := tiktokPostingMethod(req.Settings)
 	if err != nil {
 		return "", err
@@ -796,15 +801,22 @@ func validateTikTokMedia(media []MediaItem) []MediaValidationIssue {
 			}}
 		}
 		for _, item := range media {
-			if isTikTokPhotoMime(item.MimeType) {
-				continue
+			if !isTikTokPhotoMime(item.MimeType) {
+				return []MediaValidationIssue{{
+					Provider: providerTikTok,
+					MediaID:  item.ID,
+					Severity: severityError,
+					Message:  "TikTok photo posts support JPEG or WebP images only.",
+				}}
 			}
-			return []MediaValidationIssue{{
-				Provider: providerTikTok,
-				MediaID:  item.ID,
-				Severity: severityError,
-				Message:  "TikTok photo posts support JPEG or WebP images only.",
-			}}
+			if item.Width > 0 && item.Height > 0 && min(item.Width, item.Height) > providerlimits.TikTokPhotoMaxShortSidePixels {
+				return []MediaValidationIssue{{
+					Provider: providerTikTok,
+					MediaID:  item.ID,
+					Severity: severityError,
+					Message:  fmt.Sprintf("TikTok photo posts support at most %d pixels on the shorter side; this image is %dx%d.", providerlimits.TikTokPhotoMaxShortSidePixels, item.Width, item.Height),
+				}}
+			}
 		}
 		return nil
 	}
