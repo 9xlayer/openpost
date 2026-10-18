@@ -33,6 +33,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { getLocaleTag } from '$lib/i18n';
 	import { m } from '$lib/paraglide/messages';
+	import { writeClipboardText } from '$lib/clipboard';
 	import { createQuery } from '@tanstack/svelte-query';
 	import {
 		adminQueryKeys,
@@ -400,7 +401,7 @@
 	async function copyImpersonationLink() {
 		if (!impersonationURL) return;
 		try {
-			await navigator.clipboard.writeText(impersonationURL);
+			await writeClipboardText(impersonationURL);
 			impersonationCopied = true;
 			impersonationError = '';
 		} catch {

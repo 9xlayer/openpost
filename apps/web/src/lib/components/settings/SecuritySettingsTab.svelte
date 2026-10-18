@@ -22,6 +22,7 @@
 	import { createPasskeyCredential } from '$lib/auth/webauthn';
 	import { acquireReauthGrant, startOIDCIdentityLink } from '$lib/auth/reauth';
 	import { copyAuthenticatorSetupKey, isAuthenticatorCodeReady } from '$lib/authenticator-setup';
+	import { writeClipboardText } from '$lib/clipboard';
 	import { getLocaleTag } from '$lib/i18n';
 	import { getOptionalUnsavedChanges } from '$lib/unsaved-changes.svelte';
 	import { showToast } from '$lib/toast';
@@ -833,9 +834,7 @@
 	}
 
 	async function copyTOTPSetupKey() {
-		const copied = await copyAuthenticatorSetupKey(totpManualEntryKey, (value) =>
-			navigator.clipboard.writeText(value)
-		);
+		const copied = await copyAuthenticatorSetupKey(totpManualEntryKey, writeClipboardText);
 		totpSetupKeyCopyState = copied ? 'copied' : 'failed';
 	}
 
@@ -874,7 +873,7 @@
 		if (!context || recoveryCodes.length === 0) return;
 		securityError = '';
 		try {
-			await navigator.clipboard.writeText(text);
+			await writeClipboardText(text);
 			if (!securityMutationIsCurrent(context) || recoveryCodesText() !== text) return;
 			notify(m.settings_recovery_codes_copied());
 		} catch {

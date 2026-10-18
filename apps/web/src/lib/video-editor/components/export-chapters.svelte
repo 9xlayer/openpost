@@ -2,6 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { writeClipboardText } from '$lib/clipboard';
 	import { showToast } from '$lib/toast';
 	import { chaptersFromMarkers } from '../export/chapters';
 	import type { TimelineMarker } from '../project/types';
@@ -16,7 +17,7 @@
 	let text = $derived(generated);
 	async function copy(): Promise<void> {
 		try {
-			await navigator.clipboard.writeText(text);
+			await writeClipboardText(text);
 			showToast(m.video_editor_chapters_copied(), 'success');
 		} catch {
 			showToast(m.video_editor_chapters_copy_failed(), 'error');

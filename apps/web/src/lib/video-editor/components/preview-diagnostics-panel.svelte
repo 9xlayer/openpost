@@ -2,6 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { Button } from '$lib/components/ui/button';
 	import * as Popover from '$lib/components/ui/popover';
+	import { writeClipboardText } from '$lib/clipboard';
 	import { ProtectedIcon, ThemeIcon } from '$lib/themes/icons';
 	import { previewDiagnostics } from '$lib/video-editor/preview/diagnostics.svelte';
 
@@ -44,7 +45,7 @@
 		copied = false;
 		copyError = false;
 		try {
-			await navigator.clipboard.writeText(previewDiagnostics.report());
+			await writeClipboardText(previewDiagnostics.report());
 			copied = true;
 		} catch {
 			copyError = true;

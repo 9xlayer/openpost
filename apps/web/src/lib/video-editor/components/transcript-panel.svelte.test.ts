@@ -42,6 +42,7 @@ function speech() {
 afterEach(() => {
 	timelineStore.__resetForTesting();
 	commandHistory.clearHistory();
+	vi.restoreAllMocks();
 });
 
 it('reads and seeks words immediately, corrects text without cutting video, and adds a title at speech time', async () => {
@@ -475,4 +476,33 @@ it('uses sequence frames for imported captions after a timeline start trim', asy
 		timelineStore.itemById.get(id)!.from,
 		timelineStore.itemById.get(id)!.durationInFrames
 	]).toEqual([300, 150]);
+});
+
+it('reports a clipboard failure instead of copied words when the write fails', async () => {
+	speech();
+	vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(new Error('Denied'));
+	vi.spyOn(document, 'execCommand').mockReturnValue(false);
+	const screen = await render(TranscriptPanel, { onedit: vi.fn() });
+	await screen.getByRole('button', { name: 'Hello', exact: true }).click();
+	await userEvent.keyboard('{Control>}c{/Control}');
+	await expect.element(screen.getByRole('status')).toHaveTextContent('Could not copy');
+	await expect.element(screen.getByRole('status')).not.toHaveTextContent('Words copied');
+});
+
+it('shows copied words only after the awaited clipboard write resolves', async () => {
+	speech();
+	let finish!: () => void;
+	const write = vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(
+		() =>
+			new Promise<void>((resolve) => {
+				finish = resolve;
+			})
+	);
+	const screen = await render(TranscriptPanel, { onedit: vi.fn() });
+	await screen.getByRole('button', { name: 'Hello', exact: true }).click();
+	await userEvent.keyboard('{Control>}c{/Control}');
+	await expect.poll(() => write.mock.calls.length).toBe(1);
+	await expect.element(screen.getByRole('status')).not.toHaveTextContent('Words copied');
+	finish();
+	await expect.element(screen.getByRole('status')).toHaveTextContent('Words copied: 1');
 });

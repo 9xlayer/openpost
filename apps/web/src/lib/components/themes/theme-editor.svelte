@@ -8,6 +8,7 @@
 	import { ImageEditorHistory } from '$lib/image-editor/history';
 	import { getCurrentLocale, onLocaleChange } from '$lib/i18n';
 	import { m } from '$lib/paraglide/messages';
+	import { writeClipboardText } from '$lib/clipboard';
 	import { getOptionalUnsavedChanges } from '$lib/unsaved-changes.svelte';
 	import {
 		BUNDLED_THEME_FONTS,
@@ -517,19 +518,19 @@
 	}
 
 	async function copyManifest() {
-		const clipboard = 'navigator' in globalThis ? globalThis.navigator.clipboard : undefined;
-		if (!clipboard) {
-			operationError = m.theme_editor_clipboard_unavailable();
-			return;
-		}
 		try {
-			await clipboard.writeText(
+			await writeClipboardText(
 				editorMode === 'manifest' ? manifestSource : serializeThemeManifest(draft)
 			);
 			operationError = '';
 			statusMessage = m.theme_editor_manifest_copied();
 		} catch {
-			operationError = m.theme_editor_manifest_copy_failed();
+			// Keep the distinct copy for a browser with no clipboard API at all;
+			// the shared helper only reaches this when its fallback also failed.
+			operationError =
+				'navigator' in globalThis && globalThis.navigator.clipboard
+					? m.theme_editor_manifest_copy_failed()
+					: m.theme_editor_clipboard_unavailable();
 		}
 	}
 

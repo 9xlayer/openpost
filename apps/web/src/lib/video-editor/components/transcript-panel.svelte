@@ -5,6 +5,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { writeClipboardText } from '$lib/clipboard';
 	import { ThemeIcon } from '$lib/themes/icons';
 	import { timelineStore } from '../timeline/stores/timeline-store.svelte';
 	import { addTextItemAtFrame, setCurrentFrame } from '../timeline/actions/items';
@@ -266,7 +267,7 @@
 		clearSelection();
 		onedit();
 	}
-	function copyWords(cut: boolean) {
+	async function copyWords(cut: boolean): Promise<void> {
 		if (!selected.length || (cut && !canCut)) return;
 		const text = selected.map((word) => word.text).join(' ');
 		const clips = buildTranscriptClipboardItems(
@@ -275,7 +276,12 @@
 			timelineStore.fps
 		);
 		if (clips.length) itemClipboardStore.copy(clips, cut ? 'cut' : 'copy');
-		void navigator.clipboard?.writeText(text).catch(() => undefined);
+		try {
+			await writeClipboardText(text);
+		} catch {
+			status = m.interaction_copy_failed();
+			return;
+		}
 		if (cut) deleteVideo();
 		else
 			status = m.video_editor_transcript_copied_words({
@@ -353,7 +359,7 @@
 			if (event.key.toLowerCase() === 'a') {
 				anchorId = words[0]?.id ?? null;
 				focusId = words.at(-1)?.id ?? null;
-			} else copyWords(event.key.toLowerCase() === 'x');
+			} else void copyWords(event.key.toLowerCase() === 'x');
 		} else if (event.key === 'Delete' || event.key === 'Backspace') {
 			event.preventDefault();
 			event.stopPropagation();
