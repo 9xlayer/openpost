@@ -15,6 +15,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import MediaPicker from '$lib/components/media-picker.svelte';
 	import MediaPreviewImage from '$lib/components/media-preview-image.svelte';
+	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
 	import CameraCapture from '$lib/components/camera-capture.svelte';
 	import StockMediaBrowser from '$lib/components/stock-media-browser.svelte';
 	import { uploadMediaFile } from '$lib/media-upload-client';
@@ -583,11 +584,10 @@
 											ondragend={finishMediaDrag}
 											disabled={!editor.canEdit}
 										>
-											<img
-												src={getAuthenticatedMediaURL(item.thumbnail_url || item.url)}
-												alt={item.alt_text || item.original_filename}
+											<MediaThumbnail
+												{item}
+												fallbackAlt={item.original_filename}
 												class="aspect-square w-full object-cover transition-transform group-hover:scale-[1.02]"
-												loading="lazy"
 											/>
 											<span class="block truncate border-t px-1.5 py-1 text-xs"
 												>{item.original_filename}</span

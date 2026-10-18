@@ -4,6 +4,7 @@
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import MediaTagPicker from '$lib/components/media-tag-picker.svelte';
 	import InspectorAltForm from '$lib/components/inspector-alt-form.svelte';
+	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
 	import { getAuthenticatedMediaURL } from '$lib/media-url';
 	import type { MediaTag } from '$lib/media-tags';
 	import { m } from '$lib/paraglide/messages';
@@ -50,9 +51,9 @@
 		class="overflow-hidden rounded-xl bg-muted/20 ring-1 ring-foreground/10 md:sticky md:top-0"
 	>
 		{#if isImage(media.mime_type)}
-			<img
-				src={getAuthenticatedMediaURL(media.thumbnail_url || media.url)}
-				alt={media.alt_text || media.original_filename}
+			<MediaThumbnail
+				item={media}
+				fallbackAlt={media.original_filename}
 				class="aspect-[4/3] size-full object-contain"
 			/>
 		{:else if isVideo(media.mime_type)}

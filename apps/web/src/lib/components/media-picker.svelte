@@ -13,8 +13,8 @@
 	import AppSelect from '$lib/components/app-select.svelte';
 	import MediaTagFilter from '$lib/components/media-tag-filter.svelte';
 	import MediaAcquisitionPanel from './media-acquisition-panel.svelte';
+	import MediaThumbnail from './media-thumbnail.svelte';
 	import MemeGenerator from './meme-generator.svelte';
-	import { getAuthenticatedMediaURL } from '$lib/media-url';
 	import type { MediaUploadResult } from '$lib/media-upload-client';
 	import type { MediaPickerVideoSelection } from '$lib/media-picker';
 	import { queryImageEditorMedia } from '$lib/query/image-editor';
@@ -783,40 +783,33 @@
 							aria-pressed={selectedIDs.includes(item.id)}
 							aria-label={m.media_picker_select_item({ name: item.original_filename })}
 						>
-							{#if item.mime_type.startsWith('video/')}
-								{#if item.thumbnail_url || item.poster_thumbnail_url}
-									<img
-										src={getAuthenticatedMediaURL(
-											item.thumbnail_url || item.poster_thumbnail_url || ''
-										)}
-										alt={item.alt_text || item.original_filename}
-										class="size-full object-cover transition-transform group-hover:scale-[1.02]"
-										loading="lazy"
-									/>
-								{:else}
-									<div class="flex size-full items-center justify-center">
-										{#if item.processing_status === 'processing'}
-											<ProtectedIcon
-												icon="loading"
-												class="size-6 animate-spin text-muted-foreground motion-reduce:animate-none"
-											/>
-										{:else}
-											<ThemeIcon role="video" class="size-7 text-muted-foreground" />
-										{/if}
-									</div>
-								{/if}
-								<span
-									class="absolute bottom-2 left-2 flex size-7 items-center justify-center rounded-full bg-background/90 shadow-sm"
-								>
-									<ThemeIcon role="video" class="size-3.5" />
-								</span>
-							{:else if item.mime_type.startsWith('image/')}
-								<img
-									src={getAuthenticatedMediaURL(item.thumbnail_url || item.url)}
-									alt={item.alt_text || item.original_filename}
+							{#if item.mime_type.startsWith('video/') || item.mime_type.startsWith('image/')}
+								<MediaThumbnail
+									{item}
+									fallbackAlt={item.original_filename}
 									class="size-full object-cover transition-transform group-hover:scale-[1.02]"
-									loading="lazy"
-								/>
+								>
+									{#snippet noStill()}
+										<div class="flex size-full items-center justify-center">
+											{#if item.processing_status === 'processing'}
+												<ProtectedIcon
+													icon="loading"
+													class="size-6 animate-spin text-muted-foreground motion-reduce:animate-none"
+												/>
+											{:else}
+												<ThemeIcon role="video" class="size-7 text-muted-foreground" />
+											{/if}
+										</div>
+									{/snippet}
+								</MediaThumbnail>
+								{#if item.mime_type.startsWith('video/')}
+									<span
+										class="absolute bottom-2 left-2 flex size-7 items-center justify-center rounded-full bg-background/90 shadow-sm"
+										aria-hidden="true"
+									>
+										<ThemeIcon role="video" class="size-3.5" />
+									</span>
+								{/if}
 							{:else}
 								<div class="flex size-full flex-col items-center justify-center gap-2 p-2">
 									<ProtectedIcon icon="media-audio" class="size-7 text-muted-foreground" />

@@ -45,6 +45,7 @@
 	import PageContainer from '$lib/components/page-container.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
+	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
 	import AppToast from '$lib/components/app-toast.svelte';
 	import DestructiveConfirmDialog from '$lib/components/destructive-confirm-dialog.svelte';
 	import MediaInspectorDialog from '$lib/components/media-inspector-dialog.svelte';
@@ -1734,97 +1735,92 @@
 											<span class="px-3 text-center text-xs">{m.media_trash_preview_removed()}</span
 											>
 										</div>
-									{:else if isVideo(media.mime_type)}
-										{#if media.thumbnail_url || media.poster_thumbnail_url}
-											<img
-												src={getAuthenticatedMediaURL(
-													media.thumbnail_url || media.poster_thumbnail_url || ''
-												)}
-												alt={media.alt_text || media.original_filename || m.media_library_title()}
-												loading="lazy"
-												class="size-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-											/>
-										{:else if media.processing_status === 'ready'}
-											<video
-												src={getAuthenticatedMediaURL(media.url)}
-												class="size-full object-cover"
-												muted
-												playsinline
-												preload="metadata"
-											></video>
-										{/if}
-										<div
-											class="pointer-events-none absolute inset-0 flex items-center justify-center"
-										>
-											<div
-												class="flex size-10 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm"
-											>
-												<ThemeIcon role="video" class="size-5 text-foreground" />
-											</div>
-										</div>
-										{#if media.processing_status === 'processing' || media.analysis_status === 'pending'}
-											<div
-												class="absolute inset-x-2 bottom-2 z-[2] space-y-1 rounded-lg bg-background/90 px-2 py-2 shadow-sm backdrop-blur"
-												aria-live="polite"
-											>
-												<div class="flex items-center gap-2 text-xs font-medium">
-													<ProtectedIcon
-														icon="loading"
-														class="size-3.5 animate-spin motion-reduce:animate-none"
-													/>
-													{m.media_video_processing({
-														percent: Math.max(0, media.processing_progress ?? 0)
-													})}
-												</div>
-												<div
-													class="h-1.5 overflow-hidden rounded-full bg-muted"
-													role="progressbar"
-													aria-label={media.original_filename ||
-														media.alt_text ||
-														m.media_library_title()}
-													aria-valuemin={0}
-													aria-valuemax={100}
-													aria-valuenow={Math.max(0, media.processing_progress ?? 0)}
-												>
-													<div
-														class="h-full rounded-full bg-primary transition-[width]"
-														style:width={`${Math.min(
-															100,
-															Math.max(4, media.processing_progress ?? 0)
-														)}%`}
-													></div>
-												</div>
-											</div>
-										{:else if media.processing_status === 'failed' || media.analysis_status === 'failed'}
-											<div
-												class="absolute inset-x-2 bottom-2 z-[2] rounded-lg bg-destructive/90 px-2 py-2 text-xs text-destructive-foreground shadow-sm"
-											>
-												<p class="line-clamp-2">
-													{media.analysis_error || m.media_video_processing_failed()}
-												</p>
-												{#if mediaCanEdit}
-													<Button
-														type="button"
-														variant="secondary"
-														size="sm"
-														class="relative z-10 mt-2 h-8"
-														onclick={(event) => {
-															event.stopPropagation();
-															void retryVideoAnalysis(media);
-														}}
-													>
-														{m.common_retry()}
-													</Button>
-												{/if}
-											</div>
-										{/if}
-									{:else if isImage(media.mime_type)}
-										<img
-											src={getAuthenticatedMediaURL(media.thumbnail_url || media.url)}
-											alt={media.alt_text || media.original_filename || m.media_library_title()}
-											loading="lazy"
+									{:else if isVideo(media.mime_type) || isImage(media.mime_type)}
+										<MediaThumbnail
+											item={media}
+											fallbackAlt={m.media_library_title()}
 											class="size-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
-										/>
+										>
+											{#snippet noStill()}
+												{#if isVideo(media.mime_type) && media.processing_status === 'ready'}
+													<video
+														src={getAuthenticatedMediaURL(media.url)}
+														class="size-full object-cover"
+														muted
+														playsinline
+														preload="metadata"
+													></video>
+												{/if}
+											{/snippet}
+										</MediaThumbnail>
+										{#if isVideo(media.mime_type)}
+											<div
+												class="pointer-events-none absolute inset-0 flex items-center justify-center"
+												aria-hidden="true"
+											>
+												<div
+													class="flex size-10 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm"
+												>
+													<ThemeIcon role="video" class="size-5 text-foreground" />
+												</div>
+											</div>
+											{#if media.processing_status === 'processing' || media.analysis_status === 'pending'}
+												<div
+													class="absolute inset-x-2 bottom-2 z-[2] space-y-1 rounded-lg bg-background/90 px-2 py-2 shadow-sm backdrop-blur"
+													aria-live="polite"
+												>
+													<div class="flex items-center gap-2 text-xs font-medium">
+														<ProtectedIcon
+															icon="loading"
+															class="size-3.5 animate-spin motion-reduce:animate-none"
+														/>
+														{m.media_video_processing({
+															percent: Math.max(0, media.processing_progress ?? 0)
+														})}
+													</div>
+													<div
+														class="h-1.5 overflow-hidden rounded-full bg-muted"
+														role="progressbar"
+														aria-label={media.original_filename ||
+															media.alt_text ||
+															m.media_library_title()}
+														aria-valuemin={0}
+														aria-valuemax={100}
+														aria-valuenow={Math.max(0, media.processing_progress ?? 0)}
+													>
+														<div
+															class="h-full rounded-full bg-primary transition-[width]"
+															style:width={`${Math.min(
+																100,
+																Math.max(4, media.processing_progress ?? 0)
+															)}%`}
+														></div>
+													</div>
+												</div>
+											{:else if media.processing_status === 'failed' || media.analysis_status === 'failed'}
+												<div
+													class="absolute inset-x-2 bottom-2 z-[2] rounded-lg bg-destructive/90 px-2 py-2 text-xs text-destructive-foreground shadow-sm"
+												>
+													<p class="line-clamp-2">
+														{media.analysis_error || m.media_video_processing_failed()}
+													</p>
+													{#if mediaCanEdit}
+														<Button
+															type="button"
+															variant="secondary"
+															size="sm"
+															class="relative z-10 mt-2 h-8"
+															onclick={(event) => {
+																event.stopPropagation();
+																void retryVideoAnalysis(media);
+															}}
+														>
+															{m.common_retry()}
+														</Button>
+													{/if}
+												</div>
+											{/if}
+										{/if}
 									{:else if isAudio(media.mime_type)}
 										<div class="flex size-full items-center justify-center">
 											<ProtectedIcon icon="media-audio" class="size-10 text-muted-foreground/50" />

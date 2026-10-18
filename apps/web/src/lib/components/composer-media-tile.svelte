@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getAuthenticatedMediaByID } from '$lib/media-url';
+	import { getAuthenticatedMediaByID, getAuthenticatedMediaURL } from '$lib/media-url';
 	import { m } from '$lib/paraglide/messages';
 	import { ProtectedIcon, ThemeIcon } from '$lib/themes/icons';
 	import GridAltEditor from './grid-alt-editor.svelte';
@@ -33,6 +33,20 @@
 		onToggleAlt,
 		onDoneAlt
 	}: Props = $props();
+
+	const originalURL = $derived(getAuthenticatedMediaByID(mediaId));
+	const thumbURL = $derived(getAuthenticatedMediaURL(`/media/${mediaId}/thumb/md`));
+	const posterURL = $derived(getAuthenticatedMediaURL(`/media/${mediaId}/poster`));
+	let showingOriginal = $state(false);
+	let missing = $state(false);
+
+	function handleImageError(): void {
+		if (!showingOriginal) {
+			showingOriginal = true;
+			return;
+		}
+		missing = true;
+	}
 </script>
 
 <div
@@ -40,19 +54,32 @@
 	data-composer-media-id={mediaId}
 	class="group/media relative overflow-hidden rounded-lg {isFirstOfThree ? 'col-span-2' : ''}"
 >
-	{#if isVideoMedia(mediaId)}
+	{#if missing}
+		<div
+			class="{mediaCount === 1
+				? 'aspect-video'
+				: 'aspect-square'} flex w-full items-center justify-center bg-muted"
+			role="presentation"
+		>
+			<ThemeIcon role="image" class="size-8 text-muted-foreground/40" />
+		</div>
+	{:else if isVideoMedia(mediaId)}
 		<video
-			src={getAuthenticatedMediaByID(mediaId)}
+			src={originalURL}
+			poster={posterURL}
 			class="{mediaCount === 1 ? 'aspect-video' : 'aspect-square'} w-full object-cover"
 			controls
 			muted
 			playsinline
+			preload="metadata"
+			onerror={() => (missing = true)}
 		></video>
 	{:else}
 		<img
-			src={getAuthenticatedMediaByID(mediaId)}
+			src={showingOriginal ? originalURL : thumbURL}
 			alt={altTexts.get(mediaId) || ''}
 			class="{mediaCount === 1 ? 'aspect-video' : 'aspect-square'} w-full object-cover"
+			onerror={handleImageError}
 		/>
 	{/if}
 	<div
