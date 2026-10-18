@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { ActivityIndicator } from '@openpost/ui';
 	import { untrack } from 'svelte';
 	import { captureTelemetryEvent } from '@openpost/telemetry';
 	import { Button } from '$lib/components/ui/button';
@@ -654,7 +653,10 @@
 					{m.media_upload_paste_hint()}
 				</p>
 				<Button onclick={uploadReady} disabled={busy || readyCount === 0 || !workspaceId}>
-					{#if busy}<ActivityIndicator class="size-4" />{:else}<ThemeIcon role="upload" />{/if}
+					{#if busy}<ProtectedIcon
+							icon="loading"
+							class="size-4 animate-spin motion-reduce:animate-none"
+						/>{:else}<ThemeIcon role="upload" />{/if}
 					{readyCount === 1
 						? m.media_upload_one_file_action()
 						: m.media_upload_files_action({ count: readyCount })}
@@ -671,7 +673,7 @@
 		<CameraCapture onCapture={capturePhoto} />
 		{#if busy}
 			<p class="mt-3 flex items-center gap-2 text-sm text-muted-foreground" role="status">
-				<ActivityIndicator class="size-4" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{m.media_uploading()}
 			</p>
 		{/if}
