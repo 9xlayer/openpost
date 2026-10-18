@@ -36,6 +36,7 @@ import { ThemeIcon } from "@/components/theme-icon";
 import { ProtectedIcon } from "@/components/protected-icon";
 import { api, errorMessage, type Api } from "@/lib/api/client";
 import { applyPickerValue, firstPickerStep, type PickerStep } from "@/lib/date-time-picker";
+import { reconcileDestinationSelection } from "@/lib/destination-selection";
 import { accountHandle, formatDateTime, platformLabel } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
 import {
@@ -308,6 +309,10 @@ function Composer({
     originalActivity === "scheduled" || originalActivity === "published";
   const destinationCatalogFailed = accounts.isError || socialSets.isError;
   const accountsLoadedEmpty = (accounts.data?.length ?? 0) === 0 && accounts.data !== undefined;
+  const unavailableDestinations =
+    accounts.data === undefined
+      ? []
+      : reconcileDestinationSelection(activeAccounts, accounts.data, pub.renditions).unavailable;
 
   function markEditorDirty(): void {
     editorDirty.current = true;
@@ -409,7 +414,15 @@ function Composer({
     requireCurrentQueryActor(scope);
     const media = await resolveAttachments(scope, requestApi);
     requireCurrentQueryActor(scope);
-    const desired = [...activeAccounts];
+    // Only ids the workspace can still publish to reach the upsert: the
+    // accounts query drops disconnected accounts, and the server rejects
+    // inactive ids with a 400. Destinations whose account is gone stay in the
+    // selection so they render as explicit, removable rows; leaving them
+    // selected neither upserts nor deletes their authored rendition.
+    const desired =
+      accounts.data === undefined
+        ? [...activeAccounts]
+        : reconcileDestinationSelection(activeAccounts, accounts.data, pub.renditions).selectable;
     const removed = (pub.renditions ?? []).filter(
       (rendition) =>
         rendition.social_account_id && !activeAccounts.has(rendition.social_account_id),
@@ -1258,7 +1271,9 @@ function Composer({
           (accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused") ? (
             <QueryNotice message="You are offline. Current destinations remain visible." offline />
           ) : null}
-          {accountsLoadedEmpty && !destinationCatalogFailed ? (
+          {accountsLoadedEmpty &&
+          unavailableDestinations.length === 0 &&
+          !destinationCatalogFailed ? (
             <ContentSection>
               <BodyText>No connected accounts. Connect them in the web app first.</BodyText>
             </ContentSection>
@@ -1368,6 +1383,51 @@ function Composer({
                   </View>
                 );
               })}
+              {unavailableDestinations.map((destination) => (
+                <View key={destination.accountId}>
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: true }}
+                    accessibilityLabel={
+                      destination.platform
+                        ? `Unavailable destination, ${platformLabel(destination.platform)}. Remove from this post.`
+                        : "Unavailable destination. Remove from this post."
+                    }
+                    onPress={() => toggleAccount(destination.accountId)}
+                    style={({ pressed }) => [
+                      styles.accountRow,
+                      {
+                        backgroundColor: colors.background,
+                        borderColor: colors.primary,
+                      },
+                      pressed && { opacity: 0.65 },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          borderColor: colors.primary,
+                          backgroundColor: colors.primary,
+                        },
+                      ]}
+                    >
+                      <ThemeIcon role="check" size={15} tintColor={colors.onPrimary} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        numberOfLines={2}
+                        style={[typography.labelLarge, { color: colors.onSurface }]}
+                      >
+                        {destination.platform
+                          ? `Unavailable destination, ${platformLabel(destination.platform)}`
+                          : "Unavailable destination"}
+                      </Text>
+                      <BodyText>This account was disconnected. Tap to remove it.</BodyText>
+                    </View>
+                  </Pressable>
+                </View>
+              ))}
             </View>
           )}
           <Button
