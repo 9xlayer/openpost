@@ -61,12 +61,12 @@ func Render(ctx context.Context, body, outputProfile string, style Style, identi
 		}
 		paintRounded(canvas, card, radius, paper)
 		paintAvatar(canvas, avatar, identity.Name, faces, top)
-		drawLabel(canvas, wrapText(identity.Name, faces, 34, 690), 238, top+86, 690, ink)
+		drawLabel(canvas, identity.Name, faces, 34, 238, top+86, 690, ink)
 		handle := strings.TrimPrefix(identity.Handle, "@")
 		if handle != "" {
 			handle = "@" + handle
 		}
-		drawLabel(canvas, wrapText(handle, faces, 27, 690), 238, top+123, 690, muted)
+		drawLabel(canvas, handle, faces, 27, 238, top+123, 690, muted)
 		y := top + 188 + page.size
 		for _, line := range page.lines {
 			drawLine(canvas, line, 136, y, textWidth, ink)
@@ -77,7 +77,7 @@ func Render(ctx context.Context, body, outputProfile string, style Style, identi
 			footerY := card.Max.Y - 43
 			paintArrow(canvas, 896, footerY-8, muted)
 			if len(pages) > 1 {
-				drawLabel(canvas, wrapText(fmt.Sprintf("%d / %d", index+1, len(pages)+attachments), faces, 23, 200), 136, footerY, 200, muted)
+				drawLabel(canvas, fmt.Sprintf("%d / %d", index+1, len(pages)+attachments), faces, 23, 136, footerY, 200, muted)
 			}
 		}
 		var buffer bytes.Buffer
@@ -89,10 +89,43 @@ func Render(ctx context.Context, body, outputProfile string, style Style, identi
 	return result, nil
 }
 
-func drawLabel(canvas *image.NRGBA, lines []line, x, y, width int, ink color.NRGBA) {
+func drawLabel(canvas *image.NRGBA, value string, faces fontMap, size, x, y, width int, ink color.NRGBA) {
+	lines := wrapText(ellipsizeLabel(value, faces, size, width), faces, size, width)
 	if len(lines) > 0 {
 		drawLine(canvas, lines[0], x, y, width, ink)
 	}
+}
+
+const ellipsis = "…"
+
+// ellipsizeLabel collapses value to the longest single-line prefix that fits
+// width, suffixed with an ellipsis when the full text was clipped. Values
+// that already fit on one line are returned unchanged, so normal identities
+// render byte-identical output to before.
+func ellipsizeLabel(value string, faces fontMap, size, width int) string {
+	lines := wrapText(value, faces, size, width)
+	if len(lines) <= 1 && (len(lines) == 0 || lines[0].width <= width) {
+		return value
+	}
+	runes := []rune(strings.ReplaceAll(value, "\n", " "))
+	fits := func(n int) bool {
+		candidate := strings.TrimRight(string(runes[:n]), " \t") + ellipsis
+		candidateLines := wrapText(candidate, faces, size, width)
+		return len(candidateLines) == 1 && candidateLines[0].width <= width
+	}
+	if !fits(0) {
+		return ellipsis
+	}
+	low, high := 0, len(runes)
+	for low < high {
+		mid := (low + high + 1) / 2
+		if fits(mid) {
+			low = mid
+		} else {
+			high = mid - 1
+		}
+	}
+	return strings.TrimRight(string(runes[:low]), " \t") + ellipsis
 }
 
 func drawLine(canvas *image.NRGBA, item line, x, y, width int, ink color.NRGBA) {
@@ -175,6 +208,6 @@ func paintAvatar(canvas *image.NRGBA, avatar image.Image, name string, faces fon
 		if runes := []rune(strings.TrimSpace(name)); len(runes) > 0 {
 			initial = strings.ToUpper(string(runes[0]))
 		}
-		drawLabel(canvas, wrapText(initial, faces, 36, 70), 154, top+108, 70, parseColor("#312e81"))
+		drawLabel(canvas, initial, faces, 36, 154, top+108, 70, parseColor("#312e81"))
 	}
 }

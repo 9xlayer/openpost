@@ -166,7 +166,10 @@ func (s *Service) RefreshSegment(ctx context.Context, db bun.IDB, account models
 		Style                textcards.Style
 		Identity             textcards.Identity
 		Attachments          int
-	}{1, segment.Body, rendition.OutputProfile, account.AccountAvatarURL, style, Identity(account), attachments})
+		// Version 2 covers the renderer change that ellipsizes clipped
+		// identity names and handles instead of dropping wrapped lines
+		// silently, so existing cards pick up the fix on the next save.
+	}{2, segment.Body, rendition.OutputProfile, account.AccountAvatarURL, style, Identity(account), attachments})
 	hash := sha256.Sum256(fingerprint)
 	source := hex.EncodeToString(hash[:])
 	previousSource, previousAvatar := parseReceipt(previous)

@@ -56,3 +56,36 @@ func TestLayoutPaginatesWithoutDroppingTextAndBoundsWork(t *testing.T) {
 	_, err = Layout(strings.Repeat("x", MaxCharacters+1), "instagram.feed")
 	require.ErrorContains(t, err, "2200")
 }
+
+func TestEllipsizeLabelTruncatesClippedIdentity(t *testing.T) {
+	faces, err := newFaces()
+	require.NoError(t, err)
+	longName := "Alexandra Josephine Montgomery Rutherfordington the Third Esquire of the Long Names Society"
+	truncated := ellipsizeLabel(longName, faces, 34, 690)
+	require.True(t, strings.HasSuffix(truncated, "…"), "clipped name must end in an ellipsis, got %q", truncated)
+	lines := wrapText(truncated, faces, 34, 690)
+	require.Len(t, lines, 1, "truncated name must fit on one line")
+	require.LessOrEqual(t, lines[0].width, 690)
+	require.Equal(t, "Founder", ellipsizeLabel("Founder", faces, 34, 690), "short names must stay unchanged")
+	longHandle := "@" + strings.Repeat("a", 120)
+	truncatedHandle := ellipsizeLabel(longHandle, faces, 27, 690)
+	require.True(t, strings.HasSuffix(truncatedHandle, "…"), "clipped handle must end in an ellipsis, got %q", truncatedHandle)
+	handleLines := wrapText(truncatedHandle, faces, 27, 690)
+	require.Len(t, handleLines, 1, "truncated handle must fit on one line")
+	require.LessOrEqual(t, handleLines[0].width, 690)
+}
+
+func TestRenderEllipsizesLongIdentity(t *testing.T) {
+	style, err := Parse(map[string]any{"text_card": "always", "text_card_shadow": false})
+	require.NoError(t, err)
+	faces, err := newFaces()
+	require.NoError(t, err)
+	longName := "Alexandra Josephine Montgomery Rutherfordington the Third Esquire of the Long Names Society"
+	clipped, err := Render(t.Context(), "Hello world", "instagram.feed", style, Identity{Name: longName, Handle: "founder"}, nil, 0)
+	require.NoError(t, err)
+	require.Len(t, clipped, 1)
+	explicit, err := Render(t.Context(), "Hello world", "instagram.feed", style, Identity{Name: ellipsizeLabel(longName, faces, 34, 690), Handle: "founder"}, nil, 0)
+	require.NoError(t, err)
+	require.Len(t, explicit, 1)
+	require.Equal(t, explicit[0].JPEG, clipped[0].JPEG, "the renderer must draw the ellipsized identity")
+}
