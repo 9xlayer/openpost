@@ -13,6 +13,53 @@ export type UnavailableDestination = {
   platform: string;
 };
 
+export type SocialSetLike = {
+  id: string;
+  name?: string | null;
+  is_default?: boolean | null;
+};
+
+export type SocialSetAccountLike = {
+  social_account_id: string;
+};
+
+/**
+ * One summary label for every native destination chooser: `<set> · N
+ * destinations` when a set is applied, otherwise `N destination(s)`. Matches
+ * the composer drawer; Ideate's bare `N destinations` never named the set.
+ */
+export function destinationSummaryLabel(setName: string | null | undefined, count: number): string {
+  if (setName?.trim()) return `${setName.trim()} · ${count} destinations`;
+  return `${count} ${count === 1 ? "destination" : "destinations"}`;
+}
+
+/**
+ * Saved sets with the default set first, otherwise in API order. Both native
+ * drawers present sets this way; the sort is stable so non-default sets keep
+ * their relative order.
+ */
+export function orderedSocialSets<T extends SocialSetLike>(sets: readonly T[]): T[] {
+  return [...sets].sort((a, b) => Number(b.is_default === true) - Number(a.is_default === true));
+}
+
+/**
+ * Selection for an applied set: member ids in authored order, deduplicated,
+ * with no publishability filtering. Members whose account is gone stay in the
+ * selection so the drawer renders them as explicit, removable rows (via
+ * {@link reconcileDestinationSelection}) instead of silently reducing the
+ * set. Callers send only `selectable` to the server.
+ */
+export function applySocialSetSelection(accounts: readonly SocialSetAccountLike[]): string[] {
+  const seen = new Set<string>();
+  const selection: string[] = [];
+  for (const account of accounts) {
+    if (seen.has(account.social_account_id)) continue;
+    seen.add(account.social_account_id);
+    selection.push(account.social_account_id);
+  }
+  return selection;
+}
+
 /**
  * Split a destination selection into ids the workspace can still publish to
  * and ids whose account is gone (disconnected) but still has an authored

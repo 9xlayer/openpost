@@ -3,7 +3,7 @@ import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
 import { nativeTelemetry } from "@/lib/telemetry";
 import type * as ImagePicker from "expo-image-picker";
 import { MediaImage } from "@/components/media-image";
-import { AccountAvatar } from "@/components/account-avatar";
+import { DestinationChooser } from "@/components/destination-chooser";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -36,7 +36,10 @@ import { ThemeIcon } from "@/components/theme-icon";
 import { ProtectedIcon } from "@/components/protected-icon";
 import { api, errorMessage, type Api } from "@/lib/api/client";
 import { applyPickerValue, firstPickerStep, type PickerStep } from "@/lib/date-time-picker";
-import { reconcileDestinationSelection } from "@/lib/destination-selection";
+import {
+  reconcileDestinationSelection,
+  destinationSummaryLabel,
+} from "@/lib/destination-selection";
 import {
   destinationIssueMessages,
   destinationNeedsAttention,
@@ -47,7 +50,7 @@ import {
   type ReadinessSegment,
   type ResolvedDestinationCapability,
 } from "@/lib/destination-readiness";
-import { accountHandle, formatDateTime, platformLabel } from "@/lib/format";
+import { formatDateTime, platformLabel } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
 import {
   MAX_MOBILE_ATTACHMENT_COUNT,
@@ -83,7 +86,7 @@ import {
   workspaceQueryScopeIsCurrent,
   type WorkspaceQueryScope,
 } from "@/lib/query-session";
-import { useNativeTheme, withAlpha } from "@/theme";
+import { useNativeTheme } from "@/theme";
 
 type Attachment = {
   localId: string;
@@ -329,12 +332,6 @@ function Composer({
   const originalActivity = publicationActivity(pub.status);
   const originalCalendarEntry =
     originalActivity === "scheduled" || originalActivity === "published";
-  const destinationCatalogFailed = accounts.isError || socialSets.isError;
-  const accountsLoadedEmpty = (accounts.data?.length ?? 0) === 0 && accounts.data !== undefined;
-  const unavailableDestinations =
-    accounts.data === undefined
-      ? []
-      : reconcileDestinationSelection(activeAccounts, accounts.data, pub.renditions).unavailable;
   const selectableAccountIds =
     accounts.data === undefined
       ? [...activeAccounts]
@@ -1065,6 +1062,77 @@ function Composer({
 
   const isScheduled = pub.status === "scheduled" || pub.status === "publishing";
 
+  function renderAccountAction(accountId: string, selected: boolean) {
+    if (!selected) return null;
+    return (
+      <Button
+        title={expandedAccount === accountId ? "Hide" : "Edit"}
+        intent="quiet"
+        onPress={() => setExpandedAccount(expandedAccount === accountId ? null : accountId)}
+        style={styles.customizeButton}
+      />
+    );
+  }
+
+  function renderAccountNote(accountId: string) {
+    const capability = readinessByAccount[accountId];
+    if (!capability || !destinationNeedsAttention(capability)) return null;
+    return (
+      <BodyText accessibilityRole="alert" numberOfLines={2} style={{ color: colors.error }}>
+        {readinessSummary(capability)}
+      </BodyText>
+    );
+  }
+
+  function renderAccountOverrides(accountId: string) {
+    if (expandedAccount !== accountId) return null;
+    const platform = accounts.data?.find((account) => account.id === accountId)?.platform ?? "";
+    return (
+      <View style={{ gap: spacing.small }}>
+        {(pub.renditions ?? [])
+          .filter((rendition) => rendition.social_account_id === accountId)
+          .flatMap(renditionImages)
+          .map((media) => (
+            <MediaImage
+              key={media.id}
+              uri={media.url}
+              contentFit="contain"
+              accessibilityLabel={media.alt_text || "Post image"}
+              style={{
+                width: "100%",
+                aspectRatio: media.width && media.height ? media.width / media.height : 1,
+              }}
+            />
+          ))}
+        {(renditionFields[accountId] ?? [{ key: "body", value: body }]).map(
+          (field, index, fields) => (
+            <View key={field.key} style={{ gap: spacing.extraSmall }}>
+              {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
+              <TextField
+                value={renditionTextEdits[accountId]?.[field.key] ?? field.value}
+                accessibilityLabel={`Custom text ${index + 1} for ${platformLabel(platform)}`}
+                onChangeText={(text) => {
+                  markEditorDirty();
+                  setRenditionTextEdits((current) => ({
+                    ...current,
+                    [accountId]: {
+                      ...current[accountId],
+                      [field.key]: text,
+                    },
+                  }));
+                }}
+                placeholder="Account version"
+                multiline
+                textAlignVertical="top"
+                style={styles.overrideField}
+              />
+            </View>
+          ),
+        )}
+      </View>
+    );
+  }
+
   return (
     <Screen>
       <Stack.Screen options={{ headerShown: false }} />
@@ -1421,240 +1489,27 @@ function Composer({
 
       {destinationDrawerOpen ? (
         <BottomDrawer open title="Social Set" onDismiss={() => setDestinationDrawerOpen(false)}>
-          {(socialSets.data?.length ?? 0) > 0 ? (
-            <View style={styles.chipRow}>
-              {[...(socialSets.data ?? [])]
-                .sort((a, b) => Number(b.is_default === true) - Number(a.is_default === true))
-                .map((set) => (
-                  <Chip
-                    key={set.id}
-                    label={set.name ?? "Social Set"}
-                    active={activeSocialSetId === set.id}
-                    onPress={() =>
-                      applySocialSet(
-                        set.id,
-                        (set.accounts ?? []).map((account) => account.social_account_id),
-                      )
-                    }
-                  />
-                ))}
-            </View>
-          ) : null}
-          <BodyText>Choose a saved set or fine-tune the accounts below.</BodyText>
-          {(accounts.data === undefined && accounts.isPending) ||
-          (socialSets.data === undefined && socialSets.isPending) ? (
-            <DelayedQueryPlaceholder
-              pending
-              shape="list"
-              offline={accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused"}
-            />
-          ) : null}
-          {destinationCatalogFailed ? (
-            <QueryNotice
-              message={
-                accounts.data !== undefined || socialSets.data !== undefined
-                  ? "Could not refresh every destination. Current destinations remain visible."
-                  : "Could not load your Social Sets and accounts."
-              }
-              retry={() => {
-                void accounts.refetch();
-                void socialSets.refetch();
-              }}
-            />
-          ) : null}
-          {(accounts.data !== undefined || socialSets.data !== undefined) &&
-          (accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused") ? (
-            <QueryNotice message="You are offline. Current destinations remain visible." offline />
-          ) : null}
-          {readinessError ? (
-            <QueryNotice
-              message="Could not check destination readiness. You can keep editing."
-              retry={retryReadiness}
-              offline={accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused"}
-            />
-          ) : null}
-          {accountsLoadedEmpty &&
-          unavailableDestinations.length === 0 &&
-          !destinationCatalogFailed ? (
-            <ContentSection>
-              <BodyText>No connected accounts. Connect them in the web app first.</BodyText>
-            </ContentSection>
-          ) : (
-            <View style={styles.accountList}>
-              {(accounts.data ?? []).map((account) => {
-                const selected = activeAccounts.has(account.id);
-                return (
-                  <View key={account.id}>
-                    <Pressable
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: selected }}
-                      onPress={() => toggleAccount(account.id)}
-                      style={({ pressed }) => [
-                        styles.accountRow,
-                        {
-                          backgroundColor: colors.background,
-                          borderColor: selected ? colors.primary : colors.outlineVariant,
-                        },
-                        pressed && { opacity: 0.65 },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.checkbox,
-                          {
-                            borderColor: selected ? colors.primary : colors.outlineVariant,
-                            backgroundColor: selected ? colors.primary : "transparent",
-                          },
-                        ]}
-                      >
-                        {selected ? (
-                          <ThemeIcon role="check" size={15} tintColor={colors.onPrimary} />
-                        ) : null}
-                      </View>
-                      <AccountAvatar
-                        name={
-                          account.alias ||
-                          account.account_username ||
-                          platformLabel(account.platform)
-                        }
-                        platform={account.platform}
-                        avatarUrl={account.account_avatar_url}
-                      />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
-                          numberOfLines={2}
-                          style={[typography.labelLarge, { color: colors.onSurface }]}
-                        >
-                          {accountHandle(
-                            account.account_username,
-                            platformLabel(account.platform),
-                            account.platform,
-                            account.alias,
-                          )}
-                        </Text>
-                        <BodyText>{platformLabel(account.platform)}</BodyText>
-                        {selected &&
-                        readinessByAccount[account.id] &&
-                        destinationNeedsAttention(readinessByAccount[account.id]) ? (
-                          <BodyText
-                            accessibilityRole="alert"
-                            numberOfLines={2}
-                            style={{ color: colors.error }}
-                          >
-                            {readinessSummary(readinessByAccount[account.id])}
-                          </BodyText>
-                        ) : null}
-                      </View>
-                      {selected ? (
-                        <Button
-                          title={expandedAccount === account.id ? "Hide" : "Edit"}
-                          intent="quiet"
-                          onPress={() =>
-                            setExpandedAccount(expandedAccount === account.id ? null : account.id)
-                          }
-                          style={styles.customizeButton}
-                        />
-                      ) : null}
-                    </Pressable>
-                    {selected && expandedAccount === account.id ? (
-                      <View style={{ gap: spacing.small }}>
-                        {(pub.renditions ?? [])
-                          .filter((rendition) => rendition.social_account_id === account.id)
-                          .flatMap(renditionImages)
-                          .map((media) => (
-                            <MediaImage
-                              key={media.id}
-                              uri={media.url}
-                              contentFit="contain"
-                              accessibilityLabel={media.alt_text || "Post image"}
-                              style={{
-                                width: "100%",
-                                aspectRatio:
-                                  media.width && media.height ? media.width / media.height : 1,
-                              }}
-                            />
-                          ))}
-                        {(renditionFields[account.id] ?? [{ key: "body", value: body }]).map(
-                          (field, index, fields) => (
-                            <View key={field.key} style={{ gap: spacing.extraSmall }}>
-                              {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
-                              <TextField
-                                value={renditionTextEdits[account.id]?.[field.key] ?? field.value}
-                                accessibilityLabel={`Custom text ${index + 1} for ${platformLabel(account.platform)}`}
-                                onChangeText={(text) => {
-                                  markEditorDirty();
-                                  setRenditionTextEdits((current) => ({
-                                    ...current,
-                                    [account.id]: {
-                                      ...current[account.id],
-                                      [field.key]: text,
-                                    },
-                                  }));
-                                }}
-                                placeholder="Account version"
-                                multiline
-                                textAlignVertical="top"
-                                style={styles.overrideField}
-                              />
-                            </View>
-                          ),
-                        )}
-                      </View>
-                    ) : null}
-                  </View>
-                );
-              })}
-              {unavailableDestinations.map((destination) => (
-                <View key={destination.accountId}>
-                  <Pressable
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: true }}
-                    accessibilityLabel={
-                      destination.platform
-                        ? `Unavailable destination, ${platformLabel(destination.platform)}. Remove from this post.`
-                        : "Unavailable destination. Remove from this post."
-                    }
-                    onPress={() => toggleAccount(destination.accountId)}
-                    style={({ pressed }) => [
-                      styles.accountRow,
-                      {
-                        backgroundColor: colors.background,
-                        borderColor: colors.primary,
-                      },
-                      pressed && { opacity: 0.65 },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        {
-                          borderColor: colors.primary,
-                          backgroundColor: colors.primary,
-                        },
-                      ]}
-                    >
-                      <ThemeIcon role="check" size={15} tintColor={colors.onPrimary} />
-                    </View>
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <Text
-                        numberOfLines={2}
-                        style={[typography.labelLarge, { color: colors.onSurface }]}
-                      >
-                        {destination.platform
-                          ? `Unavailable destination, ${platformLabel(destination.platform)}`
-                          : "Unavailable destination"}
-                      </Text>
-                      <BodyText>This account was disconnected. Tap to remove it.</BodyText>
-                    </View>
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          )}
-          <Button
-            title="Done"
-            onPress={() => setDestinationDrawerOpen(false)}
-            disabled={activeAccounts.size === 0}
+          <DestinationChooser
+            accounts={accounts}
+            socialSets={socialSets}
+            selectedIds={[...activeAccounts]}
+            activeSetId={activeSocialSetId}
+            renditions={pub.renditions}
+            notice={
+              readinessError ? (
+                <QueryNotice
+                  message="Could not check destination readiness. You can keep editing."
+                  retry={retryReadiness}
+                  offline={accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused"}
+                />
+              ) : null
+            }
+            onApplySet={applySocialSet}
+            onToggle={toggleAccount}
+            onConfirm={() => setDestinationDrawerOpen(false)}
+            rowAction={renderAccountAction}
+            rowNote={renderAccountNote}
+            expandedContent={renderAccountOverrides}
           />
         </BottomDrawer>
       ) : null}
@@ -1731,30 +1586,6 @@ function Composer({
   );
 }
 
-function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  const theme = useNativeTheme();
-  const { colors, typography } = theme.manifest;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      hitSlop={8}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        pressed && { opacity: 0.6 },
-        {
-          backgroundColor: active ? withAlpha(colors.primary, 0.15) : colors.surface,
-          borderColor: active ? colors.primary : colors.outlineVariant,
-        },
-      ]}
-    >
-      <Text style={[typography.labelMedium, { color: active ? colors.primary : colors.onSurface }]}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 function nextHour(): Date {
   const date = new Date();
   date.setHours(date.getHours() + 1, 0, 0, 0);
@@ -1767,10 +1598,10 @@ function selectedSetLabel(
   accountCount: number,
   attentionCount = 0,
 ): string {
-  const selectedSet = sets.find((set) => set.id === selectedSetId);
-  const base = selectedSet?.name
-    ? `${selectedSet.name} · ${accountCount} destinations`
-    : `${accountCount} ${accountCount === 1 ? "destination" : "destinations"}`;
+  const base = destinationSummaryLabel(
+    sets.find((set) => set.id === selectedSetId)?.name,
+    accountCount,
+  );
   if (attentionCount <= 0) return base;
   return `${base} · ${attentionCount} need${attentionCount === 1 ? "s" : ""} attention`;
 }
@@ -1863,37 +1694,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  accountList: {
-    gap: 8,
-  },
-  accountRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    minHeight: 52,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
   },

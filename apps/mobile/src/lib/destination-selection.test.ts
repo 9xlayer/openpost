@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { reconcileDestinationSelection } from "./destination-selection";
+import {
+  applySocialSetSelection,
+  destinationSummaryLabel,
+  orderedSocialSets,
+  reconcileDestinationSelection,
+} from "./destination-selection";
 
 const known = [
   { id: "active-a", platform: "x" },
@@ -37,4 +42,33 @@ test("an empty selection reconciles to empty rows", () => {
   const result = reconcileDestinationSelection([], known, renditions);
   expect(result.selectable).toEqual([]);
   expect(result.unavailable).toEqual([]);
+});
+
+test("the summary names the set with its destination count", () => {
+  expect(destinationSummaryLabel("Creators", 3)).toBe("Creators · 3 destinations");
+});
+
+test("the summary without a set counts destinations", () => {
+  expect(destinationSummaryLabel("", 0)).toBe("0 destinations");
+  expect(destinationSummaryLabel(null, 1)).toBe("1 destination");
+  expect(destinationSummaryLabel(undefined, 2)).toBe("2 destinations");
+});
+
+test("saved sets order the default set first without reordering the rest", () => {
+  const sets = [
+    { id: "a", name: "A", is_default: false },
+    { id: "b", name: "B", is_default: true },
+    { id: "c", name: "C", is_default: false },
+  ];
+  expect(orderedSocialSets(sets).map((set) => set.id)).toEqual(["b", "a", "c"]);
+});
+
+test("applying a set keeps every member in order instead of dropping any", () => {
+  expect(
+    applySocialSetSelection([
+      { social_account_id: "active-a" },
+      { social_account_id: "gone" },
+      { social_account_id: "active-a" },
+    ]),
+  ).toEqual(["active-a", "gone"]);
 });
