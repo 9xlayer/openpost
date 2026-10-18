@@ -513,7 +513,10 @@
 					!canSchedule ||
 					(!scheduleInput.trim() && (isPastDay || !selectedDate || !selectedTime))}
 			>
-				{#if submitting}<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />{/if}
+				{#if submitting}<ProtectedIcon
+						icon="loading"
+						class="mr-2 size-4 animate-spin motion-reduce:animate-none"
+					/>{/if}
 				{m.compose_schedule()}
 			</Button>
 		</Dialog.Footer>

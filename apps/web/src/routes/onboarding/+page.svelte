@@ -455,7 +455,10 @@
 						!workspaceName.trim() ||
 						(purchaseChoiceRequired && !purchaseChoice)}
 				>
-					{#if isSubmitting}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+					{#if isSubmitting}<ProtectedIcon
+							icon="loading"
+							class="size-4 animate-spin motion-reduce:animate-none"
+						/>{/if}
 					{isSubmitting
 						? purchaseChoiceRequired
 							? m.onboarding_confirming()

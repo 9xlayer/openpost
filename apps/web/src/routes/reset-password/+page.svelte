@@ -156,7 +156,10 @@
 				/>
 			</div>
 			<Button type="submit" class="w-full gap-2" disabled={loading || !token}>
-				{#if loading}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+				{#if loading}<ProtectedIcon
+						icon="loading"
+						class="size-4 animate-spin motion-reduce:animate-none"
+					/>{/if}
 				{loading ? m.auth_reset_loading() : m.auth_reset_submit()}
 			</Button>
 		</form>

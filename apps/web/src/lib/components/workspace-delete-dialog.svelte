@@ -384,7 +384,10 @@
 				disabled={!canDelete}
 				onclick={deleteWorkspace}
 			>
-				{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+				{#if pending}<ProtectedIcon
+						icon="loading"
+						class="size-4 animate-spin motion-reduce:animate-none"
+					/>{/if}
 				{m.workspace_delete_confirm()}
 			</Button>
 		</Dialog.Footer>

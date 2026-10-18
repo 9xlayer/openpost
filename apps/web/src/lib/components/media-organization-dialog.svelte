@@ -174,7 +174,10 @@
 				</label>
 				<div class="flex gap-2">
 					<Button type="submit" size="sm" disabled={saving || !name.trim()}>
-						{#if saving}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
+						{#if saving}<ProtectedIcon
+								icon="loading"
+								class="animate-spin motion-reduce:animate-none"
+							/>{/if}
 						{editingId ? m.common_save() : m.media_create_tag()}
 					</Button>
 					{#if editingId}

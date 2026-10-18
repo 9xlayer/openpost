@@ -81,7 +81,10 @@
 			}}
 		>
 			{#if captioningIds.has(mediaId)}
-				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none md:size-3.5" />
+				<ProtectedIcon
+					icon="loading"
+					class="size-4 animate-spin motion-reduce:animate-none md:size-3.5"
+				/>
 			{:else}
 				<ProtectedIcon icon="editor-text" class="size-4 md:size-3.5" />
 			{/if}

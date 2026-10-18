@@ -310,7 +310,10 @@
 					</div>
 					<div class="sm:col-span-2 xl:col-span-3">
 						<Button type="submit" disabled={passwordBusy}>
-							{#if passwordBusy}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+							{#if passwordBusy}<ProtectedIcon
+									icon="loading"
+									class="size-4 animate-spin motion-reduce:animate-none"
+								/>{/if}
 							{passwordBusy
 								? m.settings_change_password_loading()
 								: m.settings_change_password_submit()}
@@ -358,7 +361,10 @@
 						</p>
 					{/if}
 					<Button type="submit" variant="outline" disabled={exportBusy}>
-						{#if exportBusy}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+						{#if exportBusy}<ProtectedIcon
+								icon="loading"
+								class="size-4 animate-spin motion-reduce:animate-none"
+							/>{/if}
 						{exportBusy ? m.settings_export_loading() : m.settings_export_submit()}
 					</Button>
 				</form>
@@ -382,7 +388,10 @@
 				disabled={deletionBusy}
 				onclick={reviewDeletion}
 			>
-				{#if deletionBusy}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+				{#if deletionBusy}<ProtectedIcon
+						icon="loading"
+						class="size-4 animate-spin motion-reduce:animate-none"
+					/>{/if}
 				{deletionBusy ? m.settings_delete_loading() : m.settings_delete_review()}
 			</Button>
 		</div>

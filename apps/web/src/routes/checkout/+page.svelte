@@ -529,7 +529,10 @@
 						<Button size="lg" onclick={continueToAccounts}>{m.checkout_connect_account()}</Button>
 					{/if}
 				{:else if checkoutState === 'confirming'}
-					<ProtectedIcon icon="loading" class="size-10 animate-spin motion-reduce:animate-none text-primary" />
+					<ProtectedIcon
+						icon="loading"
+						class="size-10 animate-spin text-primary motion-reduce:animate-none"
+					/>
 					<div class="space-y-2" role="status">
 						<h1 class="text-xl font-semibold">
 							{m.checkout_confirming_heading()}
@@ -581,7 +584,10 @@
 								<ThemeIcon role="lock" class="size-4 shrink-0" />
 								{m.checkout_payment_open()}
 							{:else}
-								<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
+								<ProtectedIcon
+									icon="loading"
+									class="size-4 animate-spin motion-reduce:animate-none"
+								/>
 								{checkoutState === 'loading' ? m.checkout_loading() : m.checkout_opening_secure()}
 							{/if}
 						</div>

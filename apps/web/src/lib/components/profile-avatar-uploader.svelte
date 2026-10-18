@@ -372,9 +372,10 @@
 				>{m.common_cancel()}</Button
 			>
 			<Button onclick={upload} disabled={!file || uploading}>
-				{#if uploading}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{:else}<ThemeIcon
-						role="upload"
-					/>{/if}
+				{#if uploading}<ProtectedIcon
+						icon="loading"
+						class="animate-spin motion-reduce:animate-none"
+					/>{:else}<ThemeIcon role="upload" />{/if}
 				{m.avatar_upload_action()}
 			</Button>
 		</Dialog.Footer>

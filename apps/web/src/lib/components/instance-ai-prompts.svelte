@@ -464,7 +464,10 @@
 						onclick={() => void saveSelected()}
 					>
 						{#if saving}
-							<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
+							<ProtectedIcon
+								icon="loading"
+								class="size-4 animate-spin motion-reduce:animate-none"
+							/>
 							{m.settings_ai_prompts_saving()}
 						{:else}
 							<ThemeIcon role="save" class="size-4" />

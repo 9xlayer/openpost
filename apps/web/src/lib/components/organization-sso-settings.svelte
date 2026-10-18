@@ -849,7 +849,10 @@
 					<InlineNotice tone="warning" message={m.settings_sso_required_warning()} />
 				{/if}
 				<Button type="submit" disabled={busy === 'policy'} class="gap-2">
-					{#if busy === 'policy'}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+					{#if busy === 'policy'}<ProtectedIcon
+							icon="loading"
+							class="size-4 animate-spin motion-reduce:animate-none"
+						/>{/if}
 					{m.common_save()}
 				</Button>
 			</form>

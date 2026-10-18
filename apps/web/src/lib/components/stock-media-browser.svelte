@@ -744,7 +744,10 @@
 			{#if hasMore}
 				<div class="flex justify-center pt-1">
 					<Button variant="outline" onclick={() => void search(false)} disabled={searching}>
-						{#if searching}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
+						{#if searching}<ProtectedIcon
+								icon="loading"
+								class="animate-spin motion-reduce:animate-none"
+							/>{/if}
 						{m.stock_load_more()}
 					</Button>
 				</div>

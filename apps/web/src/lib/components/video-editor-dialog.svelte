@@ -334,7 +334,10 @@
 						{/if}
 					</div>
 				{:else}
-					<ProtectedIcon icon="loading" class="size-6 animate-spin motion-reduce:animate-none text-white" />
+					<ProtectedIcon
+						icon="loading"
+						class="size-6 animate-spin text-white motion-reduce:animate-none"
+					/>
 				{/if}
 			</div>
 
@@ -482,7 +485,10 @@
 				{rendering ? m.video_upload_cancel() : m.common_cancel()}
 			</Button>
 			<Button type="button" class="min-h-12" disabled={!metadata || rendering} onclick={applyEdit}>
-				{#if rendering}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+				{#if rendering}<ProtectedIcon
+						icon="loading"
+						class="size-4 animate-spin motion-reduce:animate-none"
+					/>{/if}
 				{m.video_upload_editor_apply()}
 			</Button>
 		</Dialog.Footer>

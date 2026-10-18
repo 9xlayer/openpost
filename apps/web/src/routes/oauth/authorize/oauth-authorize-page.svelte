@@ -431,7 +431,10 @@
 						{#if selectedWorkspaceIDs.includes(workspace.id)}
 							<div class="mt-3 space-y-2 border-t pt-3 pl-7">
 								{#if accountLoadingByWorkspace[workspace.id]}
-									<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
+									<ProtectedIcon
+										icon="loading"
+										class="size-4 animate-spin motion-reduce:animate-none"
+									/>
 								{:else if accountErrorByWorkspace[workspace.id]}
 									<InlineNotice tone="error" message={accountErrorByWorkspace[workspace.id]} />
 								{/if}

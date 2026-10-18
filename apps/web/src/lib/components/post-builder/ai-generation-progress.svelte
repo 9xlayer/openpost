@@ -32,7 +32,7 @@
 		{#if active}
 			<ProtectedIcon
 				icon="loading"
-				class="mx-auto mb-3 size-5 animate-spin motion-reduce:animate-none text-primary motion-reduce:animate-none"
+				class="mx-auto mb-3 size-5 animate-spin text-primary motion-reduce:animate-none"
 			/>
 		{/if}
 		<h2 id={`${uid}-heading`} class="text-base font-semibold tracking-tight">

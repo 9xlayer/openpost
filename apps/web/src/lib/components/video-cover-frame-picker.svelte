@@ -268,7 +268,10 @@
 				disabled={applying || editing}
 				onclick={editFrame}
 			>
-				{#if editing}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
+				{#if editing}<ProtectedIcon
+						icon="loading"
+						class="size-4 animate-spin motion-reduce:animate-none"
+					/>{/if}
 				{m.compose_cover_frame_edit()}
 			</Button>
 		{/if}

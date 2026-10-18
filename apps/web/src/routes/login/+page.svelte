@@ -318,7 +318,10 @@
 						class="w-full gap-2"
 					>
 						{#if isLoading}
-							<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
+							<ProtectedIcon
+								icon="loading"
+								class="h-4 w-4 animate-spin motion-reduce:animate-none"
+							/>
 							{m.auth_login_verifying()}
 						{:else}
 							<ThemeIcon role="security" class="h-4 w-4" />
@@ -351,7 +354,10 @@
 						class="w-full gap-2"
 					>
 						{#if isLoading}
-							<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
+							<ProtectedIcon
+								icon="loading"
+								class="h-4 w-4 animate-spin motion-reduce:animate-none"
+							/>
 							{m.auth_login_verifying()}
 						{:else}
 							<ThemeIcon role="security" class="h-4 w-4" />

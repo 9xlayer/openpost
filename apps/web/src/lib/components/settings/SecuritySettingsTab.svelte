@@ -1471,7 +1471,10 @@
 					disabled={authSessionsLoading}
 				>
 					{#if authSessionsLoading}
-						<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+						<ProtectedIcon
+							icon="loading"
+							class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+						/>
 					{/if}
 					{m.common_refresh()}
 				</Button>
@@ -1523,7 +1526,10 @@
 								disabled={Boolean(authSessionBusyID)}
 							>
 								{#if authSessionBusyID === session.id}
-									<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+									<ProtectedIcon
+										icon="loading"
+										class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+									/>
 								{:else}
 									<ThemeIcon role="logout" class="mr-2 h-4 w-4" />
 								{/if}

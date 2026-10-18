@@ -709,7 +709,10 @@
 			disabled={refreshing || !workspaceId || messagingAllDisabled}
 			data-testid="messages-refresh"
 		>
-			<ThemeIcon role="refresh" class={refreshing ? 'size-4 animate-spin motion-reduce:animate-none' : 'size-4'} />
+			<ThemeIcon
+				role="refresh"
+				class={refreshing ? 'size-4 animate-spin motion-reduce:animate-none' : 'size-4'}
+			/>
 			{m.messaging_refresh()}
 		</Button>
 	{/snippet}

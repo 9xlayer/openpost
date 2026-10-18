@@ -849,7 +849,10 @@
 			disabled={refreshing || !workspaceId || engagementAllDisabled}
 			data-testid="engagement-refresh"
 		>
-			<ThemeIcon role="refresh" class={refreshing ? 'size-4 animate-spin motion-reduce:animate-none' : 'size-4'} />
+			<ThemeIcon
+				role="refresh"
+				class={refreshing ? 'size-4 animate-spin motion-reduce:animate-none' : 'size-4'}
+			/>
 			{m.engagement_refresh()}
 		</Button>
 	{/snippet}

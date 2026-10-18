@@ -562,7 +562,10 @@
 							disabled={!newPromptText.trim() || !newPromptCategory || submitting}
 						>
 							{#if submitting}
-								<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
+								<ProtectedIcon
+									icon="loading"
+									class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+								/>
 							{/if}
 							{editingPrompt ? m.common_save() : m.prompts_add()}
 						</Button>

@@ -1474,7 +1474,10 @@
 								disabled={loading || Boolean(reschedulingKey)}
 								onclick={() => loadCalendarData(loadKey, true)}
 							>
-								<ThemeIcon role="refresh" class={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')} />
+								<ThemeIcon
+									role="refresh"
+									class={cn('size-4', loading && 'animate-spin motion-reduce:animate-none')}
+								/>
 							</Button>
 						</div>
 					</div>
@@ -1818,7 +1821,7 @@
 												{#if reschedulingKey === item.key}
 													<ProtectedIcon
 														icon="loading"
-														class="size-3 shrink-0 animate-spin motion-reduce:animate-none text-current/60"
+														class="size-3 shrink-0 animate-spin text-current/60 motion-reduce:animate-none"
 													/>
 												{/if}
 											</button>

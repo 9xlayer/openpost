@@ -116,9 +116,10 @@
 					disabled={creating || !newTagName.trim()}
 					aria-label={m.media_create_tag()}
 				>
-					{#if creating}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{:else}<ThemeIcon
-							role="add"
-						/>{/if}
+					{#if creating}<ProtectedIcon
+							icon="loading"
+							class="animate-spin motion-reduce:animate-none"
+						/>{:else}<ThemeIcon role="add" />{/if}
 				</Button>
 			</form>
 		{/if}
