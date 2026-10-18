@@ -232,6 +232,9 @@ export default defineConfig({
 			},
 			'^/media/[^/]+': {
 				target: 'http://localhost:8080'
+			},
+			'^/avatars/[^/]+': {
+				target: 'http://localhost:8080'
 			}
 		}
 	},
