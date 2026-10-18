@@ -73,7 +73,7 @@
 		border-radius: 12px;
 	}
 	.mark.postiz {
-		background: #1c1c1c;
+		background: var(--marketing-rival-mark);
 	}
 	.mark :global(img) {
 		width: 100%;

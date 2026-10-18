@@ -181,16 +181,16 @@
 	}
 	.swatches i {
 		flex: 1;
-		background: #e9c68d;
+		background: var(--marketing-swatch-1);
 	}
 	.swatches i:nth-child(2) {
-		background: #a88057;
+		background: var(--marketing-swatch-2);
 	}
 	.swatches i:nth-child(3) {
-		background: #f6ebd1;
+		background: var(--marketing-swatch-3);
 	}
 	.swatches i:nth-child(4) {
-		background: #443d33;
+		background: var(--marketing-swatch-4);
 	}
 	.logo-example {
 		display: flex;

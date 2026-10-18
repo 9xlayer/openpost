@@ -1,8 +1,48 @@
-@import '../../../web/src/routes/layout.css';
+@import 'tailwindcss';
+@import '@openpost/dither/style.css';
+@import 'tw-animate-css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import '@fontsource-variable/manrope/wght.css';
+@import '@fontsource-variable/dm-sans/wght.css';
+@import '@fontsource-variable/space-grotesk/wght.css';
+@import '@fontsource-variable/playfair-display/wght.css';
+@import '@fontsource-variable/source-serif-4/wght.css';
+@import '@fontsource/anton/400.css';
+@import '@fontsource/bebas-neue/400.css';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/inter-tight';
+@import '@fontsource-variable/orbitron';
+@import '@fontsource/roboto/latin-400.css';
+@import '@fontsource/roboto/latin-400-italic.css';
+@import '@fontsource/roboto/latin-500.css';
+@import '@fontsource/roboto/latin-500-italic.css';
+@import '@fontsource/roboto/latin-600.css';
+@import '@fontsource/roboto/latin-600-italic.css';
+@import '@fontsource/roboto/latin-700.css';
+@import '@fontsource/roboto/latin-700-italic.css';
+@import '@fontsource/roboto-slab/latin-400.css';
+@import '@fontsource/roboto-slab/latin-500.css';
+@import '@fontsource/roboto-slab/latin-700.css';
+/* Shared base styles and tokens owned by @openpost/ui (see packages/ui). */
+@import '@openpost/ui/tokens.css';
+@import '@openpost/ui/style.css';
 
 @source './**/*.{svelte,ts}';
+/*
+ * Marketing compiles web-owned $lib components (svelte.config files.lib maps
+ * $lib to ../web/src/lib) such as telemetry-consent, app-select and
+ * color-picker. Their utilities must be scanned until those components move
+ * into @openpost/ui. Verified 2026-10-18: removing this line drops 30+
+ * utilities (e.g. space-y-4, max-w-[26rem], grid-cols-[1fr_4rem]) used by
+ * components rendered on marketing pages. See issue #439.
+ */
 @source '../../../web/src/lib/components';
 @source '../../../../packages/social-preview/src';
+
+@custom-variant dark (&:is(.dark *));
+@plugin '@tailwindcss/forms';
+@plugin '@tailwindcss/typography';
 
 @layer base {
 	html {
@@ -139,6 +179,11 @@
 	--marketing-launch-fold-4: #aacb86;
 	--marketing-launch-fold-5: #eaf4ce;
 	--marketing-section: oklch(0.965 0.006 80);
+	--marketing-swatch-1: #e9c68d;
+	--marketing-swatch-2: #a88057;
+	--marketing-swatch-3: #f6ebd1;
+	--marketing-swatch-4: #443d33;
+	--marketing-rival-mark: #1c1c1c;
 	scrollbar-color: var(--border) var(--background);
 	caret-color: var(--foreground);
 }
@@ -158,4 +203,9 @@
 	--marketing-launch-fold-4: #506b43;
 	--marketing-launch-fold-5: #dcebbe;
 	--marketing-section: oklch(0.18 0.008 55);
+	--marketing-swatch-1: #e9c68d;
+	--marketing-swatch-2: #a88057;
+	--marketing-swatch-3: #f6ebd1;
+	--marketing-swatch-4: #443d33;
+	--marketing-rival-mark: #1c1c1c;
 }
