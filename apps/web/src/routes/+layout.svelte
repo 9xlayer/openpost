@@ -46,7 +46,17 @@
 		common_close: m.common_close,
 		common_toggle_sidebar: m.common_toggle_sidebar,
 		common_mobile_sidebar_description: m.common_mobile_sidebar_description,
-		common_sidebar: m.common_sidebar
+		common_sidebar: m.common_sidebar,
+		// The shared color picker moved to @openpost/ui; keep its copy localized
+		// with the translations the app already ships.
+		color_picker_pick_from_screen: m.image_editor_pick_color,
+		color_picker_brand_colors: m.image_editor_brand_colors,
+		color_picker_recent_colors: m.image_editor_recent_colors,
+		color_picker_hex_color: m.image_editor_hex_color,
+		color_picker_hue: m.image_editor_hue,
+		color_picker_saturation: m.image_editor_saturation,
+		color_picker_lightness: m.image_editor_lightness,
+		color_picker_opacity: m.theme_editor_opacity
 	});
 	provideApplicationThemePreview();
 	const unsavedChanges = setUnsavedChanges(new UnsavedChangesContext());

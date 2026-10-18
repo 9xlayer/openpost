@@ -5,3 +5,6 @@ export { ThemeIcon } from "./themes/icons/index.js";
 export { provideUiMessages, type UiMessages } from "./messages.js";
 export { default as CheckboxInput } from "./components/input/checkbox-input.svelte";
 export { NativeSelect } from "./components/native-select/index.js";
+export { default as ColorPicker } from "./components/color-picker.svelte";
+export { default as EditorColorMagnifier } from "./components/editor-color-magnifier.svelte";
+export { default as TelemetryConsent } from "./components/telemetry-consent.svelte";

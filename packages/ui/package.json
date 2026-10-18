@@ -15,6 +15,21 @@
       "svelte": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./components/color-picker": {
+      "types": "./dist/components/color-picker.svelte.d.ts",
+      "svelte": "./dist/components/color-picker.svelte",
+      "default": "./dist/components/color-picker.svelte"
+    },
+    "./components/editor-color-magnifier": {
+      "types": "./dist/components/editor-color-magnifier.svelte.d.ts",
+      "svelte": "./dist/components/editor-color-magnifier.svelte",
+      "default": "./dist/components/editor-color-magnifier.svelte"
+    },
+    "./components/telemetry-consent": {
+      "types": "./dist/components/telemetry-consent.svelte.d.ts",
+      "svelte": "./dist/components/telemetry-consent.svelte",
+      "default": "./dist/components/telemetry-consent.svelte"
+    },
     "./style.css": "./dist/style.css",
     "./*": {
       "types": "./dist/*.d.ts",

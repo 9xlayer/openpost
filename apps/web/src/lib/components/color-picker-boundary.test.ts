@@ -3,7 +3,10 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
-const sharedColorPicker = new URL('./color-picker.svelte', import.meta.url);
+const sharedColorPicker = new URL(
+	'../../../../../packages/ui/src/lib/components/color-picker.svelte',
+	import.meta.url
+);
 const videoEditorRoute = new URL('../../routes/video-editor/[id]/+page.svelte', import.meta.url);
 
 async function svelteFiles(directory: string): Promise<string[]> {
@@ -38,8 +41,8 @@ describe('shared color picker boundary', () => {
 
 		expect(source).toContain('brandColors');
 		expect(source).toContain('recentColors');
-		expect(source).toContain('m.image_editor_brand_colors()');
-		expect(source).toContain('m.image_editor_recent_colors()');
+		expect(source).toContain('color_picker_brand_colors');
+		expect(source).toContain('color_picker_recent_colors');
 	});
 
 	it('provides workspace brand colors to every picker in the video editor', async () => {

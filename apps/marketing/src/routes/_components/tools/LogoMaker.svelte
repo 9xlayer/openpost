@@ -9,7 +9,7 @@
 	import { Slider } from '@openpost/ui/components/slider';
 	import { Skeleton } from '@openpost/ui/components/skeleton';
 	import AppSelect from '$lib/components/app-select.svelte';
-	import ColorPicker from '$lib/components/color-picker.svelte';
+	import ColorPicker from '@openpost/ui/components/color-picker';
 	import {
 		exportSizes,
 		logoPresets,

@@ -5,7 +5,7 @@
 	import { Button } from '@openpost/ui/components/button';
 	import { Label } from '@openpost/ui/components/label';
 	import { Slider } from '@openpost/ui/components/slider';
-	import ColorPicker from '$lib/components/color-picker.svelte';
+	import ColorPicker from '@openpost/ui/components/color-picker';
 	import LocalImageDropZone from './LocalImageDropZone.svelte';
 	import {
 		canvasFromBitmap,

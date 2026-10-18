@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { Clipboard, Pipette, RotateCcw } from '@lucide/svelte';
 	import { onDestroy } from 'svelte';
-	import EditorColorMagnifier from '$lib/components/editor-color-magnifier.svelte';
+	import EditorColorMagnifier from '@openpost/ui/components/editor-color-magnifier';
 	import { Button } from '@openpost/ui/components/button';
 	import { Input } from '@openpost/ui/components/input';
 	import { Label } from '@openpost/ui/components/label';
-	import type { OpenPostEyeDropperConstructor } from '$lib/browser-capabilities';
-	import { rgbToHSL } from '$lib/color';
+	import type { OpenPostEyeDropperConstructor } from '@openpost/ui/eyedropper.js';
+	import { rgbToHSL } from '@openpost/ui/color.js';
 	import LocalImageDropZone from './LocalImageDropZone.svelte';
 	import {
 		canvasFromBitmap,

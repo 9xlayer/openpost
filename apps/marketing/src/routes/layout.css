@@ -30,12 +30,14 @@
 
 @source './**/*.{svelte,ts}';
 /*
- * Marketing compiles web-owned $lib components (svelte.config files.lib maps
- * $lib to ../web/src/lib) such as telemetry-consent, app-select and
- * color-picker. Their utilities must be scanned until those components move
- * into @openpost/ui. Verified 2026-10-18: removing this line drops 30+
- * utilities (e.g. space-y-4, max-w-[26rem], grid-cols-[1fr_4rem]) used by
- * components rendered on marketing pages. See issue #439.
+ * Marketing still compiles web-owned $lib components (svelte.config files.lib maps
+ * $lib to ../web/src/lib) such as app-select, platform-icon and progress-meter.
+ * Their utilities must be scanned until those components move into @openpost/ui.
+ * telemetry-consent, color-picker and editor-color-magnifier already live in
+ * @openpost/ui and are scanned through its own style.css; the matching web $lib
+ * paths are thin forwarding shims. Verified 2026-10-18: removing this line drops
+ * utilities (e.g. used by the AppSelect/PlatformIcon/ProgressMeter tool components)
+ * rendered on marketing pages. See issue #439.
  */
 @source '../../../web/src/lib/components';
 @source '../../../../packages/social-preview/src';
