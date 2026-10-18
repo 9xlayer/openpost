@@ -37,6 +37,16 @@ import { ProtectedIcon } from "@/components/protected-icon";
 import { api, errorMessage, type Api } from "@/lib/api/client";
 import { applyPickerValue, firstPickerStep, type PickerStep } from "@/lib/date-time-picker";
 import { reconcileDestinationSelection } from "@/lib/destination-selection";
+import {
+  destinationIssueMessages,
+  destinationNeedsAttention,
+  firstPublishBlocker,
+  readinessDebounceMs,
+  readinessRequestSignature,
+  resolveDestinationCapabilities,
+  type ReadinessSegment,
+  type ResolvedDestinationCapability,
+} from "@/lib/destination-readiness";
 import { accountHandle, formatDateTime, platformLabel } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
 import {
@@ -263,6 +273,15 @@ function Composer({
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [readinessByAccount, setReadinessByAccount] = useState<
+    Record<string, ResolvedDestinationCapability>
+  >({});
+  const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [readinessNonce, setReadinessNonce] = useState(0);
+  const readinessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readinessAbort = useRef<AbortController | null>(null);
+  const readinessSequence = useRef(0);
+  const lastReadinessSignature = useRef<string | null>(null);
   const [celebrationTrigger, setCelebrationTrigger] = useState(celebrateOnOpen ? 1 : 0);
   const [attachments, setAttachments] = useState<Attachment[]>(() => [
     ...attachmentsFromPublication(pub),
@@ -313,6 +332,130 @@ function Composer({
     accounts.data === undefined
       ? []
       : reconcileDestinationSelection(activeAccounts, accounts.data, pub.renditions).unavailable;
+  const selectableAccountIds =
+    accounts.data === undefined
+      ? [...activeAccounts]
+      : reconcileDestinationSelection(activeAccounts, accounts.data, pub.renditions).selectable;
+  const readyMediaIds = attachments
+    .filter((attachment) => attachment.mediaId)
+    .map((attachment) => attachment.mediaId as string);
+
+  function buildReadinessSegments(firstSegmentMediaIds: string[]): ReadinessSegment[] {
+    const snapshot = contentSnapshot.current;
+    const canonical = snapshot.segments?.length
+      ? snapshot.segments
+      : [{ body: snapshot.source_text ?? "", media: snapshot.media ?? [] }];
+    return canonical.map((segment, index) => ({
+      content: index === 0 ? body : (segment.body ?? ""),
+      mediaIds:
+        index === 0
+          ? firstSegmentMediaIds
+          : ((segment.media ?? []).map((media) => media.id).filter(Boolean) as string[]),
+    }));
+  }
+
+  function computeReadinessInput(firstSegmentMediaIds: string[]) {
+    const segments = buildReadinessSegments(firstSegmentMediaIds);
+    const accountIds = [...selectableAccountIds].sort();
+    return {
+      accountIds,
+      segments,
+      signature: readinessRequestSignature({ accountIds, segments }),
+    };
+  }
+
+  async function runReadinessResolve(
+    signature: string,
+    accountIds: string[],
+    segments: ReadinessSegment[],
+  ): Promise<void> {
+    const workspaceId = getWorkspaceId();
+    if (!workspaceId) return;
+    const scope = captureWorkspaceQueryScope(workspaceId);
+    const sequence = ++readinessSequence.current;
+    readinessAbort.current?.abort();
+    const controller = new AbortController();
+    readinessAbort.current = controller;
+    try {
+      const resolved = await resolveDestinationCapabilities(
+        api(),
+        { accountIds, segments },
+        controller.signal,
+      );
+      requireCurrentQueryActor(scope);
+      if (sequence !== readinessSequence.current) return;
+      if (!workspaceScopeIsCurrent(scope)) return;
+      lastReadinessSignature.current = signature;
+      setReadinessByAccount(resolved);
+      setReadinessError(null);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      if (sequence !== readinessSequence.current) return;
+      if (!workspaceScopeIsCurrent(scope)) return;
+      setReadinessError(
+        err instanceof Error ? err.message : "Could not check destination readiness",
+      );
+    }
+  }
+
+  function retryReadiness(): void {
+    lastReadinessSignature.current = null;
+    setReadinessNonce((current) => current + 1);
+  }
+
+  const readinessAccountsKey = selectableAccountIds.join(",");
+  const readinessAttachmentsKey = attachments
+    .map((attachment) => `${attachment.localId}:${attachment.mediaId ?? ""}`)
+    .join(",");
+  useEffect(() => {
+    const { accountIds, segments, signature } = computeReadinessInput(readyMediaIds);
+    if (readinessTimer.current) {
+      clearTimeout(readinessTimer.current);
+      readinessTimer.current = null;
+    }
+    if (accountIds.length === 0) {
+      readinessAbort.current?.abort();
+      lastReadinessSignature.current = signature;
+      setReadinessByAccount({});
+      setReadinessError(null);
+      return;
+    }
+    if (signature === lastReadinessSignature.current) return;
+    readinessTimer.current = setTimeout(() => {
+      readinessTimer.current = null;
+      void runReadinessResolve(signature, accountIds, segments);
+    }, readinessDebounceMs());
+    return () => {
+      if (readinessTimer.current) {
+        clearTimeout(readinessTimer.current);
+        readinessTimer.current = null;
+      }
+      readinessAbort.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body, readinessAccountsKey, readinessAttachmentsKey, readinessNonce, pub]);
+
+  const attentionCount = selectableAccountIds.filter((accountId) =>
+    readinessByAccount[accountId]
+      ? destinationNeedsAttention(readinessByAccount[accountId])
+      : false,
+  ).length;
+
+  async function resolvePublishBlocker(
+    scope: EditorMutationScope,
+    firstSegmentMediaIds: string[],
+  ): Promise<string | null> {
+    const { accountIds, segments } = computeReadinessInput(firstSegmentMediaIds);
+    if (accountIds.length === 0) return null;
+    try {
+      const resolved = await resolveDestinationCapabilities(api(), { accountIds, segments });
+      requireCurrentQueryActor(scope);
+      if (!workspaceScopeIsCurrent(scope)) return null;
+      return firstPublishBlocker(resolved, accountIds);
+    } catch {
+      return null;
+    }
+  }
 
   function markEditorDirty(): void {
     editorDirty.current = true;
@@ -410,7 +553,7 @@ function Composer({
     scope: EditorMutationScope,
     requestApi: Api,
     scheduleOverride?: Date,
-  ): Promise<number> {
+  ): Promise<{ nextRevision: number; mediaIds: string[] }> {
     requireCurrentQueryActor(scope);
     const media = await resolveAttachments(scope, requestApi);
     requireCurrentQueryActor(scope);
@@ -500,7 +643,7 @@ function Composer({
     }
 
     if (workspaceScopeIsCurrent(scope)) setRevision(nextRevision);
-    return nextRevision;
+    return { nextRevision, mediaIds: media.map((item) => item.mediaId) };
   }
 
   function handleError(
@@ -523,9 +666,10 @@ function Composer({
   }
 
   const saveAndClose = useMutation({
-    mutationFn: (scope: EditorMutationScope) => {
+    mutationFn: async (scope: EditorMutationScope) => {
       requireCurrentQuerySession(scope);
-      return persist(scope, api());
+      const { nextRevision } = await persist(scope, api());
+      return nextRevision;
     },
     onSuccess: (_, scope) => {
       invalidate(scope, {
@@ -546,7 +690,9 @@ function Composer({
       requireCurrentQuerySession(scope);
       if (!scheduledAt) throw new Error("Pick a time first");
       const requestApi = api();
-      const nextRevision = await persist(scope, requestApi);
+      const { nextRevision, mediaIds } = await persist(scope, requestApi);
+      const blocker = await resolvePublishBlocker(scope, mediaIds);
+      if (blocker) throw new Error(blocker);
       nativeTelemetry.capture("publication schedule requested", {
         account_count: pub.renditions?.length ?? 0,
         is_thread: (pub.segments?.length ?? 0) > 1,
@@ -582,7 +728,9 @@ function Composer({
     mutationFn: async (scope: EditorMutationScope) => {
       requireCurrentQuerySession(scope);
       const requestApi = api();
-      const nextRevision = await persist(scope, requestApi);
+      const { nextRevision, mediaIds } = await persist(scope, requestApi);
+      const blocker = await resolvePublishBlocker(scope, mediaIds);
+      if (blocker) throw new Error(blocker);
       nativeTelemetry.capture("publication publish requested", {
         account_count: pub.renditions?.length ?? 0,
         is_thread: (pub.segments?.length ?? 0) > 1,
@@ -671,7 +819,10 @@ function Composer({
         markEditorDirty();
         setScheduledAt(slot);
       }
-      const nextRevision = await persist(scope, requestApi, slot);
+      const persisted = await persist(scope, requestApi, slot);
+      const blocker = await resolvePublishBlocker(scope, persisted.mediaIds);
+      if (blocker) throw new Error(blocker);
+      const nextRevision = persisted.nextRevision;
       const scheduled = await requestApi.POST("/publications/{id}/schedule", {
         params: { path: { id: scope.publicationId } },
         body: { expected_revision: nextRevision },
@@ -1117,7 +1268,12 @@ function Composer({
                   Social Set
                 </Text>
                 <BodyText numberOfLines={1}>
-                  {selectedSetLabel(socialSets.data ?? [], activeSocialSetId, activeAccounts.size)}
+                  {selectedSetLabel(
+                    socialSets.data ?? [],
+                    activeSocialSetId,
+                    activeAccounts.size,
+                    attentionCount,
+                  )}
                 </BodyText>
               </View>
               <ThemeIcon role="disclosure" size={20} tintColor={colors.onSurfaceVariant} />
@@ -1268,6 +1424,13 @@ function Composer({
           (accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused") ? (
             <QueryNotice message="You are offline. Current destinations remain visible." offline />
           ) : null}
+          {readinessError ? (
+            <QueryNotice
+              message="Could not check destination readiness. You can keep editing."
+              retry={retryReadiness}
+              offline={accounts.fetchStatus === "paused" || socialSets.fetchStatus === "paused"}
+            />
+          ) : null}
           {accountsLoadedEmpty &&
           unavailableDestinations.length === 0 &&
           !destinationCatalogFailed ? (
@@ -1328,6 +1491,17 @@ function Composer({
                           )}
                         </Text>
                         <BodyText>{platformLabel(account.platform)}</BodyText>
+                        {selected &&
+                        readinessByAccount[account.id] &&
+                        destinationNeedsAttention(readinessByAccount[account.id]) ? (
+                          <BodyText
+                            accessibilityRole="alert"
+                            numberOfLines={2}
+                            style={{ color: colors.error }}
+                          >
+                            {readinessSummary(readinessByAccount[account.id])}
+                          </BodyText>
+                        ) : null}
                       </View>
                       {selected ? (
                         <Button
@@ -1549,10 +1723,21 @@ function selectedSetLabel(
   sets: { id: string; name?: string | null }[],
   selectedSetId: string,
   accountCount: number,
+  attentionCount = 0,
 ): string {
   const selectedSet = sets.find((set) => set.id === selectedSetId);
-  if (selectedSet?.name) return `${selectedSet.name} · ${accountCount} destinations`;
-  return `${accountCount} ${accountCount === 1 ? "destination" : "destinations"}`;
+  const base = selectedSet?.name
+    ? `${selectedSet.name} · ${accountCount} destinations`
+    : `${accountCount} ${accountCount === 1 ? "destination" : "destinations"}`;
+  if (attentionCount <= 0) return base;
+  return `${base} · ${attentionCount} need${attentionCount === 1 ? "s" : ""} attention`;
+}
+
+function readinessSummary(capability: ResolvedDestinationCapability): string {
+  const messages = destinationIssueMessages(capability);
+  if (messages.length === 0) return "Needs attention";
+  const first = messages[0];
+  return messages.length > 1 ? `${first} (+${messages.length - 1} more)` : first;
 }
 
 function publicationActivity(status: string): PublicationActivity {
