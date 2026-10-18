@@ -24,6 +24,12 @@
       "bun": "./src/paint.ts",
       "react-native": "./src/paint.ts",
       "default": "./dist/paint.js"
+    },
+    "./theme-validation": {
+      "types": "./src/theme-validation.ts",
+      "bun": "./src/theme-validation.ts",
+      "react-native": "./src/theme-validation.ts",
+      "default": "./dist/theme-validation.js"
     }
   },
   "scripts": {

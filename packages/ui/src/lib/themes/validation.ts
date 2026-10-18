@@ -1,8 +1,16 @@
+import {
+  MINIMUM_FOCUS_CONTRAST,
+  MINIMUM_SEMANTIC_ACTION_DISTANCE,
+  MINIMUM_STATUS_COLOR_DISTANCE,
+  MINIMUM_TEXT_CONTRAST,
+  compositedContrastRatio,
+  oklabDistance,
+} from "@openpost/dither/theme-validation";
 import { DITHER_BUTTON_MIN_CONTRAST, DITHER_BUTTON_MAX_CONTRAST } from "@openpost/dither";
+import { THEME_DITHER_BUTTON_OPACITY } from "./contracts.js";
 import { convert, isColor } from "@asamuzakjp/css-color";
 import {
   THEME_COLOR_TOKEN_KEYS,
-  THEME_DITHER_BUTTON_OPACITY,
   THEME_MOTION_RECIPE_KEYS,
   THEME_REDUCED_MOTION_OPTIONS,
   THEME_TYPOGRAPHY_ROLE_KEYS,
@@ -20,10 +28,6 @@ const FONT_FAMILY_PATTERN = /^[a-zA-Z0-9 _.,:'-]+$/;
 const LINE_HEIGHT_PATTERN = /^[0-9]+(?:\.[0-9]+)?$/;
 const NAMED_EASINGS = new Set(["linear", "ease", "ease-in", "ease-out", "ease-in-out"]);
 const STATUS_COLOR_KEYS = ["danger", "success", "warning", "info"] as const;
-const MINIMUM_STATUS_COLOR_DISTANCE = 0.04;
-const MINIMUM_SEMANTIC_ACTION_DISTANCE = 0.014;
-const MINIMUM_TEXT_CONTRAST = 4.5;
-const MINIMUM_FOCUS_CONTRAST = 3;
 
 interface ParsedCssLength {
   value: number;
@@ -356,32 +360,6 @@ function toRgbaColor(value: string): RgbaColor | undefined {
   return validated.rgba;
 }
 
-function compositeColor(foreground: RgbaColor, background: RgbaColor): RgbaColor {
-  const alpha = foreground.alpha + background.alpha * (1 - foreground.alpha);
-  if (alpha === 0) return { red: 0, green: 0, blue: 0, alpha: 0 };
-  return {
-    red:
-      (foreground.red * foreground.alpha +
-        background.red * background.alpha * (1 - foreground.alpha)) /
-      alpha,
-    green:
-      (foreground.green * foreground.alpha +
-        background.green * background.alpha * (1 - foreground.alpha)) /
-      alpha,
-    blue:
-      (foreground.blue * foreground.alpha +
-        background.blue * background.alpha * (1 - foreground.alpha)) /
-      alpha,
-    alpha,
-  };
-}
-
-function relativeLuminance(color: RgbaColor): number {
-  const linear = (channel: number) =>
-    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue);
-}
-
 export function themeColorContrastRatio(
   foreground: string,
   background: string,
@@ -391,20 +369,7 @@ export function themeColorContrastRatio(
   const backgroundColor = toRgbaColor(background);
   const baseColor = toRgbaColor(base);
   if (!foregroundColor || !backgroundColor || !baseColor) return undefined;
-  const opaqueBase = compositeColor(baseColor, {
-    red: 1,
-    green: 1,
-    blue: 1,
-    alpha: 1,
-  });
-  const compositedBackground = compositeColor(backgroundColor, opaqueBase);
-  const compositedForeground = compositeColor(foregroundColor, compositedBackground);
-  const foregroundLuminance = relativeLuminance(compositedForeground);
-  const backgroundLuminance = relativeLuminance(compositedBackground);
-  return (
-    (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
-    (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
-  );
+  return compositedContrastRatio(foregroundColor, backgroundColor, baseColor);
 }
 
 function hasReadableColorPairs(colors: ThemeColorTokens): boolean {
@@ -502,30 +467,8 @@ function perceptualColorDistance(
   const firstColor = toRgbaColor(first);
   const secondColor = toRgbaColor(second);
   const underlayColor = toRgbaColor(underlay);
-  if (!firstColor || !secondColor || !underlayColor || underlayColor.alpha !== 1) return undefined;
-  const firstLab = toOklab(compositeColor(firstColor, underlayColor));
-  const secondLab = toOklab(compositeColor(secondColor, underlayColor));
-  return Math.hypot(
-    firstLab[0] - secondLab[0],
-    firstLab[1] - secondLab[1],
-    firstLab[2] - secondLab[2],
-  );
-}
-
-function toOklab(color: RgbaColor): readonly [number, number, number] {
-  const linear = (channel: number) =>
-    channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  const red = linear(color.red);
-  const green = linear(color.green);
-  const blue = linear(color.blue);
-  const l = Math.cbrt(0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue);
-  const m = Math.cbrt(0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue);
-  const s = Math.cbrt(0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue);
-  return [
-    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
-  ];
+  if (!firstColor || !secondColor || !underlayColor) return undefined;
+  return oklabDistance(firstColor, secondColor, underlayColor);
 }
 
 function hasDistinctDestructiveAction(colors: ThemeColorTokens): boolean {
@@ -580,16 +523,20 @@ function hasBalancedDitherActions(manifest: ThemeSchemeManifest): boolean {
   for (const intent of ["actionFocal", "actionPrimary", "actionOrdinary"] as const) {
     const ink = colors[`${intent}Ink`];
     for (const state of [intent, `${intent}Hover`, `${intent}Active`] as const) {
+      // Keep the css-color color-mix evaluation: its interpolation of
+      // perceptual color functions differs subtly from a naive composite, and
+      // the shared core owns the ratios, not the parsing or mixing.
       const texture = `color-mix(in srgb, ${ink} ${THEME_DITHER_BUTTON_OPACITY * 100}%, ${colors[state]})`;
+      const inkColor = toRgbaColor(ink);
+      const fillColor = toRgbaColor(colors[state]);
+      const textureColor = toRgbaColor(texture);
       for (const underlay of [colors.canvas, colors.surface]) {
-        const ratio = themeColorContrastRatio(ink, texture, underlay);
-        if (ratio === undefined || ratio < MINIMUM_TEXT_CONTRAST) return false;
-        const textureRatio = themeColorContrastRatio(colors[state], texture, underlay);
-        if (
-          textureRatio === undefined ||
-          textureRatio < DITHER_BUTTON_MIN_CONTRAST ||
-          textureRatio > DITHER_BUTTON_MAX_CONTRAST
-        )
+        const underlayColor = toRgbaColor(underlay);
+        if (!inkColor || !fillColor || !textureColor || !underlayColor) return false;
+        if (compositedContrastRatio(inkColor, textureColor, underlayColor) < MINIMUM_TEXT_CONTRAST)
+          return false;
+        const textureRatio = compositedContrastRatio(fillColor, textureColor, underlayColor);
+        if (textureRatio < DITHER_BUTTON_MIN_CONTRAST || textureRatio > DITHER_BUTTON_MAX_CONTRAST)
           return false;
       }
     }

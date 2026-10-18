@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  MINIMUM_TEXT_CONTRAST,
+  contrastRatio as sharedContrastRatio,
+  type ThemeValidationRgba,
+} from "@openpost/dither/theme-validation";
+
+import {
   BUILTIN_THEME_FAMILIES,
   BUILTIN_THEME_IDS,
   builtinThemeForScheme,
@@ -38,16 +44,16 @@ describe("native built-in themes", () => {
         const manifest = family.manifests[scheme]!;
         expect(
           contrastRatio(manifest.colors.onSurface, manifest.colors.background),
-        ).toBeGreaterThanOrEqual(4.5);
+        ).toBeGreaterThanOrEqual(MINIMUM_TEXT_CONTRAST);
         expect(
           contrastRatio(manifest.colors.onSurfaceVariant, manifest.colors.background),
-        ).toBeGreaterThanOrEqual(4.5);
+        ).toBeGreaterThanOrEqual(MINIMUM_TEXT_CONTRAST);
         expect(
           contrastRatio(manifest.actions.primary.content, manifest.actions.primary.container),
-        ).toBeGreaterThanOrEqual(4.5);
+        ).toBeGreaterThanOrEqual(MINIMUM_TEXT_CONTRAST);
         expect(
           contrastRatio(manifest.actions.focal.content, manifest.actions.focal.container),
-        ).toBeGreaterThanOrEqual(4.5);
+        ).toBeGreaterThanOrEqual(MINIMUM_TEXT_CONTRAST);
       }
     }
   });
@@ -167,15 +173,13 @@ describe("native built-in themes", () => {
 });
 
 function contrastRatio(foreground: string, background: string): number {
-  const [lighter, darker] = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
-  return (lighter + 0.05) / (darker + 0.05);
+  return sharedContrastRatio(parseHexColor(foreground), parseHexColor(background));
 }
 
-function luminance(color: string): number {
+function parseHexColor(color: string): ThemeValidationRgba {
   const value = color.slice(1);
-  const channels = [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16));
-  return channels
-    .map((channel) => channel / 255)
-    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4))
-    .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const channels = [0, 2, 4].map(
+    (offset) => Number.parseInt(value.slice(offset, offset + 2), 16) / 255,
+  );
+  return { red: channels[0]!, green: channels[1]!, blue: channels[2]!, alpha: 1 };
 }

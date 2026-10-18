@@ -1,8 +1,16 @@
 import {
-  DITHER_BUTTON_MIN_CONTRAST,
   DITHER_BUTTON_MAX_CONTRAST,
+  DITHER_BUTTON_MIN_CONTRAST,
   DITHER_BUTTON_OPACITY,
-} from "@openpost/dither/paint";
+  MINIMUM_FOCUS_CONTRAST,
+  MINIMUM_SEMANTIC_ACTION_DISTANCE,
+  MINIMUM_TEXT_CONTRAST,
+  compositeValidationColor,
+  contrastRatio as sharedContrastRatio,
+  oklabDistance,
+  toValidationOklab,
+  type ThemeValidationRgba,
+} from "@openpost/dither/theme-validation";
 import {
   ACTION_INTENTS,
   NATIVE_CANVAS_TREATMENTS,
@@ -75,10 +83,6 @@ const TYPOGRAPHY_KEYS = [
 ] as const;
 
 type Rgba = readonly [red: number, green: number, blue: number, alpha: number];
-
-const MINIMUM_TEXT_CONTRAST = 4.5;
-const MINIMUM_FOCUS_CONTRAST = 3;
-const MINIMUM_SEMANTIC_ACTION_DISTANCE = 0.014;
 
 export function validateNativeThemeManifest(
   value: NativeThemeManifest | null | undefined,
@@ -246,8 +250,8 @@ export function isReadableOnThemeSurfaces(
   surface: string,
 ): boolean {
   return (
-    hasReadableContrast(foreground, background, 4.5) &&
-    hasReadableContrast(foreground, surface, 4.5)
+    hasReadableContrast(foreground, background, MINIMUM_TEXT_CONTRAST) &&
+    hasReadableContrast(foreground, surface, MINIMUM_TEXT_CONTRAST)
   );
 }
 
@@ -359,42 +363,32 @@ function perceptualColorDistanceOn(first: string, second: string, underlay: stri
   const secondColor = parseNativeColor(second);
   const underlayColor = parseNativeColor(underlay);
   if (!firstColor || !secondColor || !underlayColor || underlayColor[3] !== 1) return null;
-  const firstLab = toOklab(compositeColor(firstColor, underlayColor));
-  const secondLab = toOklab(compositeColor(secondColor, underlayColor));
-  return Math.hypot(
-    firstLab[0] - secondLab[0],
-    firstLab[1] - secondLab[1],
-    firstLab[2] - secondLab[2],
+  return (
+    oklabDistance(
+      toSharedColor(firstColor),
+      toSharedColor(secondColor),
+      toSharedColor(underlayColor),
+    ) ?? null
   );
 }
 
+/** Native tuples run 0-255; the shared core runs 0-1. Scale, never re-derive. */
+function toSharedColor([red, green, blue, alpha]: Rgba): ThemeValidationRgba {
+  return { red: red / 255, green: green / 255, blue: blue / 255, alpha };
+}
+
+function fromSharedColor(color: ThemeValidationRgba): Rgba {
+  return [color.red * 255, color.green * 255, color.blue * 255, color.alpha];
+}
+
 function compositeColor(foreground: Rgba, background: Rgba): Rgba {
-  const alpha = foreground[3] + background[3] * (1 - foreground[3]);
-  if (alpha === 0) return [0, 0, 0, 0];
-  return [
-    (foreground[0] * foreground[3] + background[0] * background[3] * (1 - foreground[3])) / alpha,
-    (foreground[1] * foreground[3] + background[1] * background[3] * (1 - foreground[3])) / alpha,
-    (foreground[2] * foreground[3] + background[2] * background[3] * (1 - foreground[3])) / alpha,
-    alpha,
-  ];
+  return fromSharedColor(
+    compositeValidationColor(toSharedColor(foreground), toSharedColor(background)),
+  );
 }
 
 function toOklab(color: Rgba): readonly [number, number, number] {
-  const linear = (channel: number) => {
-    const normalized = channel / 255;
-    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-  };
-  const red = linear(color[0]);
-  const green = linear(color[1]);
-  const blue = linear(color[2]);
-  const l = Math.cbrt(0.4122214708 * red + 0.5363325363 * green + 0.0514459929 * blue);
-  const m = Math.cbrt(0.2119034982 * red + 0.6806995451 * green + 0.1073969566 * blue);
-  const s = Math.cbrt(0.0883024619 * red + 0.2817188376 * green + 0.6299787005 * blue);
-  return [
-    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
-  ];
+  return toValidationOklab(toSharedColor(color));
 }
 
 function validTextRole(value: NativeTextRole | null | undefined): boolean {
@@ -460,20 +454,7 @@ function hasReadableContrast(foreground: string, background: string, minimum: nu
 }
 
 function contrastRatio(foreground: Rgba, background: Rgba): number {
-  const [lighter, darker] = [luminance(foreground), luminance(background)].sort(
-    (left, right) => right - left,
-  );
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function luminance([red, green, blue]: Rgba): number {
-  const channels = [red, green, blue]
-    .map((channel) => channel / 255)
-    .map((channel) => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
-  return channels.reduce(
-    (total, channel, index) => total + channel * [0.2126, 0.7152, 0.0722][index]!,
-    0,
-  );
+  return sharedContrastRatio(toSharedColor(foreground), toSharedColor(background));
 }
 
 function boundedText(value: unknown, maximumCodePoints: number): value is string {
@@ -560,7 +541,8 @@ export function nativeDitherActionMaterial(
     opacity: best.opacity,
     content: best.content,
     focus:
-      contrastRatio(resolvedFocus, endpoint) >= 3 && contrastRatio(resolvedFocus, background) >= 3
+      contrastRatio(resolvedFocus, endpoint) >= MINIMUM_FOCUS_CONTRAST &&
+      contrastRatio(resolvedFocus, background) >= MINIMUM_FOCUS_CONTRAST
         ? focus
         : best.content,
   };
