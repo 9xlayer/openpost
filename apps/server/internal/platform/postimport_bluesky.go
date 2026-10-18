@@ -130,14 +130,6 @@ func blueskyNativePostProfile(handle, did string) string {
 	return handle
 }
 
-func blueskyNativePostURL(profile, uri string) string {
-	parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(uri), "at://"), "/")
-	if len(parts) != 3 || parts[1] != "app.bsky.feed.post" || parts[2] == "" {
-		return ""
-	}
-	return "https://bsky.app/profile/" + profile + "/post/" + parts[2]
-}
-
 func parseNativePostTime(primary, fallback string) time.Time {
 	for _, candidate := range []string{strings.TrimSpace(primary), strings.TrimSpace(fallback)} {
 		if candidate == "" {

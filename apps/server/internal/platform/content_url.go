@@ -29,7 +29,7 @@ func DeterministicContentURL(provider, _ string, username, instanceURL, external
 	switch provider {
 	case "x":
 		return xContentURL(externalID)
-	case "mastodon":
+	case "mastodon", "pixelfed":
 		return mastodonContentURL(username, instanceURL, externalID)
 	case "bluesky":
 		return blueskyContentURL(externalID)
@@ -45,6 +45,12 @@ func DeterministicContentURL(provider, _ string, username, instanceURL, external
 		return tiktokContentURL(username, externalID, profile)
 	case "youtube":
 		return youtubeContentURL(externalID)
+	case "peertube":
+		return peertubeContentURL(instanceURL, externalID)
+	case "lemmy", "piefed":
+		return communityContentURL(instanceURL, externalID)
+	case "facebook":
+		return facebookContentURL(externalID)
 	}
 	return ""
 }
@@ -57,6 +63,11 @@ func xContentURL(externalID string) string {
 }
 
 func mastodonContentURL(username, instanceURL, externalID string) string {
+	// Stored handles are sometimes a full "user@host" Fediverse address;
+	// Mastodon profile paths use only the local part.
+	if at := strings.Index(username, "@"); at >= 0 {
+		username = username[:at]
+	}
 	base, err := url.Parse(strings.TrimSpace(instanceURL))
 	if err != nil || base.Scheme != "https" || base.Host == "" || username == "" ||
 		!safeContentID.MatchString(externalID) {
@@ -104,6 +115,53 @@ func youtubeContentURL(externalID string) string {
 		return ""
 	}
 	return "https://www.youtube.com/watch?v=" + url.QueryEscape(externalID)
+}
+
+func peertubeContentURL(instanceURL, externalID string) string {
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" || !safeContentID.MatchString(externalID) {
+		return ""
+	}
+	base, err := url.Parse(strings.TrimSpace(instanceURL))
+	if err != nil || base.Scheme != "https" || base.Host == "" {
+		return ""
+	}
+	base.Path = strings.TrimRight(base.Path, "/") + "/videos/watch/" + externalID
+	base.RawQuery = ""
+	base.Fragment = ""
+	return base.String()
+}
+
+func communityContentURL(instanceURL, externalID string) string {
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" || !safeContentID.MatchString(externalID) {
+		return ""
+	}
+	base, err := url.Parse(strings.TrimSpace(instanceURL))
+	if err != nil || base.Scheme != "https" || base.Host == "" {
+		return ""
+	}
+	base.Path = strings.TrimRight(base.Path, "/") + "/post/" + externalID
+	base.RawQuery = ""
+	base.Fragment = ""
+	return base.String()
+}
+
+func facebookContentURL(externalID string) string {
+	if !safeContentID.MatchString(externalID) {
+		return ""
+	}
+	return "https://www.facebook.com/" + externalID
+}
+
+// blueskyNativePostURL names the profile link for an imported native post:
+// the verified handle when Bluesky vouches for it, otherwise the DID.
+func blueskyNativePostURL(profile, uri string) string {
+	parts := strings.Split(strings.TrimPrefix(strings.TrimSpace(uri), "at://"), "/")
+	if len(parts) != 3 || parts[1] != "app.bsky.feed.post" || parts[2] == "" {
+		return ""
+	}
+	return "https://bsky.app/profile/" + profile + "/post/" + parts[2]
 }
 
 func IsSafeContentURL(value string) bool {

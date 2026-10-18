@@ -474,7 +474,13 @@ func (p *PeerTubeAdapter) videoURL(video peertubeVideo, uuid string) string {
 		return p.instanceURL + "/w/" + short
 	}
 	if id := strings.TrimSpace(video.UUID); id != "" {
+		if canonical := peertubeContentURL(p.instanceURL, id); canonical != "" {
+			return canonical
+		}
 		return p.instanceURL + "/videos/watch/" + id
+	}
+	if canonical := peertubeContentURL(p.instanceURL, uuid); canonical != "" {
+		return canonical
 	}
 	return p.instanceURL + "/videos/watch/" + uuid
 }

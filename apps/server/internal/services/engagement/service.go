@@ -705,7 +705,7 @@ func (s *Service) resolveAndStoreContentURL(
 	account models.SocialAccount,
 	rendition *models.Rendition,
 ) {
-	if isSafeProviderPostURL(rendition.ExternalURL) {
+	if platform.IsSafeContentURL(rendition.ExternalURL) {
 		return
 	}
 	resolver, ok := commenter.(platform.ContentURLResolver)
@@ -713,7 +713,7 @@ func (s *Service) resolveAndStoreContentURL(
 		return
 	}
 	resolved, err := resolver.ResolveContentURL(ctx, accessToken, account.AccountID, rendition.ExternalID)
-	if err != nil || !isSafeProviderPostURL(resolved) {
+	if err != nil || !platform.IsSafeContentURL(resolved) {
 		return
 	}
 	if _, err := s.db.NewUpdate().
@@ -1408,88 +1408,17 @@ func (s *Service) loadEngagementHydrationContext(
 }
 
 func providerPostURL(rendition models.Rendition, account models.SocialAccount) string {
-	if isSafeProviderPostURL(rendition.ExternalURL) {
+	if platform.IsSafeContentURL(rendition.ExternalURL) {
 		return rendition.ExternalURL
 	}
-	externalID := strings.TrimSpace(rendition.ExternalID)
-	if externalID == "" {
-		return ""
-	}
-	username := strings.TrimPrefix(strings.TrimSpace(account.AccountUsername), "@")
-	switch rendition.Platform {
-	case "x":
-		return xPostURL(username, externalID)
-	case "mastodon", "pixelfed":
-		return mastodonPostURL(account.InstanceURL, username, externalID)
-	case "peertube":
-		return peertubeWatchURL(account.InstanceURL, externalID)
-	case "lemmy", "piefed":
-		return communityPostURL(account.InstanceURL, externalID)
-	case "bluesky":
-		return blueskyPostURL(externalID)
-	case "linkedin":
-		return linkedinPostURL(externalID)
-	case "facebook":
-		return "https://www.facebook.com/" + url.PathEscape(externalID)
-	case "youtube":
-		return "https://www.youtube.com/watch?v=" + url.QueryEscape(externalID)
-	}
-	return ""
-}
-
-func xPostURL(username, externalID string) string {
-	if username == "" {
-		return ""
-	}
-	return "https://x.com/" + url.PathEscape(username) + "/status/" + url.PathEscape(externalID)
-}
-
-func peertubeWatchURL(instanceURL, externalID string) string {
-	instanceURL = strings.TrimRight(strings.TrimSpace(instanceURL), "/")
-	externalID = strings.TrimSpace(externalID)
-	if !strings.HasPrefix(instanceURL, "https://") || externalID == "" {
-		return ""
-	}
-	return instanceURL + "/videos/watch/" + url.PathEscape(externalID)
-}
-
-func communityPostURL(instanceURL, externalID string) string {
-	instanceURL = strings.TrimRight(strings.TrimSpace(instanceURL), "/")
-	externalID = strings.TrimSpace(externalID)
-	if !strings.HasPrefix(instanceURL, "https://") || externalID == "" {
-		return ""
-	}
-	return instanceURL + "/post/" + url.PathEscape(externalID)
-}
-
-func mastodonPostURL(instanceURL, username, externalID string) string {
-	instanceURL = strings.TrimRight(strings.TrimSpace(instanceURL), "/")
-	if at := strings.Index(username, "@"); at >= 0 {
-		username = username[:at]
-	}
-	if !strings.HasPrefix(instanceURL, "https://") || username == "" {
-		return ""
-	}
-	return instanceURL + "/@" + url.PathEscape(username) + "/" + url.PathEscape(externalID)
-}
-
-func blueskyPostURL(externalID string) string {
-	uri := blueskyPostURI(externalID)
-	if uri == "" {
-		return ""
-	}
-	parts := strings.Split(strings.TrimPrefix(uri, "at://"), "/")
-	if len(parts) < 3 || parts[0] == "" || parts[2] == "" {
-		return ""
-	}
-	return "https://bsky.app/profile/" + url.PathEscape(parts[0]) + "/post/" + url.PathEscape(parts[2])
-}
-
-func linkedinPostURL(externalID string) string {
-	if !strings.HasPrefix(externalID, "urn:li:") {
-		return ""
-	}
-	return "https://www.linkedin.com/feed/update/" + externalID + "/"
+	return platform.DeterministicContentURL(
+		rendition.Platform,
+		account.AccountID,
+		account.AccountUsername,
+		account.InstanceURL,
+		rendition.ExternalID,
+		rendition.OutputProfile,
+	)
 }
 
 // resolveRenditionAccount preserves comment collection for renditions created
@@ -1527,24 +1456,6 @@ func (s *Service) resolveRenditionAccount(ctx context.Context, accountID string)
 		return models.SocialAccount{}, fmt.Errorf("load replacement rendition account: %w", err)
 	}
 	return replacement, nil
-}
-
-func blueskyPostURI(externalID string) string {
-	if strings.HasPrefix(externalID, "at://") {
-		return externalID
-	}
-	var payload struct {
-		URI string `json:"uri"`
-	}
-	if json.Unmarshal([]byte(externalID), &payload) == nil {
-		return strings.TrimSpace(payload.URI)
-	}
-	return ""
-}
-
-func isSafeProviderPostURL(value string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(value))
-	return err == nil && parsed.Scheme == "https" && parsed.Host != ""
 }
 
 func engagementFilters(query *bun.SelectQuery, platformName, accountID, publicationID string, unreadOnly, archived bool) *bun.SelectQuery {
