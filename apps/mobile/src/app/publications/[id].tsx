@@ -1,6 +1,6 @@
 import { PublicationReviews } from "@/components/publication-reviews";
 import { NativeText as Text } from "@/components/native-text";
-import { PlatformIcon } from "@/components/platform-icon";
+import { AccountAvatar } from "@/components/account-avatar";
 import { MediaImage } from "@/components/media-image";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -296,7 +296,11 @@ export default function PostScreen() {
                   onPress={() => setExpandedDestination(expanded ? null : rendition.id)}
                   style={[styles.renditionRow, { minHeight: 52 }]}
                 >
-                  <PlatformIcon platform={rendition.platform} />
+                  <AccountAvatar
+                    name={label}
+                    platform={rendition.platform}
+                    avatarUrl={account?.account_avatar_url}
+                  />
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text
                       numberOfLines={2}

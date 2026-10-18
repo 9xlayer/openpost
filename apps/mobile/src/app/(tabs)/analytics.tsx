@@ -12,6 +12,7 @@ import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } fro
 import { SvgXml } from "react-native-svg";
 
 import { BottomDrawer } from "@/components/bottom-drawer";
+import { AccountAvatar } from "@/components/account-avatar";
 import { trendBars } from "@/lib/analytics-chart";
 import { DitherPanel } from "@/components/dither-panel";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -271,7 +272,11 @@ function AnalyticsDashboard() {
                     }}
                   >
                     <View style={styles.accountRow}>
-                      <PlatformIcon platform={account.platform} />
+                      <AccountAvatar
+                        name={account.username}
+                        platform={account.platform}
+                        avatarUrl={account.avatar_url}
+                      />
                       <View style={{ flex: 1 }}>
                         <ContentTitle>
                           {accountHandle(
@@ -325,18 +330,49 @@ function AnalyticsDashboard() {
               setAccountPickerOpen(false);
             }}
           />
-          {accounts.data?.map((account) => (
-            <Button
-              key={account.id}
-              title={`${platformLabel(account.platform)} · ${accountHandle(account.account_username, platformLabel(account.platform), account.platform, account.alias)}`}
-              intent={accountId === account.id ? "primary" : "ordinary"}
-              accessibilityState={{ selected: accountId === account.id }}
-              onPress={() => {
-                setAccountId(account.id);
-                setAccountPickerOpen(false);
-              }}
-            />
-          ))}
+          {accounts.data?.map((account) => {
+            const selected = accountId === account.id;
+            const label = `${platformLabel(account.platform)} · ${accountHandle(account.account_username, platformLabel(account.platform), account.platform, account.alias)}`;
+            return (
+              <DitherPressable
+                key={account.id}
+                radius={shape.medium}
+                focusColor={colors.focus}
+                accessibilityRole="button"
+                accessibilityLabel={selected ? `${label}, selected` : label}
+                accessibilityState={{ selected }}
+                accessibilityHint="Filter analytics by account"
+                onPress={() => {
+                  setAccountId(account.id);
+                  setAccountPickerOpen(false);
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  minHeight: 48,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderWidth: 1,
+                  borderColor: selected ? colors.primary : colors.outlineVariant,
+                  borderRadius: shape.medium,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <AccountAvatar
+                  name={
+                    account.alias || account.account_username || platformLabel(account.platform)
+                  }
+                  platform={account.platform}
+                  avatarUrl={account.account_avatar_url}
+                  size={32}
+                />
+                <Text style={[typography.bodyLarge, { flex: 1, color: colors.onSurface }]}>
+                  {label}
+                </Text>
+              </DitherPressable>
+            );
+          })}
         </BottomDrawer>
       ) : null}
     </Screen>

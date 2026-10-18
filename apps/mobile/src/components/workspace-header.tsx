@@ -3,6 +3,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { Brand } from "@/components/brand";
+import { WorkspaceAvatar } from "@/components/account-avatar";
 import { ThemeIcon } from "@/components/theme-icon";
 import { WorkspaceMenu } from "@/components/workspace-menu";
 import { useWorkspaces, useWorkspaceId } from "@/lib/queries";
@@ -13,7 +14,8 @@ export function WorkspaceHeader({ children }: { children?: React.ReactNode }) {
   const workspaces = useWorkspaces();
   const workspaceId = useWorkspaceId();
   const [menuOpen, setMenuOpen] = useState(false);
-  const name = workspaces.data?.find((workspace) => workspace.id === workspaceId)?.name;
+  const workspace = workspaces.data?.find((candidate) => candidate.id === workspaceId);
+  const name = workspace?.name;
   return (
     <View
       style={{
@@ -39,6 +41,12 @@ export function WorkspaceHeader({ children }: { children?: React.ReactNode }) {
           opacity: pressed ? 0.6 : 1,
         })}
       >
+        <WorkspaceAvatar
+          name={workspace?.name ?? ""}
+          avatarUrl={workspace?.avatar_url}
+          color={workspace?.color}
+          size={28}
+        />
         <Brand compact />
         <ThemeIcon role="disclosure" size={14} tintColor={colors.onSurfaceVariant} />
       </DitherPressable>

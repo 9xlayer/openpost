@@ -14,6 +14,7 @@ import {
   SectionHeader,
 } from "@/components/ui";
 import { Brand } from "@/components/brand";
+import { WorkspaceAvatar } from "@/components/account-avatar";
 import { DelayedQueryPlaceholder, InitialQueryError, QueryNotice } from "@/components/query-state";
 import { getWorkspaceId } from "@/lib/api/token-store";
 import { destinationState, workspaceEmptyState } from "@/lib/first-use";
@@ -181,8 +182,14 @@ export default function WorkspaceScreen() {
                     pressed && { opacity: 0.5 },
                   ]}
                 >
+                  <WorkspaceAvatar
+                    name={workspace.name}
+                    avatarUrl={workspace.avatar_url}
+                    color={workspace.color}
+                    size={32}
+                  />
                   <Text
-                    style={[typography.bodyLarge, { color: colors.onSurface, flexShrink: 1 }]}
+                    style={[typography.bodyLarge, { color: colors.onSurface, flex: 1 }]}
                     numberOfLines={2}
                   >
                     {workspace.name}
@@ -233,6 +240,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    gap: 12,
     minHeight: 48,
     paddingHorizontal: 12,
   },

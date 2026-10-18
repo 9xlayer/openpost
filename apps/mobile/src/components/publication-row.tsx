@@ -1,4 +1,5 @@
 import { NativeText } from "@/components/native-text";
+import { AccountAvatar } from "@/components/account-avatar";
 import { DitherPressable } from "@/components/dither-pressable";
 import { MediaImage } from "@/components/media-image";
 import { PlatformIcon } from "@/components/platform-icon";
@@ -6,8 +7,8 @@ import { StyleSheet, View } from "react-native";
 
 import { BodyText, StatusBadge } from "@/components/ui";
 import { ThemeIcon } from "@/components/theme-icon";
-import type { PublicationListItem } from "@/lib/queries";
-import { platformLabel } from "@/lib/format";
+import { useAccounts, type PublicationListItem } from "@/lib/queries";
+import { accountHandle, platformLabel } from "@/lib/format";
 import { useNativeTheme } from "@/theme";
 
 function publicationTitle(publication: PublicationListItem) {
@@ -31,10 +32,17 @@ export function PublicationRow({
   showStatus?: boolean;
 }) {
   const { colors, shape, spacing, typography } = useNativeTheme().manifest;
+  const accounts = useAccounts();
   const title = publicationTitle(publication);
   const platforms = [
     ...new Set(publication.renditions?.map((rendition) => rendition.platform).filter(Boolean)),
   ];
+  const seenPlatforms = new Set<string>();
+  const destinations = (publication.renditions ?? []).filter((rendition) => {
+    if (!rendition.platform || seenPlatforms.has(rendition.platform)) return false;
+    seenPlatforms.add(rendition.platform);
+    return true;
+  });
   const image = publication.media?.find((media) => media.mime_type?.startsWith("image/"));
   return (
     <DitherPressable
@@ -70,9 +78,32 @@ export function PublicationRow({
         </NativeText>
         <BodyText numberOfLines={2}>{detail}</BodyText>
         <View style={{ flexDirection: "row", gap: 6 }}>
-          {platforms.map((platform) => (
-            <PlatformIcon key={platform} platform={platform!} size={18} />
-          ))}
+          {destinations.map((rendition) => {
+            const account = accounts.data?.find(
+              (candidate) => candidate.id === rendition.social_account_id,
+            );
+            if (!account && accounts.data === undefined) {
+              return <PlatformIcon key={rendition.id} platform={rendition.platform!} size={18} />;
+            }
+            return (
+              <AccountAvatar
+                key={rendition.id}
+                name={
+                  account
+                    ? accountHandle(
+                        account.account_username,
+                        platformLabel(rendition.platform!),
+                        rendition.platform!,
+                        account.alias,
+                      )
+                    : platformLabel(rendition.platform!)
+                }
+                platform={rendition.platform!}
+                avatarUrl={account?.account_avatar_url}
+                size={28}
+              />
+            );
+          })}
         </View>
         {showStatus ? <StatusBadge status={publication.status} /> : null}
       </View>

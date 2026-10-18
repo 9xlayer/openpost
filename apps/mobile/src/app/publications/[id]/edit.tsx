@@ -3,7 +3,7 @@ import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
 import { nativeTelemetry } from "@/lib/telemetry";
 import * as ImagePicker from "expo-image-picker";
 import { MediaImage } from "@/components/media-image";
-import { PlatformIcon } from "@/components/platform-icon";
+import { AccountAvatar } from "@/components/account-avatar";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -1306,7 +1306,15 @@ function Composer({
                           <ThemeIcon role="check" size={15} tintColor={colors.onPrimary} />
                         ) : null}
                       </View>
-                      <PlatformIcon platform={account.platform} />
+                      <AccountAvatar
+                        name={
+                          account.alias ||
+                          account.account_username ||
+                          platformLabel(account.platform)
+                        }
+                        platform={account.platform}
+                        avatarUrl={account.account_avatar_url}
+                      />
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <Text
                           numberOfLines={2}
