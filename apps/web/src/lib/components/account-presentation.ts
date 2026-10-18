@@ -103,6 +103,8 @@ export function providerDescription(provider: ProviderEntry): string {
 			return m.accounts_provider_lemmy();
 		case 'piefed':
 			return m.accounts_provider_piefed();
+		case 'devnull':
+			return m.accounts_provider_devnull();
 		case 'tiktok':
 			return m.accounts_provider_tiktok();
 		default:

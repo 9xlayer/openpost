@@ -20,6 +20,7 @@ import (
 
 const (
 	ProviderBluesky        = "bluesky"
+	ProviderDevNull        = "devnull"
 	ProviderDiscord        = "discord"
 	ProviderFacebook       = "facebook"
 	ProviderGoogleBusiness = "googlebusiness"
@@ -325,6 +326,7 @@ func All() []Capability {
 	}
 	publicStory := publicMedia
 	publicStory.MaxCount = 1
+	devnullImages := MediaConstraint{MinCount: 1, MaxCount: providerlimits.DevNullMaxImages, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp"}, MaxSizeBytes: providerlimits.DevNullMaxImageBytes, MaxWidth: providerlimits.DevNullMaxImageDimension, MaxHeight: providerlimits.DevNullMaxImageDimension}
 	video := MediaConstraint{MinCount: 1, MaxCount: 1, AllowedMIMEs: []string{"video/mp4", "video/quicktime"}, MaxSizeBytes: 2 * 1024 * 1024 * 1024}
 	shortVideo := video
 	shortVideo.MaxDurationSeconds = 180
@@ -407,6 +409,11 @@ func All() []Capability {
 		defaultQueued(Capability{Provider: ProviderBluesky, Profile: models.ContentProfileLinkShare, Label: "Bluesky link", TextLimit: 300, Media: text, Settings: blueskySettings()}),
 		defaultQueued(Capability{Provider: ProviderBluesky, Profile: models.ContentProfileImagePost, Label: "Bluesky images", TextLimit: 300, Media: MediaConstraint{MinCount: 1, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp"}, MaxImageSizeBytes: blueskyImageMaxBytes}, Settings: blueskySettings()}),
 		defaultQueued(Capability{Provider: ProviderBluesky, Profile: models.ContentProfileShortVideo, Label: "Bluesky video", TextLimit: 300, Media: blueskyVideo, Settings: blueskySettings()}),
+
+		defaultQueued(Capability{Provider: ProviderDevNull, Profile: models.ContentProfileShortText, Label: "dev/null commit", TextLimit: providerlimits.DevNullMaxBodyBytes, Media: text, Settings: devnullSettings()}),
+		defaultQueued(Capability{Provider: ProviderDevNull, Profile: models.ContentProfileThread, Label: "dev/null thread", TextLimit: providerlimits.DevNullMaxBodyBytes, Media: text, Settings: devnullSettings()}),
+		defaultQueued(Capability{Provider: ProviderDevNull, Profile: models.ContentProfileLinkShare, Label: "dev/null link", TextLimit: providerlimits.DevNullMaxBodyBytes, Media: text, Settings: devnullSettings()}),
+		defaultQueued(Capability{Provider: ProviderDevNull, Profile: models.ContentProfileImagePost, Label: "dev/null images", TextLimit: providerlimits.DevNullMaxBodyBytes, Media: devnullImages, Settings: devnullSettings()}),
 
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileShortText, Label: "Mastodon post", TextLimit: 500, Media: text, Settings: mastodonSettings()}),
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileThread, Label: "Mastodon thread", TextLimit: 500, Media: MediaConstraint{MinCount: 0, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"}}, Settings: mastodonSettings()}),
@@ -920,6 +927,7 @@ var providerDisplayNames = map[string]string{
 	ProviderPinterest:      "Pinterest",
 	ProviderTelegram:       "Telegram",
 	ProviderBluesky:        "Bluesky",
+	ProviderDevNull:        "dev/null",
 	ProviderThreads:        "Threads",
 	ProviderDiscord:        "Discord",
 }
@@ -2565,6 +2573,14 @@ func lemmySettings() []SettingField {
 
 func piefedSettings() []SettingField {
 	return communitySettings("piefed_communities")
+}
+
+// devnullSettings returns the composer settings for dev/null. The CLI commit
+// contract takes only body text, an optional reply reference, and images:
+// link cards unfurl server-side from the first URL, so OpenPost sends no
+// provider settings and the composer stays a plain text field.
+func devnullSettings() []SettingField {
+	return []SettingField{}
 }
 
 func blueskySettings() []SettingField {

@@ -15,6 +15,7 @@ const providerIcons: Record<string, string> = {
   instagram: docsPath("/assets/logos/instagram.svg"),
   threads: docsPath("/assets/logos/threads.svg"),
   bluesky: docsPath("/assets/logos/bluesky.svg"),
+  devnull: docsPath("/assets/logos/devnull.svg"),
   telegram: docsPath("/assets/logos/telegram.svg"),
   mastodon: docsPath("/assets/logos/mastodon.svg"),
   pixelfed: docsPath("/assets/logos/pixelfed.svg"),

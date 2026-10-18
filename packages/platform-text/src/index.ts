@@ -73,6 +73,13 @@ export const PLATFORM_LIMITS = {
     media: "Up to 4 images or 1 MP4 video",
     note: "Video is MP4-only and cannot be mixed with images.",
   },
+  devnull: {
+    key: "devnull",
+    name: "dev/null",
+    charLimit: 4000,
+    media: "Up to 3 JPEG, PNG, or WebP images",
+    note: "Commits are signed with your SSH key; new accounts need approval before posts go public.",
+  },
   linkedin: {
     key: "linkedin",
     name: "LinkedIn",

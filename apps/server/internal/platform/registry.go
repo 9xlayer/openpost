@@ -75,6 +75,9 @@ var appBuilders = map[string]appBuilder{
 	providerBluesky: func(_ AppConfig, _ RegistryOptions) (Adapter, error) {
 		return NewBlueskyAdapter(""), nil
 	},
+	providerDevNull: func(_ AppConfig, _ RegistryOptions) (Adapter, error) {
+		return NewDevNullAdapter(""), nil
+	},
 	providerDiscord: func(app AppConfig, _ RegistryOptions) (Adapter, error) {
 		if app.ConnectionMode == ConnectionModeBot {
 			return NewDiscordBotAdapter(app.ClientID, app.ClientSecret, app.BotToken, app.RedirectURI), nil

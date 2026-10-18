@@ -46,7 +46,7 @@ func TestValidateReportRejectsUnknownErrorCode(t *testing.T) {
 
 func TestValidateReportAcceptsCanonicalProviders(t *testing.T) {
 	providers := []string{
-		"bluesky", "discord", "facebook", "instagram", "lemmy", "linkedin", "mastodon", "peertube",
+		"bluesky", "devnull", "discord", "facebook", "instagram", "lemmy", "linkedin", "mastodon", "peertube",
 		"piefed", "pinterest", "pixelfed", "telegram", "threads", "tiktok", "x", "youtube",
 	}
 	for _, provider := range providers {

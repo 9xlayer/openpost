@@ -7,6 +7,7 @@ import (
 
 const (
 	ConnectionModeAppPassword    = "app_password"
+	ConnectionModeSSHSignature   = "ssh_signature"
 	ConnectionModeBot            = "bot"
 	ConnectionModeOAuth          = "oauth"
 	ConnectionModeInstagramLogin = "instagram_login"
@@ -31,6 +32,7 @@ func ApplicationContract(provider, connectionMode string) (ProviderAppContract, 
 	connectionMode = normalizeConnectionMode(provider, connectionMode, AppConfig{})
 	contracts := map[string]ProviderAppContract{
 		providerBluesky + ":" + ConnectionModeAppPassword:      {Provider: providerBluesky, ConnectionMode: ConnectionModeAppPassword, AdapterBacked: true, BuiltIn: true},
+		providerDevNull + ":" + ConnectionModeSSHSignature:     {Provider: providerDevNull, ConnectionMode: ConnectionModeSSHSignature, AdapterBacked: true, BuiltIn: true},
 		providerDiscord + ":" + ConnectionModeWebhook:          {Provider: providerDiscord, ConnectionMode: ConnectionModeWebhook, AdapterBacked: true, BuiltIn: true},
 		providerDiscord + ":" + ConnectionModeBot:              {Provider: providerDiscord, ConnectionMode: ConnectionModeBot, RequiredFields: []string{"client_id", "client_secret", "bot_token", "redirect_uri"}, AdapterBacked: true},
 		providerPinterest + ":" + ConnectionModeOAuth:          {Provider: providerPinterest, ConnectionMode: ConnectionModeOAuth, RequiredFields: []string{"client_id", "client_secret", "redirect_uri"}, AdapterBacked: true},
@@ -95,6 +97,8 @@ func normalizeConnectionMode(provider, connectionMode string, app AppConfig) str
 	switch provider {
 	case providerBluesky:
 		return ConnectionModeAppPassword
+	case providerDevNull:
+		return ConnectionModeSSHSignature
 	case providerDiscord:
 		if strings.TrimSpace(app.ClientID) != "" || strings.TrimSpace(app.ClientSecret) != "" || strings.TrimSpace(app.BotToken) != "" {
 			return ConnectionModeBot

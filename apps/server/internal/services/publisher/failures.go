@@ -161,6 +161,21 @@ func classifyProviderHTTPFailure(err error) (Failure, bool) {
 		failure.Message = "Verify your email in Bluesky before publishing videos. Text and image posts remain available."
 		failure.Action = FailureActionProvider
 	}
+	if code == "devnull:signature_rejected" {
+		failure.Message = "dev/null rejected the commit signature. Reconnect with the SSH key on your GitHub account."
+		failure.Action = FailureActionReconnect
+	}
+	if code == "devnull:key_or_user_unknown" {
+		failure.Message = "dev/null did not recognize this SSH key or user. Add the key to GitHub, sign in at dev-null.sh, then reconnect."
+		failure.Action = FailureActionReconnect
+	}
+	if code == "devnull:commit_rejected" {
+		failure.Message = "dev/null rejected the commit. It may exceed 4000 characters, 3 images, or 10 MB per image."
+		failure.Action = FailureActionEdit
+	}
+	if code == "devnull:rate_limited" {
+		failure.Message = "dev/null allows 10 commits a minute. OpenPost will retry."
+	}
 	if code == "google:invalid_rapt" {
 		failure.Message = "Google requires a new sign-in or approval from your Workspace administrator. Ask the administrator to trust OpenPost, then reconnect this account."
 		failure.Action = FailureActionReconnect

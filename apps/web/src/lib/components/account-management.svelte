@@ -19,6 +19,7 @@
 	import SocialAccountIdentity from '$lib/components/social-account-identity.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import BlueskyConnectDialog from '$lib/components/bluesky-connect-dialog.svelte';
+	import DevNullConnectDialog from '$lib/components/devnull-connect-dialog.svelte';
 	import DiscordConnectDialog from '$lib/components/discord-connect-dialog.svelte';
 	import OAuthConfirmDialog from '$lib/components/oauth-confirm-dialog.svelte';
 	import CompatConnectDialog from '$lib/components/compat-connect-dialog.svelte';
@@ -214,6 +215,11 @@
 	let blueskyAppPassword = $state('');
 	let blueskyLoading = $state(false);
 	let blueskyError = $state('');
+	let devnullModalOpen = $state(false);
+	let devnullUsername = $state('');
+	let devnullPrivateKey = $state('');
+	let devnullLoading = $state(false);
+	let devnullError = $state('');
 	let discordModalOpen = $state(false);
 	let telegramModalOpen = $state(false);
 	let discordWebhookUrl = $state('');
@@ -1021,6 +1027,18 @@
 		blueskyModalOpen = true;
 	}
 
+	function connectDevNull() {
+		if (!selectedWorkspaceId) {
+			showToast(m.accounts_create_workspace_first());
+			return;
+		}
+		clearToast();
+		devnullUsername = '';
+		devnullPrivateKey = '';
+		devnullError = '';
+		devnullModalOpen = true;
+	}
+
 	async function submitBlueskyLogin() {
 		if (!blueskyHandle.trim() || !blueskyAppPassword.trim()) {
 			blueskyError = m.accounts_bluesky_fields_required();
@@ -1068,6 +1086,57 @@
 			);
 		} finally {
 			if (isCurrentRequest()) blueskyLoading = false;
+		}
+	}
+
+	async function submitDevNullLogin() {
+		if (!devnullUsername.trim() || !devnullPrivateKey.trim()) {
+			devnullError = m.accounts_devnull_fields_required();
+			return;
+		}
+
+		const request = beginConnectionRequest();
+		if (!request) return;
+		const workspaceID = request.workspaceID;
+		const isCurrentRequest = () => isCurrentConnectionRequest(request);
+		devnullLoading = true;
+		devnullError = '';
+
+		try {
+			const { data, error: err } = await client.POST('/accounts/devnull/login', {
+				body: {
+					workspace_id: workspaceID,
+					username: devnullUsername.trim(),
+					private_key: devnullPrivateKey.trim()
+				}
+			});
+			if (err) throw new Error(err.detail || m.accounts_login_failed());
+			await refreshAccountsAfterMutation(workspaceID, request.identity, isCurrentRequest);
+			if (!isCurrentRequest()) return;
+			devnullModalOpen = false;
+			devnullPrivateKey = '';
+			if (data?.open_fresh_composer) {
+				await goto(
+					resolveAppPath(
+						continuationHrefForNormalizedConnection({
+							workspaceID: data.workspace_id,
+							accountIDs: data.account_ids ?? [],
+							openFreshComposer: data.open_fresh_composer
+						})
+					)
+				);
+				return;
+			}
+			onAccountsChanged();
+		} catch (e) {
+			if (!isCurrentRequest()) return;
+			devnullError = e instanceof Error && e.message ? e.message : m.accounts_login_failed();
+			showConnectError(
+				e instanceof Error ? e : new Error(m.accounts_login_failed()),
+				m.accounts_login_failed()
+			);
+		} finally {
+			if (isCurrentRequest()) devnullLoading = false;
 		}
 	}
 
@@ -1415,6 +1484,9 @@
 				break;
 			case 'bluesky':
 				connectBluesky();
+				break;
+			case 'devnull':
+				connectDevNull();
 				break;
 			case 'discord':
 				connectDiscord();
@@ -1952,6 +2024,16 @@
 	error={blueskyError}
 	onSubmit={submitBlueskyLogin}
 	onErrorDismiss={() => (blueskyError = '')}
+/>
+
+<DevNullConnectDialog
+	bind:open={devnullModalOpen}
+	bind:username={devnullUsername}
+	bind:privateKey={devnullPrivateKey}
+	loading={devnullLoading}
+	error={devnullError}
+	onSubmit={submitDevNullLogin}
+	onErrorDismiss={() => (devnullError = '')}
 />
 
 {#if telegramModalOpen && selectedWorkspaceId}

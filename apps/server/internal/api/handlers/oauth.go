@@ -463,6 +463,14 @@ var providerCatalog = []ProviderInfo{
 		Capabilities:    coreProviderCapabilities,
 	},
 	{
+		Platform:        "devnull",
+		DisplayName:     "dev/null",
+		AuthMode:        "ssh_signature",
+		ConnectionModes: []string{"ssh_signature"},
+		Description:     "Username and SSH key connection; commits are signed with the key on your GitHub account.",
+		Capabilities:    []string{"Text posts", "Image posts", "Replies", "Scheduling", "MCP workflows"},
+	},
+	{
 		Platform:        "discord",
 		DisplayName:     "Discord",
 		AuthMode:        "webhook",
@@ -1086,6 +1094,9 @@ func (h *OAuthHandler) GetAuthURL(api huma.API) {
 	}, func(ctx context.Context, input *GetAuthURLInput) (*GetAuthURLOutput, error) {
 		if input.Platform == "bluesky" {
 			return nil, huma.Error400BadRequest("bluesky uses app passwords, not OAuth redirect")
+		}
+		if input.Platform == "devnull" {
+			return nil, huma.Error400BadRequest("dev/null uses SSH keys, not OAuth redirect")
 		}
 		if input.WorkspaceID == "" {
 			return nil, huma.Error400BadRequest(errWorkspaceIDRequired)
@@ -1890,6 +1901,94 @@ func (h *OAuthHandler) BlueskyLogin(api huma.API) {
 		resp := h.normalizedAccountConnectionResponse(input.Body.WorkspaceID, []*models.SocialAccount{account}, account.ClaimedFirst)
 		return &BlueskyLoginOutput{Body: resp}, nil
 	})
+}
+
+type DevNullLoginInput struct {
+	Body struct {
+		WorkspaceID string `json:"workspace_id" doc:"Workspace ID"`
+		Username    string `json:"username" doc:"dev/null username (your GitHub username)"`
+		PrivateKey  string `json:"private_key" doc:"OpenSSH private key whose public half is on your GitHub account (stored encrypted, used only to sign commits)"`
+		Intent      string `json:"intent,omitempty" enum:"production,certification_test" doc:"Typed execution intent; certification_test requires an unscoped instance administrator"`
+	}
+}
+
+type DevNullLoginOutput struct {
+	Body AccountConnectionResponse
+}
+
+// DevNullLogin connects a dev/null account with an SSH private key. The key
+// is verified against dev-null.sh and then stored encrypted; every publish
+// signs its commit payload with it, exactly like the official commit script.
+func (h *OAuthHandler) DevNullLogin(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "devnull-login",
+		Method:      http.MethodPost,
+		Path:        "/accounts/devnull/login",
+		Summary:     "Connect a dev/null account using an SSH private key",
+		Tags:        []string{tagAccounts},
+		Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.auth)},
+		Errors:      []int{400, 403, 502},
+	}, func(ctx context.Context, input *DevNullLoginInput) (*DevNullLoginOutput, error) {
+		userID := middleware.GetUserID(ctx)
+		intent, err := h.connectionIntent(ctx, input.Body.Intent)
+		if err != nil {
+			return nil, err
+		}
+		if err := h.ensureCanStartAccountConnection(ctx, input.Body.WorkspaceID, userID); err != nil {
+			return nil, err
+		}
+		if err := h.requireProviderConnection(ctx, "devnull", "", intent); err != nil {
+			return nil, err
+		}
+
+		adapter, ok := h.provider("devnull")
+		if !ok {
+			return nil, huma.Error400BadRequest("devnull not configured")
+		}
+		loginAdapter, ok := adapter.(interface {
+			Login(context.Context, string, string) (*platform.TokenResult, *platform.UserProfile, error)
+		})
+		if !ok {
+			return nil, huma.Error500InternalServerError("devnull login failed")
+		}
+		tokenResp, profile, err := loginAdapter.Login(ctx, strings.TrimSpace(input.Body.Username), input.Body.PrivateKey)
+		if err != nil {
+			log.Printf("[DevNullLogin] Login failed: %v", err)
+			return nil, huma.Error400BadRequest(devNullLoginErrorMessage(err))
+		}
+		if err := h.requireProviderConnectionCompletion(ctx, "devnull", "", string(intent), userID); err != nil {
+			return nil, err
+		}
+
+		account, err := h.accountSaver.SaveAccountFromInput(ctx, account_saver.SaveAccountInput{
+			Actor:            workspaceActor(ctx, userID),
+			UserID:           userID,
+			PlatformName:     "devnull",
+			WorkspaceID:      input.Body.WorkspaceID,
+			AccountID:        profile.ID,
+			AccountUsername:  firstNonEmpty(profile.Username, input.Body.Username),
+			AccountAvatarURL: profile.AvatarURL,
+			InstanceURL:      platform.DevNullDefaultBaseURL,
+			Token:            tokenResp,
+			CapabilityState:  profile.CapabilityState,
+			Grant:            authorizationGrantInput(adapter, profile.ID),
+		})
+		if err != nil {
+			log.Printf("[DevNullLogin] Failed to save account: %v", err)
+			return nil, huma.Error403Forbidden(accountConnectionErrorMessage(err))
+		}
+		resp := h.normalizedAccountConnectionResponse(input.Body.WorkspaceID, []*models.SocialAccount{account}, account.ClaimedFirst)
+		return &DevNullLoginOutput{Body: resp}, nil
+	})
+}
+
+func devNullLoginErrorMessage(err error) string {
+	message := strings.TrimSpace(err.Error())
+	if message == "" {
+		return "dev/null login failed"
+	}
+	// Adapter errors are already curated and secret-free.
+	return message
 }
 
 type FediverseLoginInput struct {

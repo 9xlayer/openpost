@@ -28,6 +28,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   pleroma: "Pleroma",
   friendica: "Friendica",
   bluesky: "Bluesky",
+  devnull: "dev/null",
   linkedin: "LinkedIn",
   facebook: "Facebook",
   instagram: "Instagram",
@@ -50,6 +51,7 @@ export function platformLabel(platform: string): string {
 
 const HANDLE_FIRST_PLATFORMS = new Set([
   "bluesky",
+  "devnull",
   "instagram",
   "mastodon",
   "pixelfed",
@@ -95,6 +97,7 @@ export const PLATFORM_COLORS = {
   lemmy: "#059669",
   piefed: "#3b82f6",
   threads: "#f97316",
+  devnull: "#65a30d",
   bluesky: "#0ea5e9",
   discord: "#6366f1",
   linkedin: "#2563eb",

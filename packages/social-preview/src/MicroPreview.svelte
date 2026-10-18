@@ -20,7 +20,7 @@
 
   type MicroPlatform = Extract<
     PreviewPlatform,
-    "x" | "mastodon" | "bluesky" | "threads"
+    "x" | "mastodon" | "bluesky" | "threads" | "devnull"
   >;
 
   interface Props {
@@ -52,7 +52,7 @@
         >{platform === "threads" ? handle : model.identity.displayName}</strong
       >
       {#if model.identity.verified}<VerifiedBadge {platform} />{/if}
-      {#if platform === "x" || platform === "bluesky"}<span>@{handle}</span
+      {#if platform === "x" || platform === "bluesky" || platform === "devnull"}<span>@{handle}</span
         >{/if}
       {#if platform !== "mastodon"}<span>· {model.createdAtLabel}</span>{/if}
     </div>

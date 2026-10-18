@@ -49,6 +49,8 @@ func DeterministicContentURL(provider, _ string, username, instanceURL, external
 		return peertubeContentURL(instanceURL, externalID)
 	case "lemmy", "piefed":
 		return communityContentURL(instanceURL, externalID)
+	case "devnull":
+		return devNullContentURL(username, externalID)
 	case "facebook":
 		return facebookContentURL(externalID)
 	}
@@ -152,6 +154,35 @@ func facebookContentURL(externalID string) string {
 		return ""
 	}
 	return "https://www.facebook.com/" + externalID
+}
+
+// devNullContentURL rebuilds a commit link from a stored commit UUID, short
+// hash, or full link. The CLI contract returns a full link, which also
+// round-trips through IsSafeContentURL, so this path only rebuilds URLs when
+// the stored ID is bare.
+func devNullContentURL(username, externalID string) string {
+	externalID = strings.TrimSpace(externalID)
+	if externalID == "" {
+		return ""
+	}
+	if IsSafeContentURL(externalID) {
+		return externalID
+	}
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
+	if username == "" {
+		return ""
+	}
+	commitID := externalID
+	if parsed, err := url.Parse(externalID); err == nil && parsed.Host != "" {
+		commitID = strings.TrimRight(parsed.Path, "/")
+		if idx := strings.LastIndex(commitID, "/"); idx >= 0 {
+			commitID = commitID[idx+1:]
+		}
+	}
+	if commitID == "" {
+		return ""
+	}
+	return DevNullDefaultBaseURL + "/@" + username + "/commits/" + commitID
 }
 
 // blueskyNativePostURL names the profile link for an imported native post:

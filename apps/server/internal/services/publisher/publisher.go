@@ -2617,6 +2617,8 @@ func publisherProviderLabel(provider string) string {
 		return "LinkedIn"
 	case "bluesky":
 		return "Bluesky"
+	case "devnull":
+		return "dev/null"
 	case "mastodon":
 		return "Mastodon"
 	case "pixelfed":

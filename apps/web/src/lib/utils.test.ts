@@ -50,6 +50,7 @@ describe('formatSocialAccountName', () => {
 	it('prefixes every handle-first platform', () => {
 		for (const platform of [
 			'bluesky',
+			'devnull',
 			'instagram',
 			'mastodon',
 			'pixelfed',
@@ -92,6 +93,7 @@ describe('getPlatformName', () => {
 			friendica: 'Friendica',
 			threads: 'Threads',
 			bluesky: 'Bluesky',
+			devnull: 'dev/null',
 			discord: 'Discord',
 			linkedin: 'LinkedIn',
 			instagram: 'Instagram',

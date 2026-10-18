@@ -57,6 +57,8 @@ export function getPlatformName(platform: string): string {
 			return 'Friendica';
 		case 'threads':
 			return 'Threads';
+		case 'devnull':
+			return 'dev/null';
 		case 'bluesky':
 			return 'Bluesky';
 		case 'discord':
@@ -91,6 +93,7 @@ export function formatAccountHandle(username: string | null | undefined): string
 
 const HANDLE_FIRST_PLATFORMS = new Set([
 	'bluesky',
+	'devnull',
 	'instagram',
 	'mastodon',
 	'pixelfed',
@@ -156,6 +159,7 @@ export const PLATFORM_COLORS = {
 	lemmy: 'bg-emerald-600',
 	piefed: 'bg-blue-500',
 	threads: 'bg-orange-500',
+	devnull: 'bg-lime-600',
 	bluesky: 'bg-sky-500',
 	discord: 'bg-indigo-500',
 	linkedin: 'bg-blue-600',

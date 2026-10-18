@@ -6,6 +6,7 @@ export const previewPlatforms = [
   "lemmy",
   "piefed",
   "bluesky",
+  "devnull",
   "linkedin",
   "threads",
   "instagram",
@@ -166,6 +167,12 @@ export const previewCapabilities: Record<PreviewPlatform, PreviewCapability> = {
     cards: ["link", "quote"],
     maxImages: 4,
   },
+  devnull: {
+    formats: ["post", "thread"],
+    media: ["image"],
+    cards: ["link"],
+    maxImages: 3,
+  },
   linkedin: {
     formats: ["post", "thread", "video", "document"],
     media: ["image", "video", "document"],
@@ -239,6 +246,7 @@ export const platformNames: Record<PreviewPlatformKey, string> = {
   lemmy: "Lemmy",
   piefed: "PieFed",
   bluesky: "Bluesky",
+  devnull: "dev/null",
   linkedin: "LinkedIn",
   threads: "Threads",
   instagram: "Instagram",

@@ -70,6 +70,8 @@ export function validateProviderMedia(
 			return validateCommunityMedia(provider, media);
 		case 'bluesky':
 			return validateBlueskyMedia(media);
+		case 'devnull':
+			return validateDevNullMedia(media);
 		case 'linkedin':
 			return validateLinkedInMedia(media);
 		case 'threads':
@@ -233,6 +235,31 @@ function validateBlueskyMedia(media: MediaCapabilityItem[]): MediaCapabilityIssu
 
 	if (media.length > 4) {
 		return [issue('bluesky', 'error', 'Bluesky supports up to 4 images per post.')];
+	}
+	return [];
+}
+
+function validateDevNullMedia(media: MediaCapabilityItem[]): MediaCapabilityIssue[] {
+	if (media.length === 0) return [];
+	if (media.length > 3) {
+		return [issue('devnull', 'error', 'dev/null commits carry up to 3 images.')];
+	}
+	const unsupported = media.find((item) => !feedImageMimeTypes.has(normalizeMime(item.mimeType)));
+	if (unsupported) {
+		return [
+			issue(
+				'devnull',
+				'error',
+				'dev/null commits accept JPEG, PNG, or WebP images.',
+				unsupported.id
+			)
+		];
+	}
+	const oversized = media.find(
+		(item) => Number.isFinite(item.size) && Number(item.size) > 10 * 1024 * 1024
+	);
+	if (oversized) {
+		return [issue('devnull', 'error', 'dev/null images must be 10 MB or less.', oversized.id)];
 	}
 	return [];
 }

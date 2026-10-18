@@ -507,7 +507,7 @@ func resolveMediaURL(mediaURL, publicURL string) string {
 }
 
 func providerAppsFromLegacyConfig(cfg *Config) []platform.AppConfig {
-	apps := []platform.AppConfig{{Provider: "bluesky"}, {Provider: "discord"}, {Provider: "peertube"}, {Provider: "lemmy"}, {Provider: "piefed"}}
+	apps := []platform.AppConfig{{Provider: "bluesky"}, {Provider: "devnull"}, {Provider: "discord"}, {Provider: "peertube"}, {Provider: "lemmy"}, {Provider: "piefed"}}
 	if cfg.TwitterClientID != "" {
 		apps = append(apps, platform.AppConfig{
 			Provider:     "x",

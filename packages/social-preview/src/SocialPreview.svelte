@@ -102,6 +102,8 @@
     <CommunityPreview {model} platform="piefed" {compact} />
   {:else if model.platform === "bluesky"}
     <MicroPreview {model} platform="bluesky" {compact} />
+  {:else if model.platform === "devnull"}
+    <MicroPreview {model} platform="devnull" {compact} />
   {:else if model.platform === "threads"}
     <MicroPreview {model} platform="threads" {compact} />
   {:else if model.platform === "linkedin"}

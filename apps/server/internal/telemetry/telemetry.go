@@ -84,7 +84,7 @@ var eventPropertyValues = map[string]map[string]struct{}{
 	"mutual_count_bucket": propertySet("0", "1", "2-3", "4-6", "7+"),
 	"rank_bucket":         propertySet("1-3", "4-6", "7-10", "11+"),
 	"platform": propertySet(
-		"bluesky", "discord", "facebook", "instagram", "lemmy", "linkedin",
+		"bluesky", "devnull", "discord", "facebook", "instagram", "lemmy", "linkedin",
 		"mastodon", "peertube", "piefed", "pinterest", "pixelfed", "telegram",
 		"threads", "tiktok", "x", "youtube",
 	),

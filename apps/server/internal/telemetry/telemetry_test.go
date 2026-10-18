@@ -14,7 +14,7 @@ import (
 // unsupported value (notably reddit) may sneak back in. The authoritative
 // owner of this list is the platform package's PublicProviders catalogue.
 var supportedPublicProviders = []string{
-	"bluesky", "discord", "facebook", "instagram", "lemmy", "linkedin",
+	"bluesky", "devnull", "discord", "facebook", "instagram", "lemmy", "linkedin",
 	"mastodon", "peertube", "piefed", "pinterest", "pixelfed", "telegram",
 	"threads", "tiktok", "x", "youtube",
 }

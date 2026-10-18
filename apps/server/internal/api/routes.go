@@ -459,6 +459,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	oauthHandler.Callback(api)
 	oauthHandler.ExchangeCode(api)
 	oauthHandler.BlueskyLogin(api)
+	oauthHandler.DevNullLogin(api)
 	oauthHandler.PeerTubeLogin(api)
 	oauthHandler.LemmyLogin(api)
 	oauthHandler.PieFedLogin(api)

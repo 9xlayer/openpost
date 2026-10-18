@@ -6,6 +6,7 @@ const platforms = [
   "x",
   "threads",
   "bluesky",
+  "devnull",
   "mastodon",
   "pixelfed",
   "peertube",

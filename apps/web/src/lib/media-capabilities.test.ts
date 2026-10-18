@@ -72,4 +72,23 @@ describe('media-capabilities', () => {
 		expect(videoProviderSupportLabel('image/png')).toBeNull();
 		expect(videoProviderSupportDetail('video/webm')).toContain('works best on Mastodon');
 	});
+
+	it('limits dev/null commits to three small JPEG, PNG, or WebP images', () => {
+		expect(validateProviderMedia('devnull', [])).toEqual([]);
+		expect(validateProviderMedia('devnull', [{ id: 'image-1', mimeType: 'image/png' }])).toEqual(
+			[]
+		);
+		expect(
+			validateProviderMedia('devnull', [{ id: 'image-1', mimeType: 'image/gif' }])
+		).toContainEqual(expect.objectContaining({ provider: 'devnull', severity: 'error' }));
+		expect(
+			validateProviderMedia(
+				'devnull',
+				Array.from({ length: 4 }, (_, index) => ({
+					id: `image-${index}`,
+					mimeType: 'image/jpeg'
+				}))
+			)
+		).toContainEqual(expect.objectContaining({ provider: 'devnull', severity: 'error' }));
+	});
 });

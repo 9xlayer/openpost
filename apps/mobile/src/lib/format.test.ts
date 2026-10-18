@@ -74,6 +74,7 @@ test("every canonical platform key resolves to a name different from the raw key
     friendica: "Friendica",
     threads: "Threads",
     bluesky: "Bluesky",
+    devnull: "dev/null",
     discord: "Discord",
     linkedin: "LinkedIn",
     instagram: "Instagram",
@@ -134,6 +135,7 @@ test("pinterest and google business handles render without @", () => {
 test("every handle-first platform keeps @", () => {
   for (const platform of [
     "bluesky",
+    "devnull",
     "instagram",
     "mastodon",
     "pixelfed",

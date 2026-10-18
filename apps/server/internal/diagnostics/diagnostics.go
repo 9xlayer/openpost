@@ -92,7 +92,7 @@ var allowedSurfaces = map[string]struct{}{
 // allowedProviders mirrors the first-party platform allowlist used for
 // product telemetry. Only these values may appear in a report.
 var allowedProviders = map[string]struct{}{
-	"bluesky": {}, "discord": {}, "facebook": {}, "instagram": {},
+	"bluesky": {}, "devnull": {}, "discord": {}, "facebook": {}, "instagram": {},
 	"lemmy": {}, "linkedin": {}, "mastodon": {}, "peertube": {},
 	"piefed": {}, "pinterest": {}, "pixelfed": {}, "telegram": {},
 	"threads": {}, "tiktok": {}, "x": {}, "youtube": {},

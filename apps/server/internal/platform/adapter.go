@@ -235,6 +235,7 @@ var ErrUnsupportedCommentAction = errors.New("comment action unsupported")
 func RegisterAllMediaValidators() {
 	registerMediaValidatorsOnce.Do(func() {
 		MediaValidators[providerBluesky] = validateBlueskyMedia
+		MediaValidators[providerDevNull] = validateDevNullMedia
 		MediaValidators[providerDiscord] = validateDiscordMedia
 		MediaValidators[providerFacebook] = validateFacebookMedia
 		MediaValidators[providerGoogleBusiness] = validateGoogleBusinessMedia

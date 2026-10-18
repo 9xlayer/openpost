@@ -1105,6 +1105,7 @@
 			['twitter', 'X'],
 			['mastodon', 'Mastodon'],
 			['bluesky', 'Bluesky'],
+			['devnull', 'dev/null'],
 			['linkedin', 'LinkedIn'],
 			['threads', 'Threads'],
 			['facebook', 'Facebook'],

@@ -121,7 +121,7 @@ func TestProviderPrerequisiteFailuresGiveProviderGuidance(t *testing.T) {
 		code    string
 		status  int
 		message string
-	}{{"x:credits_depleted", 402, "X developer account"}, {"bluesky:unconfirmed_email", 403, "Verify your email"}, {"google:invalid_rapt", 401, "Workspace administrator"}} {
+	}{{"x:credits_depleted", 402, "X developer account"}, {"bluesky:unconfirmed_email", 403, "Verify your email"}, {"google:invalid_rapt", 401, "Workspace administrator"}, {"devnull:signature_rejected", 401, "SSH key on your GitHub account"}, {"devnull:commit_rejected", 422, "exceed 4000 characters"}} {
 		failure := ClassifyFailure(&platform.HTTPError{StatusCode: test.status, Code: test.code})
 		require.Contains(t, failure.Message, test.message)
 		require.False(t, failure.Retryable)

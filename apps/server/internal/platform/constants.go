@@ -30,6 +30,7 @@ const (
 	// canonical provider keys (see AGENTS.md "Provider Key Convention")
 	// and the entries in RegisterAllMediaValidators().
 	providerBluesky        = "bluesky"
+	providerDevNull        = "devnull"
 	providerDiscord        = "discord"
 	providerFacebook       = "facebook"
 	providerGoogleBusiness = "googlebusiness"

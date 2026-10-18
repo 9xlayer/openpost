@@ -30,6 +30,8 @@ func TestDeterministicContentURL(t *testing.T) {
 		{name: "lemmy", provider: "lemmy", instance: "https://lemmy.example", externalID: "12345", want: "https://lemmy.example/post/12345"},
 		{name: "piefed", provider: "piefed", instance: "https://piefed.example", externalID: "67890", want: "https://piefed.example/post/67890"},
 		{name: "facebook", provider: "facebook", externalID: "123456789_987654321", want: "https://www.facebook.com/123456789_987654321"},
+		{name: "devnull", provider: "devnull", username: "testuser", externalID: "01a14c0f-6e52-4b1c-9a1d-2f4b5c6d7e8f", want: "https://dev-null.sh/@testuser/commits/01a14c0f-6e52-4b1c-9a1d-2f4b5c6d7e8f"},
+		{name: "devnull link", provider: "devnull", username: "testuser", externalID: "https://dev-null.sh/@testuser/commits/01a14c0f", want: "https://dev-null.sh/@testuser/commits/01a14c0f"},
 		{name: "unsafe id is rejected", provider: "x", externalID: "123/../../settings", want: ""},
 		{name: "unsafe id with space is rejected", provider: "mastodon", username: "rgo", instance: "https://mastodon.social", externalID: "12 34", want: ""},
 		{name: "existing url", provider: "threads", externalID: "https://www.threads.net/@rgo/post/example", want: "https://www.threads.net/@rgo/post/example"},

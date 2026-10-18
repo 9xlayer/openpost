@@ -17,3 +17,4 @@ Brand names and logos belong to their respective owners.
 | `peertube.svg`  | [Simple Icons: PeerTube](https://simpleicons.org/?q=peertube) (fill normalized to `currentColor`)                                                                        |
 | `lemmy.svg`     | [Simple Icons: Lemmy](https://simpleicons.org/?q=lemmy) (fill normalized to `currentColor`)                                                                              |
 | `piefed.svg`    | [PieFed icon](https://codeberg.org/rimu/pyfedi/src/branch/main/app/static/images/piefed_logo_icon_t_256x256.svg) (fills normalized to `currentColor`, metadata stripped) |
+| `devnull.svg`   | [dev/null favicon](https://dev-null.sh/favicon.svg) (fills normalized to `currentColor`, style block and metadata stripped)                                              |

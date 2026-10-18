@@ -6,6 +6,7 @@
 	import lemmy from '../../../../../assets/logos/lemmy.svg?raw';
 	import piefed from '../../../../../assets/logos/piefed.svg?raw';
 	import threads from '../../../../../assets/logos/threads.svg?raw';
+	import devnull from '../../../../../assets/logos/devnull.svg?raw';
 	import bluesky from '../../../../../assets/logos/bluesky.svg?raw';
 	import discord from '../../../../../assets/logos/discord.svg?raw';
 	import linkedin from '../../../../../assets/logos/linkedin.svg?raw';
@@ -33,6 +34,7 @@
 		['lemmy', lemmy],
 		['piefed', piefed],
 		['threads', threads],
+		['devnull', devnull],
 		['bluesky', bluesky],
 		['discord', discord],
 		['linkedin', linkedin],
