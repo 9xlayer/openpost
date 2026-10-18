@@ -1,6 +1,11 @@
 import { createPreviewModel } from '@openpost/social-preview';
 import { expect, it } from 'vitest';
-import { textCardRequest, textCardRequestKey, withTextCardImages } from './text-cards';
+import {
+	textCardIdentityForAccount,
+	textCardRequest,
+	textCardRequestKey,
+	withTextCardImages
+} from './text-cards';
 
 it('joins a card and unique attachments in source order, retaining the first alt text', () => {
 	const model = createPreviewModel({
@@ -56,5 +61,44 @@ it('reuses the same saved image across automatic format resolution and explicit 
 	expect(textCardRequestKey(request)).not.toBe(textCardRequestKey({ ...request, text: 'Changed' }));
 	expect(textCardRequestKey(request)).not.toBe(
 		textCardRequestKey({ ...request, attachment_count: 1 })
+	);
+});
+
+it('derives the card identity from the same fields the server render receipt hashes', () => {
+	expect(
+		textCardIdentityForAccount({
+			alias: 'Launch Buddy',
+			account_username: 'founder',
+			slug: 'founder',
+			account_avatar_url: 'https://cdn.example/a.png'
+		})
+	).toEqual({ name: 'Launch Buddy', handle: 'founder', avatar: 'https://cdn.example/a.png' });
+	expect(textCardIdentityForAccount({ account_username: 'founder', slug: 'founder' }).name).toBe(
+		'founder'
+	);
+	expect(textCardIdentityForAccount({ slug: 'founder' }).name).toBe('founder');
+});
+
+it('invalidates the preview key when account identity or the avatar changes', () => {
+	const request = {
+		social_account_id: 'account',
+		text: 'A saved post',
+		attachment_count: 0,
+		settings: { text_card: 'text_only' }
+	};
+	const identity = {
+		name: 'Founder',
+		handle: 'founder',
+		avatar: 'https://cdn.example/a.png'
+	};
+	expect(textCardRequestKey(request, identity)).toBe(textCardRequestKey(request, identity));
+	expect(textCardRequestKey(request, identity)).not.toBe(
+		textCardRequestKey(request, { ...identity, name: 'Renamed' })
+	);
+	expect(textCardRequestKey(request, identity)).not.toBe(
+		textCardRequestKey(request, { ...identity, handle: 'someone-else' })
+	);
+	expect(textCardRequestKey(request, identity)).not.toBe(
+		textCardRequestKey(request, { ...identity, avatar: 'https://cdn.example/b.png' })
 	);
 });

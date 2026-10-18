@@ -11,6 +11,29 @@ export interface TextCardResult {
 	error: string;
 }
 
+// Identity fields the server render receipt hashes (publicationcards
+// Identity + the avatar URL). The preview request body carries only the
+// account id, so callers pass the current identity alongside the request
+// when computing cache keys. A relevant alias, handle or avatar change must
+// invalidate the saved client preview exactly when it invalidates the saved
+// server output.
+export interface TextCardIdentity {
+	name: string;
+	handle: string;
+	avatar: string;
+}
+
+export function textCardIdentityForAccount(account: {
+	alias?: string | null;
+	account_username?: string | null;
+	slug?: string | null;
+	account_avatar_url?: string | null;
+}): TextCardIdentity {
+	const username = account.account_username ?? '';
+	const name = (account.alias ?? '').trim() || username || account.slug || '';
+	return { name, handle: username, avatar: account.account_avatar_url ?? '' };
+}
+
 export function supportsTextCards(provider: string, output = ''): boolean {
 	return provider === 'instagram'
 		? ['', 'instagram.feed', 'instagram.carousel', 'instagram.story'].includes(output)
@@ -72,7 +95,10 @@ export function withTextCardImages(model: PreviewModel, images: TextCardImage[])
 	return { ...model, media, segments: [{ ...model.segments[0], text, media }] };
 }
 
-export function textCardRequestKey(request: TextCardRequest | null): string {
+export function textCardRequestKey(
+	request: TextCardRequest | null,
+	identity?: TextCardIdentity | null
+): string {
 	if (!request) return '';
 	const settings = request.settings ?? {};
 	return JSON.stringify([
@@ -80,6 +106,9 @@ export function textCardRequestKey(request: TextCardRequest | null): string {
 		request.text.trim(),
 		request.output_profile === 'instagram.story',
 		request.attachment_count ?? 0,
+		identity?.name ?? '',
+		identity?.handle ?? '',
+		identity?.avatar ?? '',
 		settings.text_card_appearance ?? 'light',
 		settings.text_card_background ?? 'gradient',
 		settings.text_card_color ?? '#c4b5fd',
@@ -90,7 +119,8 @@ export function textCardRequestKey(request: TextCardRequest | null): string {
 }
 
 export function savedTextCardPreviews(
-	renditions: components['schemas']['RenditionResponse'][] = []
+	renditions: components['schemas']['RenditionResponse'][] = [],
+	identities: Record<string, TextCardIdentity | undefined> = {}
 ) {
 	const previews: Record<string, TextCardResult> = {};
 	for (const rendition of renditions) {
@@ -112,7 +142,7 @@ export function savedTextCardPreviews(
 			settings: rendition.settings ?? {}
 		};
 		previews[rendition.social_account_id] = {
-			key: textCardRequestKey(request),
+			key: textCardRequestKey(request, identities[rendition.social_account_id]),
 			images: cards.map((media) => ({
 				data_url: media.url,
 				width: media.width,

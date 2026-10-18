@@ -123,6 +123,7 @@
 	import {
 		supportsTextCards,
 		textCardRequest,
+		textCardIdentityForAccount,
 		textCardRequestKey,
 		savedTextCardPreviews,
 		withTextCardImages,
@@ -893,6 +894,9 @@
 			.map((id) => accounts.find((account) => account.id === id))
 			.filter((account): account is SocialAccount => Boolean(account))
 	);
+	const textCardIdentities = $derived(
+		Object.fromEntries(accounts.map((account) => [account.id, textCardIdentityForAccount(account)]))
+	);
 	const deliveryAccountLabels = $derived.by(() =>
 		Object.fromEntries(accounts.map((account) => [account.id, accountLabel(account)]))
 	);
@@ -1644,7 +1648,10 @@
 
 	function previewForAccount(account: SocialAccount) {
 		const model = authoredPreviewForAccount(account);
-		const requestKey = textCardRequestKey(cardRequestForAccount(account));
+		const requestKey = textCardRequestKey(
+			cardRequestForAccount(account),
+			textCardIdentityForAccount(account)
+		);
 		const saved = savedCardPreviews[account.id];
 		const result = saved?.key === requestKey ? saved : textCardResults.get(account.id);
 		return result?.key === requestKey ? withTextCardImages(model, result.images) : model;
@@ -3239,7 +3246,7 @@
 			].map((media) => [media.id, media.alt_text ?? ''])
 		);
 		hydrateCanonicalSettings(publication);
-		savedCardPreviews = savedTextCardPreviews(publication.renditions ?? []);
+		savedCardPreviews = savedTextCardPreviews(publication.renditions ?? [], textCardIdentities);
 		if (resolveAfter) await resolveCapabilities();
 		lastSavedSnapshot = getSaveSnapshot();
 	}
@@ -4081,7 +4088,7 @@
 			publicationId = savedPublicationId;
 			revision = saved.revision;
 			reviewState = saved.review_state ?? '';
-			savedCardPreviews = savedTextCardPreviews(saved.renditions ?? []);
+			savedCardPreviews = savedTextCardPreviews(saved.renditions ?? [], textCardIdentities);
 			draftConflict = null;
 			lastSavedSnapshot = snapshot;
 			showSavedIndicator();
@@ -4184,7 +4191,7 @@
 		publicationId = saved.id;
 		revision = saved.revision;
 		reviewState = saved.review_state ?? '';
-		savedCardPreviews = savedTextCardPreviews(saved.renditions ?? []);
+		savedCardPreviews = savedTextCardPreviews(saved.renditions ?? [], textCardIdentities);
 		lastSavedSnapshot = getSaveSnapshot();
 		draftConflict = null;
 		success = m.compose_changes_saved();

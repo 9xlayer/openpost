@@ -88,46 +88,67 @@ func Identity(account models.SocialAccount) textcards.Identity {
 }
 
 func (s *Service) Preview(ctx context.Context, account models.SocialAccount, body, output string, style textcards.Style, attachments int) ([]textcards.Image, error) {
+	images, _, err := s.render(ctx, account, body, output, style, attachments)
+	return images, err
+}
+
+// Avatar outcomes recorded in the render receipt. "missing" means no photo
+// was configured, so the monogram fallback is final until the URL changes.
+// "failed" means a configured photo could not be fetched or decoded, so the
+// next save retries the fetch explicitly instead of reusing the fallback.
+const (
+	avatarOK      = "ok"
+	avatarMissing = "missing"
+	avatarFailed  = "failed"
+)
+
+func (s *Service) render(ctx context.Context, account models.SocialAccount, body, output string, style textcards.Style, attachments int) ([]textcards.Image, string, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, avatarFailed, err
 	}
 	select {
 	case renderSlots <- struct{}{}:
 		defer func() { <-renderSlots }()
 	default:
-		return nil, ErrRenderBusy
+		return nil, avatarFailed, ErrRenderBusy
 	}
 
-	avatar := s.avatar(ctx, account.AccountAvatarURL)
-	return textcards.Render(ctx, body, output, style, Identity(account), avatar, attachments)
+	avatar, outcome := s.avatar(ctx, account.AccountAvatarURL)
+	images, err := textcards.Render(ctx, body, output, style, Identity(account), avatar, attachments)
+	if err != nil {
+		return nil, avatarFailed, err
+	}
+	return images, outcome, nil
 }
 
-func (s *Service) avatar(ctx context.Context, raw string) image.Image {
+func (s *Service) avatar(ctx context.Context, raw string) (image.Image, string) {
 	if raw == "" {
-		return nil
+		return nil, avatarMissing
 	}
 	reader, err := s.openAvatar(ctx, raw)
 	if err != nil || reader == nil {
-		return nil
+		return nil, avatarFailed
 	}
 	defer reader.Close()
 	data, err := io.ReadAll(io.LimitReader(reader, 4*1024*1024+1))
 	if err != nil || len(data) > 4*1024*1024 {
-		return nil
+		return nil, avatarFailed
 	}
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 16_000_000 {
-		return nil
+		return nil, avatarFailed
 	}
 	photo, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		return nil
+		return nil, avatarFailed
 	}
-	return photo
+	return photo, avatarOK
 }
 
 // RefreshSegment changes only generated media relations. Existing output bytes
 // are retained when the text, layout, identity and attachment count are unchanged.
+// A previously failed avatar fetch retries on the next save; any other unchanged
+// receipt reuses the saved output without fetching the photo.
 func (s *Service) RefreshSegment(ctx context.Context, db bun.IDB, account models.SocialAccount, rendition models.Rendition, segment models.RenditionSegment, settings map[string]any) error {
 	var rows []models.RenditionSegmentMedia
 	if err := db.NewSelect().Model(&rows).Where("rendition_segment_id = ?", segment.ID).Order("display_order ASC").Scan(ctx); err != nil {
@@ -147,26 +168,40 @@ func (s *Service) RefreshSegment(ctx context.Context, db bun.IDB, account models
 		Attachments          int
 	}{1, segment.Body, rendition.OutputProfile, account.AccountAvatarURL, style, Identity(account), attachments})
 	hash := sha256.Sum256(fingerprint)
-	receipt := string(mustJSON(map[string]string{"text_card_source": hex.EncodeToString(hash[:])}))
-	if applies && len(previous) > 0 && previous[0].SettingsJSON == receipt {
+	source := hex.EncodeToString(hash[:])
+	previousSource, previousAvatar := parseReceipt(previous)
+	if applies && len(previous) > 0 && previousSource == source && previousAvatar != avatarFailed {
 		return nil
 	}
-	if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
-		return err
-	}
+	// A previously failed avatar retries on the next save without requiring
+	// an authored-text edit. The comparison above needs no network; only this
+	// explicit retry path fetches the photo again.
+	if _, err := textcards.Layout(segment.Body, rendition.OutputProfile); err != nil && applies {
+		if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
+			return err
+		}
+		return nil
+	} // Keep incomplete drafts editable.
 	if !applies {
+		if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
+			return err
+		}
 		return nil
 	}
 	if s == nil || s.storage == nil {
 		return errors.New("text card storage is unavailable")
 	}
-	if _, err := textcards.Layout(segment.Body, rendition.OutputProfile); err != nil {
-		return nil
-	} // Keep incomplete drafts editable.
-	images, err := s.Preview(ctx, account, segment.Body, rendition.OutputProfile, style, attachments)
+	images, outcome, err := s.render(ctx, account, segment.Body, rendition.OutputProfile, style, attachments)
 	if err != nil {
 		return err
 	}
+	if len(previous) > 0 && previousSource == source && outcome == avatarFailed {
+		return nil
+	} // The retry is still failing; keep the existing fallback without churning media.
+	if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
+		return err
+	}
+	receipt := string(mustJSON(map[string]string{"text_card_source": source, "text_card_avatar": outcome}))
 	for index, img := range images {
 		media, err := s.persist(ctx, db, account.WorkspaceID, segment.Body, img)
 		if err != nil {
@@ -178,6 +213,21 @@ func (s *Service) RefreshSegment(ctx context.Context, db bun.IDB, account models
 		}
 	}
 	return nil
+}
+
+// parseReceipt reads the internal render receipt stored on generated media
+// relations. Receipts written before avatar outcomes existed carry no avatar
+// field and are treated as reusable, so existing cards are never re-rendered
+// merely for missing the new field.
+func parseReceipt(previous []models.RenditionSegmentMedia) (string, string) {
+	if len(previous) == 0 {
+		return "", ""
+	}
+	var receipt map[string]string
+	if err := json.Unmarshal([]byte(previous[0].SettingsJSON), &receipt); err != nil {
+		return "", ""
+	}
+	return receipt["text_card_source"], receipt["text_card_avatar"]
 }
 
 func (s *Service) persist(ctx context.Context, db bun.IDB, workspaceID, body string, img textcards.Image) (models.MediaAttachment, error) {

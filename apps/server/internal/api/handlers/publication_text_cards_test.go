@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"image"
+	"image/color"
 	"image/jpeg"
+	"image/png"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -73,6 +78,94 @@ func TestTextCardsStaySeparateFromAuthoredMediaAndRefreshAfterEditing(t *testing
 	require.NoError(t, srv.db.NewSelect().Model(&relations).Where("rendition_id = ?", again.Renditions[0].ID).Scan(ctx))
 	require.Len(t, relations, 1)
 	require.Equal(t, segment.OutputMedia[0].ID, relations[0].MediaID)
+}
+
+func TestTextCardAccountIdentityChangeRerendersSameText(t *testing.T) {
+	srv := newMCPTestServer(t)
+	ctx := t.Context()
+	_, err := srv.db.NewUpdate().Model((*models.SocialAccount)(nil)).Set("platform = 'pixelfed'").Set("alias = 'Founder'").Where("id = 'account-1'").Exec(ctx)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	h := srv.handler.publicationHandler()
+	h.SetTextCardStorage(mediastore.NewLocalStorage(dir, "https://media.example"))
+	app := h.publicationApplication()
+	created, err := app.Create(ctx, "user-1", CreatePublicationBody{WorkspaceID: "ws-1", SourceText: "A steady release note.", SocialAccountIDs: []string{"account-1"}})
+	require.NoError(t, err)
+	first := created.Renditions[0].Segments[0].OutputMedia[0]
+	// A no-op save reuses the exact card without another render.
+	require.NoError(t, app.Update(ctx, "user-1", created.ID, PublicationUpdateBody{ExpectedRevision: created.Revision, SourceText: &created.Segments[0].Body}))
+	reused, err := app.Get(ctx, "user-1", created.ID)
+	require.NoError(t, err)
+	require.Equal(t, first.ID, reused.Renditions[0].Segments[0].OutputMedia[0].ID)
+	// Renaming the account invalidates the saved output even though the
+	// authored text is unchanged, so the preview and the next save agree.
+	_, err = srv.db.NewUpdate().Model((*models.SocialAccount)(nil)).Set("alias = 'Renamed Founder'").Where("id = 'account-1'").Exec(ctx)
+	require.NoError(t, err)
+	require.NoError(t, app.Update(ctx, "user-1", created.ID, PublicationUpdateBody{ExpectedRevision: reused.Revision, SourceText: &created.Segments[0].Body}))
+	renamed, err := app.Get(ctx, "user-1", created.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, first.ID, renamed.Renditions[0].Segments[0].OutputMedia[0].ID, "an identity change must re-render the saved card")
+}
+
+func writeTestAvatarPNG(t *testing.T, dir, name string) {
+	t.Helper()
+	photo := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	for y := range 64 {
+		for x := range 64 {
+			photo.Set(x, y, color.RGBA{R: uint8(x * 4), G: uint8(y * 4), B: 128, A: 255})
+		}
+	}
+	var buffer bytes.Buffer
+	require.NoError(t, png.Encode(&buffer, photo))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name), buffer.Bytes(), 0o644))
+}
+
+func textCardReceiptSettings(t *testing.T, srv *mcpTestServer, segmentID string) []models.RenditionSegmentMedia {
+	t.Helper()
+	var rows []models.RenditionSegmentMedia
+	require.NoError(t, srv.db.NewSelect().Model(&rows).Where("rendition_segment_id = ? AND role = 'text_card'", segmentID).Order("display_order ASC").Scan(t.Context()))
+	require.NotEmpty(t, rows)
+	return rows
+}
+
+func TestTextCardFailedAvatarRetriesOnNextSave(t *testing.T) {
+	srv := newMCPTestServer(t)
+	ctx := t.Context()
+	_, err := srv.db.NewUpdate().Model((*models.SocialAccount)(nil)).Set("platform = 'pixelfed'").Set("account_avatar_url = '/avatars/retry.png'").Where("id = 'account-1'").Exec(ctx)
+	require.NoError(t, err)
+	dir := t.TempDir()
+	h := srv.handler.publicationHandler()
+	h.SetTextCardStorage(mediastore.NewLocalStorage(dir, "https://media.example"))
+	app := h.publicationApplication()
+	// Saving stays possible while the optional photo is unavailable; the card
+	// uses the monogram fallback.
+	created, err := app.Create(ctx, "user-1", CreatePublicationBody{WorkspaceID: "ws-1", SourceText: "A release worth sharing.", SocialAccountIDs: []string{"account-1"}})
+	require.NoError(t, err)
+	segmentID := created.Renditions[0].Segments[0].ID
+	fallback := created.Renditions[0].Segments[0].OutputMedia[0]
+	require.Contains(t, textCardReceiptSettings(t, srv, segmentID)[0].SettingsJSON, `"text_card_avatar":"failed"`)
+	// Editing the body during the outage renders the new body, never the
+	// previous complete card.
+	changed := "The release now includes keyboard navigation."
+	require.NoError(t, app.Update(ctx, "user-1", created.ID, PublicationUpdateBody{ExpectedRevision: created.Revision, SourceText: &changed}))
+	edited, err := app.Get(ctx, "user-1", created.ID)
+	require.NoError(t, err)
+	require.Equal(t, changed, edited.Renditions[0].Segments[0].OutputMedia[0].AltText)
+	require.NotEqual(t, fallback.ID, edited.Renditions[0].Segments[0].OutputMedia[0].ID)
+	// Once the photo is available, an explicit save retries it without any
+	// authored-text edit solely to break the cache key.
+	writeTestAvatarPNG(t, dir, "retry.png")
+	require.NoError(t, app.Update(ctx, "user-1", edited.ID, PublicationUpdateBody{ExpectedRevision: edited.Revision, SourceText: &changed}))
+	retried, err := app.Get(ctx, "user-1", edited.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, edited.Renditions[0].Segments[0].OutputMedia[0].ID, retried.Renditions[0].Segments[0].OutputMedia[0].ID, "a recovered avatar must re-render the saved card")
+	require.Equal(t, changed, retried.Renditions[0].Segments[0].OutputMedia[0].AltText)
+	require.Contains(t, textCardReceiptSettings(t, srv, segmentID)[0].SettingsJSON, `"text_card_avatar":"ok"`)
+	// The recovered card is then reused without further renders.
+	require.NoError(t, app.Update(ctx, "user-1", retried.ID, PublicationUpdateBody{ExpectedRevision: retried.Revision, SourceText: &changed}))
+	stable, err := app.Get(ctx, "user-1", retried.ID)
+	require.NoError(t, err)
+	require.Equal(t, retried.Renditions[0].Segments[0].OutputMedia, stable.Renditions[0].Segments[0].OutputMedia)
 }
 
 func TestTextCardReplacementNearQuotaAndRollback(t *testing.T) {
