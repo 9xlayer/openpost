@@ -59,6 +59,7 @@ export function PublicationRow({
       {image?.url ? (
         <MediaImage
           uri={image.url}
+          size="md"
           contentFit="cover"
           style={{ width: 64, height: 56, borderRadius: shape.medium }}
         />

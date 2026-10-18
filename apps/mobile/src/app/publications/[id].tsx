@@ -261,6 +261,7 @@ export default function PostScreen() {
             <MediaImage
               key={media.id}
               uri={media.url}
+              size="original"
               contentFit="contain"
               style={{ width: "100%", height: 200 }}
               accessibilityLabel={media.original_filename || "Post image"}
@@ -325,6 +326,7 @@ export default function PostScreen() {
                       <MediaImage
                         key={media.id}
                         uri={media.url}
+                        size="original"
                         accessibilityLabel={media.alt_text || "Post image"}
                         contentFit="contain"
                         style={{
@@ -337,6 +339,7 @@ export default function PostScreen() {
                       <MediaImage
                         key={media.id}
                         uri={media.url}
+                        size="original"
                         accessibilityLabel={media.alt_text || "Post image"}
                         contentFit="contain"
                         style={{
