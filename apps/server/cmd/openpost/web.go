@@ -24,6 +24,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/publicprofiles"
+	"github.com/openpost/backend/internal/services/billing"
 	"github.com/openpost/backend/internal/usernames"
 	"github.com/uptrace/bun"
 )
@@ -395,18 +396,19 @@ const managedEditionReviewMetadata = `<title data-openpost-review-fallback>OpenP
 		<meta data-openpost-review-fallback name="description" content="Create, adapt, schedule, publish, and review social content from one OpenPost workspace.">
 		<link data-openpost-review-fallback rel="canonical" href="https://app.openpo.st/">`
 
-const managedEditionReviewFallback = `<main data-openpost-review-fallback style="box-sizing:border-box;max-width:42rem;margin:0 auto;padding:4rem 1.5rem;font:16px/1.6 system-ui,sans-serif;color:CanvasText;background:Canvas">
+// managedEditionReviewPlanIDs mirrors the catalogue display order
+// (canonicalPlanOrder in the generated billing catalogue, hostedPlanIDs in
+// @openpost/plan-catalog). Plan names, prices, the trial CTA link, and the
+// purchase-terms sentence are read from the generated catalogue at render
+// time, so changing packages/plan-catalog/src/catalog.json and regenerating
+// updates this fallback with no manual edit.
+var managedEditionReviewPlanIDs = []string{"founder", "team", "agency"}
+
+const managedEditionReviewFallbackHead = `<main data-openpost-review-fallback style="box-sizing:border-box;max-width:42rem;margin:0 auto;padding:4rem 1.5rem;font:16px/1.6 system-ui,sans-serif;color:CanvasText;background:Canvas">
 		<h1 style="font-size:2rem;line-height:1.2">Your content operation, together in one workspace.</h1>
-		<p>Create one source, adapt it for each social platform, schedule every destination, and review publishing results from one OpenPost workspace.</p>
-		<p><a href="/register?plan=founder&amp;billing_period=monthly">Start 14-day trial</a> · <a href="/login">Sign in</a></p>
-		<h2>Hosted plans</h2>
-		<ul>
-			<li>Solo: $29/month</li>
-			<li>Team: $59/month</li>
-			<li>Agency: $99/month</li>
-		</ul>
-		<p>Every plan starts with a 14-day free trial. A card is required. Cancel before the first charge.</p>
-		<nav aria-label="OpenPost product and policies">
+		<p>Create one source, adapt it for each social platform, schedule every destination, and review publishing results from one OpenPost workspace.</p>`
+
+const managedEditionReviewFallbackTail = `		<nav aria-label="OpenPost product and policies">
 			<a href="https://openpo.st/pricing">Compare plans</a>
 			<span aria-hidden="true"> · </span>
 			<a href="https://openpo.st/terms">Terms of service</a>
@@ -419,6 +421,60 @@ const managedEditionReviewFallback = `<main data-openpost-review-fallback style=
 	<script data-openpost-review-fallback>
 		document.querySelectorAll('[data-openpost-review-fallback]').forEach((element) => element.remove());
 	</script>`
+
+func managedEditionReviewFallback() string {
+	var fallback strings.Builder
+	fallback.WriteString(managedEditionReviewFallbackHead)
+	writeManagedEditionReviewTrialCTA(&fallback)
+	writeManagedEditionReviewPlans(&fallback)
+	writeManagedEditionReviewPurchaseTerms(&fallback)
+	fallback.WriteString("\n")
+	fallback.WriteString(managedEditionReviewFallbackTail)
+	return fallback.String()
+}
+
+func writeManagedEditionReviewTrialCTA(fallback *strings.Builder) {
+	for _, planID := range managedEditionReviewPlanIDs {
+		if _, ok := billing.GetPlanConfig(planID); !ok {
+			continue
+		}
+		fallback.WriteString("\n\t\t<p><a href=\"/register?plan=")
+		fallback.WriteString(url.QueryEscape(planID))
+		fallback.WriteString("&amp;billing_period=monthly\">Start ")
+		fallback.WriteString(strconv.Itoa(billing.PlanCatalogTrialDays))
+		fallback.WriteString("-day trial</a> · <a href=\"/login\">Sign in</a></p>")
+		return
+	}
+	fallback.WriteString("\n\t\t<p><a href=\"/login\">Sign in</a></p>")
+}
+
+func writeManagedEditionReviewPlans(fallback *strings.Builder) {
+	fallback.WriteString("\n\t\t<h2>Hosted plans</h2>\n\t\t<ul>")
+	for _, planID := range managedEditionReviewPlanIDs {
+		plan, ok := billing.GetPlanConfig(planID)
+		if !ok {
+			continue
+		}
+		fallback.WriteString("\n\t\t\t<li>")
+		fallback.WriteString(html.EscapeString(plan.Name))
+		fallback.WriteString(": $")
+		fallback.WriteString(strconv.Itoa(plan.MonthlyPriceUSD))
+		fallback.WriteString("/month</li>")
+	}
+	fallback.WriteString("\n\t\t</ul>")
+}
+
+func writeManagedEditionReviewPurchaseTerms(fallback *strings.Builder) {
+	fallback.WriteString("\n\t\t<p>Every plan starts with a ")
+	fallback.WriteString(strconv.Itoa(billing.PlanCatalogTrialDays))
+	fallback.WriteString("-day free trial. ")
+	if billing.PlanCatalogCardRequired {
+		fallback.WriteString("A card is required.")
+	} else {
+		fallback.WriteString("No card is required.")
+	}
+	fallback.WriteString(" Cancel before the first charge.</p>")
+}
 
 func renderManagedEditionMetadata(indexData []byte, requestPath string) []byte {
 	htmlDocument := string(indexData)
@@ -441,7 +497,7 @@ func renderManagedEditionMetadata(indexData []byte, requestPath string) []byte {
 	if !strings.Contains(htmlDocument, "</body>") {
 		return []byte(htmlDocument)
 	}
-	return []byte(strings.Replace(htmlDocument, "</body>", managedEditionReviewFallback+"\n</body>", 1))
+	return []byte(strings.Replace(htmlDocument, "</body>", managedEditionReviewFallback()+"\n</body>", 1))
 }
 
 func loadPublicProfilePageMetadata(ctx context.Context, db *bun.DB, requestedUsername string) (publicProfilePageMetadata, bool, error) {

@@ -19,6 +19,7 @@ import (
 	"github.com/labstack/echo/v4"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/billing"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
@@ -325,10 +326,18 @@ func TestManagedAndSelfHostedSpaRoot(t *testing.T) {
 	require.Equal(t, strconv.Itoa(getRec.Body.Len()), headRec.Header().Get("Content-Length"))
 	require.Empty(t, headRec.Body.String())
 
+	fallback := managedEditionReviewFallback()
+	require.Contains(t, html, fallback)
+
 	data, err := os.ReadFile("../../../../packages/plan-catalog/src/catalog.json")
 	require.NoError(t, err)
 	var catalog struct {
+		PurchaseTerms struct {
+			TrialDays    int  `json:"trial_days"`
+			CardRequired bool `json:"card_required"`
+		} `json:"purchase_terms"`
 		Plans []struct {
+			ID              string `json:"id"`
 			Name            string `json:"name"`
 			MonthlyPriceUSD int    `json:"monthly_price_usd"`
 		} `json:"plans"`
@@ -336,12 +345,45 @@ func TestManagedAndSelfHostedSpaRoot(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &catalog))
 	require.NotEmpty(t, catalog.Plans)
 	for _, plan := range catalog.Plans {
+		// The fallback renders the generated Go catalogue, which the
+		// plan-catalog --check gate keeps in sync with catalog.json.
+		config, ok := billing.GetPlanConfig(plan.ID)
+		require.True(t, ok, "catalogue plan %q must resolve in the generated Go catalogue", plan.ID)
+		require.Equal(t, plan.Name, config.Name)
+		require.Equal(t, plan.MonthlyPriceUSD, config.MonthlyPriceUSD)
 		require.Contains(
 			t,
-			managedEditionReviewFallback,
+			fallback,
 			fmt.Sprintf("<li>%s: $%d/month</li>", plan.Name, plan.MonthlyPriceUSD),
 		)
 	}
+	require.Equal(t, catalog.PurchaseTerms.TrialDays, billing.PlanCatalogTrialDays)
+	require.Equal(t, catalog.PurchaseTerms.CardRequired, billing.PlanCatalogCardRequired)
+
+	firstPlanID := ""
+	for _, plan := range catalog.Plans {
+		if _, ok := billing.GetPlanConfig(plan.ID); ok {
+			firstPlanID = plan.ID
+			break
+		}
+	}
+	require.NotEmpty(t, firstPlanID)
+	require.Contains(
+		t,
+		fallback,
+		fmt.Sprintf(
+			`<a href="/register?plan=%s&amp;billing_period=monthly">Start %d-day trial</a>`,
+			firstPlanID,
+			billing.PlanCatalogTrialDays,
+		),
+	)
+	trialTerms := fmt.Sprintf("Every plan starts with a %d-day free trial. ", billing.PlanCatalogTrialDays)
+	if billing.PlanCatalogCardRequired {
+		trialTerms += "A card is required."
+	} else {
+		trialTerms += "No card is required."
+	}
+	require.Contains(t, fallback, trialTerms)
 
 	selfHosted := echo.New()
 	registerSpaRoutes(selfHosted, webFS)
