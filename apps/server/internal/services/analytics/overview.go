@@ -29,7 +29,12 @@ type Summary struct {
 	Views         MetricSummary `json:"views"`
 	Impressions   MetricSummary `json:"impressions"`
 	Reach         MetricSummary `json:"reach"`
-	Published     int           `json:"published"`
+	// Published counts published destination outputs (renditions where both
+	// the publication and the rendition are published), not publications.
+	// One publication delivered to three destinations contributes 3. Use
+	// Overview.PublicationTotal for the distinct-post count when reconciling
+	// with the Posts "Published" tab, which filters by publication status.
+	Published int `json:"published"`
 }
 
 type SeriesPoint struct {
@@ -131,21 +136,27 @@ type PublicationOverview struct {
 }
 
 type Overview struct {
-	GeneratedAt           time.Time             `json:"generated_at"`
-	LastSyncedAt          time.Time             `json:"last_synced_at,omitempty"`
-	RangeDays             int                   `json:"range_days"`
-	Summary               Summary               `json:"summary"`
-	Accounts              []AccountOverview     `json:"accounts"`
-	FollowerSeries        []SeriesPoint         `json:"follower_series"`
-	Trends                TrendSeries           `json:"trends"`
-	Publications          []PublicationOverview `json:"publications"`
-	Content               []ContentOverview     `json:"content"`
-	Insights              []Insight             `json:"insights"`
-	AccountGrowthScope    string                `json:"account_growth_scope" enum:"account_wide"`
-	PublicationTotal      int                   `json:"publication_total"`
-	PublicationNextCursor string                `json:"publication_next_cursor,omitempty"`
-	ContentNextCursor     string                `json:"content_next_cursor,omitempty"`
-	ContentTotal          int                   `json:"content_total"`
+	GeneratedAt        time.Time             `json:"generated_at"`
+	LastSyncedAt       time.Time             `json:"last_synced_at,omitempty"`
+	RangeDays          int                   `json:"range_days"`
+	Summary            Summary               `json:"summary"`
+	Accounts           []AccountOverview     `json:"accounts"`
+	FollowerSeries     []SeriesPoint         `json:"follower_series"`
+	Trends             TrendSeries           `json:"trends"`
+	Publications       []PublicationOverview `json:"publications"`
+	Content            []ContentOverview     `json:"content"`
+	Insights           []Insight             `json:"insights"`
+	AccountGrowthScope string                `json:"account_growth_scope" enum:"account_wide"`
+	// PublicationTotal is the distinct-post count behind Content: the number
+	// of publications with at least one published rendition in range. It is
+	// the field to compare against the Posts "Published" tab (after aligning
+	// date range and account scope); Summary.Published counts destinations.
+	PublicationTotal      int    `json:"publication_total"`
+	PublicationNextCursor string `json:"publication_next_cursor,omitempty"`
+	ContentNextCursor     string `json:"content_next_cursor,omitempty"`
+	// ContentTotal is the number of published destination outputs in range.
+	// It always equals Summary.Published for the same request.
+	ContentTotal int `json:"content_total"`
 }
 
 func (s *Service) Overview(ctx context.Context, workspaceID string, days int) (Overview, error) {
@@ -715,6 +726,12 @@ func addMeasuredSummary(summary *MetricSummary, values platform.AnalyticsValues,
 	summary.Measured++
 }
 
+// loadManagedContent returns one entry per published destination output in
+// range: it joins renditions to publications and requires both the
+// publication and the rendition to be published. A publication with three
+// successfully published destinations yields three entries; a failed
+// rendition yields none. Callers needing the post-level count use
+// uniquePublicationCount over the result (exposed as PublicationTotal).
 func (s *Service) loadManagedContent(
 	ctx context.Context,
 	workspaceID string,
@@ -752,6 +769,9 @@ func (s *Service) loadManagedContent(
 	return buildContentOverviews(renditions, publicationByID, accountByID, states, now, &unused), nil
 }
 
+// summarizeWholeAccountContent sets Summary.Published to the number of
+// published destination outputs (len(content)), not the number of
+// publications. See loadManagedContent and Summary.Published.
 func summarizeWholeAccountContent(content []ContentOverview) Summary {
 	summary := Summary{Published: len(content)}
 	for _, item := range content {
