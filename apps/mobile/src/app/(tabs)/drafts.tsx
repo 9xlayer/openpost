@@ -1,4 +1,3 @@
-import * as ImagePicker from "expo-image-picker";
 import { Image } from "expo-image";
 import { router, Stack } from "expo-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,7 +29,8 @@ import {
 import { api, errorMessage } from "@/lib/api/client";
 import { relativeTime } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
-import { ORIGINAL_IMAGE_QUALITY, attachmentSizeError, type PendingAttachment } from "@/lib/media";
+import { attachmentSizeError, type PendingAttachment } from "@/lib/media";
+import { CAMERA_PERMISSION_MESSAGE, pickMedia } from "@/lib/media-picker";
 import { stashPendingAttachments, stashSharedFiles } from "@/lib/share";
 import { cacheCreatedPublication, invalidatePublicationData } from "@/lib/query-cache";
 import { queryKeys } from "@/lib/query-policy";
@@ -153,21 +153,7 @@ export default function DraftsScreen() {
 
   async function pickImage(source: "library" | "camera" = "library") {
     try {
-      if (source === "camera" && !(await ImagePicker.requestCameraPermissionsAsync()).granted) {
-        setCaptureError("Allow camera access in Settings to take a photo.");
-        return;
-      }
-      const result =
-        source === "camera"
-          ? await ImagePicker.launchCameraAsync({
-              mediaTypes: ["images"],
-              quality: ORIGINAL_IMAGE_QUALITY,
-            })
-          : await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ["images"],
-              allowsMultipleSelection: false,
-              quality: ORIGINAL_IMAGE_QUALITY,
-            });
+      const result = await pickMedia({ source, mediaTypes: ["images"] });
       const asset = result.canceled ? null : result.assets[0];
       if (!asset) return;
       const capturedAt = Date.now();
@@ -181,11 +167,13 @@ export default function DraftsScreen() {
         },
         () => ideaInputRef.current?.focus(),
       );
-    } catch {
+    } catch (err) {
       setCaptureError(
-        source === "camera"
-          ? "Could not open the camera. Try again."
-          : "Could not open your photo library. Try again.",
+        err instanceof Error && err.message === CAMERA_PERMISSION_MESSAGE
+          ? err.message
+          : source === "camera"
+            ? "Could not open the camera. Try again."
+            : "Could not open your photo library. Try again.",
       );
       void errorHaptic();
     }

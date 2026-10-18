@@ -1,7 +1,7 @@
 import { NativeText as Text } from "@/components/native-text";
 import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
 import { nativeTelemetry } from "@/lib/telemetry";
-import * as ImagePicker from "expo-image-picker";
+import type * as ImagePicker from "expo-image-picker";
 import { MediaImage } from "@/components/media-image";
 import { AccountAvatar } from "@/components/account-avatar";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -51,11 +51,11 @@ import { accountHandle, formatDateTime, platformLabel } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
 import {
   MAX_MOBILE_ATTACHMENT_COUNT,
-  ORIGINAL_IMAGE_QUALITY,
   attachmentSizeError,
   uploadAttachment,
   type PendingAttachment,
 } from "@/lib/media";
+import { pickMedia } from "@/lib/media-picker";
 import { takePendingAttachments } from "@/lib/share";
 import { publicationContentUpdate } from "@/lib/publication-content";
 import {
@@ -988,11 +988,11 @@ function Composer({
   }
 
   async function pickFromLibrary() {
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await pickMedia({
+      source: "library",
       mediaTypes: ["images", "videos"],
-      allowsMultipleSelection: true,
-      selectionLimit: 10,
-      quality: ORIGINAL_IMAGE_QUALITY,
+      multiple: true,
+      limit: MAX_MOBILE_ATTACHMENT_COUNT,
     });
     if (!result.canceled) {
       appendAttachments(result.assets.map((asset, index) => attachmentFromAsset(asset, index)));
@@ -1000,17 +1000,14 @@ function Composer({
   }
 
   async function takePhoto() {
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      setActionError("Camera permission is needed to take photos.");
+    try {
+      const result = await pickMedia({ source: "camera", mediaTypes: ["images"] });
+      if (!result.canceled && result.assets[0]) {
+        addAttachment(result.assets[0]);
+      }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not open the camera. Try again.");
       void errorHaptic();
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      quality: ORIGINAL_IMAGE_QUALITY,
-    });
-    if (!result.canceled && result.assets[0]) {
-      addAttachment(result.assets[0]);
     }
   }
 

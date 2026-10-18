@@ -1,5 +1,6 @@
 import { NativeText as Text } from "@/components/native-text";
-import * as ImagePicker from "expo-image-picker";
+import type * as ImagePicker from "expo-image-picker";
+import { pickMedia } from "@/lib/media-picker";
 import * as Network from "expo-network";
 import {
   CameraView,
@@ -139,10 +140,7 @@ export default function VideoProjectsScreen() {
     if (!workspaceId || busy) return;
     setBusy(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["videos"],
-        allowsMultipleSelection: false,
-      });
+      const result = await pickMedia({ source: "library", mediaTypes: ["videos"] });
       const asset = result.canceled ? undefined : result.assets[0];
       if (!asset) return;
       setSelectedAsset(asset);
