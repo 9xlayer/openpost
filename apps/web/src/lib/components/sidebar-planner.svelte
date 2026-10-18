@@ -31,6 +31,7 @@
 	import { ui } from '$lib/stores/ui.svelte';
 	import { publicationInvalidationForWorkspace } from '$lib/publication-invalidation';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
+	import { publicationCalendarDayKey } from '$lib/publication-calendar';
 	import { m } from '$lib/paraglide/messages';
 	import { getLocaleTag } from '$lib/i18n';
 	import { workspaceColor } from '$lib/workspace-color';
@@ -467,20 +468,6 @@
 			from: start.toDate(timeZone).toISOString(),
 			before: start.add({ months: 1 }).toDate(timeZone).toISOString()
 		};
-	}
-
-	function publicationCalendarDayKey(publication: Publication, timeZone: string) {
-		const occurrence =
-			publication.status === 'published'
-				? publication.actual_run_at ||
-					publication.scheduled_at ||
-					publication.updated_at ||
-					publication.created_at
-				: publication.scheduled_at;
-		if (!occurrence) return '';
-		return new Date(occurrence)
-			.toLocaleDateString('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
-			.replace(/\//g, '-');
 	}
 
 	function formatWeekday(date: CalendarDate) {

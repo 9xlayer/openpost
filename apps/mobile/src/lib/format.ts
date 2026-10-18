@@ -111,22 +111,42 @@ export function formatDateTime(iso: string | null | undefined): string {
 }
 
 /**
- * When a publication counts on the calendar, mirroring the web app:
- * scheduled/publishing use scheduled_at; published prefers actual_run_at.
+ * When a publication counts on the calendar, using the same status-to-field
+ * rule as the web owner `publicationCalendarOccurrence` in
+ * `apps/web/src/lib/publication-calendar.ts` (separate bundle, so this is an
+ * adapter, not an import): scheduled/publishing use the authored
+ * `scheduled_at`; published prefers `actual_run_at`; every other status has
+ * no occurrence. Keep the two in sync when statuses change.
  */
 export function calendarOccurrence(pub: {
   status: string;
   scheduled_at?: string | null;
   actual_run_at?: string | null;
   updated_at?: string | null;
+  created_at?: string | null;
 }): Date | null {
-  const iso =
-    pub.status === "published"
-      ? (pub.actual_run_at ?? pub.scheduled_at ?? pub.updated_at)
-      : (pub.scheduled_at ?? null);
+  const iso = occurrenceIso(pub);
   if (!iso) return null;
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function occurrenceIso(pub: {
+  status: string;
+  scheduled_at?: string | null;
+  actual_run_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+}): string | null {
+  // Planned views retain the authored schedule; queued dispatch may be
+  // randomized, so actual_run_at is never used for scheduled/publishing.
+  if (pub.status === "scheduled" || pub.status === "publishing") {
+    return pub.scheduled_at || null;
+  }
+  if (pub.status === "published") {
+    return pub.actual_run_at || pub.scheduled_at || pub.updated_at || pub.created_at || null;
+  }
+  return null;
 }
 
 export function dayKey(date: Date): string {
