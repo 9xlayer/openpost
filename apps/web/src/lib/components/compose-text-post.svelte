@@ -6498,7 +6498,7 @@
 						aria-label={m.compose_accounts_loading()}
 						data-testid="composer-account-loading"
 					>
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					</Button>
 				{/if}
 				{#if autoSavesDraft}
@@ -6542,7 +6542,7 @@
 						onclick={() => saveEditedPost()}
 						disabled={isSaving || isSubmitting || !canSaveEditedPost}
 					>
-						{#if isSaving}<ProtectedIcon icon="loading" class="size-3.5 animate-spin" />{/if}
+						{#if isSaving}<ProtectedIcon icon="loading" class="size-3.5 animate-spin motion-reduce:animate-none" />{/if}
 						<span>{isSaving ? m.compose_saving_changes() : m.compose_save_changes()}</span>
 					</Button>
 				{:else}
@@ -6603,7 +6603,7 @@
 						disabled
 						data-testid="composer-account-loading"
 					>
-						<ProtectedIcon icon="loading" class="size-3.5 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-3.5 animate-spin motion-reduce:animate-none" />
 						{m.compose_accounts_loading()}
 					</Button>
 				{/if}
@@ -6659,7 +6659,7 @@
 						onclick={() => saveEditedPost()}
 						disabled={isSaving || isSubmitting || !canSaveEditedPost}
 					>
-						{#if isSaving}<ProtectedIcon icon="loading" class="h-3.5 w-3.5 animate-spin" />{/if}
+						{#if isSaving}<ProtectedIcon icon="loading" class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />{/if}
 						<span>{isSaving ? m.compose_saving_changes() : m.compose_save_changes()}</span>
 					</Button>
 				{:else}
@@ -7613,7 +7613,7 @@
 						disabled={copyingDraft}
 					>
 						{#if copyingDraft}
-							<ProtectedIcon icon="loading" class="size-4 animate-spin text-muted-foreground" />
+							<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none text-muted-foreground" />
 							{m.publication_copying()}
 						{:else}
 							<ThemeIcon role="copy" class="size-4 text-muted-foreground" />
@@ -7809,7 +7809,7 @@
 					aria-busy={workspaceSwitchState?.intent === 'save'}
 				>
 					{#if workspaceSwitchState?.intent === 'save'}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{/if}
 					{isEditMode ? m.compose_save_changes() : m.compose_save_draft()}
 				</Button>

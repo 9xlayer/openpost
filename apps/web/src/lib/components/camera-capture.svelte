@@ -218,7 +218,7 @@
 		{/if}
 		{#if loading}
 			<div class="absolute inset-0 flex items-center justify-center bg-neutral-950/80">
-				<ProtectedIcon icon="loading" class="size-6 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-6 animate-spin motion-reduce:animate-none" />
 				<span class="sr-only">{m.camera_opening()}</span>
 			</div>
 		{/if}
@@ -291,7 +291,7 @@
 		{#if capturedURL}
 			<Button variant="outline" onclick={retake}>{m.camera_retake()}</Button>
 			<Button onclick={usePhoto} disabled={usingPhoto}>
-				{#if usingPhoto}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+				{#if usingPhoto}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 				{m.camera_use_photo()}
 			</Button>
 		{:else}

@@ -892,7 +892,7 @@
 					</label>
 					<div class="flex justify-end">
 						<Button type="submit" disabled={providerSaving || !providerClientID.trim()}>
-							{#if providerSaving}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+							{#if providerSaving}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 							{editingProviderID
 								? m.settings_configuration_save_provider()
 								: m.settings_configuration_add_provider_action()}

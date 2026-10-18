@@ -94,7 +94,7 @@
 						<ThemeIcon
 							role="refresh"
 							data-icon="inline-start"
-							class={retrying ? 'animate-spin' : ''}
+							class={retrying ? 'animate-spin motion-reduce:animate-none' : ''}
 						/>
 						{retrying ? m.app_error_retrying() : m.common_retry()}
 					</Button>

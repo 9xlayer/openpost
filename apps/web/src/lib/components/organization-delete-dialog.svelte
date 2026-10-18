@@ -526,7 +526,7 @@
 				onclick={deleteOrganization}
 				>{#if pending}<ProtectedIcon
 						icon="loading"
-						class="size-4 animate-spin"
+						class="size-4 animate-spin motion-reduce:animate-none"
 					/>{/if}{m.organization_delete_confirm()}</Button
 			>
 		</Dialog.Footer>

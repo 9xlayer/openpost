@@ -28,7 +28,7 @@
 	/>
 	{#if canEdit && altText.trim() !== savedAltText}
 		<Button size="sm" variant="outline" onclick={onSaveAlt} disabled={altSaving}>
-			{#if altSaving}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+			{#if altSaving}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 			{m.media_save_alt()}
 		</Button>
 	{/if}

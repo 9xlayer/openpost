@@ -97,7 +97,7 @@
 					data-testid="composer-delete"
 				>
 					{#if deleting}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="delete" class="size-4" />
 					{/if}

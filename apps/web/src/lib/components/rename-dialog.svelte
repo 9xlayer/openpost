@@ -86,7 +86,7 @@
 					class="w-full sm:w-auto"
 					disabled={pending || !value.trim() || value.trim() === initialValue.trim()}
 				>
-					{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+					{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 					{m.common_save()}
 				</Button>
 			</Dialog.Footer>

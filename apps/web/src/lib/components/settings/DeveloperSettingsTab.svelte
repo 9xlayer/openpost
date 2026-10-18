@@ -632,7 +632,7 @@
 				(apiTokenWorkspaceScope === 'current' && !workspaceCtx.currentWorkspace)}
 		>
 			{#if apiTokenBusy}
-				<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
 			{/if}
 			{m.settings_create_token()}
 		</Button>
@@ -781,7 +781,7 @@
 		</div>
 		<Button variant="outline" size="sm" onclick={retryMCPActivity} disabled={mcpActivityLoading}>
 			{#if mcpActivityLoading}
-				<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
 			{/if}
 			{m.common_refresh()}
 		</Button>

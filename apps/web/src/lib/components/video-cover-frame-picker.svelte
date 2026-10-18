@@ -253,7 +253,7 @@
 			onclick={applyFrame}
 		>
 			{#if applying}
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{m.compose_cover_frame_applying()}
 			{:else}
 				{m.compose_cover_frame_use()}
@@ -268,7 +268,7 @@
 				disabled={applying || editing}
 				onclick={editFrame}
 			>
-				{#if editing}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+				{#if editing}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 				{m.compose_cover_frame_edit()}
 			</Button>
 		{/if}

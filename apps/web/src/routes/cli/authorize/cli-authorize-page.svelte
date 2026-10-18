@@ -362,7 +362,7 @@
 					disabled={submitting || selectedWorkspaceID === null}
 				>
 					{#if pendingDecision === 'approved'}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="security" class="h-4 w-4" />
 					{/if}
@@ -370,7 +370,7 @@
 				</Button>
 				<Button variant="outline" class="w-full gap-2" onclick={deny} disabled={submitting}>
 					{#if pendingDecision === 'denied'}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="close" class="h-4 w-4" />
 					{/if}

@@ -289,7 +289,7 @@
 					disabled={suggesting}
 				>
 					{#if suggesting}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="arrow-right" class="size-4" />
 					{/if}
@@ -513,7 +513,7 @@
 					!canSchedule ||
 					(!scheduleInput.trim() && (isPastDay || !selectedDate || !selectedTime))}
 			>
-				{#if submitting}<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin" />{/if}
+				{#if submitting}<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />{/if}
 				{m.compose_schedule()}
 			</Button>
 		</Dialog.Footer>

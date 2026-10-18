@@ -61,7 +61,7 @@
 			onclick={() => void start(provider)}
 		>
 			{#if loadingProviderID === provider.id}
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 			{:else if provider.id === 'google'}
 				<svg class="size-4" viewBox="0 0 18 18" aria-hidden="true">
 					<path

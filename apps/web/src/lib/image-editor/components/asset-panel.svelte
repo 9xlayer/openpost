@@ -551,7 +551,7 @@
 
 		{#if (!guestMode || guestSource === 'library') && loading}
 			<div class="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-				<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />
 				{m.common_loading()}
 			</div>
 		{:else if !guestMode || guestSource === 'library'}

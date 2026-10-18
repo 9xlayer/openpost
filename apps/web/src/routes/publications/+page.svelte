@@ -995,7 +995,10 @@
 						onclick={() => loadData()}
 						disabled={loading}
 					>
-						<ThemeIcon role="refresh" class={`size-4 ${loading ? 'animate-spin' : ''}`} />
+						<ThemeIcon
+							role="refresh"
+							class={`size-4 ${loading ? 'animate-spin motion-reduce:animate-none' : ''}`}
+						/>
 					</Button>
 				</div>
 			</div>
@@ -1157,7 +1160,10 @@
 									onclick={loadMoreFailedJobs}
 								>
 									{#if failedJobsInfinite.isFetchingNextPage}
-										<ThemeIcon role="refresh" class="mr-1.5 size-3.5 animate-spin" />
+										<ThemeIcon
+											role="refresh"
+											class="mr-1.5 size-3.5 animate-spin motion-reduce:animate-none"
+										/>
 									{/if}
 									{m.activity_load_more_jobs({
 										count: Math.min(jobPageSize, failedJobsPage.total - failedJobs.length)
@@ -1183,7 +1189,10 @@
 						onclick={loadMorePublicationHistory}
 					>
 						{#if publicationsInfinite.isFetchingNextPage}
-							<ThemeIcon role="refresh" class="mr-1.5 size-3.5 animate-spin" />
+							<ThemeIcon
+								role="refresh"
+								class="mr-1.5 size-3.5 animate-spin motion-reduce:animate-none"
+							/>
 						{/if}
 						{m.notifications_load_more()}
 					</Button>

@@ -232,7 +232,7 @@
 				class="mb-4 flex items-center justify-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground"
 				role="status"
 			>
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{m.purchase_choice_loading()}
 			</div>
 		{:else if purchaseChoice}
@@ -291,7 +291,7 @@
 				disabled={!canVerify || isVerifying || isResending}
 			>
 				{#if isVerifying}
-					<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+					<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{m.auth_verify_email_loading()}
 				{:else}
 					{m.auth_verify_email_submit()}
@@ -307,7 +307,7 @@
 			onclick={() => void resend()}
 		>
 			{#if isResending}
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{m.auth_verify_email_resending()}
 			{:else if resendSeconds > 0}
 				{m.auth_verify_email_resend_in({ seconds: resendSeconds })}

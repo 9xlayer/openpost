@@ -28,7 +28,7 @@
 		})}
 	>
 		{#if busy}
-			<ProtectedIcon icon="loading" class="size-3.5 animate-spin" />
+			<ProtectedIcon icon="loading" class="size-3.5 animate-spin motion-reduce:animate-none" />
 		{:else}
 			<ThemeIcon role="billing" class="size-3.5" />
 		{/if}
@@ -49,7 +49,7 @@
 			})}
 		>
 			{#if busy}
-				<ProtectedIcon icon="loading" class="size-3.5 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-3.5 animate-spin motion-reduce:animate-none" />
 			{:else}
 				<ThemeIcon role="user" class="size-3.5" />
 			{/if}

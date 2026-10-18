@@ -214,7 +214,7 @@
 				disabled={!canDelete}
 				onclick={deleteAccount}
 			>
-				{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+				{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 				{pending ? m.settings_delete_deleting() : m.settings_delete_submit()}
 			</Button>
 		</Dialog.Footer>

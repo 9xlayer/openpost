@@ -328,7 +328,7 @@
 				class="mb-4 flex items-center justify-center gap-2 rounded-lg border p-4 text-sm text-muted-foreground"
 				role="status"
 			>
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{m.purchase_choice_loading()}
 			</div>
 		{:else if purchaseChoice}
@@ -457,7 +457,7 @@
 				class="w-full gap-2"
 			>
 				{#if isLoading}
-					<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin" />
+					<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
 					{m.auth_register_loading()}
 				{:else}
 					{m.auth_register_submit()}

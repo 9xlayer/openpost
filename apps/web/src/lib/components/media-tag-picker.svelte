@@ -74,7 +74,7 @@
 					onclick={() => void toggle(tag.id, !selectedIds.includes(tag.id))}
 				>
 					{#if busyTagId === tag.id}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<span
 							class="flex size-4 shrink-0 items-center justify-center rounded-sm border {selectedIds.includes(
@@ -116,7 +116,7 @@
 					disabled={creating || !newTagName.trim()}
 					aria-label={m.media_create_tag()}
 				>
-					{#if creating}<ProtectedIcon icon="loading" class="animate-spin" />{:else}<ThemeIcon
+					{#if creating}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{:else}<ThemeIcon
 							role="add"
 						/>{/if}
 				</Button>

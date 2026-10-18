@@ -4582,7 +4582,7 @@
 			<div class="space-y-2 overflow-y-auto pr-1">
 				{#if historyBusy}
 					<div class="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
-						<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />
 						{m.image_editor_loading_history()}
 					</div>
 				{:else if revisions.length === 0}
@@ -4627,7 +4627,7 @@
 						>
 							{#if historyPageBusy}<ProtectedIcon
 									icon="loading"
-									class="mr-2 size-4 animate-spin"
+									class="mr-2 size-4 animate-spin motion-reduce:animate-none"
 								/>{/if}
 							{m.notifications_load_more()}
 						</Button>
@@ -4642,7 +4642,7 @@
 			<section class="min-h-0 overflow-y-auto rounded-lg border bg-muted/20 p-3" aria-live="polite">
 				{#if revisionPreviewBusy}
 					<div class="flex min-h-56 items-center justify-center text-sm text-muted-foreground">
-						<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />
 						{m.version_preview_loading()}
 					</div>
 				{:else if !revisionPreview}
@@ -4780,7 +4780,7 @@
 					!imageEditorRevisionHasChanges(revisionChanges)}
 				onclick={() => void restoreRevision()}
 			>
-				{#if historyBusy}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+				{#if historyBusy}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 				{m.version_restore_confirm()}
 			</Button>
 		</Dialog.Footer>
@@ -4811,7 +4811,7 @@
 				>{m.common_cancel()}</Button
 			>
 			<Button onclick={createCheckpoint} disabled={!checkpointName.trim() || historyBusy}>
-				{#if historyBusy}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+				{#if historyBusy}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 				{m.image_editor_create_checkpoint()}
 			</Button>
 		</Dialog.Footer>
@@ -4860,7 +4860,7 @@
 				>{m.common_cancel()}</Button
 			>
 			<Button onclick={saveAsTemplate} disabled={!templateName.trim() || historyBusy}>
-				{#if historyBusy}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+				{#if historyBusy}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 				{templateTargetID === 'new'
 					? m.image_editor_save_template_action()
 					: m.image_editor_replace_template_action()}
@@ -4902,7 +4902,7 @@
 							class="grid justify-items-center gap-2 text-sm text-muted-foreground"
 							role="status"
 						>
-							<ProtectedIcon icon="loading" class="size-5 animate-spin" />
+							<ProtectedIcon icon="loading" class="size-5 animate-spin motion-reduce:animate-none" />
 							<span>{exportPreviewProgress || m.image_editor_export_preview_encoding()}</span>
 						</div>
 					{:else if exportPreviewError}
@@ -5129,7 +5129,7 @@
 					!editor.document ||
 					!exportBudget?.allowed}
 			>
-				{#if exportBusy}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+				{#if exportBusy}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 				{exportMode === 'download'
 					? m.image_editor_download()
 					: exportMode === 'attach'

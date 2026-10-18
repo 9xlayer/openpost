@@ -755,7 +755,7 @@
 				<Button type="submit" disabled={busy === 'provider'} class="gap-2">
 					{#if busy === 'provider'}<ProtectedIcon
 							icon="loading"
-							class="size-4 animate-spin"
+							class="size-4 animate-spin motion-reduce:animate-none"
 						/>{:else}<ThemeIcon role="add" class="size-4" />{/if}
 					{m.common_save()}
 				</Button>
@@ -849,7 +849,7 @@
 					<InlineNotice tone="warning" message={m.settings_sso_required_warning()} />
 				{/if}
 				<Button type="submit" disabled={busy === 'policy'} class="gap-2">
-					{#if busy === 'policy'}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+					{#if busy === 'policy'}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 					{m.common_save()}
 				</Button>
 			</form>

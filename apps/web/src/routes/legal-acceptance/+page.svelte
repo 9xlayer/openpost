@@ -140,7 +140,7 @@
 			class="w-full gap-2"
 			disabled={loading || configurationLoading || !authConfiguration?.legal_acceptance_required}
 		>
-			{#if loading}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+			{#if loading}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 			{loading ? m.auth_legal_loading() : m.auth_legal_submit()}
 		</Button>
 		<Button type="button" variant="ghost" class="w-full" disabled={loading} onclick={signOut}>

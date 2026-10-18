@@ -417,7 +417,7 @@
 			</div>
 			{#if creating === template.id}<ProtectedIcon
 					icon="loading"
-					class="size-4 animate-spin"
+					class="size-4 animate-spin motion-reduce:animate-none"
 				/>{/if}
 		</div>
 	</button>

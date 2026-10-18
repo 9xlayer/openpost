@@ -38,7 +38,7 @@
 				{upload.file.name}
 			</p>
 			{#if upload.status === 'uploading'}
-				<ProtectedIcon icon="loading" class="size-5 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-5 animate-spin motion-reduce:animate-none" />
 				<p class="text-xs font-medium">
 					{upload.file.name}: {m.media_upload_action()}
 					{#if upload.progress !== null}
@@ -69,7 +69,7 @@
 					{m.common_cancel()}
 				</button>
 			{:else if upload.status === 'queued'}
-				<ProtectedIcon icon="loading" class="size-5 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-5 animate-spin motion-reduce:animate-none" />
 				<p class="text-xs font-medium">
 					{upload.file.name}: {m.media_upload_ready()}
 				</p>

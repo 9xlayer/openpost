@@ -137,7 +137,7 @@
 					{m.common_cancel()}
 				</Button>
 				<Button type="submit" class="gap-2" disabled={!canCreate}>
-					{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+					{#if pending}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 					{m.onboarding_submit()}
 				</Button>
 			</Dialog.Footer>

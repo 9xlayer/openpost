@@ -383,7 +383,7 @@
 				disabled={billingPortalBusy}
 			>
 				{#if billingPortalBusy}
-					<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin" />
+					<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
 				{:else}
 					<ThemeIcon role="external-link" class="mr-2 h-4 w-4" />
 				{/if}
@@ -438,7 +438,7 @@
 							disabled={billingPortalBusy}
 						>
 							{#if billingPortalBusy}
-								<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin" />
+								<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" />
 							{/if}
 							{m.billing_recovery_update_payment_method()}
 						</Button>

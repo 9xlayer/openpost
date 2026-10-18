@@ -1768,7 +1768,7 @@
 												aria-live="polite"
 											>
 												<div class="flex items-center gap-2 text-xs font-medium">
-													<ProtectedIcon icon="loading" class="size-3.5 animate-spin" />
+													<ProtectedIcon icon="loading" class="size-3.5 animate-spin motion-reduce:animate-none" />
 													{m.media_video_processing({
 														percent: Math.max(0, media.processing_progress ?? 0)
 													})}

@@ -481,7 +481,7 @@
 					class="inline-flex h-11 cursor-pointer items-center justify-center rounded-md border px-3 text-sm font-medium has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring"
 				>
 					{#if uploadingFont}
-						<ProtectedIcon icon="loading" class="mr-2 animate-spin" />
+						<ProtectedIcon icon="loading" class="mr-2 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="upload" class="mr-2" />
 					{/if}

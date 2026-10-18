@@ -236,7 +236,7 @@
 					class="mr-auto"
 				>
 					{#if saving}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{/if}
 					{m.settings_instance_remove_plan()}
 				</Button>
@@ -246,7 +246,7 @@
 			</Button>
 			<Button onclick={savePlan} disabled={!selectedPlan || saving || success}>
 				{#if saving}
-					<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+					<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{/if}
 				{m.settings_instance_apply_plan()}
 			</Button>

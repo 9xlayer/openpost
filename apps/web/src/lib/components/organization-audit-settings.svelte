@@ -668,7 +668,7 @@
 				onclick={() => void loadAudit({ append: true })}
 				>{#if loadingMore}<ProtectedIcon
 						icon="loading"
-						class="size-4 animate-spin"
+						class="size-4 animate-spin motion-reduce:animate-none"
 					/>{/if}{m.settings_audit_load_older()}</Button
 			>{/if}
 	{/if}

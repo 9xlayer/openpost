@@ -60,7 +60,7 @@
 			>
 				{#if pendingAction === 'reload'}<ProtectedIcon
 						icon="loading"
-						class="size-4 animate-spin"
+						class="size-4 animate-spin motion-reduce:animate-none"
 					/>{/if}
 				{m.draft_conflict_reload()}
 			</Button>
@@ -71,14 +71,14 @@
 			>
 				{#if pendingAction === 'copy'}<ProtectedIcon
 						icon="loading"
-						class="size-4 animate-spin"
+						class="size-4 animate-spin motion-reduce:animate-none"
 					/>{/if}
 				{m.draft_conflict_copy()}
 			</Button>
 			<Button disabled={Boolean(pendingAction)} onclick={() => run('overwrite', onOverwrite)}>
 				{#if pendingAction === 'overwrite'}<ProtectedIcon
 						icon="loading"
-						class="size-4 animate-spin"
+						class="size-4 animate-spin motion-reduce:animate-none"
 					/>{/if}
 				{m.draft_conflict_overwrite()}
 			</Button>

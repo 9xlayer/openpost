@@ -334,7 +334,7 @@
 			role="status"
 			aria-live="polite"
 		>
-			<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+			<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 			{m.stock_media_downloading({
 				title: selectingAsset.title || selectingAsset.kind
 			})}
@@ -343,7 +343,7 @@
 
 	{#if loading}
 		<div class="flex items-center gap-2 py-6 text-sm text-muted-foreground" role="status">
-			<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+			<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 			{m.common_loading()}
 		</div>
 	{:else if providers.length === 0}
@@ -390,7 +390,7 @@
 				<Button type="submit" disabled={!query.trim() || !provider || searching}>
 					{#if searching}<ProtectedIcon
 							icon="loading"
-							class="size-4 animate-spin"
+							class="size-4 animate-spin motion-reduce:animate-none"
 						/>{:else}<ThemeIcon role="search" class="size-4" />{/if}
 					{m.stock_media_search_action()}
 				</Button>
@@ -729,7 +729,7 @@
 							>
 								{#if selecting === asset.external_id}<ProtectedIcon
 										icon="loading"
-										class="size-4 animate-spin"
+										class="size-4 animate-spin motion-reduce:animate-none"
 									/>{/if}
 								{selecting === asset.external_id
 									? m.stock_media_downloading({
@@ -744,7 +744,7 @@
 			{#if hasMore}
 				<div class="flex justify-center pt-1">
 					<Button variant="outline" onclick={() => void search(false)} disabled={searching}>
-						{#if searching}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+						{#if searching}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 						{m.stock_load_more()}
 					</Button>
 				</div>

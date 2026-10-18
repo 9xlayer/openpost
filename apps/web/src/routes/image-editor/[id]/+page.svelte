@@ -230,7 +230,7 @@
 
 {#if loading || migrationBusy}
 	<div class="flex h-dvh items-center justify-center bg-background text-foreground">
-		<ProtectedIcon icon="loading" class="mr-2 size-5 animate-spin" />
+		<ProtectedIcon icon="loading" class="mr-2 size-5 animate-spin motion-reduce:animate-none" />
 		{m.image_editor_public_importing()}
 	</div>
 {:else if error || !design}

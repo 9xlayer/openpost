@@ -747,14 +747,14 @@
 					size="icon"
 					aria-label={m.media_picker_search_action()}
 				>
-					{#if loading}<ProtectedIcon icon="loading" class="animate-spin" />{:else}<ThemeIcon
+					{#if loading}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{:else}<ThemeIcon
 							role="search"
 						/>{/if}
 				</Button>
 			</form>
 			{#if loading && media.length === 0}
 				<div class="flex min-h-48 items-center justify-center text-muted-foreground">
-					<ProtectedIcon icon="loading" class="mr-2 size-5 animate-spin" />
+					<ProtectedIcon icon="loading" class="mr-2 size-5 animate-spin motion-reduce:animate-none" />
 					{m.media_picker_loading()}
 				</div>
 			{:else if media.length === 0}
@@ -794,7 +794,7 @@
 										{#if item.processing_status === 'processing'}
 											<ProtectedIcon
 												icon="loading"
-												class="size-6 animate-spin text-muted-foreground"
+												class="size-6 animate-spin motion-reduce:animate-none text-muted-foreground"
 											/>
 										{:else}
 											<ThemeIcon role="video" class="size-7 text-muted-foreground" />
@@ -885,7 +885,7 @@
 		<div class="flex flex-col-reverse gap-2 border-t px-4 py-3 sm:flex-row sm:justify-end">
 			<Button variant="ghost" onclick={() => (open = false)}>{m.common_cancel()}</Button>
 			<Button onclick={confirm} disabled={actionLoading || selectedIDs.length === 0}>
-				{#if actionLoading}<ProtectedIcon icon="loading" class="animate-spin" />{/if}
+				{#if actionLoading}<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />{/if}
 				{m.media_picker_add_media()}
 			</Button>
 		</div>

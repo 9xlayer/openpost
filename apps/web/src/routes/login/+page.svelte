@@ -287,7 +287,7 @@
 					disabled={isLoading}
 				>
 					{#if isLoading}
-						<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
 						{m.auth_login_passkey_loading()}
 					{:else}
 						<ThemeIcon role="key" class="h-4 w-4" />
@@ -318,7 +318,7 @@
 						class="w-full gap-2"
 					>
 						{#if isLoading}
-							<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin" />
+							<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
 							{m.auth_login_verifying()}
 						{:else}
 							<ThemeIcon role="security" class="h-4 w-4" />
@@ -351,7 +351,7 @@
 						class="w-full gap-2"
 					>
 						{#if isLoading}
-							<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin" />
+							<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
 							{m.auth_login_verifying()}
 						{:else}
 							<ThemeIcon role="security" class="h-4 w-4" />
@@ -441,7 +441,7 @@
 
 			<Button type="submit" disabled={isLoading} class="w-full gap-2">
 				{#if isLoading}
-					<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin" />
+					<ProtectedIcon icon="loading" class="h-4 w-4 animate-spin motion-reduce:animate-none" />
 					{m.auth_login_loading()}
 				{:else}
 					{m.auth_login_submit()}
@@ -465,7 +465,7 @@
 				</div>
 				<Button type="submit" variant="outline" class="w-full gap-2" disabled={Boolean(ssoLoading)}>
 					{#if ssoLoading === 'discover'}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="organization" class="size-4" />
 					{/if}

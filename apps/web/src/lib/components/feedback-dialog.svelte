@@ -235,7 +235,7 @@
 
 		{#if loading && !config}
 			<div class="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-				<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />
 				{m.feedback_loading()}
 			</div>
 		{:else if !config}
@@ -346,7 +346,7 @@
 					</label>
 					{#if screenshotLoading}
 						<p class="flex items-center text-xs text-muted-foreground">
-							<ProtectedIcon icon="loading" class="mr-2 size-3.5 animate-spin" />
+							<ProtectedIcon icon="loading" class="mr-2 size-3.5 animate-spin motion-reduce:animate-none" />
 							{m.feedback_screenshot_capturing()}
 						</p>
 					{:else if screenshotDataURL}
@@ -419,7 +419,7 @@
 						{m.common_cancel()}
 					</Button>
 					<Button type="submit" disabled={sending || screenshotLoading || !message.trim()}>
-						{#if sending}<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin" />{/if}
+						{#if sending}<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />{/if}
 						{sending ? m.feedback_sending() : m.feedback_send()}
 					</Button>
 				</Dialog.Footer>

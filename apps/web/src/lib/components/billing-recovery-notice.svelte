@@ -203,7 +203,7 @@
 					onclick={openPaymentRecovery}
 					disabled={recoveryBusy}
 				>
-					{#if recoveryBusy}<ProtectedIcon icon="loading" class="mr-1.5 size-4 animate-spin" />{/if}
+					{#if recoveryBusy}<ProtectedIcon icon="loading" class="mr-1.5 size-4 animate-spin motion-reduce:animate-none" />{/if}
 					{m.billing_recovery_update_payment_method()}
 				</Button>
 			{/if}

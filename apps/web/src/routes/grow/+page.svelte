@@ -693,7 +693,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 				data-testid="grow-refresh-button"
 			>
 				{#if busy}
-					<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+					<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{m.grow_refreshing()}
 				{:else}
 					<ThemeIcon role="refresh" class="size-4" />
@@ -754,7 +754,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 						class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
 						aria-live="polite"
 					>
-						<ProtectedIcon icon="loading" class="size-3.5 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-3.5 animate-spin motion-reduce:animate-none" />
 						{m.grow_refreshing()}
 					</span>
 				{/if}

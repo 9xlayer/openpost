@@ -467,7 +467,7 @@
 			</div>
 			<Button type="submit" variant="outline" disabled={usersLoading}>
 				{#if usersLoading && users}
-					<ProtectedIcon icon="loading" class="animate-spin" />
+					<ProtectedIcon icon="loading" class="animate-spin motion-reduce:animate-none" />
 				{/if}
 				{m.settings_instance_search()}
 			</Button>
@@ -647,7 +647,7 @@
 
 		{#if impersonationBusyUserID}
 			<div class="flex min-h-24 items-center justify-center gap-2 text-sm text-muted-foreground">
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 				{m.settings_instance_impersonation_creating()}
 			</div>
 		{:else if impersonationError && !impersonationURL}

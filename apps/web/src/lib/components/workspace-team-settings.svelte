@@ -817,7 +817,7 @@
 			<div class="flex items-end">
 				<Button type="submit" disabled={Boolean(busyKey) || !inviteEmail.trim()}>
 					{#if busyKey === 'invite'}
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 					{:else}
 						<ThemeIcon role="growth" class="size-4" />
 					{/if}
@@ -980,7 +980,7 @@
 												>
 													{#if busyKey === `member:${member.user_id}`}<ProtectedIcon
 															icon="loading"
-															class="size-4 animate-spin"
+															class="size-4 animate-spin motion-reduce:animate-none"
 														/>{:else}<ThemeIcon role="refresh" class="size-4" />{/if}
 													{m.settings_member_reactivate()}
 												</Button>
@@ -1067,7 +1067,7 @@
 										>
 											{#if busyKey === `invitation:${invitation.id}`}<ProtectedIcon
 													icon="loading"
-													class="size-4 animate-spin"
+													class="size-4 animate-spin motion-reduce:animate-none"
 												/>{:else}<ThemeIcon role="refresh" class="size-4" />{/if}
 											{m.settings_invitation_resend()}
 										</Button>

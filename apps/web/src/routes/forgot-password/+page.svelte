@@ -117,7 +117,7 @@
 				class="w-full gap-2"
 				disabled={loading || configurationLoading || !authConfiguration?.password_reset_enabled}
 			>
-				{#if loading}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+				{#if loading}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 				{loading ? m.auth_forgot_loading() : m.auth_forgot_submit()}
 			</Button>
 		</form>

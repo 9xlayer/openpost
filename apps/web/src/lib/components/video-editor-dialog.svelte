@@ -334,14 +334,14 @@
 						{/if}
 					</div>
 				{:else}
-					<ProtectedIcon icon="loading" class="size-6 animate-spin text-white" />
+					<ProtectedIcon icon="loading" class="size-6 animate-spin motion-reduce:animate-none text-white" />
 				{/if}
 			</div>
 
 			<div class="space-y-5 p-4 sm:p-5">
 				{#if loading}
 					<div class="flex items-center gap-2 text-sm text-muted-foreground">
-						<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+						<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 						{m.video_upload_editor_loading()}
 					</div>
 				{:else if metadata && file}
@@ -482,7 +482,7 @@
 				{rendering ? m.video_upload_cancel() : m.common_cancel()}
 			</Button>
 			<Button type="button" class="min-h-12" disabled={!metadata || rendering} onclick={applyEdit}>
-				{#if rendering}<ProtectedIcon icon="loading" class="size-4 animate-spin" />{/if}
+				{#if rendering}<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />{/if}
 				{m.video_upload_editor_apply()}
 			</Button>
 		</Dialog.Footer>
