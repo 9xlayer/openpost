@@ -2321,6 +2321,12 @@ func (s *Service) openSettingMedia(ctx context.Context, settings map[string]inte
 	return &media, reader, nil
 }
 
+// settingStringPublisher stays strict on purpose (issue #414): it reads
+// media IDs and the content-posting-method mode, where coercing a stored
+// number via fmt.Sprint would manufacture a database lookup or mode match
+// instead of skipping the setting. Only string and fmt.Stringer values are
+// accepted; use settingx.String for general adapter settings that follow
+// the tolerant coercion rule.
 func settingStringPublisher(settings map[string]interface{}, key string) string {
 	if settings == nil {
 		return ""

@@ -6209,6 +6209,10 @@ func cleanRemoteMediaFilename(filename string) string {
 	return filename
 }
 
+// stringFromMap stays strict on purpose (issue #414): it reads internal
+// upload-result maps ("id", "deduped"), not stored settings_json, and the
+// public MCP surface accepts no new coercion. Values of an unexpected type
+// read as "" rather than being coerced.
 func stringFromMap(values map[string]interface{}, key string) string {
 	if value, ok := values[key].(string); ok {
 		return value
@@ -6216,6 +6220,9 @@ func stringFromMap(values map[string]interface{}, key string) string {
 	return ""
 }
 
+// boolFromMap stays strict on purpose (issue #414): it reads internal
+// upload-result maps ("deduped"), not stored settings_json, and the public
+// MCP surface accepts no new coercion. Only a bare bool reads true.
 func boolFromMap(values map[string]interface{}, key string) bool {
 	if value, ok := values[key].(bool); ok {
 		return value

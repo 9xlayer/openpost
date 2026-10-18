@@ -1,83 +1,31 @@
 package platform
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/openpost/backend/internal/settingx"
 )
 
 func settingString(settings map[string]interface{}, key string) string {
-	if settings == nil {
-		return ""
-	}
-	value, ok := settings[key]
-	if !ok || value == nil {
-		return ""
-	}
-	return strings.TrimSpace(fmt.Sprint(value))
+	return settingx.String(settings, key)
 }
 
 func settingBool(settings map[string]interface{}, key string) bool {
-	if settings == nil {
-		return false
-	}
-	value, ok := settings[key]
-	if !ok {
-		return false
-	}
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	case string:
-		normalized := strings.ToLower(strings.TrimSpace(typed))
-		return normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
-	default:
-		return strings.EqualFold(fmt.Sprint(value), "true")
-	}
+	return settingx.Bool(settings, key)
 }
 
 // settingBoolPtr keeps an explicit false: nil when the key is absent or null, so
 // providers can tell "not set" (use the account default) from "set to false".
 func settingBoolPtr(settings map[string]interface{}, key string) *bool {
-	if raw, ok := settings[key]; !ok || raw == nil {
-		return nil
-	}
-	value := settingBool(settings, key)
-	return &value
+	return settingx.BoolPtr(settings, key)
 }
 
 func settingBoolDefault(settings map[string]interface{}, key string, fallback bool) bool {
-	if settings == nil {
-		return fallback
-	}
-	if _, ok := settings[key]; !ok {
-		return fallback
-	}
-	return settingBool(settings, key)
+	return settingx.BoolDefault(settings, key, fallback)
 }
 
 func settingInt(settings map[string]interface{}, key string) int {
-	if settings == nil {
-		return 0
-	}
-	value, ok := settings[key]
-	if !ok || value == nil {
-		return 0
-	}
-	switch typed := value.(type) {
-	case int:
-		return typed
-	case int64:
-		return int(typed)
-	case float64:
-		return int(typed)
-	case string:
-		parsed, err := strconv.Atoi(strings.TrimSpace(typed))
-		if err == nil {
-			return parsed
-		}
-	}
-	return 0
+	return settingx.Int(settings, key)
 }
 
 // ContentWithSettingURL returns the exact text sent by text-based adapters

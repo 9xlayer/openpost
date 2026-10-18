@@ -14,6 +14,7 @@ import (
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/providerlimits"
+	"github.com/openpost/backend/internal/settingx"
 	"github.com/openpost/backend/internal/textcards"
 )
 
@@ -2106,19 +2107,13 @@ func settingDependenciesMet(field SettingDefinition, settings map[string]any, me
 }
 
 func settingBooleanValue(settings map[string]any, key string) bool {
-	value, exists := settings[key]
-	if !exists {
-		return false
-	}
-	switch typed := value.(type) {
-	case bool:
-		return typed
-	case string:
-		parsed, _ := strconv.ParseBool(strings.TrimSpace(typed))
-		return parsed
-	default:
-		return false
-	}
+	// Issue #414: delegate to the shared settingx.Bool owner so the
+	// capability preview agrees with what the provider adapters already
+	// send for the same stored value. This deliberately changes two edge
+	// cases versus the previous strconv.ParseBool rule: "yes"/"on" now
+	// read true (adapters already sent them as enabled) and "t" now reads
+	// false (adapters already sent it as disabled).
+	return settingx.Bool(settings, key)
 }
 
 func splitSettingItems(value string) []string {
