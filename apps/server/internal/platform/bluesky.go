@@ -1025,24 +1025,23 @@ const (
 )
 
 const (
-	blueskyMaxGraphemes = 300
-	blueskyMaxBytes     = 3000
+	blueskyPostGraphemeLimit = providerlimits.BlueskyPostMaxGraphemes
+	blueskyPostByteLimit     = providerlimits.BlueskyPostMaxBytes
 )
 
 // validateBlueskyText enforces the post length the relay enforces: 300
-// graphemes and 3000 UTF-8 bytes. It fails before any record is built so
-// oversized text never reaches the PDS.
+// graphemes and 3000 UTF-8 bytes. Grapheme counting delegates to the shared
+// server counter (providerlimits.TextLength, the implementation behind
+// capabilities.TextLength) so delivery-side validation cannot drift from
+// capability validation. The byte ceiling stays here as the explicit provider
+// limit. It fails before any record is built so oversized text never reaches
+// the PDS.
 func validateBlueskyText(text string) error {
-	if len(text) > blueskyMaxBytes {
-		return fmt.Errorf("bluesky post text exceeds %d bytes", blueskyMaxBytes)
+	if len(text) > blueskyPostByteLimit {
+		return fmt.Errorf("bluesky post text exceeds %d bytes", blueskyPostByteLimit)
 	}
-	graphemes := 0
-	clusters := uniseg.NewGraphemes(text)
-	for clusters.Next() {
-		graphemes++
-	}
-	if graphemes > blueskyMaxGraphemes {
-		return fmt.Errorf("bluesky post text exceeds %d characters", blueskyMaxGraphemes)
+	if graphemes := providerlimits.TextLength(providerBluesky, text); graphemes > blueskyPostGraphemeLimit {
+		return fmt.Errorf("bluesky post text exceeds %d characters", blueskyPostGraphemeLimit)
 	}
 	return nil
 }

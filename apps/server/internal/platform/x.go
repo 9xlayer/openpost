@@ -40,8 +40,8 @@ const (
 	XSubscriptionTypeBasic           = "Basic"
 	XSubscriptionTypePremium         = "Premium"
 	XSubscriptionTypePremiumPlus     = "PremiumPlus"
-	XStandardTextLimit               = 280
-	XPremiumTextLimit                = 25_000
+	XStandardTextLimit               = providerlimits.XStandardTextLimit
+	XPremiumTextLimit                = providerlimits.XPremiumTextLimit
 	XStandardVideoDurationSeconds    = providerlimits.XPostVideoMaxDurationSeconds
 	XPremiumVideoDurationSeconds     = providerlimits.XPremiumPostVideoMaxDurationSeconds
 	XStandardVideoSizeBytes          = providerlimits.XPostVideoMaxBytes
