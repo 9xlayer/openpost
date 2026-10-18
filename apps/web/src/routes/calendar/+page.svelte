@@ -1360,17 +1360,21 @@
 													variant="outline"
 													class="w-full justify-between"
 													><span
-														>{m.sidebar_accounts()}{selectedAccountIds !== null
-															? ` (${selectedAccountIds?.length ?? 0})`
-															: ''}</span
+														>{selectedAccountIds === null
+															? m.analytics_all_accounts()
+															: `${m.sidebar_accounts()} (${selectedAccountIds?.length ?? 0})`}</span
 													></Button
 												>{/snippet}
 										</DropdownMenu.Trigger>
 										<DropdownMenu.Content class="max-h-72 w-64 overflow-y-auto" align="end">
 											<DropdownMenu.Label>{m.sidebar_accounts()}</DropdownMenu.Label>
-											<DropdownMenu.Item onclick={() => (selectedAccountIds = null)}
-												>{m.analytics_all_accounts()}</DropdownMenu.Item
+											<DropdownMenu.CheckboxItem
+												checked={selectedAccountIds === null}
+												onCheckedChange={() => (selectedAccountIds = null)}
+												class="gap-2"
 											>
+												<span>{m.analytics_all_accounts()}</span>
+											</DropdownMenu.CheckboxItem>
 											<DropdownMenu.Separator />
 											{#each availableAccounts as account (account.id)}
 												<DropdownMenu.CheckboxItem

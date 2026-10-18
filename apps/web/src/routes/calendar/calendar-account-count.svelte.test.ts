@@ -118,6 +118,93 @@ it('announces the day-drawer account count as text instead of an ignored label',
 	await expect.element(screen.getByTestId('calendar-day-drawer')).toHaveTextContent('2 accounts');
 });
 
+async function renderTwoAccountCalendar() {
+	queryClient.clear();
+	seedWorkspace();
+	const first = scheduledPublication();
+	first.title = 'Launch account post';
+	first.renditions = [first.renditions[0]];
+	const second = scheduledPublication();
+	second.id = 'publication-calendar-2';
+	second.title = 'Lessons account post';
+	second.renditions = [
+		{ ...second.renditions[0], id: 'rendition-other', social_account_id: 'account-2' }
+	];
+	vi.spyOn(client, 'GET').mockImplementation(async (path) => {
+		if (path === '/publications') {
+			// SAFETY: The overloaded GET signature cannot express this publication fixture; it contains only calendar inventory fields.
+			return {
+				data: [first, second],
+				response: new Response(null, { headers: { 'X-Total-Count': '2' } })
+			} as never;
+		}
+		if (path === '/accounts') {
+			// SAFETY: Connected account identity and label are the only fields this calendar read uses.
+			return {
+				data: [
+					{
+						id: 'account-1',
+						platform: 'x',
+						alias: 'Launch account',
+						account_username: 'founder',
+						is_active: true
+					},
+					{
+						id: 'account-2',
+						platform: 'x',
+						alias: 'Lessons account',
+						account_username: 'founder',
+						is_active: true
+					}
+				]
+			} as never;
+		}
+		// SAFETY: Other calendar discovery endpoints return empty lists in this fixture.
+		return { data: [] } as never;
+	});
+	return render(
+		CalendarPage,
+		{},
+		{ wrapper: QueryClientProvider, wrapperProps: { client: queryClient } }
+	);
+}
+
+it('shows All accounts as a selected option distinct from an explicit full subset', async () => {
+	const screen = await renderTwoAccountCalendar();
+	await expect
+		.element(screen.getByRole('button', { name: 'Launch account post · 1 account' }))
+		.toBeVisible();
+	const accountTrigger = () => screen.getByRole('button', { name: /^(Accounts|All accounts)/ });
+	const allOption = () =>
+		screen.getByRole('menuitemcheckbox', { name: 'All accounts', exact: true });
+	await screen.getByRole('button', { name: 'Filters', exact: true }).click();
+	await accountTrigger().click();
+	// Fails without the fix: "All accounts" is a plain menuitem with no selected state,
+	// so a null "all" and an explicit full subset render identically.
+	await expect.element(allOption()).toHaveAttribute('aria-checked', 'true');
+	// Unchecking one row from "All accounts" reports a subset with a trigger count.
+	// (Selecting a row closes the menu, so reopen it for the next assertion.)
+	await screen.getByRole('menuitemcheckbox', { name: 'Launch account', exact: true }).click();
+	await expect
+		.element(screen.getByRole('button', { name: 'Accounts (1)', exact: true }))
+		.toBeVisible();
+	await accountTrigger().click();
+	await expect.element(allOption()).toHaveAttribute('aria-checked', 'false');
+	// Selecting every row individually stays an explicit subset, never collapsing into "All".
+	await screen.getByRole('menuitemcheckbox', { name: 'Launch account', exact: true }).click();
+	await expect
+		.element(screen.getByRole('button', { name: 'Accounts (2)', exact: true }))
+		.toBeVisible();
+	await accountTrigger().click();
+	await expect.element(allOption()).toHaveAttribute('aria-checked', 'false');
+	await expect
+		.element(screen.getByRole('menuitemcheckbox', { name: 'Launch account', exact: true }))
+		.toHaveAttribute('aria-checked', 'true');
+	await expect
+		.element(screen.getByRole('menuitemcheckbox', { name: 'Lessons account', exact: true }))
+		.toHaveAttribute('aria-checked', 'true');
+});
+
 it('filters by connected account identity within one platform', async () => {
 	queryClient.clear();
 	seedWorkspace();
@@ -171,7 +258,7 @@ it('filters by connected account identity within one platform', async () => {
 		.element(screen.getByRole('button', { name: 'Launch account post · 1 account' }))
 		.toBeVisible();
 	await screen.getByRole('button', { name: 'Filters', exact: true }).click();
-	await screen.getByRole('button', { name: 'Accounts', exact: true }).click();
+	await screen.getByRole('button', { name: 'All accounts', exact: true }).click();
 	await screen.getByRole('menuitemcheckbox', { name: 'Lessons account', exact: true }).click();
 	await expect
 		.element(screen.getByRole('button', { name: 'Launch account post · 1 account' }))
@@ -185,7 +272,7 @@ it('filters by connected account identity within one platform', async () => {
 		.element(screen.getByRole('button', { name: 'Launch account post · 1 account' }))
 		.not.toBeInTheDocument();
 	await screen.getByRole('button', { name: /^Accounts/ }).click();
-	await screen.getByRole('menuitem', { name: 'All accounts', exact: true }).click();
+	await screen.getByRole('menuitemcheckbox', { name: 'All accounts', exact: true }).click();
 	await expect
 		.element(screen.getByRole('button', { name: 'Launch account post · 1 account' }))
 		.toBeVisible();
