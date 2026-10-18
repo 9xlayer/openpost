@@ -4,9 +4,9 @@ import {
 	readDirectoryFiles,
 	writeJsonAtomic,
 	removeEntry
-} from '$lib/video-editor/workspace-fs/fs-primitives';
-import { requireWorkspaceRoot, getWorkspaceRoot } from '$lib/video-editor/workspace-fs/root';
-import { saveHandle, getHandle } from '$lib/video-editor/workspace-fs/handles-db';
+} from '@openpost/editor-shared/workspace';
+import { requireWorkspaceRoot, getWorkspaceRoot } from '@openpost/editor-shared/workspace';
+import { saveHandle, getHandle } from '@openpost/editor-shared/workspace';
 import { quickCutProjectPath } from './paths';
 import type {
 	QuickCutProject,

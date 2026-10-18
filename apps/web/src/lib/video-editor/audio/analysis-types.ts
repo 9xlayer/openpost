@@ -1,16 +1,2 @@
-import type { AudioSilenceDetectionOptions, AudioSilenceRange } from './audio-silence';
-
-export interface AudioAnalysisOptions extends AudioSilenceDetectionOptions {
-	mode: 'signal' | 'speech';
-	audioTrackIndices?: number[];
-	signal?: AbortSignal;
-	onProgress?: (progress: number) => void;
-}
-export type AudioAnalysisRequest = {
-	blob: Blob;
-	options: Omit<AudioAnalysisOptions, 'signal' | 'onProgress'>;
-};
-export type AudioAnalysisResponse =
-	| { type: 'progress'; progress: number }
-	| { type: 'result'; ranges: AudioSilenceRange[] }
-	| { type: 'error'; message: string };
+// Moved to `@openpost/editor-shared/audio`. Re-exported here so existing imports keep working.
+export * from '@openpost/editor-shared/audio';

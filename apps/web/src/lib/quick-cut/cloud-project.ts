@@ -5,8 +5,8 @@ import {
 	type CloudVideoProject,
 	type CloudVideoProjectSummary
 } from '$lib/video-editor/cloud/project-repository';
-import type { MediaMetadata } from '$lib/video-editor/media/types';
-import { hashBlob } from '$lib/video-editor/project-bundle/bundle-utils';
+import type { MediaMetadata } from '@openpost/editor-shared/media';
+import { hashBlob } from '@openpost/editor-shared/project-bundle';
 import { deserializeProject } from './project';
 import type {
 	QuickCutProject,

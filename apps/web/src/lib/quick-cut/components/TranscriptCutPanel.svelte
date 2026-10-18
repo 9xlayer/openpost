@@ -9,7 +9,7 @@
 		TranscriptionSelection,
 		TranscribeProgress,
 		ResolvedTranscriptionEngine
-	} from '$lib/video-editor/transcript/engine/types';
+	} from '@openpost/editor-shared/transcript';
 	import type { QuickCutSource, QuickCutSegment } from '../types';
 	import { formatTimecode, getSelectedAudioStreams } from '../model';
 	import {

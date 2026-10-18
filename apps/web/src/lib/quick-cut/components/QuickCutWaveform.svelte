@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import type { WaveformData } from '$lib/video-editor/media/waveform-client';
+	import type { WaveformData } from '@openpost/editor-shared/media';
 	import type { QuickCutSource } from '../types';
 	import {
 		getQuickCutWaveform,

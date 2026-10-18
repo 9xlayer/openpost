@@ -36,7 +36,7 @@ export interface QuickCutMarker {
 export interface QuickCutSourceMetadata {
 	transcript?: {
 		audioTrackIndex: number;
-		words: import('$lib/video-editor/transcript/engine/types').EngineTranscriptWord[];
+		words: import('@openpost/editor-shared/transcript').EngineTranscriptWord[];
 	};
 	id: string;
 	name: string;

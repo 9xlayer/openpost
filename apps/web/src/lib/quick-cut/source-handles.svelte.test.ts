@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { restoreSourceHandles } from './project';
 import type { QuickCutSourceMetadata } from './types';
-import { saveHandle, deleteHandle } from '$lib/video-editor/workspace-fs/handles-db';
+import { saveHandle, deleteHandle } from '@openpost/editor-shared/workspace';
 
 it('preserves legacy words for explicit relinking and upgrades verified source handles', async () => {
 	const id = crypto.randomUUID();

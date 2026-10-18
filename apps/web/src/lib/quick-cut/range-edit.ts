@@ -1,4 +1,4 @@
-import type { AudioSilenceRange } from '$lib/video-editor/audio/audio-silence';
+import type { AudioSilenceRange } from '@openpost/editor-shared/audio';
 import { MIN_SEGMENT_DURATION_SECONDS } from './model';
 import type { QuickCutSegment } from './types';
 

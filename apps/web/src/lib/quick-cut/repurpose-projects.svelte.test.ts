@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { createRepurposeProjects } from './repurpose-projects';
 import { loadProjectSessionFromWorkspace, listProjectsFromWorkspace } from './project';
-import { setWorkspaceRoot } from '$lib/video-editor/workspace-fs/root';
+import { setWorkspaceRoot } from '@openpost/editor-shared/workspace';
 import type { QuickCutSource } from './types';
 import { CloudVideoProjectRepository } from '$lib/video-editor/cloud/project-repository';
 import { registerQueryAuthorizationBoundary } from '$lib/query/authorization-boundary';
@@ -12,8 +12,8 @@ const boundary = vi.hoisted<{ afterWrite: (() => void) | null; cacheFails: boole
 }));
 // Preserve real OPFS writes while scheduling cancellation at the external commit boundary.
 // oxlint-disable-next-line anti-slop/no-module-mocking
-vi.mock('$lib/video-editor/workspace-fs/fs-primitives', async (original) => {
-	const actual = await original<typeof import('$lib/video-editor/workspace-fs/fs-primitives')>();
+vi.mock('@openpost/editor-shared/workspace', async (original) => {
+	const actual = await original<typeof import('@openpost/editor-shared/workspace')>();
 	return {
 		...actual,
 		writeJsonAtomic: async (...args: Parameters<typeof actual.writeJsonAtomic>) => {

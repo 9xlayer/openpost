@@ -2,7 +2,7 @@ import {
 	editorDeleteModeForEvent,
 	eventMatchesShortcut,
 	type EditorShortcutBindingMap
-} from '$lib/video-editor/settings/keyboard-shortcuts';
+} from '@openpost/editor-shared/settings';
 
 export type QuickCutShortcutAction =
 	| 'previous-frame'

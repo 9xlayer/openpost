@@ -8,61 +8,31 @@
 
 import { Input, AudioSampleSink, ALL_FORMATS, BlobSource } from 'mediabunny';
 import { ensureAc3DecoderForCodec } from './ac3-decoder';
+import type {
+	WaveformAbortRequest,
+	WaveformChunkMessage,
+	WaveformCompleteMessage,
+	WaveformErrorMessage,
+	WaveformGenerateRequest,
+	WaveformInitMessage,
+	WaveformProgressMessage,
+	WaveformWorkerRequest,
+	WaveformWorkerResponse
+} from '@openpost/editor-shared/media';
 
-export interface WaveformGenerateRequest {
-	type: 'generate';
-	requestId: string;
-	file: File;
-	samplesPerSecond: number;
-	binDurationSeconds?: number;
-	trackIndex?: number;
-}
-
-export interface WaveformAbortRequest {
-	type: 'abort';
-	requestId: string;
-}
-
-export type WaveformWorkerRequest = WaveformGenerateRequest | WaveformAbortRequest;
-
-export interface WaveformInitMessage {
-	type: 'init';
-	requestId: string;
-	durationSeconds: number;
-	totalSamples: number;
-}
-
-export interface WaveformChunkMessage {
-	type: 'chunk';
-	requestId: string;
-	startIndex: number;
-	peaks: Float32Array;
-}
-
-export interface WaveformCompleteMessage {
-	type: 'complete';
-	requestId: string;
-	maxPeak: number;
-}
-
-export interface WaveformProgressMessage {
-	type: 'progress';
-	requestId: string;
-	progress: number;
-}
-
-export interface WaveformErrorMessage {
-	type: 'error';
-	requestId: string;
-	message: string;
-}
-
-export type WaveformWorkerResponse =
-	| WaveformInitMessage
-	| WaveformChunkMessage
-	| WaveformCompleteMessage
-	| WaveformProgressMessage
-	| WaveformErrorMessage;
+// The waveform protocol types live in the shared package; re-export them so
+// existing `from './waveform-worker'` type imports keep working.
+export type {
+	WaveformAbortRequest,
+	WaveformChunkMessage,
+	WaveformCompleteMessage,
+	WaveformErrorMessage,
+	WaveformGenerateRequest,
+	WaveformInitMessage,
+	WaveformProgressMessage,
+	WaveformWorkerRequest,
+	WaveformWorkerResponse
+};
 
 const activeRequests = new Map<string, { aborted: boolean }>();
 

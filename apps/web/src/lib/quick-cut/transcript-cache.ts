@@ -3,8 +3,8 @@ import {
 	readJson,
 	writeJsonAtomic,
 	WorkspaceFileCorruptError
-} from '$lib/video-editor/workspace-fs/fs-primitives';
-import { aiOutputPath } from '$lib/video-editor/workspace-fs/paths';
+} from '@openpost/editor-shared/workspace';
+import { aiOutputPath } from '@openpost/editor-shared/workspace';
 import {
 	assertSourceTranscriptStorageCurrent,
 	sourceTranscriptRoot,

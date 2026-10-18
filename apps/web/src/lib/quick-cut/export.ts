@@ -34,16 +34,16 @@ import {
 } from './model';
 import { createStreamingOutputTarget } from '$lib/video/stream-target';
 import { probeSourceFile, resolveSourceFile } from './source';
-import { ensureAc3DecoderForCodec } from '$lib/video-editor/media/ac3-decoder';
-import { requireWorkspaceRoot } from '$lib/video-editor/workspace-fs/root';
-import { openBlobWriter, exists, removeEntry } from '$lib/video-editor/workspace-fs/fs-primitives';
+import { ensureAc3DecoderForCodec } from '@openpost/editor-shared/media';
+import { requireWorkspaceRoot } from '@openpost/editor-shared/workspace';
+import { openBlobWriter, exists, removeEntry } from '@openpost/editor-shared/workspace';
 import {
 	projectExportFilePath,
 	exportFilePath,
 	PROJECTS_DIR,
 	EXPORTS_DIR,
 	sanitizeWorkspaceFileName
-} from '$lib/video-editor/workspace-fs/paths';
+} from '@openpost/editor-shared/workspace';
 import { exportSmartCut, nextSmartCutBoundary, UnsupportedSmartCutError } from './smart-cut';
 import { copyContainerMetadata, readTrackMetadata } from './container-metadata';
 

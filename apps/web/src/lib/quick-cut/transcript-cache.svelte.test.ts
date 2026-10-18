@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import { registerQueryAuthorizationBoundary } from '$lib/query/authorization-boundary';
-import { getWorkspaceRoot, setWorkspaceRoot } from '$lib/video-editor/workspace-fs/root';
+import { getWorkspaceRoot, setWorkspaceRoot } from '@openpost/editor-shared/workspace';
 import { captureSourceTranscriptStorage } from '$lib/video-editor/workspace-fs/source-transcripts';
-import { readJson } from '$lib/video-editor/workspace-fs/fs-primitives';
-import { aiOutputPath } from '$lib/video-editor/workspace-fs/paths';
+import { readJson } from '@openpost/editor-shared/workspace';
+import { aiOutputPath } from '@openpost/editor-shared/workspace';
 import { getQuickCutSourceTranscript, saveQuickCutSourceTranscript } from './transcript-cache';
 import type { QuickCutSourceMetadata } from './types';
 

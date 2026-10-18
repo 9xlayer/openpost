@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import type { QuickCutSource } from '../types';
-	import type { AudioSilenceRange } from '$lib/video-editor/audio/audio-silence';
+	import type { AudioSilenceRange } from '@openpost/editor-shared/audio';
 	import CleanupPanel from './CleanupPanel.svelte';
 	import StreamSelector from './StreamSelector.svelte';
 	let {

@@ -5,9 +5,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { m } from '$lib/paraglide/messages';
-	import { analyzeAudioBlob } from '$lib/video-editor/audio/analysis-client';
+	import { analyzeAudioBlob } from '@openpost/editor-shared/audio';
 	import { loadSpeechCleanupSettings } from '$lib/video-editor/transcript/speech-cleanup-settings';
-	import type { AudioSilenceRange } from '$lib/video-editor/audio/audio-silence';
+	import type { AudioSilenceRange } from '@openpost/editor-shared/audio';
 	import type { QuickCutSource } from '../types';
 	import { formatTimecode } from '../model';
 	let {

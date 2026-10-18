@@ -11,9 +11,9 @@ import {
 	BrowserTranscriber,
 	TranscriptionJob
 } from '$lib/video-editor/transcript/engine/transcriber';
-import { handleGlobalPlayPauseShortcut } from '$lib/video-editor/settings/keyboard-shortcuts';
+import { handleGlobalPlayPauseShortcut } from '@openpost/editor-shared/settings';
 
-import { setWorkspaceRoot } from '$lib/video-editor/workspace-fs/root';
+import { setWorkspaceRoot } from '@openpost/editor-shared/workspace';
 beforeEach(async () => {
 	setWorkspaceRoot(
 		await (

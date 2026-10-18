@@ -1,7 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
 import { tick } from 'svelte';
 import { render } from 'vitest-browser-svelte';
-import type { WaveformData } from '$lib/video-editor/media/waveform-client';
+import type { WaveformData } from '@openpost/editor-shared/media';
 import type { QuickCutSource } from '../types';
 import { getQuickCutWaveform } from '../waveform';
 import QuickCutWaveform from './QuickCutWaveform.svelte';

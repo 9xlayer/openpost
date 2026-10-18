@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEditorShortcuts } from '$lib/video-editor/settings/keyboard-shortcuts';
+import { resolveEditorShortcuts } from '@openpost/editor-shared/settings';
 import { quickCutShortcutAction } from './shortcuts';
 
 function keyEvent(code: string, key: string, modifiers: KeyboardEventInit = {}): KeyboardEvent {

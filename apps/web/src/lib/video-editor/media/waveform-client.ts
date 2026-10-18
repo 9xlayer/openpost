@@ -8,19 +8,16 @@
  */
 
 import type { MediaMetadata } from './types';
+import type { WaveformData } from '@openpost/editor-shared/media';
 import type { WaveformWorkerResponse } from './waveform-worker';
 import { SizedAccessedMemoryCache } from './sized-accessed-memory-cache';
 import { loadWaveform, saveWaveform } from './waveform-persistence';
 import { removeOpfsEntry } from './opfs-cache';
 import { mediaTaskId, mediaTasks } from './media-tasks.svelte';
 
-export interface WaveformData {
-	peaks: Float32Array;
-	durationSeconds: number;
-	samplesPerSecond: number;
-	loadedSamples: number;
-	isComplete: boolean;
-}
+// `WaveformData` lives in the shared package; re-export it so existing
+// `from './waveform-client'` type imports keep working.
+export type { WaveformData };
 
 interface WaveformMetadata {
 	data: WaveformData | null;

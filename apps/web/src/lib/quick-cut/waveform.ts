@@ -1,6 +1,6 @@
-import { SizedAccessedMemoryCache } from '$lib/video-editor/media/sized-accessed-memory-cache';
-import type { WaveformData } from '$lib/video-editor/media/waveform-client';
-import type { WaveformWorkerResponse } from '$lib/video-editor/media/waveform-worker';
+import { SizedAccessedMemoryCache } from '@openpost/editor-shared/media';
+import type { WaveformData } from '@openpost/editor-shared/media';
+import type { WaveformWorkerResponse } from '@openpost/editor-shared/media';
 import type { QuickCutSource } from './types';
 
 interface CacheEntry {

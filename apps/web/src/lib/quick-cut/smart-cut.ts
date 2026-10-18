@@ -11,7 +11,7 @@ import {
 	type OutputFormat,
 	type VideoCodec
 } from 'mediabunny';
-import { ensureAc3DecoderForCodec } from '$lib/video-editor/media/ac3-decoder';
+import { ensureAc3DecoderForCodec } from '@openpost/editor-shared/media';
 import { createStreamingOutputTarget, type StreamingOutputTarget } from '$lib/video/stream-target';
 import {
 	getSelectedAudioStreams,

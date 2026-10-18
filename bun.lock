@@ -127,6 +127,7 @@
         "@openpost/api-contract": "workspace:*",
         "@openpost/dither": "workspace:*",
         "@openpost/draft-transfer": "workspace:*",
+        "@openpost/editor-shared": "workspace:*",
         "@openpost/plan-catalog": "workspace:*",
         "@openpost/platform-text": "workspace:*",
         "@openpost/query-catalog": "workspace:*",
@@ -242,6 +243,21 @@
       "name": "@openpost/draft-transfer",
       "dependencies": {
         "zod": "^4.4.3",
+      },
+    },
+    "packages/editor-shared": {
+      "name": "@openpost/editor-shared",
+      "dependencies": {
+        "@mediabunny/ac3": "1.54.0",
+        "@noble/hashes": "1.8.0",
+        "@ricky0123/vad-web": "0.0.31",
+        "mediabunny": "1.54.0",
+        "onnxruntime-web": "1.26.0-dev.20260410-5e55544225",
+        "zod": "^4.4.3",
+      },
+      "devDependencies": {
+        "typescript": "5.9.3",
+        "vite": "^7.3.0",
       },
     },
     "packages/legal-policy": {
@@ -1083,6 +1099,8 @@
     "@openpost/docs": ["@openpost/docs@workspace:apps/docs"],
 
     "@openpost/draft-transfer": ["@openpost/draft-transfer@workspace:packages/draft-transfer"],
+
+    "@openpost/editor-shared": ["@openpost/editor-shared@workspace:packages/editor-shared"],
 
     "@openpost/legal-policy": ["@openpost/legal-policy@workspace:packages/legal-policy"],
 
