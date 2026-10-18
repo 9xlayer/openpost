@@ -11,6 +11,7 @@
 	import { resolveAppPath } from '$lib/app-path';
 	import { Button } from '$lib/components/ui/button';
 	import PageContainer from '$lib/components/page-container.svelte';
+	import SectionHeading from '$lib/components/section-heading.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import DestructiveConfirmDialog from '$lib/components/destructive-confirm-dialog.svelte';
 	import { ThemeIcon } from '$lib/themes/icons';
@@ -97,7 +98,7 @@
 		>{:else}
 		{#if !canEdit}<InlineNotice message={m.templates_read_only()} />{/if}
 		{#if mediaID}<section class="mb-6 space-y-3 rounded-md border p-4">
-				<h2 class="text-sm font-medium">{m.templates_use_recipe()}</h2>
+				<SectionHeading level={2} size="section">{m.templates_use_recipe()}</SectionHeading>
 				<p class="text-sm text-muted-foreground">{m.templates_recipe_description()}</p>
 				{#if recipe.isError && !recipe.data}<InlineNotice
 						tone="error"
@@ -115,7 +116,7 @@
 					>{/if}
 			</section>{/if}
 		{#if category !== 'memes'}<section class="space-y-3">
-				<h2 class="text-sm font-medium">{m.templates_choose()}</h2>
+				<SectionHeading level={2} size="section">{m.templates_choose()}</SectionHeading>
 				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 					{#each examples as document (document.template_id)}<button
 							type="button"
@@ -138,7 +139,7 @@
 				</div>
 			</section>{/if}
 		{#if category === 'memes'}<section class="mt-6 space-y-3">
-				<h2 class="text-sm font-medium">{m.media_picker_meme()}</h2>
+				<SectionHeading level={2} size="section">{m.media_picker_meme()}</SectionHeading>
 				<fieldset disabled={!canEdit || busy} class="min-w-0">
 					{#key workspaceId}<MemeBrowser
 							{workspaceId}
@@ -150,7 +151,7 @@
 			</section>{/if}
 
 		<section class="mt-8 space-y-3">
-			<h2 class="text-sm font-medium">{m.templates_drafts()}</h2>
+			<SectionHeading level={2} size="section">{m.templates_drafts()}</SectionHeading>
 			{#if !designs.data?.designs?.length}<p class="py-8 text-sm text-muted-foreground">
 					{m.templates_no_drafts()}
 				</p>{:else}<div class="divide-y rounded-md border">

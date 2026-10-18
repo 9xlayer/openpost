@@ -41,6 +41,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	import AnalyticsPerformanceChart from '$lib/components/analytics-performance-chart.svelte';
 	import AnalyticsAccountComposition from '$lib/components/analytics-account-composition.svelte';
 	import SocialAccountIdentity from '$lib/components/social-account-identity.svelte';
+	import SectionHeading from '$lib/components/section-heading.svelte';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { getLocaleTag } from '$lib/i18n';
@@ -1001,9 +1002,9 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				aria-labelledby="analytics-composition-heading"
 			>
 				<div class="mb-3">
-					<h2 id="analytics-composition-heading" class="text-base font-semibold">
+					<SectionHeading level={2} size="section" id="analytics-composition-heading">
 						{m.analytics_audience_title()}
-					</h2>
+					</SectionHeading>
 				</div>
 				<AnalyticsAccountComposition {accounts} formatValue={formatNumber} {accountLabel} />
 			</section>
@@ -1014,9 +1015,9 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 					aria-labelledby="analytics-insights-heading"
 				>
 					<div class="border-b border-border px-4 py-3">
-						<h2 id="analytics-insights-heading" class="text-sm font-semibold">
+						<SectionHeading level={2} size="section" id="analytics-insights-heading">
 							{m.analytics_insights_title()}
-						</h2>
+						</SectionHeading>
 					</div>
 					<div class="analytics-insights-grid grid gap-px overflow-hidden rounded-b-xl bg-border">
 						{#each analyticsInsights as insight (insight.kind)}
@@ -1133,9 +1134,9 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 			<section aria-labelledby="analytics-content-heading">
 				<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
 					<div class="min-w-0">
-						<h2 id="analytics-content-heading" class="text-base font-semibold">
+						<SectionHeading level={2} size="section" id="analytics-content-heading">
 							{m.analytics_content_title()}
-						</h2>
+						</SectionHeading>
 					</div>
 					<div class="flex min-w-0 shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
 						<Select.Root

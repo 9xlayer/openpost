@@ -26,6 +26,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import PageContainer from '$lib/components/page-container.svelte';
+	import SectionHeading from '$lib/components/section-heading.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import AppToast from '$lib/components/app-toast.svelte';
@@ -369,7 +370,7 @@
 				aria-label={m.compose_writing_prompt()}
 				aria-live="polite"
 			>
-				<h2 class="text-sm font-semibold">{m.compose_writing_prompt()}</h2>
+				<SectionHeading level={2} size="section">{m.compose_writing_prompt()}</SectionHeading>
 				<p class="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{randomPrompt.text}</p>
 				{#if randomPrompt.example}
 					<div class="mt-3 border-t pt-3">
@@ -428,9 +429,9 @@
 			<div class="space-y-6">
 				{#each Object.entries(groupedPrompts) as [category, categoryPrompts] (category)}
 					<section>
-						<h2 class="mb-3 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+						<SectionHeading level={2} size="compact" class="mb-3">
 							{category}
-						</h2>
+						</SectionHeading>
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 							{#each categoryPrompts as prompt (prompt.id)}
 								<article

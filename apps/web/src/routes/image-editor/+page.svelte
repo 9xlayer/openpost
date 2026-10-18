@@ -28,6 +28,7 @@
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import EditorStart from '$lib/components/editor-start.svelte';
 	import EditorFormatButton from '$lib/components/editor-format-button.svelte';
+	import SectionHeading from '$lib/components/section-heading.svelte';
 	import TemplatePreview from '$lib/image-editor/components/template-preview.svelte';
 	import { imageEditorQueryAPI, type WebImageEditorQueryData } from '$lib/query/image-editor';
 	import {
@@ -636,7 +637,9 @@
 		{/if}
 		{#if workspaceID}
 			<section class="mt-10 mb-10" aria-labelledby="image-trash-heading">
-				<h2 id="image-trash-heading" class="text-lg font-semibold">{m.media_lifecycle_trash()}</h2>
+				<SectionHeading level={2} size="section" id="image-trash-heading">
+					{m.media_lifecycle_trash()}
+				</SectionHeading>
 				<p class="mt-1 text-sm text-muted-foreground">
 					{m.image_editor_trash_restore_independent()}
 				</p>
@@ -706,9 +709,9 @@
 				</InlineNotice>
 			{/if}
 			<section aria-labelledby="formats-heading">
-				<h2 id="formats-heading" class="mb-3 text-base font-semibold">
+				<SectionHeading level={2} size="section" id="formats-heading" class="mb-3">
 					{m.image_editor_choose_format()}
-				</h2>
+				</SectionHeading>
 				<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 					{#each presets as preset (preset.key)}
 						<EditorFormatButton
@@ -730,9 +733,9 @@
 				<section class="pt-3" aria-labelledby="custom-heading">
 					<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(22rem,32rem)] lg:items-end">
 						<div>
-							<h2 id="custom-heading" class="text-base font-semibold">
+							<SectionHeading level={2} size="section" id="custom-heading">
 								{m.image_editor_custom_size()}
-							</h2>
+							</SectionHeading>
 							<p class="mt-1 text-sm text-muted-foreground">{m.image_editor_custom_limits()}</p>
 						</div>
 						<div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
@@ -760,9 +763,9 @@
 			{#if workspaceID && (workspaceTemplates.length > 0 || workspaceTemplatesQuery.isPending || workspaceTemplatesQuery.isError)}
 				<section class="mt-12" aria-labelledby="workspace-templates-heading">
 					<div class="mb-4">
-						<h2 id="workspace-templates-heading" class="text-lg font-semibold">
+						<SectionHeading level={2} size="section" id="workspace-templates-heading">
 							{m.image_editor_workspace_templates()}
-						</h2>
+						</SectionHeading>
 						<p class="mt-1 text-sm text-muted-foreground">
 							{m.image_editor_workspace_templates_body()}
 						</p>
@@ -790,9 +793,9 @@
 
 			<section class="mt-12" aria-labelledby="templates-heading">
 				<div class="mb-4">
-					<h2 id="templates-heading" class="text-lg font-semibold">
+					<SectionHeading level={2} size="section" id="templates-heading">
 						{m.image_editor_starter_templates()}
-					</h2>
+					</SectionHeading>
 					<p class="mt-1 text-sm text-muted-foreground">
 						{m.image_editor_public_templates_description()}
 					</p>
