@@ -1,6 +1,6 @@
 import { planCatalog, purchaseTerms, selfHostedDeployment } from '@openpost/plan-catalog';
 import { browserExtensions, mediaTools, previewTools } from '@openpost/social-images';
-import { PLATFORM_LIMITS } from '@openpost/platform-text';
+import { PLATFORM_LIMITS, X_PREMIUM_CHAR_LIMIT } from '@openpost/platform-text';
 import publicClaimManifest from '../../../../config/provider-certification/public-claims.json';
 
 type PublicProviderClaim = {
@@ -229,6 +229,29 @@ export const plans = planCatalog.plans.map((plan) => ({
 	featured: plan.featured
 }));
 
+// Capability claim sources — start
+// Marketing text limits come from PLATFORM_LIMITS (@openpost/platform-text,
+// guarded by packages/platform-text/conformance/fixtures.json). The tiered
+// values below have no platform-text owner; each cites the enforcing server
+// owner and the provider documentation. Reviewed 2026-10-18.
+// Enforced by the LinkedIn thread capability (TextLimit: 1250 in
+// apps/server/internal/capabilities/capabilities.go).
+export const LINKEDIN_COMMENT_LIMIT = 1250;
+// Enforced by the TikTok photo-post capability (TextLimit: 4000 in
+// apps/server/internal/capabilities/capabilities.go); see
+// https://developers.tiktok.com/docs/en/content-posting-api-media-transfer-guide
+export const TIKTOK_PHOTO_CHAR_LIMIT = 4000;
+// Enforced by the Telegram media/video capabilities (TextLimit: 1024 in
+// apps/server/internal/capabilities/capabilities.go); see
+// https://core.telegram.org/bots/api#sending-files
+export const TELEGRAM_CAPTION_LIMIT = 1024;
+// Enforced by apps/server/internal/providerlimits/x.go for media_category=tweet_video;
+// see https://docs.x.com/x-api/media/introduction and
+// https://docs.x.com/x-api/media/quickstart/best-practices (verified there 2026-09-26).
+export const X_VIDEO_STANDARD = { minutes: 20, gib: 8 } as const;
+export const X_VIDEO_PREMIUM = { minutes: 125, gib: 16 } as const;
+// Capability claim sources — end
+
 const platformImplementations = [
 	{
 		slug: 'x',
@@ -244,7 +267,7 @@ const platformImplementations = [
 			label: 'Reply chain',
 			headline: 'Three connected posts',
 			body: 'Each part is reviewed and scheduled as its own X post.',
-			detail: '280 standard · up to 25,000 subscribed',
+			detail: `${PLATFORM_LIMITS.x.charLimit} standard · up to ${X_PREMIUM_CHAR_LIMIT.toLocaleString('en-US')} subscribed`,
 			chips: ['Post 1', 'Reply 2', 'Reply 3']
 		},
 		accountRequirement: 'An X developer app with OAuth 1.0a user authentication enabled.',
@@ -257,24 +280,24 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Post, thread, or link',
-				text: '280 standard · up to 25,000 subscribed',
+				text: `${PLATFORM_LIMITS.x.charLimit} standard · up to ${X_PREMIUM_CHAR_LIMIT.toLocaleString('en-US')} subscribed`,
 				media: 'Text only'
 			},
 			{
 				name: 'Image post',
-				text: '280 standard · up to 25,000 subscribed',
+				text: `${PLATFORM_LIMITS.x.charLimit} standard · up to ${X_PREMIUM_CHAR_LIMIT.toLocaleString('en-US')} subscribed`,
 				media: '1-4 JPEG, PNG, WebP, or GIF images'
 			},
 			{
 				name: 'Video',
-				text: '280 standard · up to 25,000 subscribed',
+				text: `${PLATFORM_LIMITS.x.charLimit} standard · up to ${X_PREMIUM_CHAR_LIMIT.toLocaleString('en-US')} subscribed`,
 				media: '1 MP4 or QuickTime video'
 			}
 		],
 		limits: [
 			`${PLATFORM_LIMITS.x.charLimit} weighted characters for standard accounts`,
-			'Up to 25,000 weighted characters for verified Basic, Premium, or Premium+ accounts',
-			'Video: 20 minutes and 8 GiB standard; up to 125 minutes and 16 GiB subscribed',
+			`Up to ${X_PREMIUM_CHAR_LIMIT.toLocaleString('en-US')} weighted characters for verified Basic, Premium, or Premium+ accounts`,
+			`Video: ${X_VIDEO_STANDARD.minutes} minutes and ${X_VIDEO_STANDARD.gib} GiB standard; up to ${X_VIDEO_PREMIUM.minutes} minutes and ${X_VIDEO_PREMIUM.gib} GiB subscribed`,
 			PLATFORM_LIMITS.x.media,
 			'Your X API plan and limits still apply'
 		],
@@ -300,7 +323,7 @@ const platformImplementations = [
 			label: 'mastodon.social',
 			headline: 'Public post with a content warning option',
 			body: 'Each account keeps its visibility, language, sensitive media, and server rules.',
-			detail: '500 characters by default',
+			detail: `${PLATFORM_LIMITS.mastodon.charLimit} characters by default`,
 			chips: ['Public', 'English', 'Instance-aware']
 		},
 		accountRequirement: 'An account on a public HTTPS Mastodon instance that allows app access.',
@@ -313,12 +336,12 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Post, thread, or link',
-				text: '500 characters by default',
+				text: `${PLATFORM_LIMITS.mastodon.charLimit} characters by default`,
 				media: 'Text only'
 			},
 			{
 				name: 'Media post',
-				text: '500 characters by default',
+				text: `${PLATFORM_LIMITS.mastodon.charLimit} characters by default`,
 				media: 'Up to 4 images, GIFs, or MP4 attachments'
 			}
 		],
@@ -364,12 +387,12 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Photo post',
-				text: '500 characters by default',
+				text: `${PLATFORM_LIMITS.pixelfed.charLimit} characters by default`,
 				media: '1-4 JPEG, PNG, or WebP photos'
 			},
 			{
 				name: 'Album',
-				text: '500 characters by default',
+				text: `${PLATFORM_LIMITS.pixelfed.charLimit} characters by default`,
 				media: '2-4 photos with per-image alt text'
 			}
 		],
@@ -547,7 +570,7 @@ const platformImplementations = [
 			label: '@openpo.st',
 			headline: 'A short post with a rich link card',
 			body: "Rich text, link cards, replies, labels, and media use Bluesky's AT Protocol format.",
-			detail: '300 characters',
+			detail: `${PLATFORM_LIMITS.bluesky.charLimit} characters`,
 			chips: ['Rich text', 'Link card', 'AT Protocol']
 		},
 		accountRequirement: 'A Bluesky handle and a dedicated app password.',
@@ -560,17 +583,17 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Post, thread, or link',
-				text: '300 characters',
+				text: `${PLATFORM_LIMITS.bluesky.charLimit} characters`,
 				media: 'Text or a rich link card'
 			},
 			{
 				name: 'Image post',
-				text: '300 characters',
+				text: `${PLATFORM_LIMITS.bluesky.charLimit} characters`,
 				media: '1-4 JPEG, PNG, or WebP images'
 			},
 			{
 				name: 'Video',
-				text: '300 characters',
+				text: `${PLATFORM_LIMITS.bluesky.charLimit} characters`,
 				media: '1 MP4 video, up to 100 MB'
 			}
 		],
@@ -603,7 +626,7 @@ const platformImplementations = [
 			label: 'Professional update',
 			headline: 'Quarterly field guide.pdf',
 			body: 'The document title, post text, and follow-up comments each have their own limit.',
-			detail: '3,000 post · 1,250 comment',
+			detail: `${PLATFORM_LIMITS.linkedin.charLimit.toLocaleString('en-US')} post · ${LINKEDIN_COMMENT_LIMIT.toLocaleString('en-US')} comment`,
 			chips: ['PDF document', 'Comment child', 'Organization-ready']
 		},
 		accountRequirement:
@@ -617,23 +640,23 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Post or link',
-				text: '3,000 characters',
+				text: `${PLATFORM_LIMITS.linkedin.charLimit.toLocaleString('en-US')} characters`,
 				media: 'Text or a link card'
 			},
 			{
 				name: 'Comment thread',
-				text: '1,250 characters per child',
+				text: `${LINKEDIN_COMMENT_LIMIT.toLocaleString('en-US')} characters per child`,
 				media: 'Text only'
 			},
 			{
 				name: 'Image, document, or video',
-				text: '3,000 characters',
+				text: `${PLATFORM_LIMITS.linkedin.charLimit.toLocaleString('en-US')} characters`,
 				media: 'One image, PDF document, or video per account version'
 			}
 		],
 		limits: [
 			`${PLATFORM_LIMITS.linkedin.charLimit} characters for posts`,
-			'1,250 characters for thread comments',
+			`${LINKEDIN_COMMENT_LIMIT.toLocaleString('en-US')} characters for thread comments`,
 			PLATFORM_LIMITS.linkedin.media,
 			'Thread children publish as comments'
 		],
@@ -673,17 +696,17 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Post or reply thread',
-				text: '500 characters',
+				text: `${PLATFORM_LIMITS.threads.charLimit} characters`,
 				media: 'Text only'
 			},
 			{
 				name: 'Image or video',
-				text: '500 characters',
+				text: `${PLATFORM_LIMITS.threads.charLimit} characters`,
 				media: 'One public HTTPS media item'
 			},
 			{
 				name: 'Carousel',
-				text: '500 characters',
+				text: `${PLATFORM_LIMITS.threads.charLimit} characters`,
 				media: '2-20 public HTTPS images or videos'
 			}
 		],
@@ -729,17 +752,17 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Page post or link',
-				text: '63,206 characters',
+				text: `${PLATFORM_LIMITS.facebook.charLimit.toLocaleString('en-US')} characters`,
 				media: 'Text or a link card'
 			},
 			{
 				name: 'Photo or multi-photo',
-				text: '63,206 characters',
+				text: `${PLATFORM_LIMITS.facebook.charLimit.toLocaleString('en-US')} characters`,
 				media: '1 image or 2-10 public HTTPS photos'
 			},
 			{
 				name: 'Video or Story',
-				text: '63,206 characters for video',
+				text: `${PLATFORM_LIMITS.facebook.charLimit.toLocaleString('en-US')} characters for video`,
 				media: 'One public HTTPS video; Story accepts one image or video'
 			}
 		],
@@ -784,17 +807,17 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Feed image',
-				text: '2,200 caption characters',
+				text: `${PLATFORM_LIMITS.instagram.charLimit.toLocaleString('en-US')} caption characters`,
 				media: 'One public HTTPS image'
 			},
 			{
 				name: 'Carousel',
-				text: '2,200 caption characters',
+				text: `${PLATFORM_LIMITS.instagram.charLimit.toLocaleString('en-US')} caption characters`,
 				media: '2-10 public HTTPS images or videos'
 			},
 			{
 				name: 'Story or Reel',
-				text: 'No Story caption; 2,200 for Reel',
+				text: `No Story caption; ${PLATFORM_LIMITS.instagram.charLimit.toLocaleString('en-US')} for Reel`,
 				media: 'Public HTTPS media required'
 			}
 		],
@@ -827,7 +850,7 @@ const platformImplementations = [
 			label: 'Two post types',
 			headline: 'Video or 1-35 photos',
 			body: 'Video and photo posts keep different captions, media rules, and app-review checks.',
-			detail: '2,200 video · 4,000 photo',
+			detail: `${PLATFORM_LIMITS.tiktok.charLimit.toLocaleString('en-US')} video · ${TIKTOK_PHOTO_CHAR_LIMIT.toLocaleString('en-US')} photo`,
 			chips: ['9:16 video', 'Photo post', 'App review']
 		},
 		accountRequirement:
@@ -841,18 +864,18 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Video',
-				text: '2,200 caption characters',
+				text: `${PLATFORM_LIMITS.tiktok.charLimit.toLocaleString('en-US')} caption characters`,
 				media: 'One public HTTPS MP4 or QuickTime video'
 			},
 			{
 				name: 'Photo post',
-				text: '4,000 caption characters',
+				text: `${TIKTOK_PHOTO_CHAR_LIMIT.toLocaleString('en-US')} caption characters`,
 				media: '1-35 public HTTPS JPEG or WebP images'
 			}
 		],
 		limits: [
 			`${PLATFORM_LIMITS.tiktok.charLimit.toLocaleString()} characters for video captions`,
-			'4,000 characters for photo-post captions',
+			`${TIKTOK_PHOTO_CHAR_LIMIT.toLocaleString('en-US')} characters for photo-post captions`,
 			PLATFORM_LIMITS.tiktok.media,
 			'Photo posts support 1-35 JPEG or WebP images',
 			'App review and a live test are required'
@@ -893,12 +916,12 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Short',
-				text: 'Required title; up to 5,000 description characters',
+				text: `Required title; up to ${PLATFORM_LIMITS.youtube.charLimit.toLocaleString('en-US')} description characters`,
 				media: 'Exactly one short video'
 			},
 			{
 				name: 'Video',
-				text: 'Required title; up to 5,000 description characters',
+				text: `Required title; up to ${PLATFORM_LIMITS.youtube.charLimit.toLocaleString('en-US')} description characters`,
 				media: 'Exactly one video, up to the long-video profile limit'
 			}
 		],
@@ -1023,7 +1046,7 @@ const platformImplementations = [
 			label: 'Telegram chat',
 			headline: 'A scheduled channel update',
 			body: 'Text and media go through the verified chat connection.',
-			detail: '4,096 characters',
+			detail: `${PLATFORM_LIMITS.telegram.charLimit.toLocaleString('en-US')} characters`,
 			chips: ['Bot', 'Up to 10 media', 'No backfill']
 		},
 		accountRequirement:
@@ -1037,19 +1060,19 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Message',
-				text: '4,096 characters',
+				text: `${PLATFORM_LIMITS.telegram.charLimit.toLocaleString('en-US')} characters`,
 				media: 'Text only'
 			},
 			{
 				name: 'Message with media',
-				text: '1,024-character caption',
+				text: `${TELEGRAM_CAPTION_LIMIT.toLocaleString('en-US')}-character caption`,
 				media: 'Up to 10 media items in one group'
 			}
 		],
 		limits: [
 			`${PLATFORM_LIMITS.telegram.charLimit.toLocaleString()} characters`,
 			PLATFORM_LIMITS.telegram.media,
-			'Media captions allow up to 1,024 characters',
+			`Media captions allow up to ${TELEGRAM_CAPTION_LIMIT.toLocaleString('en-US')} characters`,
 			'Observation starts at installation; earlier messages are never backfilled'
 		],
 		limitations: [
@@ -1074,7 +1097,7 @@ const platformImplementations = [
 			label: 'Discord channel',
 			headline: 'A scheduled channel update',
 			body: 'Text, files, alt text, and reply links are sent through the channel webhook.',
-			detail: '2,000 characters',
+			detail: `${PLATFORM_LIMITS.discord.charLimit.toLocaleString('en-US')} characters`,
 			chips: ['Webhook', 'Up to 10 files', 'Reply links']
 		},
 		accountRequirement:
@@ -1088,12 +1111,12 @@ const platformImplementations = [
 		formats: [
 			{
 				name: 'Message',
-				text: '2,000 characters',
+				text: `${PLATFORM_LIMITS.discord.charLimit.toLocaleString('en-US')} characters`,
 				media: 'Text only'
 			},
 			{
 				name: 'Message with files',
-				text: '2,000 characters',
+				text: `${PLATFORM_LIMITS.discord.charLimit.toLocaleString('en-US')} characters`,
 				media: 'Up to 10 images or one video in the current post formats'
 			}
 		],

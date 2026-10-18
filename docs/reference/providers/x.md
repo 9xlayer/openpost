@@ -18,10 +18,15 @@ OpenPost currently uses X OAuth 1.0a end-to-end. Configure an app type that supp
 
 OpenPost reads the connected account's `subscription_type` from the authenticated X profile and applies the matching publishing limits.
 
+<!-- provider-limits:start -->
+
 | Connected X account              |                 Text limit | Video duration | Video size |
 | -------------------------------- | -------------------------: | -------------: | ---------: |
 | Standard, unknown, or stale tier |    280 weighted characters |     20 minutes |      8 GiB |
 | Basic, Premium, or Premium+      | 25,000 weighted characters |    125 minutes |     16 GiB |
+
+Text limits come from the capability catalogue for the standard and subscribed X tiers; video caps come from the provider limits. Provider documentation verified 26 September 2026; see the links below.
+<!-- provider-limits:end -->
 
 X does not count every Unicode character as one. OpenPost follows X's weighted counting rules, treats URLs as 23 characters, normalizes composed text, and keeps emoji sequences together. The counter and server validation use the same rules.
 

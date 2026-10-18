@@ -63,6 +63,16 @@ Direct messages, Comments and replies, and Analytics are optional and per connec
 
 ## Current Limits
 
+<!-- provider-limits:start -->
+
+| Format               |    Caption limit |
+| -------------------- | ---------------: |
+| Feed, carousel, Reel | 2,200 characters |
+| Story                |       No caption |
+
+Caption limits come from the capability catalogue. Meta documents publishing in the [Content Publishing guide](https://developers.facebook.com/documentation/instagram-platform/content-publishing) (verified there 17 October 2026).
+<!-- provider-limits:end -->
+
 - No text-only Instagram posts.
 - Media URLs must be public HTTPS URLs.
 - Account discovery currently uses Pages returned by the authenticated Meta user.

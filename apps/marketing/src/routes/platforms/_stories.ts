@@ -1,3 +1,6 @@
+import { PLATFORM_LIMITS } from '@openpost/platform-text';
+import { TELEGRAM_CAPTION_LIMIT } from '../_marketing';
+
 export type ChannelStory = {
 	title: string;
 	intro: string;
@@ -468,7 +471,7 @@ const channelStories = {
 			},
 			{
 				title: 'Write the message once.',
-				text: 'Prepare text up to 4,096 characters, or add media with a caption up to 1,024 characters. Check the preview before scheduling.'
+				text: `Prepare text up to ${PLATFORM_LIMITS.telegram.charLimit.toLocaleString('en-US')} characters, or add media with a caption up to ${TELEGRAM_CAPTION_LIMIT.toLocaleString('en-US')} characters. Check the preview before scheduling.`
 			},
 			{
 				title: 'Keep channel history in view.',
