@@ -14,12 +14,15 @@
 	import ProgressMeter from '$lib/components/progress-meter.svelte';
 	import { ObjectURLSlot } from './local-image';
 	import {
+		MEDIA_MAX_BYTES,
+		OUTPUT_MAX_BYTES,
 		openLocalMedia,
 		inspectLocalMedia,
 		inspectConvertedMedia,
 		convertLocalMedia,
 		mediaCodecOptions,
 		mediaBytes,
+		mediaLimitLabel,
 		mediaCodecLabel,
 		audioUsesBitrate,
 		type MediaInfo,
@@ -292,7 +295,7 @@
 						? 'an audio file'
 						: 'a video or audio file'}</span
 			>
-			<small>Up to 250 MB. Processing stays on your device.</small>
+			<small>Up to {mediaLimitLabel(MEDIA_MAX_BYTES)}. Processing stays on your device.</small>
 		</Button>
 		<Input
 			bind:ref={picker}
@@ -411,7 +414,9 @@
 			</fieldset>
 			<p class="hint">
 				Uses the primary {audioOnly ? 'audio track' : 'video and audio tracks'}. Subtitles,
-				attachments and extra tracks are omitted. Output is held in browser memory, up to 500 MB.
+				attachments and extra tracks are omitted. Output is held in browser memory, up to {mediaLimitLabel(
+					OUTPUT_MAX_BYTES
+				)}.
 			</p>
 			{#if checking}<p class="hint" role="status">Checking available encoders…</p>{/if}
 			<div class="actions">

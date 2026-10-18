@@ -1,7 +1,11 @@
 import type { MediaConversionTool, MediaOutputFormat } from '@openpost/social-images';
+import {
+	MEDIA_MAX_BYTES,
+	OUTPUT_MAX_BYTES,
+	mediaLimitLabel
+} from '../_components/tools/local-media';
 
-const privacy =
-	'Your files stay on your device. Conversion runs in your browser, using its available decoders and encoders. MP3 and AAC encoders load when needed. Keep the tab open and download your result before leaving. Input files are limited to 250 MB and output files to 500 MB.';
+const privacy = `Your files stay on your device. Conversion runs in your browser, using its available decoders and encoders. MP3 and AAC encoders load when needed. Keep the tab open and download your result before leaving. Input files are limited to ${mediaLimitLabel(MEDIA_MAX_BYTES)} and output files to ${mediaLimitLabel(OUTPUT_MAX_BYTES)}.`;
 const outputAdvice = {
 	mp4: 'MP4 is useful for social uploads and sharing. H.264 video with AAC audio is a common compatibility choice. An MP4 extension alone does not guarantee that a service accepts the codecs, dimensions or bitrate inside it.',
 	mkv: 'MKV can hold many video and audio codecs. It is useful for keeping compatible encoded tracks in a different container. Many browsers and social platforms cannot play or accept MKV directly. Download it for a player or editor that supports Matroska.',

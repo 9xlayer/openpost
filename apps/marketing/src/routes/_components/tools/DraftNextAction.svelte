@@ -4,6 +4,7 @@
 	import { Button } from '@openpost/ui/components/button';
 	import { appUrl } from '../../_marketing';
 	import {
+		draftTransferLimits,
 		draftTransferReceiptSchema,
 		draftTransferSchema,
 		draftTransferTimeoutMS,
@@ -29,8 +30,7 @@
 		failure = '';
 		const parsed = draftTransferSchema.safeParse($state.snapshot(draft));
 		if (!parsed.success) {
-			failure =
-				'This draft could not transfer. Keep at most 100 parts and 250 MB of files, then try again.';
+			failure = `This draft could not transfer. Keep at most ${draftTransferLimits.parts} parts and ${draftTransferLimits.fileBytes / 1_000_000} MB of files, then try again.`;
 			return;
 		}
 		const token = crypto.randomUUID();

@@ -25,7 +25,7 @@ import {
 import type { MediaOutputFormat } from '@openpost/social-images';
 
 export const MEDIA_MAX_BYTES = 250 * 1024 * 1024;
-const OUTPUT_MAX_BYTES = 500 * 1024 * 1024;
+export const OUTPUT_MAX_BYTES = 500 * 1024 * 1024;
 export type VideoChoice = 'auto' | 'copy' | VideoCodec;
 export type AudioChoice = 'auto' | 'copy' | 'mute' | AudioCodec;
 export interface MediaSettings {
@@ -69,7 +69,8 @@ export function mediaOutputFormat(format: MediaOutputFormat): OutputFormat {
 
 export function openLocalMedia(file: File): Input {
 	if (!file.size) throw new Error('This file is empty. Choose a video or audio file.');
-	if (file.size > MEDIA_MAX_BYTES) throw new Error('Choose a file smaller than 250 MB.');
+	if (file.size > MEDIA_MAX_BYTES)
+		throw new Error(`Choose a file smaller than ${mediaLimitLabel(MEDIA_MAX_BYTES)}.`);
 	return new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
 }
 
@@ -164,7 +165,7 @@ export async function convertLocalMedia(
 				const end = position + data.byteLength;
 				if (end > OUTPUT_MAX_BYTES)
 					throw new Error(
-						'The output exceeds 500 MB. Choose a compressed format or a shorter source.'
+						`The output exceeds ${mediaLimitLabel(OUTPUT_MAX_BYTES)}. Choose a compressed format or a shorter source.`
 					);
 				// Container headers can be backpatched. Blob slices keep these writes
 				// bounded without repeatedly copying a growing ArrayBuffer.
@@ -285,4 +286,10 @@ export function mediaCodecLabel(codec: string): string {
 }
 export function mediaBytes(bytes: number): string {
 	return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+// Whole-MB labels for authored limits. Formatting from the byte value keeps the
+// displayed copy in step when a limit changes.
+export function mediaLimitLabel(bytes: number): string {
+	return `${bytes / 1024 / 1024} MB`;
 }
