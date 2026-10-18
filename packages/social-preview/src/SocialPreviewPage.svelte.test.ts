@@ -68,3 +68,39 @@ it("aligns Facebook stories and feed cards in one desktop column", async () => {
     expect(neighbor.width).toBeCloseTo(authored.width);
   }
 });
+
+it("shows the verified badge in the page chrome when verified is set", async () => {
+  await page.viewport(1280, 900);
+  host = document.createElement("div");
+  host.style.width = "1200px";
+  document.body.append(host);
+  const verifiedModel = createPreviewModel({
+    platform: "x",
+    identity: { displayName: "A publisher", handle: "publisher", verified: true },
+    segments: [
+      {
+        id: "post",
+        text: "The authored post stays visible in an embedded preview.",
+      },
+    ],
+  });
+  await render(SocialPreviewPage, {
+    target: host,
+    props: { model: verifiedModel, scheme: "light" },
+  });
+  const railBadge = host.querySelector(".rail-profile [aria-label='Verified']");
+  expect(railBadge).not.toBeNull();
+});
+
+it("shows no verified badge in the page chrome when verified is unset", async () => {
+  await page.viewport(1280, 900);
+  host = document.createElement("div");
+  host.style.width = "1200px";
+  document.body.append(host);
+  await render(SocialPreviewPage, {
+    target: host,
+    props: { model, scheme: "light" },
+  });
+  expect(host.querySelector(".rail-profile [aria-label='Verified']")).toBeNull();
+  expect(host.querySelector("[aria-label='Verified']")).toBeNull();
+});

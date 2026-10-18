@@ -33,6 +33,7 @@
   import PlatformGlyph from "./PlatformGlyph.svelte";
   import PreviewAvatar from "./PreviewAvatar.svelte";
   import SocialPreview from "./SocialPreview.svelte";
+  import VerifiedBadge from "./VerifiedBadge.svelte";
   import AdditionalPreviewPage from "./AdditionalPreviewPage.svelte";
 
   interface Props {
@@ -247,9 +248,12 @@
           <div class="rail-profile">
             <PreviewAvatar identity={model.identity} size={40} />
             <span
-              ><strong>{model.identity.displayName}</strong><small
-                >@{handle}</small
-              ></span
+              ><span class="identity-name"
+                ><strong>{model.identity.displayName}</strong>{#if model
+                  .identity.verified}<VerifiedBadge
+                    platform={model.platform}
+                  />{/if}</span
+              ><small>@{handle}</small></span
             >
             <MoreHorizontal aria-hidden="true" />
           </div>
@@ -375,7 +379,10 @@
         <aside class="linkedin-profile">
           <div class="profile-cover"></div>
           <PreviewAvatar identity={model.identity} size={68} />
-          <strong>{model.identity.displayName}</strong>
+          <span class="identity-name profile-name"
+            ><strong>{model.identity.displayName}</strong>{#if model.identity
+              .verified}<VerifiedBadge platform="linkedin" />{/if}</span
+          >
           <span>@{handle}</span>
 
           <hr />
@@ -434,8 +441,10 @@
       <div class="facebook-page">
         <aside class="facebook-left">
           <div class="account-row">
-            <PreviewAvatar identity={model.identity} size={36} /><strong
-              >{model.identity.displayName}</strong
+            <PreviewAvatar identity={model.identity} size={36} /><span
+              class="identity-name"
+              ><strong>{model.identity.displayName}</strong>{#if model.identity
+                .verified}<VerifiedBadge platform={model.platform} />{/if}</span
             >
           </div>
           {@render navItem("users", "Friends")}
@@ -532,9 +541,11 @@
           <aside class="instagram-right">
             <div class="account-row">
               <PreviewAvatar identity={model.identity} size={44} /><span
-                ><strong>{handle}</strong><small
-                  >{model.identity.displayName}</small
-                ></span
+                ><span class="identity-name"
+                  ><strong>{handle}</strong>{#if model.identity.verified}<VerifiedBadge
+                      platform={model.platform}
+                    />{/if}</span
+                ><small>{model.identity.displayName}</small></span
               ><b>Switch</b>
             </div>
             <div class="suggested-heading">
@@ -672,7 +683,13 @@
           {@render navItem("message", "Lounge")}
           <div class="discord-user">
             <PreviewAvatar identity={model.identity} size={34} />
-            <span><strong>{handle}</strong><small>Online</small></span>
+            <span
+              ><span class="identity-name"
+                ><strong>{handle}</strong>{#if model.identity.verified}<VerifiedBadge
+                    platform={model.platform}
+                  />{/if}</span
+              ><small>Online</small></span
+            >
             <Mic />
             <Settings />
           </div>
@@ -710,9 +727,10 @@
           <div class="telegram-channel-row">
             <PreviewAvatar identity={model.identity} size={46} />
             <span
-              ><strong>{model.identity.displayName}</strong><small
-                >{model.segments[0]?.text || "Channel"}</small
-              ></span
+              ><span class="identity-name"
+                ><strong>{model.identity.displayName}</strong>{#if model.identity
+                  .verified}<VerifiedBadge platform={model.platform} />{/if}</span
+              ><small>{model.segments[0]?.text || "Channel"}</small></span
             >
             <time>{model.createdAtLabel}</time>
           </div>
@@ -721,7 +739,10 @@
           <header class="telegram-channel-header">
             <PreviewAvatar identity={model.identity} size={40} />
             <span
-              ><h2>{model.identity.displayName}</h2>
+              ><span class="identity-name"
+                ><h2>{model.identity.displayName}</h2>{#if model.identity
+                  .verified}<VerifiedBadge platform={model.platform} />{/if}</span
+              >
               <small>channel</small></span
             >
             <Search aria-hidden="true" />
@@ -1030,6 +1051,40 @@
   .account-row > span {
     display: grid;
     min-width: 0;
+  }
+
+  .identity-name {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .account-row > .identity-name {
+    display: flex;
+  }
+
+  .identity-name > strong,
+  .identity-name > h2 {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .identity-name > :global(.verified-badge) {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .profile-name {
+    justify-content: center;
+    max-width: 100%;
+  }
+
+  .profile-name > strong {
+    flex: 0 1 auto;
   }
 
   .rail-profile strong,
