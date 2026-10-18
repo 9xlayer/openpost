@@ -4204,57 +4204,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/post-plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List your recent saved post plans */
-        get: operations["list-post-plans"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/post-plans/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Save post plan topics, selection, order and proposed dates */
-        put: operations["update-post-plan"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/post-plans/{id}/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Durably prepare selected plan topics within normal generation capacity */
-        post: operations["generate-post-plan"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/posting-schedules": {
         parameters: {
             query?: never;
@@ -5949,23 +5898,6 @@ export interface paths {
          * @description Resolves Publication override, account override, then Workspace default in that order.
          */
         post: operations["resolve-effective-voice-profiles"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/voice-profiles/source-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Read a public source for review before remembering it */
-        post: operations["preview-profile-source"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7710,16 +7642,14 @@ export interface components {
             error_message?: string;
             id: string;
             input: components["schemas"]["BuildInput"];
-            /** @enum {string} */
-            phase: "queued" | "sources" | "directing" | "drafting" | "reviewing" | "ready" | "committing" | "committed" | "failed" | "cancelled";
+            phase: string;
             publication_id?: string;
             result?: components["schemas"]["BuildResult"];
             /** Format: int64 */
             revision: number;
             series_origin?: components["schemas"]["SeriesOrigin"];
             social_set_id?: string;
-            /** @enum {string} */
-            state: "queued" | "building" | "ready" | "committed" | "failed" | "cancelled";
+            state: string;
             /** Format: date-time */
             updated_at: string;
             voice_profile_id?: string;
@@ -7732,8 +7662,6 @@ export interface components {
             role: string;
         };
         BuildInput: {
-            /** @description Business context frozen independently from each destination writing voice */
-            context_profile?: components["schemas"]["ContextSnapshot"];
             destination_policy: string;
             destinations: components["schemas"]["Destination"][] | null;
             direction: components["schemas"]["DirectionInput"];
@@ -7744,8 +7672,6 @@ export interface components {
              * @enum {integer}
              */
             option_count?: 0 | 4;
-            plan?: components["schemas"]["PostPlanInput"];
-            planning_context?: components["schemas"]["PlanningContext"];
             /** Format: int64 */
             series_count?: number;
             sources?: components["schemas"]["SourceMaterial"][] | null;
@@ -8281,15 +8207,6 @@ export interface components {
             styles: components["schemas"]["Style"][] | null;
             suggestions: components["schemas"]["Suggestion"][] | null;
         };
-        ContextSnapshot: {
-            about?: string;
-            audience?: string;
-            knowledge?: components["schemas"]["KnowledgeEntry"][] | null;
-            name: string;
-            profile_id: string;
-            /** Format: int64 */
-            revision: number;
-        };
         Conversation: {
             /** Format: date-time */
             archived_at?: string;
@@ -8793,8 +8710,6 @@ export interface components {
             context_may_publish?: boolean;
             /** @description Private planning notes supplied as untrusted source material */
             context_notes?: string;
-            /** @description Subject profile in this Workspace; independent from the writing voice */
-            context_profile_id?: string;
             /** @description Public HTTP or HTTPS sources loaded by the guarded background worker */
             context_urls?: string[] | null;
             /**
@@ -8812,7 +8727,6 @@ export interface components {
              * @enum {integer}
              */
             option_count?: 0 | 4;
-            plan?: components["schemas"]["PostPlanInput"];
             /**
              * Format: int64
              * @description Plan up to three complementary posts before generating selected drafts
@@ -9018,9 +8932,6 @@ export interface components {
             state: string;
         };
         Definition: {
-            /** @description Facts about the business, project or person, separate from its writing style */
-            about?: string;
-            audience?: string;
             /** @description Tone or identity boundaries */
             boundaries?: string[] | null;
             /** @description Accepted edits that explain how the voice should change a draft */
@@ -9041,8 +8952,6 @@ export interface components {
             identity_summary?: string;
             /** @description Optional answers used to learn opinions and phrasing */
             interview_answers?: components["schemas"]["InterviewAnswer"][] | null;
-            /** @description Explicitly saved facts, updates, goals and private background */
-            knowledge?: components["schemas"]["KnowledgeEntry"][] | null;
             /** @description Established views the builder may draw on */
             opinions?: string[] | null;
             /** @description Language or locale this voice normally writes in */
@@ -9434,12 +9343,8 @@ export interface components {
              * @example https://example.com/api/v1/schemas/DiscoverPublicationOpportunitiesInputBody.json
              */
             readonly $schema?: string;
-            assets?: components["schemas"]["BuildAsset"][] | null;
             /** @description People the opportunities should matter to */
             audience?: string;
-            context_notes?: string;
-            context_profile_id?: string;
-            context_urls?: string[] | null;
             /** @description Optional subject, project, niche, or current objective */
             focus?: string;
             /**
@@ -10266,17 +10171,6 @@ export interface components {
             /** @description Canonical publication copy */
             source_text: string;
         };
-        GeneratePostPlanInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/api/v1/schemas/GeneratePostPlanInputBody.json
-             */
-            readonly $schema?: string;
-            /** Format: int64 */
-            expected_revision: number;
-            item_ids: string[] | null;
-        };
         "Get-running-versionResponse": {
             /**
              * Format: uri
@@ -10338,6 +10232,8 @@ export interface components {
              * @description Storage limit, or zero when no fixed limit is exposed
              */
             limit_bytes: number;
+            /** @description Per-kind upload ceilings matching the enforced admission limits */
+            upload_limits: components["schemas"]["MediaUploadLimits"];
             /**
              * Format: int64
              * @description Quota-counted media bytes
@@ -11523,23 +11419,6 @@ export interface components {
             readonly $schema?: string;
             joined: boolean;
         };
-        KnowledgeEntry: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/api/v1/schemas/KnowledgeEntry.json
-             */
-            readonly $schema?: string;
-            /** @description Date of the information, YYYY-MM-DD */
-            as_of?: string;
-            /** @description Last usable date, YYYY-MM-DD */
-            expires_on?: string;
-            id: string;
-            /** @enum {string} */
-            kind: "fact" | "update" | "goal" | "background";
-            source_url?: string;
-            text: string;
-        };
         LibraryReference: {
             id?: string;
             role: string;
@@ -11946,6 +11825,23 @@ export interface components {
             item_count: number;
             name: string;
             workspace_id: string;
+        };
+        MediaUploadLimits: {
+            /**
+             * Format: int64
+             * @description Upload ceiling in bytes for brand-font assets
+             */
+            brand_font_bytes: number;
+            /**
+             * Format: int64
+             * @description Upload ceiling in bytes for non-video, non-brand-font assets
+             */
+            default_bytes: number;
+            /**
+             * Format: int64
+             * @description Upload ceiling in bytes for video assets
+             */
+            video_bytes: number;
         };
         MediaUploadResult: {
             /**
@@ -12420,8 +12316,6 @@ export interface components {
             id: string;
             platform_treatments: components["schemas"]["PlatformTreatment"][] | null;
             signal_date: string;
-            source_refs?: string[] | null;
-            sources?: components["schemas"]["SourceCitation"][] | null;
             title: string;
             why_it_fits: string;
             why_now: string;
@@ -12701,11 +12595,6 @@ export interface components {
             readonly $schema?: string;
             angles: components["schemas"]["AngleOption"][] | null;
         };
-        PlanningContext: {
-            platforms?: string[] | null;
-            recent_topics?: string[] | null;
-            writing_voice?: components["schemas"]["Definition"];
-        };
         PlatformTreatment: {
             format: string;
             media: string;
@@ -12806,22 +12695,6 @@ export interface components {
             label: string;
             review_flags: components["schemas"]["ReviewFlag"][] | null;
             skipped: components["schemas"]["SkippedDestination"][] | null;
-        };
-        PostPlanInput: {
-            /** Format: int64 */
-            count: number;
-            end_date?: string;
-            /** @description Optional suggested placement period, YYYY-MM-DD */
-            start_date?: string;
-            title?: string;
-        };
-        PostPlanSummary: {
-            id: string;
-            state: string;
-            title: string;
-            /** Format: date-time */
-            updated_at: string;
-            workspace_id: string;
         };
         PostingScheduleResponse: {
             /**
@@ -12995,16 +12868,6 @@ export interface components {
             description: string;
             key: string;
             name: string;
-        };
-        ProfileSourcePreviewInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/api/v1/schemas/ProfileSourcePreviewInputBody.json
-             */
-            readonly $schema?: string;
-            url: string;
-            workspace_id: string;
         };
         ProjectAssetResponse: {
             /**
@@ -15205,15 +15068,10 @@ export interface components {
             brief: string;
             child_build_id?: string;
             evidence: string;
-            generate_requested?: boolean;
-            /** Format: int64 */
-            generation_request?: number;
             id: string;
             /** Format: int64 */
             revision: number;
-            selected?: boolean;
             source_refs: string[] | null;
-            suggested_date?: string;
             title: string;
         };
         SeriesOrigin: {
@@ -15221,7 +15079,6 @@ export interface components {
             item_id: string;
             /** Format: int64 */
             item_revision: number;
-            plan?: boolean;
         };
         SeriesPoint: {
             date: string;
@@ -15443,14 +15300,6 @@ export interface components {
             name: string;
             updated_at: string;
             workspace_id: string;
-        };
-        SourceCitation: {
-            primary: boolean;
-            published_at: string;
-            publisher: string;
-            supports: string;
-            title: string;
-            url: string;
         };
         SourceMaterial: {
             id: string;
@@ -16415,17 +16264,6 @@ export interface components {
             default_reference: components["schemas"]["ThemeReference"];
             /** @description Organization ID */
             organization_id: string;
-        };
-        UpdatePostPlanInputBody: {
-            /**
-             * Format: uri
-             * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/api/v1/schemas/UpdatePostPlanInputBody.json
-             */
-            readonly $schema?: string;
-            /** Format: int64 */
-            expected_revision: number;
-            items: components["schemas"]["SeriesConcept"][] | null;
         };
         UpdatePostingScheduleInputBody: {
             /**
@@ -33868,107 +33706,6 @@ export interface operations {
             };
         };
     };
-    "list-post-plans": {
-        parameters: {
-            query: {
-                workspace_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PostPlanSummary"][] | null;
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "update-post-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdatePostPlanInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Build"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "generate-post-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GeneratePostPlanInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Build"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
     "list-posting-schedules": {
         parameters: {
             query?: {
@@ -35658,10 +35395,6 @@ export interface operations {
     "list-publications": {
         parameters: {
             query: {
-                /** @description Optional current post review state */
-                review_state?: "pending" | "approved" | "changes_requested" | "needs_review";
-                /** @description Optional assigned reviewer, matched against the current review */
-                reviewer_id?: string;
                 /** @description Workspace ID */
                 workspace_id: string;
                 /** @description Optional status filter */
@@ -42044,39 +41777,6 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "preview-profile-source": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProfileSourcePreviewInputBody"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["KnowledgeEntry"];
-                };
-            };
-            /** @description Error */
-            default: {
                 headers: {
                     [name: string]: unknown;
                 };

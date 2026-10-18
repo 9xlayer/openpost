@@ -2789,7 +2789,7 @@
 						"type": "string"
 					},
 					"app_password": {
-						"description": "Bluesky app password (Settings > App Passwords)",
+						"description": "Bluesky app password (Settings \u003e App Passwords)",
 						"type": "string"
 					},
 					"handle": {
@@ -2894,18 +2894,6 @@
 						"$ref": "#/components/schemas/BuildInput"
 					},
 					"phase": {
-						"enum": [
-							"queued",
-							"sources",
-							"directing",
-							"drafting",
-							"reviewing",
-							"ready",
-							"committing",
-							"committed",
-							"failed",
-							"cancelled"
-						],
 						"type": "string"
 					},
 					"publication_id": {
@@ -2925,7 +2913,6 @@
 						"type": "string"
 					},
 					"state": {
-						"enum": ["queued", "building", "ready", "committed", "failed", "cancelled"],
 						"type": "string"
 					},
 					"updated_at": {
@@ -2971,10 +2958,6 @@
 			"BuildInput": {
 				"additionalProperties": false,
 				"properties": {
-					"context_profile": {
-						"$ref": "#/components/schemas/ContextSnapshot",
-						"description": "Business context frozen independently from each destination writing voice"
-					},
 					"destination_policy": {
 						"type": "string"
 					},
@@ -2995,12 +2978,6 @@
 						"enum": [0, 4],
 						"format": "int64",
 						"type": "integer"
-					},
-					"plan": {
-						"$ref": "#/components/schemas/PostPlanInput"
-					},
-					"planning_context": {
-						"$ref": "#/components/schemas/PlanningContext"
 					},
 					"series_count": {
 						"format": "int64",
@@ -4324,35 +4301,6 @@
 				"required": ["preferences", "styles", "favorites", "suggestions", "learning_enabled"],
 				"type": "object"
 			},
-			"ContextSnapshot": {
-				"additionalProperties": false,
-				"properties": {
-					"about": {
-						"type": "string"
-					},
-					"audience": {
-						"type": "string"
-					},
-					"knowledge": {
-						"items": {
-							"$ref": "#/components/schemas/KnowledgeEntry"
-						},
-						"type": ["array", "null"]
-					},
-					"name": {
-						"type": "string"
-					},
-					"profile_id": {
-						"type": "string"
-					},
-					"revision": {
-						"format": "int64",
-						"type": "integer"
-					}
-				},
-				"required": ["profile_id", "name", "revision"],
-				"type": "object"
-			},
 			"Conversation": {
 				"additionalProperties": false,
 				"properties": {
@@ -5386,10 +5334,6 @@
 						"maxLength": 10000,
 						"type": "string"
 					},
-					"context_profile_id": {
-						"description": "Subject profile in this Workspace; independent from the writing voice",
-						"type": "string"
-					},
 					"context_urls": {
 						"description": "Public HTTP or HTTPS sources loaded by the guarded background worker",
 						"items": {
@@ -5418,9 +5362,6 @@
 						"enum": [0, 4],
 						"format": "int64",
 						"type": "integer"
-					},
-					"plan": {
-						"$ref": "#/components/schemas/PostPlanInput"
 					},
 					"series_count": {
 						"description": "Plan up to three complementary posts before generating selected drafts",
@@ -5871,15 +5812,6 @@
 			"Definition": {
 				"additionalProperties": false,
 				"properties": {
-					"about": {
-						"description": "Facts about the business, project or person, separate from its writing style",
-						"maxLength": 6000,
-						"type": "string"
-					},
-					"audience": {
-						"maxLength": 1000,
-						"type": "string"
-					},
 					"boundaries": {
 						"description": "Tone or identity boundaries",
 						"items": {
@@ -5939,14 +5871,6 @@
 						"items": {
 							"$ref": "#/components/schemas/InterviewAnswer"
 						},
-						"type": ["array", "null"]
-					},
-					"knowledge": {
-						"description": "Explicitly saved facts, updates, goals and private background",
-						"items": {
-							"$ref": "#/components/schemas/KnowledgeEntry"
-						},
-						"maxItems": 20,
 						"type": ["array", "null"]
 					},
 					"opinions": {
@@ -6883,31 +6807,10 @@
 						"readOnly": true,
 						"type": "string"
 					},
-					"assets": {
-						"items": {
-							"$ref": "#/components/schemas/BuildAsset"
-						},
-						"maxItems": 10,
-						"type": ["array", "null"]
-					},
 					"audience": {
 						"description": "People the opportunities should matter to",
 						"maxLength": 500,
 						"type": "string"
-					},
-					"context_notes": {
-						"maxLength": 10000,
-						"type": "string"
-					},
-					"context_profile_id": {
-						"type": "string"
-					},
-					"context_urls": {
-						"items": {
-							"type": "string"
-						},
-						"maxItems": 10,
-						"type": ["array", "null"]
 					},
 					"focus": {
 						"description": "Optional subject, project, niche, or current objective",
@@ -8815,34 +8718,6 @@
 					}
 				},
 				"required": ["source_text", "renditions", "model"],
-				"type": "object"
-			},
-			"GeneratePostPlanInputBody": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/api/v1/schemas/GeneratePostPlanInputBody.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"expected_revision": {
-						"format": "int64",
-						"minimum": 1,
-						"type": "integer"
-					},
-					"item_ids": {
-						"items": {
-							"type": "string"
-						},
-						"maxItems": 12,
-						"minItems": 1,
-						"type": ["array", "null"],
-						"uniqueItems": true
-					}
-				},
-				"required": ["expected_revision", "item_ids"],
 				"type": "object"
 			},
 			"Get-running-versionResponse": {
@@ -11976,44 +11851,6 @@
 				"required": ["joined"],
 				"type": "object"
 			},
-			"KnowledgeEntry": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/api/v1/schemas/KnowledgeEntry.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"as_of": {
-						"description": "Date of the information, YYYY-MM-DD",
-						"type": "string"
-					},
-					"expires_on": {
-						"description": "Last usable date, YYYY-MM-DD",
-						"type": "string"
-					},
-					"id": {
-						"maxLength": 80,
-						"type": "string"
-					},
-					"kind": {
-						"enum": ["fact", "update", "goal", "background"],
-						"type": "string"
-					},
-					"source_url": {
-						"maxLength": 2048,
-						"type": "string"
-					},
-					"text": {
-						"maxLength": 4000,
-						"type": "string"
-					}
-				},
-				"required": ["id", "kind", "text"],
-				"type": "object"
-			},
 			"LibraryReference": {
 				"additionalProperties": false,
 				"properties": {
@@ -14065,18 +13902,6 @@
 					"signal_date": {
 						"type": "string"
 					},
-					"source_refs": {
-						"items": {
-							"type": "string"
-						},
-						"type": ["array", "null"]
-					},
-					"sources": {
-						"items": {
-							"$ref": "#/components/schemas/SourceCitation"
-						},
-						"type": ["array", "null"]
-					},
 					"title": {
 						"type": "string"
 					},
@@ -14816,27 +14641,6 @@
 				"required": ["angles"],
 				"type": "object"
 			},
-			"PlanningContext": {
-				"additionalProperties": false,
-				"properties": {
-					"platforms": {
-						"items": {
-							"type": "string"
-						},
-						"type": ["array", "null"]
-					},
-					"recent_topics": {
-						"items": {
-							"type": "string"
-						},
-						"type": ["array", "null"]
-					},
-					"writing_voice": {
-						"$ref": "#/components/schemas/Definition"
-					}
-				},
-				"type": "object"
-			},
 			"PlatformTreatment": {
 				"additionalProperties": false,
 				"properties": {
@@ -15126,53 +14930,6 @@
 					"skipped",
 					"review_flags"
 				],
-				"type": "object"
-			},
-			"PostPlanInput": {
-				"additionalProperties": false,
-				"properties": {
-					"count": {
-						"format": "int64",
-						"maximum": 12,
-						"minimum": 1,
-						"type": "integer"
-					},
-					"end_date": {
-						"type": "string"
-					},
-					"start_date": {
-						"description": "Optional suggested placement period, YYYY-MM-DD",
-						"type": "string"
-					},
-					"title": {
-						"maxLength": 200,
-						"type": "string"
-					}
-				},
-				"required": ["count"],
-				"type": "object"
-			},
-			"PostPlanSummary": {
-				"additionalProperties": false,
-				"properties": {
-					"id": {
-						"type": "string"
-					},
-					"state": {
-						"type": "string"
-					},
-					"title": {
-						"type": "string"
-					},
-					"updated_at": {
-						"format": "date-time",
-						"type": "string"
-					},
-					"workspace_id": {
-						"type": "string"
-					}
-				},
-				"required": ["id", "workspace_id", "title", "state", "updated_at"],
 				"type": "object"
 			},
 			"PostingScheduleResponse": {
@@ -15540,27 +15297,6 @@
 					}
 				},
 				"required": ["key", "name", "description"],
-				"type": "object"
-			},
-			"ProfileSourcePreviewInputBody": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/api/v1/schemas/ProfileSourcePreviewInputBody.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"url": {
-						"maxLength": 2048,
-						"type": "string"
-					},
-					"workspace_id": {
-						"type": "string"
-					}
-				},
-				"required": ["workspace_id", "url"],
 				"type": "object"
 			},
 			"ProjectAssetResponse": {
@@ -20819,13 +20555,6 @@
 						"maxLength": 1000,
 						"type": "string"
 					},
-					"generate_requested": {
-						"type": "boolean"
-					},
-					"generation_request": {
-						"format": "int64",
-						"type": "integer"
-					},
 					"id": {
 						"type": "string"
 					},
@@ -20833,17 +20562,11 @@
 						"format": "int64",
 						"type": "integer"
 					},
-					"selected": {
-						"type": "boolean"
-					},
 					"source_refs": {
 						"items": {
 							"type": "string"
 						},
 						"type": ["array", "null"]
-					},
-					"suggested_date": {
-						"type": "string"
 					},
 					"title": {
 						"maxLength": 200,
@@ -20865,9 +20588,6 @@
 					"item_revision": {
 						"format": "int64",
 						"type": "integer"
-					},
-					"plan": {
-						"type": "boolean"
 					}
 				},
 				"required": ["build_id", "item_id", "item_revision"],
@@ -21447,31 +21167,6 @@
 					"created_at",
 					"updated_at"
 				],
-				"type": "object"
-			},
-			"SourceCitation": {
-				"additionalProperties": false,
-				"properties": {
-					"primary": {
-						"type": "boolean"
-					},
-					"published_at": {
-						"type": "string"
-					},
-					"publisher": {
-						"type": "string"
-					},
-					"supports": {
-						"type": "string"
-					},
-					"title": {
-						"type": "string"
-					},
-					"url": {
-						"type": "string"
-					}
-				},
-				"required": ["title", "url", "publisher", "published_at", "supports", "primary"],
 				"type": "object"
 			},
 			"SourceMaterial": {
@@ -24239,32 +23934,6 @@
 					}
 				},
 				"required": ["organization_id", "default_reference", "assignments_locked"],
-				"type": "object"
-			},
-			"UpdatePostPlanInputBody": {
-				"additionalProperties": false,
-				"properties": {
-					"$schema": {
-						"description": "A URL to the JSON Schema for this object.",
-						"examples": ["https://example.com/api/v1/schemas/UpdatePostPlanInputBody.json"],
-						"format": "uri",
-						"readOnly": true,
-						"type": "string"
-					},
-					"expected_revision": {
-						"format": "int64",
-						"minimum": 1,
-						"type": "integer"
-					},
-					"items": {
-						"items": {
-							"$ref": "#/components/schemas/SeriesConcept"
-						},
-						"maxItems": 12,
-						"type": ["array", "null"]
-					}
-				},
-				"required": ["expected_revision", "items"],
 				"type": "object"
 			},
 			"UpdatePostingScheduleInputBody": {
@@ -48196,147 +47865,6 @@
 				"tags": ["Publications"]
 			}
 		},
-		"/post-plans": {
-			"get": {
-				"operationId": "list-post-plans",
-				"parameters": [
-					{
-						"explode": false,
-						"in": "query",
-						"name": "workspace_id",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"items": {
-										"$ref": "#/components/schemas/PostPlanSummary"
-									},
-									"type": ["array", "null"]
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"default": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Error"
-					}
-				},
-				"summary": "List your recent saved post plans",
-				"tags": ["Publication Builds"]
-			}
-		},
-		"/post-plans/{id}": {
-			"put": {
-				"operationId": "update-post-plan",
-				"parameters": [
-					{
-						"in": "path",
-						"name": "id",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/UpdatePostPlanInputBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Build"
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"default": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Error"
-					}
-				},
-				"summary": "Save post plan topics, selection, order and proposed dates",
-				"tags": ["Publication Builds"]
-			}
-		},
-		"/post-plans/{id}/generate": {
-			"post": {
-				"operationId": "generate-post-plan",
-				"parameters": [
-					{
-						"in": "path",
-						"name": "id",
-						"required": true,
-						"schema": {
-							"type": "string"
-						}
-					}
-				],
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/GeneratePostPlanInputBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/Build"
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"default": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Error"
-					}
-				},
-				"summary": "Durably prepare selected plan topics within normal generation capacity",
-				"tags": ["Publication Builds"]
-			}
-		},
 		"/posting-schedules": {
 			"get": {
 				"operationId": "list-posting-schedules",
@@ -50505,27 +50033,6 @@
 			"get": {
 				"operationId": "list-publications",
 				"parameters": [
-					{
-						"description": "Optional current post review state",
-						"explode": false,
-						"in": "query",
-						"name": "review_state",
-						"schema": {
-							"description": "Optional current post review state",
-							"enum": ["pending", "approved", "changes_requested", "needs_review"],
-							"type": "string"
-						}
-					},
-					{
-						"description": "Optional assigned reviewer, matched against the current review",
-						"explode": false,
-						"in": "query",
-						"name": "reviewer_id",
-						"schema": {
-							"description": "Optional assigned reviewer, matched against the current review",
-							"type": "string"
-						}
-					},
 					{
 						"description": "Workspace ID",
 						"explode": false,
@@ -59379,45 +58886,6 @@
 						}
 					]
 				}
-			}
-		},
-		"/voice-profiles/source-preview": {
-			"post": {
-				"operationId": "preview-profile-source",
-				"requestBody": {
-					"content": {
-						"application/json": {
-							"schema": {
-								"$ref": "#/components/schemas/ProfileSourcePreviewInputBody"
-							}
-						}
-					},
-					"required": true
-				},
-				"responses": {
-					"200": {
-						"content": {
-							"application/json": {
-								"schema": {
-									"$ref": "#/components/schemas/KnowledgeEntry"
-								}
-							}
-						},
-						"description": "OK"
-					},
-					"default": {
-						"content": {
-							"application/problem+json": {
-								"schema": {
-									"$ref": "#/components/schemas/ErrorModel"
-								}
-							}
-						},
-						"description": "Error"
-					}
-				},
-				"summary": "Read a public source for review before remembering it",
-				"tags": ["Voice Profiles"]
 			}
 		},
 		"/voice-profiles/{id}": {
