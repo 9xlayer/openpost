@@ -4,6 +4,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import AppSelect from '$lib/components/app-select.svelte';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { stockMediaKindsForProviders } from '$lib/stock-media-kinds';
@@ -753,13 +754,21 @@
 				</div>
 			{/if}
 		{:else if searched && !searching}
-			<div class="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-				{m.video_editor_no_results()}
-			</div>
+			<EmptyState
+				themeIconRole="search"
+				title={m.video_editor_no_results()}
+				variant="muted"
+				size="sm"
+				headingLevel={3}
+			/>
 		{:else}
-			<div class="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-				{emptyMessage}
-			</div>
+			<EmptyState
+				themeIconRole="search"
+				title={emptyMessage}
+				variant="muted"
+				size="sm"
+				headingLevel={3}
+			/>
 		{/if}
 	{/if}
 </div>

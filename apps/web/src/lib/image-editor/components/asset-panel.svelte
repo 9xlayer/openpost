@@ -14,6 +14,7 @@
 	import MediaTagFilter from '$lib/components/media-tag-filter.svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import MediaPicker from '$lib/components/media-picker.svelte';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import MediaPreviewImage from '$lib/components/media-preview-image.svelte';
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
@@ -625,9 +626,13 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
-						{emptyMediaMessage}
-					</p>
+					<EmptyState
+						themeIconRole="media"
+						title={emptyMediaMessage}
+						variant="muted"
+						size="sm"
+						headingLevel={4}
+					/>
 				{/if}
 			</section>
 		{/if}

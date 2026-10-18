@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import FieldFeedback from '$lib/components/field-feedback.svelte';
 	import PageLoading from '$lib/components/page-loading.svelte';
@@ -605,9 +606,13 @@
 	{#if loadingSchedules && !scheduleDataReady}
 		<PageLoading layout="list" label={m.common_loading()} items={3} />
 	{:else if scheduleDataReady && scheduleRows.length === 0}
-		<div class="rounded-xl border px-4 py-10 text-center text-sm text-muted-foreground">
-			{m.settings_no_posting_times()}
-		</div>
+		<EmptyState
+			themeIconRole="calendar"
+			title={m.settings_no_posting_times()}
+			variant="muted"
+			size="sm"
+			headingLevel={3}
+		/>
 	{:else if scheduleDataReady}
 		<div class="space-y-3 xl:hidden">
 			{#each scheduleRows as row (row.key)}

@@ -13,6 +13,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import AppToast from '$lib/components/app-toast.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import {
 		prepareRasterOperation,
@@ -4584,9 +4585,13 @@
 				{#if historyBusy && revisions.length === 0}
 					<PageLoading layout="list" label={m.image_editor_loading_history()} items={3} />
 				{:else if revisions.length === 0}
-					<p class="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-						{m.image_editor_no_history()}
-					</p>
+					<EmptyState
+						themeIconRole="history"
+						title={m.image_editor_no_history()}
+						variant="muted"
+						size="sm"
+						headingLevel={3}
+					/>
 				{:else}
 					{#each revisions as revision (revision.id)}
 						<Button
