@@ -64,6 +64,13 @@ export type { OpenPostClientOptions } from "./client.js";
 export { OpenPostError, dispositionFor } from "./errors.js";
 export type { OpenPostErrorCode, OpenPostRetryDisposition } from "./errors.js";
 export type { PublicationSegmentInput, RenditionSegmentInput } from "./types.js";
+export type {
+  MediaSummary,
+  ProviderDelivery,
+  PublicationSegment,
+  RenditionSegment,
+  RepostOverride,
+} from "./types.js";
 export { SDK_VERSION } from "./version.js";
 export type {
   ContentProfile,

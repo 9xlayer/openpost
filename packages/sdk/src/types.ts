@@ -1,6 +1,8 @@
-// Hand-written shapes for the SDK v1 surface. They mirror the wire format
-// used by the Go CLI client and the OpenAPI schemas, using loose records for
-// provider-specific settings so new providers never break the SDK build.
+// Hand-written shapes for the SDK v1 surface. Response types mirror the wire
+// format served by the API (apps/web/openapi.json components.schemas); new
+// contract fields are added as optional so widening never breaks consumers.
+// src/types-parity.test.ts fails the build when a declared field is absent
+// from the matching schema or a required schema field is missing here.
 
 export type ContentProfile =
   | "short_text"
@@ -128,6 +130,78 @@ export interface ListPublicationsQuery {
   offset?: number;
 }
 
+export interface RenditionSegment {
+  id: string;
+  publication_segment_id: string;
+  position: number;
+  body: string;
+  title: string;
+  description: string;
+  media_inherited: boolean;
+  settings: Record<string, unknown>;
+  status: string;
+  error_retryable: boolean;
+  media: MediaSummary[];
+  url?: string;
+  body_override?: string | null;
+  title_override?: string | null;
+  description_override?: string | null;
+  url_override?: string | null;
+  output_media?: MediaSummary[];
+  external_id?: string;
+  external_url?: string;
+  error_message?: string;
+  error_kind?: string;
+  error_code?: string;
+}
+
+export interface PublicationSegment {
+  id: string;
+  position: number;
+  body: string;
+  title: string;
+  description: string;
+  settings: Record<string, unknown>;
+  media: MediaSummary[];
+  url?: string;
+}
+
+export interface MediaSummary {
+  id: string;
+  mime_type: string;
+  size: number;
+  original_filename: string;
+  url?: string;
+  alt_text?: string;
+  role?: string;
+  width?: number;
+  height?: number;
+  duration_ms?: number;
+  aspect_ratio?: string;
+  settings?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface ProviderDelivery {
+  target_key: string;
+  state: string;
+  recovery_action: string;
+  current_attempt_id?: string;
+  current_attempt_number?: number;
+  current_attempt_created_at?: string;
+  external_id?: string;
+  external_url?: string;
+  error_kind?: string;
+  error_code?: string;
+  error_http_status?: number;
+}
+
+export interface RepostOverride {
+  mode: string;
+  target_account_ids?: string[];
+  rule?: Record<string, unknown>;
+}
+
 export interface Rendition {
   id: string;
   social_account_id: string;
@@ -138,12 +212,22 @@ export interface Rendition {
   description: string;
   settings: Record<string, unknown>;
   status: string;
+  publication_id?: string;
+  target_key?: string;
+  output_profile?: string;
+  format_locked?: boolean;
+  schedule_override?: string;
+  segments?: RenditionSegment[];
+  media?: MediaSummary[];
+  delivery?: ProviderDelivery;
   external_id?: string;
   external_url?: string;
   error_message?: string;
   error_kind?: string;
   error_code?: string;
+  error_action?: string;
   error_http_status?: number;
+  error_retry_at?: string;
   error_retryable?: boolean;
 }
 
@@ -162,6 +246,17 @@ export interface Publication {
   metadata?: Record<string, unknown>;
   status: PublicationStatus;
   revision: number;
+  creation_preset?: string;
+  social_set_id?: string;
+  segments?: PublicationSegment[];
+  media?: MediaSummary[];
+  random_delay_minutes?: number;
+  random_delay_inherited?: boolean;
+  repost_override?: RepostOverride;
+  review_state?: string;
+  review_id?: string;
+  review_epoch?: number;
+  failure_dismissed_at?: string;
   scheduled_at?: string;
   actual_run_at?: string;
   created_at: string;
@@ -226,9 +321,41 @@ export interface PublicationEvent {
 export interface SocialAccount {
   id: string;
   platform: string;
-  display_name?: string;
-  username?: string;
-  status?: string;
+  slug?: string;
+  account_id?: string;
+  account_username?: string;
+  account_avatar_url?: string;
+  account_kind?: string;
+  alias?: string;
+  instance_url?: string;
+  is_active?: boolean;
+  limit_profile?: string;
+  messaging_supported?: boolean;
+  messages_enabled?: boolean;
+  thread_replies_supported?: boolean;
+  grant_destination_count?: number;
+  shared_grant?: boolean;
+  provider_installation_id?: string;
+  capability_checked_at?: string;
+  fediverse_software?: string;
+  /**
+   * @deprecated The wire format never sends `username`; AccountResponse
+   * carries `account_username`. Kept as `never` for one release so stale
+   * reads fail the build instead of compiling against `undefined`.
+   */
+  username?: never;
+  /**
+   * @deprecated The wire format never sends `display_name`; use
+   * `account_username` or `alias`. Kept as `never` for one release so stale
+   * reads fail the build instead of compiling against `undefined`.
+   */
+  display_name?: never;
+  /**
+   * @deprecated The wire format never sends `status`; AccountResponse
+   * carries `is_active`. Kept as `never` for one release so stale reads fail
+   * the build instead of compiling against `undefined`.
+   */
+  status?: never;
   [key: string]: unknown;
 }
 
@@ -299,6 +426,10 @@ export interface Job {
   attempts?: number;
   max_attempts?: number;
   last_error?: string;
+  created_at?: string;
+  publication_id?: string;
+  payload?: string;
+  locked_at?: string;
   [key: string]: unknown;
 }
 
@@ -313,6 +444,20 @@ export interface Workspace {
   id: string;
   name: string;
   created_at?: string;
+  organization_id?: string;
+  organization_name?: string;
+  avatar_url?: string;
+  color?: string;
+  role?: string;
+  can_edit?: boolean;
+  can_connect?: boolean;
+  can_approve?: boolean;
+  client_reviews_enabled?: boolean;
+  sso_required?: boolean;
+  sso_authenticated?: boolean;
+  sso_identity_linked?: boolean;
+  sso_provider_id?: string;
+  sso_provider_name?: string;
 }
 
 export interface WaitOptions {
