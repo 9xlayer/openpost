@@ -103,6 +103,23 @@ test("supplying a demo attaches only matching media to the required variant and 
   });
 });
 
+test("supplied attachments carry their per-post alt text into the required variant", () => {
+  const standalone = {
+    ...rendition,
+    segments: (rendition.segments ?? []).map((segment) => ({
+      ...segment,
+      source_overrides: undefined,
+    })),
+  };
+  const input = mobileRenditionInput(
+    { renditions: [standalone], segments: [] },
+    "founder",
+    { "segment:0": "" },
+    [{ mediaId: "demo", mimeType: "video/mp4", altText: "Demo walkthrough" }],
+  );
+  expect(input.segments?.[0]?.media).toEqual([{ media_id: "demo", alt_text: "Demo walkthrough" }]);
+});
+
 test("editing one joined source keeps independent images, inherited continuation, and explicit omissions", () => {
   const custom = {
     media_id: "custom-image",

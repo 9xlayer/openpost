@@ -93,6 +93,7 @@ type Attachment = {
   filename: string;
   size: number | null;
   status: "local" | "uploading" | "ready" | "error";
+  altText: string;
 };
 
 function attachmentsFromPublication(pub: PublicationDetail): Attachment[] {
@@ -104,6 +105,7 @@ function attachmentsFromPublication(pub: PublicationDetail): Attachment[] {
     filename: media.original_filename ?? media.id,
     size: media.size ?? null,
     status: "ready" as const,
+    altText: media.alt_text ?? "",
   }));
 }
 
@@ -292,6 +294,7 @@ function Composer({
       filename: pending.filename,
       size: pending.size,
       status: "local" as const,
+      altText: "",
     })),
   ]);
   const autoBuildStarted = useRef(false);
@@ -494,13 +497,14 @@ function Composer({
   async function resolveAttachments(
     scope: WorkspaceQueryScope,
     requestApi: Api,
-  ): Promise<{ mediaId: string; mimeType: string }[]> {
-    const mediaIds: { mediaId: string; mimeType: string }[] = [];
+  ): Promise<{ mediaId: string; mimeType: string; localId: string }[]> {
+    const mediaIds: { mediaId: string; mimeType: string; localId: string }[] = [];
     for (const attachment of attachments) {
       if (attachment.mediaId) {
         mediaIds.push({
           mediaId: attachment.mediaId,
           mimeType: attachment.mimeType,
+          localId: attachment.localId,
         });
         continue;
       }
@@ -525,7 +529,7 @@ function Composer({
           workspaceId: scope.workspaceId,
         });
         requireCurrentQueryActor(scope);
-        mediaIds.push({ mediaId, mimeType: attachment.mimeType });
+        mediaIds.push({ mediaId, mimeType: attachment.mimeType, localId: attachment.localId });
         if (workspaceScopeIsCurrent(scope)) {
           setAttachments((current) =>
             current.map((item) =>
@@ -557,6 +561,29 @@ function Composer({
     requireCurrentQueryActor(scope);
     const media = await resolveAttachments(scope, requestApi);
     requireCurrentQueryActor(scope);
+    // Per-post attachment descriptions live on the Publication media metadata
+    // for this destination, never on the shared library Media record. Only
+    // values that differ from the snapshot baseline (including explicit empty
+    // overrides) are sent.
+    const baselineAlt = new Map(
+      (contentSnapshot.current.segments?.[0]?.media ?? contentSnapshot.current.media ?? []).map(
+        (item) => [item.id, item.alt_text ?? ""],
+      ),
+    );
+    const altByLocalId = new Map(attachments.map((item) => [item.localId, item.altText]));
+    const altOverrides = new Map<string, string>();
+    for (const item of media) {
+      const altText = altByLocalId.get(item.localId) ?? "";
+      const previous = baselineAlt.get(item.mediaId);
+      if (previous === undefined ? altText !== "" : altText !== previous) {
+        altOverrides.set(item.mediaId, altText);
+      }
+    }
+    const renditionMedia = media.map((item) => ({
+      mediaId: item.mediaId,
+      mimeType: item.mimeType,
+      altText: altOverrides.get(item.mediaId),
+    }));
     // Only ids the workspace can still publish to reach the upsert: the
     // server lists only active accounts, and rejects inactive ids with a
     // 400. Destinations whose account is gone stay in the
@@ -587,6 +614,7 @@ function Composer({
           contentSnapshot.current,
           body,
           media.map((item) => item.mediaId),
+          altOverrides,
         ),
         ...(activeSocialSetId ? { social_set_id: activeSocialSetId } : {}),
         ...(scheduledChanged
@@ -614,7 +642,7 @@ function Composer({
               contentSnapshot.current,
               accountId,
               renditionTextEdits[accountId],
-              media,
+              renditionMedia,
             ),
           ),
         },
@@ -962,6 +990,7 @@ function Composer({
         ...item,
         localId: item.localId ?? `local-${current.length + index}-${item.uri}`,
         status: "local" as const,
+        altText: "",
       })),
     ]);
     if (validItems.length === items.length && accepted.length === validItems.length) {
@@ -1014,6 +1043,13 @@ function Composer({
   function removeAttachment(localId: string) {
     markEditorDirty();
     setAttachments((current) => current.filter((item) => item.localId !== localId));
+  }
+
+  function setAttachmentAlt(localId: string, altText: string) {
+    markEditorDirty();
+    setAttachments((current) =>
+      current.map((item) => (item.localId === localId ? { ...item, altText } : item)),
+    );
   }
 
   function moveAttachment(index: number, delta: -1 | 1) {
@@ -1215,6 +1251,15 @@ function Composer({
                 <BodyText numberOfLines={1} style={{ color: colors.onSurface }}>
                   {attachment.filename}
                 </BodyText>
+                <TextField
+                  value={attachment.altText}
+                  onChangeText={(text) => setAttachmentAlt(attachment.localId, text)}
+                  accessibilityLabel={`Alt text for ${attachment.filename}`}
+                  placeholder="Describe this media for people who cannot see it"
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.altField}
+                />
                 <View style={styles.attachmentActions}>
                   {index > 0 ? (
                     <IconButton
@@ -1793,6 +1838,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "flex-end",
     minHeight: 48,
+  },
+  altField: {
+    marginTop: 4,
+    minHeight: 40,
   },
   thumbWrap: {
     width: 64,

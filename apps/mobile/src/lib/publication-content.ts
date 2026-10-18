@@ -18,8 +18,11 @@ type PublicationContent = {
   media?: readonly Media[] | null;
 };
 
-function mediaInput(media: Media): components["schemas"]["PublicationMediaInput"] {
-  return {
+function mediaInput(
+  media: Media,
+  altTexts?: ReadonlyMap<string, string>,
+): components["schemas"]["PublicationMediaInput"] {
+  const input: components["schemas"]["PublicationMediaInput"] = {
     media_id: media.id,
     ...(media.role === undefined ? {} : { role: media.role }),
     ...(media.alt_text === undefined ? {} : { alt_text: media.alt_text }),
@@ -28,12 +31,16 @@ function mediaInput(media: Media): components["schemas"]["PublicationMediaInput"
       : { thumbnail_timestamp_ms: media.thumbnail_timestamp_ms }),
     ...(media.settings === undefined ? {} : { settings: media.settings }),
   };
+  const override = altTexts?.get(media.id);
+  if (override !== undefined) input.alt_text = override;
+  return input;
 }
 
 export function publicationContentUpdate(
   publication: PublicationContent,
   body: string,
   mediaIds: readonly string[],
+  altTexts?: ReadonlyMap<string, string>,
 ): Pick<components["schemas"]["PublicationUpdateBody"], "source_text" | "segments"> {
   const segments = publication.segments?.length
     ? publication.segments
@@ -52,7 +59,13 @@ export function publicationContentUpdate(
   const mediaChanged =
     mediaIds.length !== initialMedia.length ||
     mediaIds.some((id, index) => id !== initialMedia[index]?.id);
-  if (body === first.body && !mediaChanged) return { source_text: body };
+  const altChanged = altTexts
+    ? [...altTexts].some(([id, alt]) => {
+        const existing = initialMedia.find((media) => media.id === id);
+        return existing ? (existing.alt_text ?? "") !== alt : alt !== "";
+      })
+    : false;
+  if (body === first.body && !mediaChanged && !altChanged) return { source_text: body };
 
   return {
     source_text: body,
@@ -67,9 +80,13 @@ export function publicationContentUpdate(
         index === 0
           ? mediaIds.map((id) => {
               const existing = initialMedia.find((media) => media.id === id);
-              return existing ? mediaInput(existing) : { media_id: id };
+              if (existing) return mediaInput(existing, altTexts);
+              const override = altTexts?.get(id);
+              return override === undefined
+                ? { media_id: id }
+                : { media_id: id, alt_text: override };
             })
-          : (segment.media ?? []).map(mediaInput),
+          : (segment.media ?? []).map((media) => mediaInput(media, altTexts)),
     })),
   };
 }

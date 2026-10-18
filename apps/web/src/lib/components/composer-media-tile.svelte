@@ -132,9 +132,10 @@
 	<GridAltEditor
 		open={editing}
 		{mediaId}
-		{altTexts}
-		{captioningIds}
-		{onAltText}
+		value={altTexts.get(mediaId) ?? ''}
+		captioning={captioningIds.has(mediaId)}
+		variant="inline"
+		onChange={(next) => onAltText(mediaId, next)}
 		onDone={onDoneAlt}
 	/>
 </div>

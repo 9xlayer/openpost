@@ -5,7 +5,7 @@ type Rendition = components["schemas"]["RenditionResponse"];
 type RenditionSegment = components["schemas"]["RenditionSegmentResponse"];
 type Media = components["schemas"]["MediaSummary"];
 type MediaInput = components["schemas"]["PublicationMediaInput"];
-type Attachment = { mediaId?: string; mimeType: string };
+type Attachment = { mediaId?: string; mimeType: string; altText?: string };
 type PublicationContent = Pick<Publication, "renditions" | "segments">;
 export type RenditionTextEdits = Readonly<Record<string, string>>;
 
@@ -55,7 +55,10 @@ function withAttachments(
   const result = [...media];
   for (const attachment of attachments) {
     if (attachment.mediaId && !result.some((item) => item.media_id === attachment.mediaId))
-      result.push({ media_id: attachment.mediaId });
+      result.push({
+        media_id: attachment.mediaId,
+        ...(attachment.altText === undefined ? {} : { alt_text: attachment.altText }),
+      });
   }
   return result;
 }

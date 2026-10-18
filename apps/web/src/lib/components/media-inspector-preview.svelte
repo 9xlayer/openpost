@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import MediaTagPicker from '$lib/components/media-tag-picker.svelte';
-	import InspectorAltForm from '$lib/components/inspector-alt-form.svelte';
+	import GridAltEditor from '$lib/components/grid-alt-editor.svelte';
 	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
 	import { getAuthenticatedMediaURL } from '$lib/media-url';
 	import type { MediaTag } from '$lib/media-tags';
@@ -168,12 +168,15 @@
 				</dd>
 			</div>
 		</dl>
-		<InspectorAltForm
-			bind:altText
-			savedAltText={media.alt_text}
-			{altSaving}
+		<GridAltEditor
+			mediaId={media.id}
+			value={altText}
+			savedValue={media.alt_text}
+			saving={altSaving}
 			{canEdit}
-			{onSaveAlt}
+			variant="panel"
+			onChange={(next) => (altText = next)}
+			onCommit={onSaveAlt}
 		/>
 	</div>
 </div>

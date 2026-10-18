@@ -62,3 +62,44 @@ test("explicitly removes photos and updates canonical text even without media ch
     "Edited",
   );
 });
+
+test("applies edited per-post alt text, including explicit empty overrides", () => {
+  const update = publicationContentUpdate(
+    publication,
+    "Before",
+    ["photo", "new-photo"],
+    new Map([
+      ["photo", ""],
+      ["new-photo", "Fresh upload"],
+    ]),
+  );
+  expect(update.segments?.[0]?.media).toEqual([
+    {
+      media_id: "photo",
+      role: "attachment",
+      alt_text: "",
+      settings: { crop: "square" },
+    },
+    { media_id: "new-photo", alt_text: "Fresh upload" },
+  ]);
+  expect(update.segments?.[1]?.media).toEqual([
+    { media_id: "reply-photo", alt_text: "Reply photo" },
+  ]);
+});
+
+test("an alt-only edit still emits segments so the description is saved", () => {
+  const update = publicationContentUpdate(
+    publication,
+    "Before",
+    ["photo"],
+    new Map([["photo", "Edited caption"]]),
+  );
+  expect(update.segments?.[0]?.media).toEqual([
+    {
+      media_id: "photo",
+      role: "attachment",
+      alt_text: "Edited caption",
+      settings: { crop: "square" },
+    },
+  ]);
+});
