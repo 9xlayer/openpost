@@ -12,6 +12,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import AppSelect from '$lib/components/app-select.svelte';
 	import MediaTagFilter from '$lib/components/media-tag-filter.svelte';
+	import PageLoading from '$lib/components/page-loading.svelte';
 	import MediaAcquisitionPanel from './media-acquisition-panel.svelte';
 	import MediaThumbnail from './media-thumbnail.svelte';
 	import MemeGenerator from './meme-generator.svelte';
@@ -754,13 +755,7 @@
 				</Button>
 			</form>
 			{#if loading && media.length === 0}
-				<div class="flex min-h-48 items-center justify-center text-muted-foreground">
-					<ProtectedIcon
-						icon="loading"
-						class="mr-2 size-5 animate-spin motion-reduce:animate-none"
-					/>
-					{m.media_picker_loading()}
-				</div>
+				<PageLoading layout="gallery" label={m.media_picker_loading()} items={8} />
 			{:else if media.length === 0}
 				<div
 					class="flex min-h-48 flex-col items-center justify-center rounded-xl border border-dashed px-4 text-center"

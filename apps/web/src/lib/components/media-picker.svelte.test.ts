@@ -303,3 +303,23 @@ describe('MediaPicker meme source', () => {
 		await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
 	});
 });
+
+describe('MediaPicker library loading', () => {
+	beforeEach(() => {
+		mocks.listMedia.mockReset();
+		mocks.listTags.mockReset().mockResolvedValue({ tags: [], canEdit: true });
+		mocks.listTemplates.mockReset().mockResolvedValue(templateResult());
+	});
+
+	it('renders a content-shaped placeholder while library results load', async () => {
+		mocks.listMedia.mockImplementation(() => new Promise<ImageEditorMediaItem[]>(() => {}));
+		const screen = await renderPicker(false);
+
+		const placeholder = screen.getByTestId('page-loading');
+		await expect.element(placeholder).toBeVisible();
+		await expect.element(placeholder).toHaveAttribute('data-layout', 'gallery');
+		expect(placeholder.element().querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(
+			0
+		);
+	});
+});

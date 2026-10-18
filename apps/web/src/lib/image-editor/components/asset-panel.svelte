@@ -15,6 +15,7 @@
 	import * as Tooltip from '$lib/components/ui/tooltip';
 	import MediaPicker from '$lib/components/media-picker.svelte';
 	import MediaPreviewImage from '$lib/components/media-preview-image.svelte';
+	import PageLoading from '$lib/components/page-loading.svelte';
 	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
 	import CameraCapture from '$lib/components/camera-capture.svelte';
 	import StockMediaBrowser from '$lib/components/stock-media-browser.svelte';
@@ -550,11 +551,8 @@
 			</Button>
 		{/if}
 
-		{#if (!guestMode || guestSource === 'library') && loading}
-			<div class="flex min-h-40 items-center justify-center text-sm text-muted-foreground">
-				<ProtectedIcon icon="loading" class="mr-2 size-4 animate-spin motion-reduce:animate-none" />
-				{m.common_loading()}
-			</div>
+		{#if (!guestMode || guestSource === 'library') && loading && media.length === 0}
+			<PageLoading layout="gallery" label={m.common_loading()} items={6} />
 		{:else if !guestMode || guestSource === 'library'}
 			<section>
 				<h3 class="mb-2 text-xs font-semibold">{m.image_editor_all_media()}</h3>

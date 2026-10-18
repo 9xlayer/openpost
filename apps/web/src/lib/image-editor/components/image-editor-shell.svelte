@@ -13,6 +13,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import AppToast from '$lib/components/app-toast.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
+	import PageLoading from '$lib/components/page-loading.svelte';
 	import {
 		prepareRasterOperation,
 		rasterRenderDocument,
@@ -4580,14 +4581,8 @@
 			class="grid max-h-[65dvh] min-h-72 gap-4 overflow-hidden sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"
 		>
 			<div class="space-y-2 overflow-y-auto pr-1">
-				{#if historyBusy}
-					<div class="flex min-h-32 items-center justify-center text-sm text-muted-foreground">
-						<ProtectedIcon
-							icon="loading"
-							class="mr-2 size-4 animate-spin motion-reduce:animate-none"
-						/>
-						{m.image_editor_loading_history()}
-					</div>
+				{#if historyBusy && revisions.length === 0}
+					<PageLoading layout="list" label={m.image_editor_loading_history()} items={3} />
 				{:else if revisions.length === 0}
 					<p class="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
 						{m.image_editor_no_history()}
