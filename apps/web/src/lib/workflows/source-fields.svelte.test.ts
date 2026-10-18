@@ -62,4 +62,21 @@ describe('workflow repost source picker', () => {
 		await anySource.click();
 		expect(onchange).toHaveBeenLastCalledWith(expect.objectContaining({ account_ids: [] }));
 	});
+
+	it('shows the account photo in the source picker when an avatar URL is set', async () => {
+		const avatarUrl = 'https://example.com/avatar-alice.png';
+		const avatarAccounts: SocialAccount[] = [
+			{ ...sourceAccount('account-a', 'alice'), account_avatar_url: avatarUrl },
+			sourceAccount('account-b', 'bob')
+		];
+		const screen = await render(SourceFields, {
+			source: publishedSource([]),
+			connections: [],
+			accounts: avatarAccounts,
+			onchange: vi.fn()
+		});
+
+		const image = screen.container.querySelector(`img[src="${avatarUrl}"]`);
+		expect(image?.getAttribute('src')).toBe(avatarUrl);
+	});
 });

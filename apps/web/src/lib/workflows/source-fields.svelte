@@ -145,6 +145,7 @@
 					/><SocialAccountIdentity
 						name={account.account_username || account.platform}
 						platform={account.platform}
+						avatarUrl={account.account_avatar_url}
 					/></label
 				>{/each}
 		</fieldset>
