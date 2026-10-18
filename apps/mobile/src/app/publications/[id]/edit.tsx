@@ -415,8 +415,8 @@ function Composer({
     const media = await resolveAttachments(scope, requestApi);
     requireCurrentQueryActor(scope);
     // Only ids the workspace can still publish to reach the upsert: the
-    // accounts query drops disconnected accounts, and the server rejects
-    // inactive ids with a 400. Destinations whose account is gone stay in the
+    // server lists only active accounts, and rejects inactive ids with a
+    // 400. Destinations whose account is gone stay in the
     // selection so they render as explicit, removable rows; leaving them
     // selected neither upserts nor deletes their authored rendition.
     const desired =
