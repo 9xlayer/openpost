@@ -23,6 +23,10 @@ const PLATFORM_LABEL: Record<string, string> = {
   peertube: "PeerTube",
   lemmy: "Lemmy",
   piefed: "PieFed",
+  gotosocial: "GoToSocial",
+  akkoma: "Akkoma",
+  pleroma: "Pleroma",
+  friendica: "Friendica",
   bluesky: "Bluesky",
   linkedin: "LinkedIn",
   facebook: "Facebook",
@@ -35,6 +39,7 @@ const PLATFORM_LABEL: Record<string, string> = {
   discord: "Discord",
   telegram: "Telegram",
   gmb: "Google Business",
+  googlebusiness: "Google Business",
 };
 
 export function platformLabel(platform: string): string {
@@ -55,7 +60,7 @@ export function accountHandle(
   if (!value) return fallback;
   if (
     /\s/.test(value) ||
-    ["facebook", "linkedin", "gmb", "discord", "telegram", "youtube"].includes(
+    ["facebook", "linkedin", "gmb", "googlebusiness", "discord", "telegram", "youtube"].includes(
       platform.split(":")[0],
     )
   )
