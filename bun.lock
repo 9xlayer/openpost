@@ -270,6 +270,7 @@
       "name": "@openpost/platform-text",
       "devDependencies": {
         "typescript": "5.9.3",
+        "vitest": "^4.1.11",
       },
     },
     "packages/query-catalog": {

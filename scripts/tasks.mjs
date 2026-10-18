@@ -126,8 +126,12 @@ const checks = {
     bun("scripts/provider-certification-manifest.mjs", "check"),
   ]),
   "provider-facts": stage("provider facts", [
-    bunTest("scripts/provider-catalog-facts.test.mjs"),
+    bunTest(
+      "scripts/provider-catalog-facts.test.mjs",
+      "scripts/check-platform-text-conformance.test.mjs",
+    ),
     bun("scripts/provider-catalog-facts.mjs"),
+    bun("scripts/check-platform-text-conformance.mjs"),
   ]),
   "plan-catalog": stage("plan catalog", [
     bun("scripts/plan-catalog.mjs", "--check"),
