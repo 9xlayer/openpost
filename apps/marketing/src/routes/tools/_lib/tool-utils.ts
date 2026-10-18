@@ -1,4 +1,5 @@
 import { countPlatformText, PLATFORM_LIMITS } from '@openpost/platform-text';
+import { counterPlatforms } from '@openpost/social-images';
 
 export type PlatformKey =
 	| 'x'
@@ -21,80 +22,68 @@ export interface PlatformCountDefinition {
 	note: string;
 }
 
-export const COUNTER_PLATFORMS: PlatformCountDefinition[] = [
-	{
-		key: 'x',
-		name: 'X',
+const COUNTER_PLATFORM_DETAILS: Record<PlatformKey, { limit: number; note: string }> = {
+	x: {
 		limit: PLATFORM_LIMITS.x.charLimit,
 		note: 'Standard-post estimate: links use 23 characters, with X-style character weighting.'
 	},
-	{
-		key: 'bluesky',
-		name: 'Bluesky',
+	bluesky: {
 		limit: PLATFORM_LIMITS.bluesky.charLimit,
 		note: 'Counts grapheme clusters.'
 	},
-	{
-		key: 'mastodon',
-		name: 'Mastodon',
+	mastodon: {
 		limit: PLATFORM_LIMITS.mastodon.charLimit,
 		note: '500 is the common default; an instance can set a different limit.'
 	},
-	{
-		key: 'threads',
-		name: 'Threads',
+	threads: {
 		limit: PLATFORM_LIMITS.threads.charLimit,
 		note: 'Counts UTF-8 bytes.'
 	},
-	{
-		key: 'linkedin',
-		name: 'LinkedIn',
+	linkedin: {
 		limit: PLATFORM_LIMITS.linkedin.charLimit,
 		note: 'This is the main post limit; comment replies are shorter.'
 	},
-	{
-		key: 'instagram',
-		name: 'Instagram',
+	instagram: {
 		limit: PLATFORM_LIMITS.instagram.charLimit,
 		note: 'Caption limit for feed posts and Reels.'
 	},
-	{
-		key: 'tiktok',
-		name: 'TikTok',
+	tiktok: {
 		limit: PLATFORM_LIMITS.tiktok.charLimit,
 		note: 'Video caption limit. Photo posts allow up to 4,000 characters.'
 	},
-	{
-		key: 'youtube',
-		name: 'YouTube',
+	youtube: {
 		limit: PLATFORM_LIMITS.youtube.charLimit,
 		note: 'Video description limit; titles use a separate field.'
 	},
-	{
-		key: 'facebook',
-		name: 'Facebook Pages',
+	facebook: {
 		limit: PLATFORM_LIMITS.facebook.charLimit,
 		note: 'Maximum post length. Shorter posts are often easier to read.'
 	},
-	{
-		key: 'pinterest',
-		name: 'Pinterest',
+	pinterest: {
 		limit: PLATFORM_LIMITS.pinterest.charLimit,
 		note: 'Pin description limit; Pin titles use a separate field.'
 	},
-	{
-		key: 'telegram',
-		name: 'Telegram',
+	telegram: {
 		limit: PLATFORM_LIMITS.telegram.charLimit,
 		note: 'Text-message limit; media captions allow up to 1,024 characters.'
 	},
-	{
-		key: 'discord',
-		name: 'Discord',
+	discord: {
 		limit: PLATFORM_LIMITS.discord.charLimit,
 		note: 'Message limit for incoming webhooks.'
 	}
-];
+};
+
+// The rendered rows follow the shared counter platform list in
+// @openpost/social-images, the same list the public tool description counts,
+// so the advertised number can never disagree with the tool.
+export const COUNTER_PLATFORMS: PlatformCountDefinition[] = counterPlatforms.map((platform) => {
+	const key = platform.key as PlatformKey;
+	return {
+		key,
+		name: platform.name,
+		...COUNTER_PLATFORM_DETAILS[key]
+	};
+});
 
 export const THREAD_PLATFORMS = [
 	{ key: 'x', name: 'X', limit: PLATFORM_LIMITS.x.charLimit },

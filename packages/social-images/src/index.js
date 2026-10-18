@@ -1,5 +1,7 @@
 import { browserExtensions } from "./extensions.js";
 export { browserExtensions } from "./extensions.js";
+import { counterPlatforms } from "./counter-platforms.js";
+export { counterPlatforms } from "./counter-platforms.js";
 import { previewTools } from "./preview-tools.js";
 export { previewTools } from "./preview-tools.js";
 import { marketingGuides } from "./guides.js";
@@ -94,7 +96,7 @@ const toolPages = [
     slug: "multi-platform-character-counter",
     name: "Multi-platform character counter",
     title: "Free social media character counter - OpenPost",
-    description: `Check one draft against the limits and counting rules for ${platformNames.length} social networks.`,
+    description: `Check one draft against the limits and counting rules for ${counterPlatforms.length} social networks.`,
   },
   {
     slug: "post-preview-generator",

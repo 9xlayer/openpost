@@ -72,6 +72,11 @@ export interface DocumentationPageEntry extends SocialEntry {
     | { membership: "excluded"; reason: string };
 }
 
+export interface CounterPlatform {
+  key: string;
+  name: string;
+}
+export const counterPlatforms: readonly CounterPlatform[];
 export const marketingSiteUrl: "https://openpo.st";
 export const docsBasePath: "/docs";
 export const docsSiteUrl: "https://openpo.st/docs";
