@@ -572,20 +572,18 @@
 									<Label for={'instance-setting-' + setting.key} class="font-medium">
 										{copy.label}
 									</Label>
-									<Badge
-										class={setting.source === 'environment' ? 'border-border bg-background' : ''}
-									>
+									<Badge>
 										{sourceLabel(setting)}
 									</Badge>
 									{#if setting.managed_by && !unsets[setting.key] && (setting.database_override_configured || hasDraftOverride(setting))}
-										<Badge class="bg-amber-500/15 text-amber-900 dark:text-amber-100">
+										<Badge tone="warning">
 											{setting.database_override_configured && !setting.requires_restart
 												? m.settings_configuration_overrides_environment()
 												: m.settings_configuration_will_override_environment()}
 										</Badge>
 									{/if}
 									{#if setting.requires_restart}
-										<Badge class="bg-amber-500/15 text-amber-900 dark:text-amber-100">
+										<Badge tone="warning">
 											{m.settings_configuration_pending()}
 										</Badge>
 									{/if}
@@ -765,7 +763,7 @@
 													: m.settings_configuration_source_admin()}
 											</Badge>
 											{#if !app.is_active}
-												<Badge class="bg-muted text-muted-foreground">
+												<Badge>
 													{m.settings_configuration_disabled()}
 												</Badge>
 											{/if}
@@ -779,7 +777,7 @@
 											</p>
 										{/if}
 										{#if app.shadowed_by_environment}
-											<Badge class="bg-amber-500/15 text-amber-900 dark:text-amber-100">
+											<Badge tone="warning">
 												{m.settings_configuration_database_fallback()}
 											</Badge>
 										{/if}

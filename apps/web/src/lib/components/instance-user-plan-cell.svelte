@@ -18,7 +18,7 @@
 {#if planIDs?.length}
 	<div class="flex max-w-48 flex-wrap gap-1">
 		{#each planIDs as planID (planID)}
-			<Badge class="border-primary/15 bg-primary/10 text-primary">{planName(planID)}</Badge>
+			<Badge tone="info">{planName(planID)}</Badge>
 		{/each}
 	</div>
 {:else}

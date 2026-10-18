@@ -166,7 +166,7 @@
 						>
 							<span
 								class={step.completed
-									? 'flex size-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+									? 'flex size-6 items-center justify-center rounded-full bg-success text-success-foreground'
 									: 'flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground'}
 							>
 								{#if step.completed}<ThemeIcon role="check" class="size-3.5" />{:else}{index +

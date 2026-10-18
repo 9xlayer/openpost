@@ -186,7 +186,7 @@
 			{#if currentPlan}
 				<div class="flex items-center gap-2">
 					<span class="text-sm text-muted-foreground">{m.settings_instance_current_plan()}:</span>
-					<Badge class="border-primary/15 bg-primary/10 text-primary">
+					<Badge tone="info">
 						{planOptions.find((p) => p.value === currentPlan)?.label || currentPlan}
 					</Badge>
 				</div>
