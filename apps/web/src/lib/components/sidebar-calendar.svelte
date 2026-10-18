@@ -278,7 +278,7 @@
 </script>
 
 <section
-	class="shrink-0 border-b border-sidebar-border px-2 py-2"
+	class="shrink-0 border-b border-sidebar-border px-2 pb-3"
 	aria-label={m.sidebar_calendar()}
 >
 	<div class="flex h-8 items-center justify-between px-2 [@media(pointer:coarse)]:hidden">

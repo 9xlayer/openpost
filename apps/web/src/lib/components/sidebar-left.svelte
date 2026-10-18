@@ -68,6 +68,7 @@
 	);
 	const showDesktopPlanner = $derived(!sidebar.isMobile && sidebar.state === 'expanded');
 	const showPlannerCalendar = $derived(showDesktopPlanner && sidebarPreferences.calendarVisible);
+	const showPlannerChrome = $derived(showDesktopPlanner || showPlannerCalendar);
 
 	function navigationIcon(id: PrimaryNavigationItem['id']): ThemeIconRole {
 		switch (id) {
@@ -277,8 +278,12 @@
 		{/if}
 	</Sidebar.Header>
 
-	<Sidebar.Content class="overflow-y-auto px-2 py-3">
-		{#if !showPlannerCalendar}{@render workspaceNavigation()}{/if}
+	<Sidebar.Content class={showPlannerChrome ? 'overflow-y-auto pt-2' : 'px-2 py-3'}>
+		{#if !showPlannerCalendar}
+			<div class={showPlannerChrome ? 'px-2 pb-3' : ''}>
+				{@render workspaceNavigation()}
+			</div>
+		{/if}
 		{#if showPlannerCalendar}<SidebarCalendar />{/if}
 		{#if showDesktopPlanner}<SidebarPlanner onNavigate={navigate} />{/if}
 	</Sidebar.Content>

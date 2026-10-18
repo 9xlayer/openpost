@@ -390,6 +390,13 @@ for (const calendar of [true, false]) {
       await page.goto(route);
       await expect(page.getByTestId("sidebar-rolling-calendar")).toHaveCount(calendar ? 1 : 0);
       await expect(drafts.getByRole("link")).toHaveCount(12);
+      // The planner sections own the horizontal inset; the content region must not pad them again.
+      const draftsInset = await page.locator('[data-sidebar="content"]').evaluate((content) => {
+        const bounds = content.getBoundingClientRect();
+        const link = content.querySelector('[data-testid="sidebar-draft-list"] a');
+        return link ? Math.round(link.getBoundingClientRect().x - bounds.x) : -1;
+      });
+      expect(draftsInset).toBe(8);
       const visibleCount = await drafts.getByRole("link").evaluateAll((links) => {
         const viewport = links[0].closest("ul")!.getBoundingClientRect();
         return links.filter((link) => {
