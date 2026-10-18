@@ -1,5 +1,7 @@
 import type { components } from '$lib/api/types';
 import { m } from '$lib/paraglide/messages';
+import { getLocaleTag } from './i18n';
+import { formatBytes as formatByteSize } from './byte-size';
 
 export type MediaListResponseItem = components['schemas']['MediaListItem'];
 export type MediaUsageResponseItem = components['schemas']['MediaUsageItem'];
@@ -36,10 +38,24 @@ export function errorMessage(cause: unknown, fallback: string): string {
 	return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
-export function formatSize(bytes: number): string {
-	if (bytes < 1024) return bytes + ' B';
-	if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-	return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+/**
+ * Binary-base (1024) byte display for the media library and inspector.
+ * One-line call to the shared byte-size owner (issue #376); the signature
+ * stays `(bytes) => string` because message-arg callers pass the result
+ * directly. Non-finite input renders as an em dash, matching
+ * `formatVideoDuration` in this module.
+ */
+export function formatSize(
+	bytes: number,
+	opts?: { locale?: string; maximumFractionDigits?: number }
+): string {
+	return (
+		formatByteSize(bytes, {
+			locale: opts?.locale ?? getLocaleTag(),
+			maximumFractionDigits: opts?.maximumFractionDigits,
+			base: 'iec'
+		}) ?? '—'
+	);
 }
 
 export function formatVideoDuration(milliseconds: number): string {

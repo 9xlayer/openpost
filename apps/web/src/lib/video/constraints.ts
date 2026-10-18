@@ -1,4 +1,5 @@
 import type { VideoConstraint, VideoMetadata } from './types';
+import { formatBytes as formatByteSize } from '../byte-size';
 
 const DEFAULT_UPLOAD_LIMIT = 5 * 1024 * 1024 * 1024;
 
@@ -50,12 +51,17 @@ export function isCanonicalPlatformVideo(metadata: VideoMetadata): boolean {
 	);
 }
 
-export function formatBytes(bytes: number): string {
-	if (!Number.isFinite(bytes)) return 'the platform limit';
-	if (bytes < 1024) return `${Math.max(0, Math.round(bytes))} B`;
-	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-	if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-	return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+/**
+ * Binary-base (1024) byte display for video constraint messages.
+ * Delegates to the shared byte-size owner (issue #376). Non-finite input
+ * returns `undefined`; the caller supplies the limit message instead of the
+ * formatter embedding English copy.
+ */
+export function formatBytes(
+	bytes: number,
+	opts?: { locale?: string; maximumFractionDigits?: number }
+): string | undefined {
+	return formatByteSize(bytes, { ...opts, base: 'iec' });
 }
 
 function minimumPositive(values: Array<number | undefined>, fallback: number): number {

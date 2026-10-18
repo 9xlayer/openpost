@@ -109,7 +109,7 @@ export async function prepareVideoForUpload(
 	if (!encoded) {
 		const message =
 			file.size > effective.maxBytes
-				? `This browser could not reduce the video below ${formatBytes(effective.maxBytes)}.`
+				? `This browser could not reduce the video below ${formatBytes(effective.maxBytes) ?? 'the platform limit'}.`
 				: 'This browser cannot create the H.264 MP4 required by the selected accounts.';
 		throw new VideoPreparationError(
 			file.size > effective.maxBytes ? 'cannot-fit' : 'encoder-unavailable',

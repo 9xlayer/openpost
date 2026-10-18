@@ -73,7 +73,7 @@ describe('normalize', () => {
 describe('formatting', () => {
 	it('formats sizes and durations', () => {
 		expect(formatSize(512)).toBe('512 B');
-		expect(formatSize(2048)).toBe('2.0 KB');
+		expect(formatSize(2048)).toBe('2 KB');
 		expect(formatVideoDuration(90000)).toBe('1:30');
 		expect(formatVideoDuration(3723000)).toBe('1:02:03');
 		expect(formatVideoDuration(-1)).toBe('—');
