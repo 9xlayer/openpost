@@ -12,7 +12,6 @@ import { queryAPI } from '$lib/query/api';
 import { queryClient } from '$lib/query/client';
 import {
 	captureQueryMutationSession,
-	settleQueryMutationSession,
 	type QueryMutationSession
 } from '$lib/query/authorization-boundary';
 import { reconcileQueryMutation } from '$lib/query/mutation-reconciliation';
@@ -50,7 +49,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 			const { data, error, response } = await client.POST('/publications', {
 				body: { ...draft, workspace_id: createWorkspaceId }
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			const publication = publicationForWorkspace(data, createWorkspaceId);
 			await reconcilePublicationSeed(mutationSession, publication, createWorkspaceId);
@@ -63,7 +61,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 				params: { path: { id: publicationId } },
 				body: publicationUpdate(draft, expectedRevision)
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			const publication = publicationForWorkspace(data, workspaceId, publicationId);
 			await reconcilePublicationSeed(mutationSession, publication, workspaceId);
@@ -71,11 +68,9 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 		},
 
 		async validate(publicationId) {
-			const mutationSession = captureQueryMutationSession();
 			const { data, error, response } = await client.POST('/publications/{id}/validate', {
 				params: { path: { id: publicationId } }
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			return { issues: data.issues ?? [] };
 		},
@@ -86,7 +81,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 				params: { path: { id: publicationId } },
 				body: { expected_revision: expectedRevision }
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			await reconcilePublicationInvalidation(mutationSession, workspaceId, publicationId);
 			return data;
@@ -98,7 +92,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 				params: { path: { id: publicationId } },
 				body: { expected_revision: expectedRevision }
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			await reconcilePublicationInvalidation(mutationSession, workspaceId, publicationId);
 			return data;
@@ -115,7 +108,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 					}
 				}
 			);
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			await reconcilePublicationInvalidation(mutationSession, workspaceId, publicationId);
 			return data;
@@ -127,7 +119,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 				params: { path: { id: publicationId } },
 				body: { expected_revision: expectedRevision }
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error || !data) throw clientError(error, response.status);
 			await reconcilePublicationInvalidation(mutationSession, workspaceId, publicationId);
 			return data;
@@ -141,7 +132,6 @@ export function createComposerPublicationClient(workspaceId: string): ComposerPu
 					query: { confirm: true, expected_revision: expectedRevision }
 				}
 			});
-			settleQueryMutationSession(mutationSession, response);
 			if (error) throw clientError(error, response.status);
 			await reconcilePublicationDelete(mutationSession, workspaceId, publicationId);
 		}
