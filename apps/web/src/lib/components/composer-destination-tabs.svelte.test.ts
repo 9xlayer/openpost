@@ -39,9 +39,9 @@ describe('Composer destination tabs', () => {
 			screen.container.querySelectorAll('[data-testid="composer-destination-custom"]')
 		).toHaveLength(1);
 
-		const customButton = screen.getByRole('tab', { name: '@one, X, custom' });
-		expect(customButton.element().getAttribute('aria-selected')).toBe('false');
-		expect(screen.getByRole('tab', { name: '@one, Threads' })).toBeDefined();
+		const customButton = screen.getByRole('button', { name: '@one, X, custom' });
+		expect(customButton.element().getAttribute('aria-pressed')).toBe('false');
+		expect(screen.getByRole('button', { name: '@one, Threads' })).toBeDefined();
 
 		await customButton.click();
 		expect(onActivate).toHaveBeenCalledWith('acc-1');
@@ -61,5 +61,47 @@ describe('Composer destination tabs', () => {
 			screen.container.querySelectorAll('[data-testid="composer-destination-custom"]')
 		).toHaveLength(1);
 		expect(screen.getByText('2')).toBeDefined();
+	});
+
+	it('exposes a labelled group of toggle buttons instead of a tab contract', async () => {
+		const screen = await render(ComposerDestinationTabs, {
+			accounts: [socialAccount('acc-1', 'x', 'one'), socialAccount('acc-2', 'threads', 'one')],
+			activeAccountId: null,
+			onActivate: () => {},
+			accountLabel: (account: SocialAccount) => `@${account.account_username}`,
+			issueCountFor: () => 0,
+			isCustomFor: () => false
+		});
+
+		expect(screen.container.querySelectorAll('[role="tablist"]')).toHaveLength(0);
+		expect(screen.container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+		const group = screen.getByRole('group', { name: 'Destinations' });
+		expect(group).toBeDefined();
+		expect(screen.container.querySelectorAll('button[aria-pressed]')).toHaveLength(3);
+	});
+
+	it('tracks the active destination with aria-pressed and keeps every button tabbable', async () => {
+		const onActivate = vi.fn();
+		const screen = await render(ComposerDestinationTabs, {
+			accounts: [socialAccount('acc-1', 'x', 'one'), socialAccount('acc-2', 'threads', 'one')],
+			activeAccountId: 'acc-2',
+			onActivate,
+			accountLabel: (account: SocialAccount) => `@${account.account_username}`,
+			issueCountFor: () => 0,
+			isCustomFor: () => false
+		});
+
+		const allButton = screen.getByRole('button', { name: 'All' });
+		expect(allButton.element().getAttribute('aria-pressed')).toBe('false');
+		const activeButton = screen.getByRole('button', { name: '@one, Threads' });
+		expect(activeButton.element().getAttribute('aria-pressed')).toBe('true');
+		expect(screen.getByRole('button', { name: '@one, X' })).toBeDefined();
+		for (const button of screen.container.querySelectorAll('button')) {
+			expect(button.getAttribute('tabindex')).toBe(null);
+		}
+		expect(screen.container.querySelector('#composer-destination-acc-1')).not.toBe(null);
+
+		await activeButton.click();
+		expect(onActivate).toHaveBeenCalledWith('acc-2');
 	});
 });

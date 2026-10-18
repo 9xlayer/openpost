@@ -44,13 +44,13 @@
 <div
 	bind:this={tabsElement}
 	class="destination-tabs-scrollbar flex min-w-0 flex-1 gap-1 overflow-x-auto pb-px"
-	role="tablist"
+	role="group"
 	aria-label={m.compose_destination_tabs()}
 >
 	<button
+		id="composer-destination-all"
 		type="button"
-		role="tab"
-		aria-selected={!activeAccountId}
+		aria-pressed={!activeAccountId}
 		class="min-h-11 max-w-full shrink-0 border-b-2 px-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-9"
 		class:border-foreground={!activeAccountId}
 		class:border-transparent={Boolean(activeAccountId)}
@@ -65,8 +65,7 @@
 		<button
 			id="composer-destination-{account.id}"
 			type="button"
-			role="tab"
-			aria-selected={activeAccountId === account.id}
+			aria-pressed={activeAccountId === account.id}
 			aria-label={custom
 				? `${accountLabel(account)}, ${getPlatformName(account.platform)}, ${m.compose_custom_state()}`
 				: `${accountLabel(account)}, ${getPlatformName(account.platform)}`}
