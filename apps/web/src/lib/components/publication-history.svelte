@@ -7,6 +7,7 @@
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import PublicationDeliveryCard from '$lib/components/publication-delivery-card.svelte';
 	import { getLocaleTag } from '$lib/i18n';
 	import { m } from '$lib/paraglide/messages';
@@ -26,6 +27,7 @@
 		workspaceId,
 		headingLevel = 2,
 		showHeading = true,
+		accountAvatars = {},
 		retryingRenditionID = '',
 		onRetry,
 		onManualResolution
@@ -34,6 +36,7 @@
 		workspaceId: string;
 		headingLevel?: 2 | 3;
 		showHeading?: boolean;
+		accountAvatars?: Record<string, string | null | undefined>;
 		retryingRenditionID?: string;
 		onRetry?: (renditionID: string) => void | Promise<void>;
 		onManualResolution?: (renditionID: string) => void | Promise<void>;
@@ -232,6 +235,7 @@
 								delivery: event.delivery
 							}}
 							destinationLabel={event.destination.label}
+							accountAvatarUrl={accountAvatars[event.destination.social_account_id] ?? ''}
 							variant="compact"
 							retrying={retryingRenditionID === event.destination.rendition_id}
 							onRetry={onRetry ? retryCurrentDestination : undefined}
@@ -259,7 +263,12 @@
 							<p class="text-sm font-medium">{event.summary}</p>
 							{#if event.destination}
 								<span class="inline-flex items-center gap-1 text-xs text-muted-foreground">
-									<PlatformIcon platform={event.destination.platform} class="size-3.5" />
+									<SocialAccountAvatar
+										name={event.destination.label}
+										platform={event.destination.platform}
+										avatarUrl={accountAvatars[event.destination.social_account_id] ?? ''}
+										size="sm"
+									/>
 									{event.destination.label} · {getPlatformName(event.destination.platform)}
 								</span>
 							{:else if event.platform}

@@ -10,6 +10,7 @@
 		publicationID,
 		renditions,
 		accountLabels = {},
+		accountAvatars = {},
 		workspaceActivated = false,
 		retryingRenditionID = '',
 		onRetry,
@@ -19,6 +20,7 @@
 		publicationID: string;
 		renditions: Rendition[];
 		accountLabels?: Record<string, string>;
+		accountAvatars?: Record<string, string | null | undefined>;
 		workspaceActivated?: boolean;
 		retryingRenditionID?: string;
 		onRetry: (renditionID: string) => void | Promise<void>;
@@ -84,6 +86,7 @@
 				<PublicationDeliveryCard
 					{rendition}
 					destinationLabel={accountLabels[rendition.social_account_id]}
+					accountAvatarUrl={accountAvatars[rendition.social_account_id] ?? ''}
 					retrying={retryingRenditionID === rendition.id}
 					{onRetry}
 					{onManualResolution}

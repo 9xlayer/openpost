@@ -1,5 +1,5 @@
 <script lang="ts">
-	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import type { components } from '$lib/api/types';
 	import { Button } from '$lib/components/ui/button';
 	import { getLocaleTag } from '$lib/i18n';
@@ -21,6 +21,7 @@
 	let {
 		rendition,
 		destinationLabel,
+		accountAvatarUrl = '',
 		variant = 'card',
 		retrying = false,
 		onRetry,
@@ -28,6 +29,7 @@
 	}: {
 		rendition: Rendition;
 		destinationLabel?: string;
+		accountAvatarUrl?: string | null;
 		variant?: 'card' | 'compact';
 		retrying?: boolean;
 		onRetry?: (renditionID: string) => void | Promise<void>;
@@ -53,7 +55,13 @@
 		variant === 'card' ? 'rounded-xl border bg-card p-4' : 'py-2.5'
 	]}
 >
-	<PlatformIcon platform={rendition.platform} class="mt-0.5 size-5 shrink-0" />
+	<SocialAccountAvatar
+		name={destinationLabel || getPlatformName(rendition.platform)}
+		platform={rendition.platform}
+		avatarUrl={accountAvatarUrl ?? ''}
+		size="sm"
+		class="mt-0.5 shrink-0"
+	/>
 	<div class="min-w-0 flex-1">
 		<p class="font-medium">{destinationLabel || getPlatformName(rendition.platform)}</p>
 		{#if destinationLabel}

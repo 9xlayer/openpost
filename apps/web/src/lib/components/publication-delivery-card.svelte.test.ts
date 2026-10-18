@@ -10,6 +10,19 @@ const baseRendition = {
 	status: 'failed'
 };
 
+it('renders the account photo with its platform badge instead of a bare platform icon', async () => {
+	const avatarUrl =
+		'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="blue"/%3E%3C/svg%3E';
+	const screen = await render(PublicationDeliveryCard, {
+		rendition: { ...baseRendition },
+		destinationLabel: '@openpost',
+		accountAvatarUrl: avatarUrl
+	});
+
+	const image = screen.container.querySelector('img');
+	expect(image?.getAttribute('src')).toBe(avatarUrl);
+});
+
 it('attaches retryable failure evidence and retry to the exact destination', async () => {
 	const onRetry = vi.fn();
 	const screen = await render(PublicationDeliveryCard, {
