@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { resizeReusableBlock } from '../sequences/reusable-block';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { Button } from '$lib/components/ui/button';
 	import ColorPicker from '$lib/components/color-picker.svelte';
 	import { Input } from '$lib/components/ui/input';
@@ -79,7 +79,7 @@
 						value={composition.durationInFrames / composition.fps}
 						onchange={(event) => {
 							if (resizeReusableBlock(activeItem.id, Number(event.currentTarget.value))) onedit();
-							else toast.error(m.video_editor_repeat_blocked());
+							else showToast(m.video_editor_repeat_blocked(), 'error');
 						}}
 					/>
 				</label>

@@ -8,7 +8,7 @@
 	import AppSelect from '$lib/components/app-select.svelte';
 	import PreferencesPanel from './preferences-panel.svelte';
 	import { client } from '$lib/api/client';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import {
 		queryEditorPreferences,
 		removeEditorPreference,
@@ -114,7 +114,7 @@
 			undoneRules = [...undoneRules, rule.id!];
 			preferencesRevision++;
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : String(error));
+			showToast(error instanceof Error ? error.message : String(error), 'error');
 		}
 	}
 	/* oxlint-disable anti-slop/no-runtime-typeof -- Assistant steps cross the HTTP boundary as raw tool JSON. Validate the receipt before offering a rule undo action. */

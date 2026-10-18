@@ -116,7 +116,7 @@
 		scopeCaptureDue,
 		scopeSamples
 	} from '$lib/video-editor/effects/scope-samples.svelte';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { hasLinkedAudioCompanion } from '$lib/video-editor/audio/transition-crossfade';
 	import { planPreviewAudioLayers } from '$lib/video-editor/preview/audio-plan';
 	import { sequenceStore } from '$lib/video-editor/sequences/sequence-store.svelte';
@@ -1029,7 +1029,7 @@
 		const committed = setAnimatedProperties(selectedItemId, frame, committedValues, (property) =>
 			autoKeyframeStore.isEnabled(selectedItemId ?? '', property)
 		);
-		if (!committed) toast.error(m.video_editor_keyframe_transition_blocked());
+		if (!committed) showToast(m.video_editor_keyframe_transition_blocked(), 'error');
 		return committed;
 	}
 
@@ -1042,7 +1042,7 @@
 		if (!itemId) return false;
 		const local = localCanvasValuesForItem(itemId, frame, { x, y });
 		const committed = setPositionAtFrame(itemId, frame, local.x ?? x, local.y ?? y);
-		if (!committed) toast.error(m.video_editor_keyframe_transition_blocked());
+		if (!committed) showToast(m.video_editor_keyframe_transition_blocked(), 'error');
 		return committed;
 	}
 
@@ -1183,7 +1183,7 @@
 			}
 			return true;
 		});
-		if (!committed) toast.error(m.video_editor_keyframe_transition_blocked());
+		if (!committed) showToast(m.video_editor_keyframe_transition_blocked(), 'error');
 		return committed;
 	}
 
@@ -1266,7 +1266,7 @@
 
 	function createCanvasSpatialTangents(frame: number): boolean {
 		const committed = selectedItemId ? createPositionSpatialTangents(selectedItemId, frame) : false;
-		if (!committed) toast.error(m.video_editor_keyframe_transition_blocked());
+		if (!committed) showToast(m.video_editor_keyframe_transition_blocked(), 'error');
 		return committed;
 	}
 
@@ -1275,7 +1275,7 @@
 		const committed = selectedItemId
 			? setPositionSpatialTangents(selectedItemId, frame, localSpatial)
 			: false;
-		if (!committed) toast.error(m.video_editor_keyframe_transition_blocked());
+		if (!committed) showToast(m.video_editor_keyframe_transition_blocked(), 'error');
 		return committed;
 	}
 

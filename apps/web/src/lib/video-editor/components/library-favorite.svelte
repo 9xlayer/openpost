@@ -2,7 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { Button } from '$lib/components/ui/button';
 	import { ThemeIcon } from '$lib/themes/icons';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { videoLibrary } from '../library/library-store.svelte';
 	import type { LibraryRecipe } from '../library/types';
 	let {
@@ -23,7 +23,7 @@
 			if (entry) await videoLibrary.update(entry, { favorite: !entry.favorite });
 			else await videoLibrary.save(name, $state.snapshot(recipe), '', true, id);
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : String(error));
+			showToast(error instanceof Error ? error.message : String(error), 'error');
 		}
 	}
 </script>

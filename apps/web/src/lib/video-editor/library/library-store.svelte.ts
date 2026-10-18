@@ -5,7 +5,7 @@ import {
 	recordEditorChoice
 } from '$lib/editor-agent/preferences';
 import { editorSession } from '../editor.svelte';
-import { toast } from 'svelte-sonner';
+import { showToast } from '$lib/toast';
 import { m } from '$lib/paraglide/messages';
 import {
 	deleteLibraryEntry,
@@ -23,7 +23,7 @@ function syncFavorite(entry: LibraryEntry, targetWorkspaceId = workspaceId): voi
 	void syncEditorFavorite(targetWorkspaceId, entry.id, entry.name, 'video', {
 		favorite: entry.favorite,
 		deviceLocal: entry.recipe.kind === 'selection' || entry.recipe.kind === 'text-style'
-	}).catch(() => toast.error(m.editor_agent_sync_failed()));
+	}).catch(() => showToast(m.editor_agent_sync_failed(), 'error'));
 }
 let revision = 0;
 export const videoLibrary = {

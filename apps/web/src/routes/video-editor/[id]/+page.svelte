@@ -21,7 +21,6 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 	import { ProtectedIcon, ThemeIcon, type ProtectedIconRole } from '$lib/themes/icons';
 	import type { ThemeIconRole } from '$lib/themes/contracts';
 	import PanelResizeHandle from '$lib/components/panel-resize-handle.svelte';
-	import { toast } from 'svelte-sonner';
 	import { showToast } from '$lib/toast';
 	import { auth } from '$lib/stores/auth';
 	import { ui } from '$lib/stores/ui.svelte';
@@ -531,7 +530,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 		if (scope)
 			void videoLibrary
 				.load(scope, workspaceCtx.currentWorkspace?.id, $auth.user?.id)
-				.catch((error) => toast.error(String(error)));
+				.catch((error) => showToast(String(error), 'error'));
 	});
 	type LeftPanel =
 		| 'library'

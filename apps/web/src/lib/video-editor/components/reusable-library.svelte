@@ -5,7 +5,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import AppSelect from '$lib/components/app-select.svelte';
 	import { ThemeIcon } from '$lib/themes/icons';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { videoLibrary } from '../library/library-store.svelte';
 	import { captureLibrarySelection } from '../library/selection';
 	import type { TransitionDirection } from '../project/types';
@@ -71,7 +71,7 @@
 		if (collection && !collections.includes(collection)) collection = '';
 	});
 	function fail(cause: unknown): void {
-		toast.error(cause instanceof Error ? cause.message : String(cause));
+		showToast(cause instanceof Error ? cause.message : String(cause), 'error');
 	}
 	async function save(): Promise<void> {
 		if (!name.trim() || busy) return;
@@ -157,12 +157,10 @@
 		try {
 			const copy = $state.snapshot(entry);
 			await videoLibrary.remove(entry);
-			toast(m.video_editor_library_remove({ name: entry.name }), {
-				action: {
-					label: m.video_editor_undo(),
-					onClick: () => {
-						void videoLibrary.restore(copy).catch(fail);
-					}
+			showToast(m.video_editor_library_remove({ name: entry.name }), 'neutral', {
+				actionLabel: m.video_editor_undo(),
+				onAction: () => {
+					void videoLibrary.restore(copy).catch(fail);
 				}
 			});
 		} catch (error) {

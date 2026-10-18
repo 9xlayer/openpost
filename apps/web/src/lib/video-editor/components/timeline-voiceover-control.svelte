@@ -7,7 +7,7 @@
 	import AppSelect from '$lib/components/app-select.svelte';
 	import { ProtectedIcon, ThemeIcon } from '$lib/themes/icons';
 	import { voiceoverRecorder } from '$lib/video-editor/recorder/voiceover-recorder.svelte';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 
 	let {
 		projectId,
@@ -45,7 +45,7 @@
 	$effect(() => {
 		const error = voiceoverRecorder.error;
 		if (!error) return;
-		toast.error(errorMessage(error));
+		showToast(errorMessage(error), 'error');
 		voiceoverRecorder.clearError();
 	});
 

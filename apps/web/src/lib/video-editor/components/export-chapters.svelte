@@ -2,7 +2,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { chaptersFromMarkers } from '../export/chapters';
 	import type { TimelineMarker } from '../project/types';
 
@@ -17,9 +17,9 @@
 	async function copy(): Promise<void> {
 		try {
 			await navigator.clipboard.writeText(text);
-			toast.success(m.video_editor_chapters_copied());
+			showToast(m.video_editor_chapters_copied(), 'success');
 		} catch {
-			toast.error(m.video_editor_chapters_copy_failed());
+			showToast(m.video_editor_chapters_copy_failed(), 'error');
 		}
 	}
 </script>

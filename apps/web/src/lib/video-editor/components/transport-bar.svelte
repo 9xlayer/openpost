@@ -29,7 +29,7 @@
 		timelinePreviewScrub
 	} from '$lib/video-editor/preview/timeline-preview-scrub';
 	import { adaptivePreviewQuality } from '$lib/video-editor/preview/adaptive-preview-quality.svelte';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { keyboardShortcuts } from '$lib/video-editor/settings/keyboard-shortcuts.svelte';
 	import { formatShortcutBinding } from '$lib/video-editor/settings/keyboard-shortcuts';
 	import TimelineVoiceoverControl from './timeline-voiceover-control.svelte';
@@ -93,7 +93,7 @@
 			if (document.fullscreenElement === preview) await document.exitFullscreen();
 			else await preview.requestFullscreen();
 		} catch {
-			toast.error(m.video_editor_fullscreen_failed());
+			showToast(m.video_editor_fullscreen_failed(), 'error');
 		}
 	}
 
@@ -150,19 +150,21 @@
 					importAsset: importProjectAsset
 				});
 			} catch (error) {
-				toast.error(
+				showToast(
 					m.video_editor_frame_downloaded_not_saved({
 						message: error instanceof Error ? error.message : String(error)
-					})
+					}),
+					'error'
 				);
 				return;
 			}
-			toast.success(m.video_editor_frame_saved({ name: fileName }));
+			showToast(m.video_editor_frame_saved({ name: fileName }), 'success');
 		} catch (error) {
-			toast.error(
+			showToast(
 				m.video_editor_frame_save_failed({
 					message: error instanceof Error ? error.message : String(error)
-				})
+				}),
+				'error'
 			);
 		} finally {
 			savingFrame = false;

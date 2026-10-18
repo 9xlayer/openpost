@@ -6,7 +6,7 @@
 	import ColorPicker from '$lib/components/color-picker.svelte';
 	import { Disclosure } from '$lib/components/editor-density';
 	import { Button } from '$lib/components/ui/button';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { timelineStore } from '../timeline/stores/timeline-store.svelte';
 	import { executeAtomic } from '../timeline/commands/command-store.svelte';
 	import { trimItemEnd, updateItemProperties } from '../timeline/actions/items';
@@ -29,7 +29,7 @@
 			return;
 		executeAtomic('RESIZE_TIMER', () => {
 			if (!trimItemEnd(item.id, item.from + Math.round((seconds + hold) * timelineStore.fps))) {
-				toast.error(m.video_editor_repeat_blocked());
+				showToast(m.video_editor_repeat_blocked(), 'error');
 				return;
 			}
 			update({ finishHoldSeconds: hold });

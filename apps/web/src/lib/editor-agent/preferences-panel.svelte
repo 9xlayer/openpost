@@ -3,7 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import {
 		queryEditorPreferences,
 		saveEditorPreference,
@@ -58,11 +58,10 @@
 		try {
 			await action();
 			await refresh();
-			toast.success(
+			showToast(
 				m.editor_agent_preferences_changed(),
-				undo
-					? { action: { label: m.video_editor_undo(), onClick: () => void change(undo) } }
-					: undefined
+				'success',
+				undo ? { actionLabel: m.video_editor_undo(), onAction: () => void change(undo) } : undefined
 			);
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : String(cause);

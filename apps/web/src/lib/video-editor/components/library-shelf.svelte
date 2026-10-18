@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages';
 	import { Button } from '$lib/components/ui/button';
-	import { toast } from 'svelte-sonner';
+	import { showToast } from '$lib/toast';
 	import { videoLibrary } from '../library/library-store.svelte';
 	import { applyLibraryEntry } from '../library/apply';
 	import type { LibraryEntry } from '../library/types';
@@ -40,7 +40,7 @@
 			onedit();
 			await videoLibrary.update(entry, { lastUsed: Date.now() });
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : String(error));
+			showToast(error instanceof Error ? error.message : String(error), 'error');
 		} finally {
 			busy = false;
 		}
