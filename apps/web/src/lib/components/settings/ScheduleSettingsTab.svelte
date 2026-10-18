@@ -569,9 +569,17 @@
 					<Button onclick={() => (showSuggestSchedule = false)} variant="outline" size="sm"
 						>{m.common_cancel()}</Button
 					>
-					<Button onclick={generateSuggestedSchedule} size="sm" disabled={generatingSchedule}>
+					<Button
+						onclick={generateSuggestedSchedule}
+						size="sm"
+						disabled={generatingSchedule}
+						aria-busy={generatingSchedule}
+					>
 						{#if generatingSchedule}
-							<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin" />
+							<ProtectedIcon
+								icon="loading"
+								class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+							/>
 						{/if}
 						{m.settings_generate()}
 					</Button>

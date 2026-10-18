@@ -22,9 +22,9 @@
 </script>
 
 <footer data-slot="settings-form-footer" class="flex justify-end border-t pt-4">
-	<Button {type} onclick={onSave} disabled={disabled || saving}>
+	<Button {type} onclick={onSave} disabled={disabled || saving} aria-busy={saving}>
 		{#if saving}
-			<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+			<ProtectedIcon icon="loading" class="size-4 animate-spin motion-reduce:animate-none" />
 			{savingLabel}
 		{:else}
 			<ThemeIcon role="save" class="size-4" />

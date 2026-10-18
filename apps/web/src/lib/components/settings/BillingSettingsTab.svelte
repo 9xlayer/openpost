@@ -731,9 +731,13 @@
 						hasActiveBillingPlan ||
 						billingRecoveryRequired ||
 						Boolean(billingStatus && !billingStatus.can_manage_billing)}
+					aria-busy={billingBusyPlan === plan.id}
 				>
 					{#if billingBusyPlan === plan.id}
-						<ProtectedIcon icon="loading" class="mr-2 h-4 w-4 animate-spin" />
+						<ProtectedIcon
+							icon="loading"
+							class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
+						/>
 					{/if}
 					{#if hasActiveBillingPlan && billingStatus?.plan_id === plan.id}
 						{m.settings_current_plan()}
