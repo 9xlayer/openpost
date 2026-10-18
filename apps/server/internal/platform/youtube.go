@@ -1256,7 +1256,9 @@ func doYouTubeRequestWithClient(ctx context.Context, client *http.Client, method
 		return nil, safeYouTubeTransportError(err)
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
+	// YouTube data and upload responses are small JSON payloads (upload
+	// status, video metadata). Bound the read with the shared 16 MB cap.
+	respBody, err := readProviderBody(resp)
 	if err != nil {
 		return nil, err
 	}

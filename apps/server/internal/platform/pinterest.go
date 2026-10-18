@@ -752,8 +752,13 @@ func uploadPinterestVideo(ctx context.Context, session pinterestUploadSession, r
 		return fmt.Errorf("pinterest video upload failed: %w", sanitizeTransportError(err))
 	}
 	defer response.Body.Close()
-	body, readErr := io.ReadAll(response.Body)
+	// The S3 upload response is a small XML/JSON acknowledgement. Bound the
+	// read with the shared 16 MB cap.
+	body, readErr := readProviderBody(response)
 	if readErr != nil {
+		if isResponseTooLarge(readErr) {
+			return readErr
+		}
 		return fmt.Errorf("reading pinterest video upload response: %w", readErr)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {

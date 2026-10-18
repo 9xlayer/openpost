@@ -1240,8 +1240,13 @@ func doRequestWithHeaders(ctx context.Context, method, url string, body io.Reade
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(resp.Body)
+	// Response bodies are small JSON payloads; only headers are used.
+	// Bound the read with the shared 16 MB cap.
+	respBody, err := readProviderBody(resp)
 	if err != nil {
+		if isResponseTooLarge(err) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 

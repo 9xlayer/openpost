@@ -133,20 +133,57 @@ func doRequestWithClient(ctx context.Context, client *http.Client, method, url s
 	}
 	defer resp.Body.Close()
 
-	const maxProviderResponseBytes = 16 * 1024 * 1024
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderResponseBytes+1))
+	respBody, err := readProviderBody(resp)
 	if err != nil {
+		if isResponseTooLarge(err) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("reading response: %w", err)
 	}
 
-	if len(respBody) > maxProviderResponseBytes {
-		return nil, fmt.Errorf("provider response exceeds %d bytes", maxProviderResponseBytes)
-	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, NewHTTPError(resp.StatusCode, resp.Header, respBody)
 	}
 
 	return respBody, nil
+}
+
+// maxProviderResponseBytes is the default bound for provider response bodies.
+// Provider API responses are small JSON or metadata payloads; anything larger
+// indicates a misbehaving or compromised endpoint, so it is rejected before
+// it can exhaust memory.
+const maxProviderResponseBytes = 16 * 1024 * 1024
+
+// responseTooLargeError reports a provider body over the bound. Its message
+// keeps the historical "provider response exceeds N bytes" shape so every
+// provider surfaces the same failure.
+type responseTooLargeError struct {
+	limit int
+}
+
+func (e *responseTooLargeError) Error() string {
+	return fmt.Sprintf("provider response exceeds %d bytes", e.limit)
+}
+
+func isResponseTooLarge(err error) bool {
+	var tooLarge *responseTooLargeError
+	return errors.As(err, &tooLarge)
+}
+
+// readProviderBody reads a provider response body bounded by
+// maxProviderResponseBytes. I/O failures are returned unwrapped so callers
+// keep their existing error prefixes; oversized bodies return a
+// *responseTooLargeError that callers must pass through unchanged to preserve
+// the shared error shape.
+func readProviderBody(resp *http.Response) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxProviderResponseBytes {
+		return nil, &responseTooLargeError{limit: maxProviderResponseBytes}
+	}
+	return body, nil
 }
 
 // DoJSON marshals payload to JSON, sets Content-Type, and calls DoRequest.

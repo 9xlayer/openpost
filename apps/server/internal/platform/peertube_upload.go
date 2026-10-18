@@ -44,8 +44,14 @@ func peertubeRawRequest(ctx context.Context, method, rawURL string, headers map[
 		return peertubeRawResponse{}, &MediaUploadError{RetryClassification: MediaRetrySafeResume, Err: fmt.Errorf("peertube request failed: %w", sanitizeTransportError(err))}
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(resp.Body)
+	// PeerTube upload-protocol responses are small JSON payloads (session
+	// URLs, offsets, completion status). Bound the read with the shared
+	// 16 MB cap.
+	respBody, err := readProviderBody(resp)
 	if err != nil {
+		if isResponseTooLarge(err) {
+			return peertubeRawResponse{}, &MediaUploadError{RetryClassification: MediaRetrySafeResume, Err: err}
+		}
 		return peertubeRawResponse{}, &MediaUploadError{RetryClassification: MediaRetrySafeResume, Err: fmt.Errorf("reading peertube response: %w", err)}
 	}
 	return peertubeRawResponse{status: resp.StatusCode, header: resp.Header, body: respBody}, nil
