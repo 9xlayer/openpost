@@ -49,6 +49,23 @@ export function platformLabel(platform: string): string {
   );
 }
 
+const HANDLE_FIRST_PLATFORMS = new Set([
+  "bluesky",
+  "instagram",
+  "mastodon",
+  "pixelfed",
+  "threads",
+  "tiktok",
+  "x",
+]);
+
+function platformKey(platform: string): string {
+  const key = platform.split(":")[0]?.toLowerCase() ?? "";
+  if (key === "twitter") return "x";
+  if (key === "gmb") return "googlebusiness";
+  return key;
+}
+
 export function accountHandle(
   username: string | null | undefined,
   fallback: string,
@@ -58,13 +75,8 @@ export function accountHandle(
   if (alias.trim()) return alias.trim();
   const value = username?.trim();
   if (!value) return fallback;
-  if (
-    /\s/.test(value) ||
-    ["facebook", "linkedin", "gmb", "googlebusiness", "discord", "telegram", "youtube"].includes(
-      platform.split(":")[0],
-    )
-  )
-    return value;
+  if (/\s/.test(value)) return value;
+  if (!HANDLE_FIRST_PLATFORMS.has(platformKey(platform))) return value;
   return value.startsWith("@") ? value : `@${value}`;
 }
 

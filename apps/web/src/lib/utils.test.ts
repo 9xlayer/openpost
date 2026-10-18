@@ -38,6 +38,28 @@ describe('formatSocialAccountName', () => {
 		expect(formatSocialAccountName('Rodrigo', 'linkedin')).toBe('Rodrigo');
 		expect(formatSocialAccountName('OpenPost Studio', 'youtube')).toBe('OpenPost Studio');
 	});
+
+	it('keeps Pinterest and Google Business unprefixed', () => {
+		expect(formatSocialAccountName('acme', 'pinterest')).toBe('acme');
+		expect(formatSocialAccountName('acme', 'googlebusiness')).toBe('acme');
+		expect(formatSocialAccountName('acme', 'gmb')).toBe('acme');
+	});
+
+	it('prefixes every handle-first platform', () => {
+		for (const platform of [
+			'bluesky',
+			'devnull',
+			'instagram',
+			'mastodon',
+			'pixelfed',
+			'threads',
+			'tiktok',
+			'x',
+			'twitter'
+		]) {
+			expect(formatSocialAccountName('acme', platform)).toBe('@acme');
+		}
+	});
 });
 
 describe('getPlatformName', () => {

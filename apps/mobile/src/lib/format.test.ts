@@ -28,9 +28,9 @@ test("formats publication times when Hermes does not provide RelativeTimeFormat"
 });
 
 test("formats account handles with exactly one at sign", () => {
-  expect(accountHandle("@rodrgds", "youtube-rodrgds")).toBe("@rodrgds");
-  expect(accountHandle("rodrgds", "youtube-rodrgds")).toBe("@rodrgds");
-  expect(accountHandle("", "youtube-rodrgds")).toBe("youtube-rodrgds");
+  expect(accountHandle("@rodrgds", "youtube-rodrgds", "threads")).toBe("@rodrgds");
+  expect(accountHandle("rodrgds", "youtube-rodrgds", "threads")).toBe("@rodrgds");
+  expect(accountHandle("", "youtube-rodrgds", "threads")).toBe("youtube-rodrgds");
 });
 
 test("labels fediverse platforms by name", () => {
@@ -82,6 +82,28 @@ test("every canonical platform key resolves to a name different from the raw key
   for (const [key, name] of Object.entries(expected)) {
     expect(platformLabel(key)).toBe(name);
     expect(platformLabel(`${key}:suffix`)).toBe(name);
+  }
+});
+
+test("pinterest and google business handles render without @", () => {
+  expect(accountHandle("acme", "fallback", "pinterest")).toBe("acme");
+  expect(accountHandle("acme", "fallback", "googlebusiness")).toBe("acme");
+  expect(accountHandle("acme", "fallback", "gmb")).toBe("acme");
+});
+
+test("every handle-first platform keeps @", () => {
+  for (const platform of [
+    "bluesky",
+    "devnull",
+    "instagram",
+    "mastodon",
+    "pixelfed",
+    "threads",
+    "tiktok",
+    "x",
+    "twitter",
+  ]) {
+    expect(accountHandle("acme", "fallback", platform)).toBe("@acme");
   }
 });
 
