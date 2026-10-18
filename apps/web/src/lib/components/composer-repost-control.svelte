@@ -8,7 +8,8 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import SocialAccountIdentity from '$lib/components/social-account-identity.svelte';
+	import AccountPickerRow from '$lib/components/account-picker/row.svelte';
+	import AccountPickerSelectAll from '$lib/components/account-picker/select-all.svelte';
 	import RepostStageEditor from '$lib/components/repost-stage-editor.svelte';
 	import * as Popover from '$lib/components/ui/popover';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
@@ -129,6 +130,18 @@
 		value.target_account_ids = selected.includes(accountID)
 			? selected.filter((id) => id !== accountID)
 			: [...selected, accountID];
+		onChange?.();
+	}
+
+	function selectAllTargets() {
+		if (value.mode !== 'custom') return;
+		value.target_account_ids = targetAccounts.map((account) => account.id);
+		onChange?.();
+	}
+
+	function clearTargets() {
+		if (value.mode !== 'custom') return;
+		value.target_account_ids = [];
 		onChange?.();
 	}
 
@@ -267,20 +280,26 @@
 								</Button>
 							</div>
 						{/if}
+						{#if targetAccounts.length > 0}
+							<!-- Custom repost targets: any subset including none is an authored choice. -->
+							<AccountPickerSelectAll
+								selectedCount={(value.target_account_ids ?? []).length}
+								totalCount={targetAccounts.length}
+								onSelectAll={selectAllTargets}
+								onClearAll={clearTargets}
+								{disabled}
+							/>
+						{/if}
 						<div class="grid gap-2 sm:grid-cols-2">
 							{#each targetAccounts as account (account.id)}
-								<label class="flex min-h-12 items-center gap-3 rounded-md border px-3 py-2 text-sm">
-									<Checkbox
-										checked={(value.target_account_ids ?? []).includes(account.id)}
-										onCheckedChange={() => toggleTarget(account.id)}
-									/>
-									<SocialAccountIdentity
-										class="min-w-0 flex-1"
-										name={accountLabel(account)}
-										platform={account.platform}
-										avatarUrl={account.avatar_url}
-									/>
-								</label>
+								<AccountPickerRow
+									name={accountLabel(account)}
+									platform={account.platform}
+									avatarUrl={account.avatar_url}
+									selected={(value.target_account_ids ?? []).includes(account.id)}
+									onToggle={() => toggleTarget(account.id)}
+									class="rounded-md border px-3 py-2"
+								/>
 							{:else}
 								<p class="text-sm text-muted-foreground sm:col-span-2">
 									{m.repost_no_supported_accounts()}

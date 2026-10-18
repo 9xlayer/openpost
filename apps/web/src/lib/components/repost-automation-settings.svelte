@@ -29,7 +29,7 @@
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import SectionHeader from '$lib/components/section-header.svelte';
 	import SettingsFormFooter from '$lib/components/settings-form-footer.svelte';
-	import SocialAccountIdentity from '$lib/components/social-account-identity.svelte';
+	import AccountPickerRow from '$lib/components/account-picker/row.svelte';
 	import RepostStageEditor from '$lib/components/repost-stage-editor.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { formatSocialAccountLabel, formatSocialAccountName, getPlatformName } from '$lib/utils';
@@ -530,6 +530,10 @@
 								<label class="flex min-h-11 items-center gap-3 rounded-md border px-3 py-2 text-sm">
 									<Checkbox
 										checked={(policy.source_account_ids ?? []).length === 0}
+										indeterminate={(() => {
+											const count = (policy.source_account_ids ?? []).length;
+											return count > 0 && count < sourceAccounts.length;
+										})()}
 										onCheckedChange={(checked) => setSourceScope(policy, checked === true)}
 										disabled={!settings.can_manage}
 									/>
@@ -537,21 +541,15 @@
 								</label>
 								<div class="grid gap-2 sm:grid-cols-2">
 									{#each sourceAccounts as account (account.id)}
-										<label
-											class="flex min-h-12 items-center gap-3 rounded-md border px-3 py-2 text-sm"
-										>
-											<Checkbox
-												checked={(policy.source_account_ids ?? []).includes(account.id)}
-												onCheckedChange={() => toggleSource(policy, account.id)}
-												disabled={!settings.can_manage}
-											/>
-											<SocialAccountIdentity
-												class="min-w-0 flex-1"
-												name={accountLabel(account)}
-												platform={account.platform}
-												avatarUrl={account.avatar_url}
-											/>
-										</label>
+										<AccountPickerRow
+											name={accountLabel(account)}
+											platform={account.platform}
+											avatarUrl={account.avatar_url}
+											selected={(policy.source_account_ids ?? []).includes(account.id)}
+											disabled={!settings.can_manage}
+											onToggle={() => toggleSource(policy, account.id)}
+											class="rounded-md border px-3 py-2"
+										/>
 									{/each}
 								</div>
 							</fieldset>
@@ -561,28 +559,17 @@
 								<p class="text-sm text-muted-foreground">{m.repost_target_accounts_body()}</p>
 								<div class="grid gap-2 sm:grid-cols-2">
 									{#each targetAccounts as account (account.id)}
-										<label
-											class="flex min-h-12 items-center gap-3 rounded-md border px-3 py-2 text-sm"
-										>
-											<Checkbox
-												checked={(policy.target_account_ids ?? []).includes(account.id)}
-												onCheckedChange={() => toggleTarget(policy, account.id)}
-												disabled={!settings.can_manage || !targetCompatible(policy, account)}
-											/>
-											<div class="min-w-0 flex-1">
-												<SocialAccountIdentity
-													name={accountLabel(account)}
-													platform={account.platform}
-													avatarUrl={account.avatar_url}
-													detail={targetAccountDetail(policy, account)}
-												/>
-												{#if targetAccountConstraint(policy, account)}
-													<p class="mt-1 pl-10 text-xs leading-5 text-muted-foreground">
-														{targetAccountConstraint(policy, account)}
-													</p>
-												{/if}
-											</div>
-										</label>
+										<AccountPickerRow
+											name={accountLabel(account)}
+											platform={account.platform}
+											avatarUrl={account.avatar_url}
+											detail={targetAccountDetail(policy, account)}
+											constraint={targetAccountConstraint(policy, account)}
+											selected={(policy.target_account_ids ?? []).includes(account.id)}
+											disabled={!settings.can_manage || !targetCompatible(policy, account)}
+											onToggle={() => toggleTarget(policy, account.id)}
+											class="rounded-md border px-3 py-2"
+										/>
 									{/each}
 								</div>
 							</fieldset>

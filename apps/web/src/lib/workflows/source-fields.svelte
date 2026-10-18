@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { SocialAccount } from '@openpost/query-catalog';
-	import SocialAccountIdentity from '$lib/components/social-account-identity.svelte';
+	import AccountPickerRow from '$lib/components/account-picker/row.svelte';
 	import type { Source, Connection } from './api';
 	import Choice from './choice.svelte';
 	import Field from './field.svelte';
@@ -128,26 +128,29 @@
 			<label class="flex min-h-11 items-center gap-2 text-sm"
 				><Checkbox
 					checked={!source.account_ids?.length}
+					indeterminate={(() => {
+						const count = source.account_ids?.length ?? 0;
+						return count > 0 && count < accounts.length;
+					})()}
 					onCheckedChange={(checked) => setAnySource(checked === true)}
 				/>{m.repost_any_compatible_source()}</label
 			>
-			{#each accounts as account (account.id)}<label
-					class="flex min-h-11 items-center gap-3 text-sm"
-					><Checkbox
-						checked={source.account_ids?.includes(account.id) ?? false}
-						onCheckedChange={(checked) =>
-							onchange({
-								...source,
-								account_ids: checked
-									? [...(source.account_ids ?? []), account.id]
-									: (source.account_ids ?? []).filter((id) => id !== account.id)
-							})}
-					/><SocialAccountIdentity
-						name={account.account_username || account.platform}
-						platform={account.platform}
-						avatarUrl={account.account_avatar_url}
-					/></label
-				>{/each}
+			{#each accounts as account (account.id)}<AccountPickerRow
+					name={account.account_username || account.platform}
+					platform={account.platform}
+					avatarUrl={account.account_avatar_url}
+					selected={source.account_ids?.includes(account.id) ?? false}
+					onToggle={() => {
+						const selected = source.account_ids ?? [];
+						onchange({
+							...source,
+							account_ids: selected.includes(account.id)
+								? selected.filter((id) => id !== account.id)
+								: [...selected, account.id]
+						});
+					}}
+					class="min-h-11 gap-3 px-0 py-0"
+				/>{/each}
 		</fieldset>
 	{/if}
 	<p class="text-sm leading-6 text-muted-foreground">

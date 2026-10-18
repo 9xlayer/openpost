@@ -29,6 +29,8 @@
 	import InlineNotice from './inline-notice.svelte';
 	import SocialAccountAvatar from './social-account-avatar.svelte';
 	import SocialAccountIdentity from './social-account-identity.svelte';
+	import AccountPickerRow from './account-picker/row.svelte';
+	import AccountPickerSelectAll from './account-picker/select-all.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -725,7 +727,7 @@
 			{/snippet}
 		</Popover.Trigger>
 		<Popover.Content class="w-80 max-w-[calc(100vw-1rem)] p-1.5" align="start">
-			<div class="flex min-h-11 items-center justify-between px-2">
+			<div class="space-y-1 px-2 py-1">
 				<div>
 					<p class="text-sm font-medium">{m.compose_destinations()}</p>
 					<p class="text-xs text-muted-foreground">
@@ -733,15 +735,14 @@
 					</p>
 				</div>
 				{#if onSelectAll && onClearAll}
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						class="h-9 text-xs"
-						onclick={selectedAccountIds.length === accounts.length ? onClearAll : onSelectAll}
-					>
-						{selectedAccountIds.length === accounts.length ? m.compose_clear() : m.common_all()}
-					</Button>
+					<!-- Composer destination list: all, subset, and none are distinct authored states. -->
+					<AccountPickerSelectAll
+						selectedCount={selectedAccountIds.length}
+						totalCount={accounts.length}
+						{onSelectAll}
+						{onClearAll}
+						{disabled}
+					/>
 				{/if}
 			</div>
 
@@ -784,35 +785,20 @@
 			<div class="border-t py-1" role="group" aria-label={m.social_set_accounts()}>
 				{#each accounts as account (account.id)}
 					{@const issues = accountIssues[account.id] ?? []}
-					<label
-						class="flex min-h-12 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+					<AccountPickerRow
+						name={accountLabel(account)}
+						platform={account.platform}
+						avatarUrl={account.account_avatar_url}
+						detail={issues.length ? m.compose_needs_attention() : ''}
+						selected={selectedAccountIds.includes(account.id)}
+						{issues}
+						custom={customAccountIds.includes(account.id)}
+						customLabel={m.compose_custom_state()}
+						onToggle={() => requestAccountToggle(account)}
+						checkboxPosition="end"
+						class="gap-2.5 rounded-md px-2 py-1.5 hover:bg-accent"
 						data-testid="composer-account-row"
-					>
-						<div class="min-w-0 flex-1">
-							<SocialAccountIdentity
-								name={accountLabel(account)}
-								platform={account.platform}
-								avatarUrl={account.account_avatar_url}
-								detail={issues.length ? m.compose_needs_attention() : ''}
-							/>
-							{#if issues.length}
-								<ul class="mt-1 space-y-0.5 pl-10 text-xs leading-snug text-destructive">
-									{#each issues as issue (issue)}
-										<li>{issue}</li>
-									{/each}
-								</ul>
-							{/if}
-						</div>
-						{#if customAccountIds.includes(account.id)}<ThemeIcon
-								role="edit"
-								class="size-3.5 text-primary"
-								aria-label={m.compose_custom_state()}
-							/>{/if}
-						<Checkbox
-							checked={selectedAccountIds.includes(account.id)}
-							onCheckedChange={() => requestAccountToggle(account)}
-						/>
-					</label>
+					/>
 				{/each}
 			</div>
 
