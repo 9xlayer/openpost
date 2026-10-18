@@ -226,10 +226,28 @@ type Me struct {
 
 // ----- Workspaces -----
 
+// Workspace mirrors the served WorkspaceResponse shape. The human table
+// renderers select the columns they need; --json re-emits the full
+// projection. CreatedAt stays a time.Time because the workspace table
+// formats it; the server emits RFC3339, which round-trips losslessly.
 type Workspace struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
+	ID                   string    `json:"id"`
+	OrganizationID       string    `json:"organization_id"`
+	OrganizationName     string    `json:"organization_name"`
+	Name                 string    `json:"name"`
+	AvatarURL            string    `json:"avatar_url"`
+	Color                string    `json:"color"`
+	CreatedAt            time.Time `json:"created_at"`
+	Role                 string    `json:"role"`
+	CanEdit              bool      `json:"can_edit"`
+	CanConnect           bool      `json:"can_connect"`
+	CanApprove           bool      `json:"can_approve"`
+	ClientReviewsEnabled bool      `json:"client_reviews_enabled,omitempty"`
+	SSORequired          bool      `json:"sso_required"`
+	SSOAuthenticated     bool      `json:"sso_authenticated"`
+	SSOIdentityLinked    bool      `json:"sso_identity_linked"`
+	SSOProviderID        string    `json:"sso_provider_id,omitempty"`
+	SSOProviderName      string    `json:"sso_provider_name,omitempty"`
 }
 
 func (c *Client) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
@@ -428,16 +446,32 @@ func (c *Client) NextAvailableSlot(ctx context.Context, in NextAvailableSlotInpu
 
 // ----- Accounts -----
 
+// SocialAccount mirrors the served AccountResponse shape. The human
+// table renderers select the columns they need; --json re-emits the full
+// projection.
 type SocialAccount struct {
 	ID                     string `json:"id"`
 	Slug                   string `json:"slug"`
 	Platform               string `json:"platform"`
 	AccountID              string `json:"account_id"`
+	AccountKind            string `json:"account_kind,omitempty"`
 	Alias                  string `json:"alias,omitempty"`
 	AccountUsername        string `json:"account_username"`
+	AccountAvatarURL       string `json:"account_avatar_url"`
 	InstanceURL            string `json:"instance_url"`
 	IsActive               bool   `json:"is_active"`
 	ThreadRepliesSupported bool   `json:"thread_replies_supported"`
+	// messaging_supported and messages_enabled are deprecated
+	// compatibility shims (use GET /account-features), but the server
+	// still sends them, so --json projects them.
+	MessagingSupported     bool   `json:"messaging_supported"`
+	MessagesEnabled        bool   `json:"messages_enabled"`
+	LimitProfile           string `json:"limit_profile,omitempty"`
+	CapabilityCheckedAt    string `json:"capability_checked_at,omitempty"`
+	FediverseSoftware      string `json:"fediverse_software,omitempty"`
+	GrantDestinationCount  int    `json:"grant_destination_count"`
+	SharedGrant            bool   `json:"shared_grant"`
+	ProviderInstallationID string `json:"provider_installation_id,omitempty"`
 }
 
 type ProviderInfo struct {
@@ -900,52 +934,180 @@ const (
 	PublicationCreationSourceUnknown  PublicationCreationSource = "unknown"
 )
 
+// Publication mirrors the served PublicationResponse shape. The human
+// table renderers select the columns they need; --json re-emits the full
+// projection. Optional fields use omitempty so existing parsers keep
+// working; required slices stay non-omitted so a served null re-emits as
+// null rather than disappearing.
 type Publication struct {
-	ID             string                    `json:"id"`
-	WorkspaceID    string                    `json:"workspace_id"`
-	CreatedBy      string                    `json:"created_by"`
-	CreationSource PublicationCreationSource `json:"creation_source"`
-	Title          string                    `json:"title"`
-	Intent         string                    `json:"intent"`
-	ContentProfile string                    `json:"content_profile"`
-	SourceText     string                    `json:"source_text"`
-	SourceURL      string                    `json:"source_url,omitempty"`
-	Goal           string                    `json:"goal,omitempty"`
-	Audience       string                    `json:"audience,omitempty"`
-	Metadata       map[string]interface{}    `json:"metadata,omitempty"`
-	Status         string                    `json:"status"`
-	Revision       int                       `json:"revision"`
-	ScheduledAt    string                    `json:"scheduled_at,omitempty"`
-	ActualRunAt    string                    `json:"actual_run_at,omitempty"`
-	CreatedAt      string                    `json:"created_at"`
-	UpdatedAt      string                    `json:"updated_at"`
-	Renditions     []Rendition               `json:"renditions"`
-	Media          []MediaSummary            `json:"media"`
+	ID                   string                    `json:"id"`
+	WorkspaceID          string                    `json:"workspace_id"`
+	CreatedBy            string                    `json:"created_by"`
+	CreationSource       PublicationCreationSource `json:"creation_source"`
+	CreationPreset       string                    `json:"creation_preset"`
+	Title                string                    `json:"title"`
+	Intent               string                    `json:"intent"`
+	ContentProfile       string                    `json:"content_profile"`
+	SourceText           string                    `json:"source_text"`
+	SourceURL            string                    `json:"source_url,omitempty"`
+	Goal                 string                    `json:"goal,omitempty"`
+	Audience             string                    `json:"audience,omitempty"`
+	Metadata             map[string]interface{}    `json:"metadata,omitempty"`
+	Status               string                    `json:"status"`
+	Revision             int                       `json:"revision"`
+	RandomDelayMinutes   int                       `json:"random_delay_minutes"`
+	RandomDelayInherited bool                      `json:"random_delay_inherited"`
+	SocialSetID          string                    `json:"social_set_id,omitempty"`
+	ReviewState          string                    `json:"review_state,omitempty"`
+	ReviewID             string                    `json:"review_id,omitempty"`
+	ReviewEpoch          int64                     `json:"review_epoch,omitempty"`
+	RepostOverride       *RepostOverride           `json:"repost_override,omitempty"`
+	FailureDismissedAt   string                    `json:"failure_dismissed_at,omitempty"`
+	ScheduledAt          string                    `json:"scheduled_at,omitempty"`
+	ActualRunAt          string                    `json:"actual_run_at,omitempty"`
+	CreatedAt            string                    `json:"created_at"`
+	UpdatedAt            string                    `json:"updated_at"`
+	Segments             []PublicationSegment      `json:"segments"`
+	Renditions           []Rendition               `json:"renditions"`
+	Media                []MediaSummary            `json:"media"`
 }
 
+// PublicationSegment is one authored content segment of a Publication
+// (thread part). It mirrors PublicationSegmentResponse.
+type PublicationSegment struct {
+	ID          string                 `json:"id"`
+	Position    int                    `json:"position"`
+	Body        string                 `json:"body"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Settings    map[string]interface{} `json:"settings"`
+	URL         string                 `json:"url,omitempty"`
+	Media       []MediaSummary         `json:"media"`
+}
+
+// RepostOverride mirrors the served Override shape: the workspace rule
+// mode plus this post's custom rule, if any.
+type RepostOverride struct {
+	Mode             string         `json:"mode"`
+	Rule             map[string]any `json:"rule,omitempty"`
+	TargetAccountIDs []string       `json:"target_account_ids,omitempty"`
+}
+
+// MediaSummary mirrors the served MediaSummary shape: generated text
+// cards, analysis results and delivery URLs are part of the projection,
+// not just the media ID.
 type MediaSummary struct {
-	ID string `json:"id"`
+	ID                   string         `json:"id"`
+	MimeType             string         `json:"mime_type"`
+	Size                 int64          `json:"size"`
+	OriginalFilename     string         `json:"original_filename"`
+	Width                int            `json:"width"`
+	Height               int            `json:"height"`
+	DurationMS           int64          `json:"duration_ms"`
+	FrameRate            float64        `json:"frame_rate"`
+	AspectRatio          string         `json:"aspect_ratio"`
+	DominantType         string         `json:"dominant_type"`
+	AnalysisStatus       string         `json:"analysis_status"`
+	PublicURLReady       bool           `json:"public_url_ready"`
+	PublicURLStatus      int            `json:"public_url_status"`
+	URL                  string         `json:"url"`
+	AltText              string         `json:"alt_text,omitempty"`
+	Role                 string         `json:"role,omitempty"`
+	Settings             map[string]any `json:"settings,omitempty"`
+	DisplayOrder         int            `json:"display_order,omitempty"`
+	ThumbnailTimestampMS int64          `json:"thumbnail_timestamp_ms,omitempty"`
+	PosterThumbnailURL   string         `json:"poster_thumbnail_url,omitempty"`
+	AnalysisError        string         `json:"analysis_error,omitempty"`
+	PublicURLCheckedAt   string         `json:"public_url_checked_at,omitempty"`
+	PublicURLError       string         `json:"public_url_error,omitempty"`
+}
+
+// ProviderDelivery mirrors ProviderDeliveryResponse: the per-destination
+// delivery attempt state the server reconciles.
+type ProviderDelivery struct {
+	TargetKey               string `json:"target_key"`
+	State                   string `json:"state"`
+	CurrentAttemptID        string `json:"current_attempt_id"`
+	CurrentAttemptNumber    int    `json:"current_attempt_number"`
+	CurrentAttemptCreatedAt string `json:"current_attempt_created_at"`
+	RecoveryAction          string `json:"recovery_action"`
+	ErrorKind               string `json:"error_kind,omitempty"`
+	ErrorCode               string `json:"error_code,omitempty"`
+	ErrorHTTPStatus         int    `json:"error_http_status,omitempty"`
+	ExternalID              string `json:"external_id,omitempty"`
+	ExternalURL             string `json:"external_url,omitempty"`
+	LastReconciledAt        string `json:"last_reconciled_at,omitempty"`
+	NextReconciliationAt    string `json:"next_reconciliation_at,omitempty"`
+	TerminalReason          string `json:"terminal_reason,omitempty"`
+}
+
+// RenditionSourceOverride is one caller-authored per-source decision
+// inside a joined rendition segment. It mirrors RenditionSourceOverride.
+type RenditionSourceOverride struct {
+	PublicationSegmentID string                  `json:"publication_segment_id"`
+	BodyOverride         string                  `json:"body_override,omitempty"`
+	MediaInherited       bool                    `json:"media_inherited"`
+	Media                []PublicationMediaInput `json:"media,omitempty"`
+}
+
+// RenditionSegment is one destination-specific segment. It mirrors
+// RenditionSegmentResponse.
+type RenditionSegment struct {
+	ID                   string                    `json:"id"`
+	PublicationSegmentID string                    `json:"publication_segment_id"`
+	Position             int                       `json:"position"`
+	Body                 string                    `json:"body"`
+	BodyOverride         string                    `json:"body_override,omitempty"`
+	Title                string                    `json:"title"`
+	TitleOverride        string                    `json:"title_override,omitempty"`
+	Description          string                    `json:"description"`
+	DescriptionOverride  string                    `json:"description_override,omitempty"`
+	URL                  string                    `json:"url,omitempty"`
+	URLOverride          string                    `json:"url_override,omitempty"`
+	MediaInherited       bool                      `json:"media_inherited"`
+	Settings             map[string]interface{}    `json:"settings"`
+	Status               string                    `json:"status"`
+	ErrorRetryable       bool                      `json:"error_retryable"`
+	ErrorMessage         string                    `json:"error_message,omitempty"`
+	ErrorKind            string                    `json:"error_kind,omitempty"`
+	ErrorCode            string                    `json:"error_code,omitempty"`
+	ErrorHTTPStatus      int                       `json:"error_http_status,omitempty"`
+	ErrorRetryAt         string                    `json:"error_retry_at,omitempty"`
+	ErrorAction          string                    `json:"error_action,omitempty"`
+	ExternalID           string                    `json:"external_id,omitempty"`
+	ExternalURL          string                    `json:"external_url,omitempty"`
+	Media                []MediaSummary            `json:"media"`
+	OutputMedia          []MediaSummary            `json:"output_media,omitempty"`
+	SourceOverrides      []RenditionSourceOverride `json:"source_overrides,omitempty"`
 }
 
 type Rendition struct {
-	ID              string                 `json:"id"`
-	SocialAccountID string                 `json:"social_account_id"`
-	Platform        string                 `json:"platform"`
-	Profile         string                 `json:"profile"`
-	Body            string                 `json:"body"`
-	Title           string                 `json:"title"`
-	Description     string                 `json:"description"`
-	Settings        map[string]interface{} `json:"settings"`
-	Status          string                 `json:"status"`
-	ExternalID      string                 `json:"external_id,omitempty"`
-	ExternalURL     string                 `json:"external_url,omitempty"`
-	ErrorMessage    string                 `json:"error_message,omitempty"`
-	ErrorKind       string                 `json:"error_kind,omitempty"`
-	ErrorCode       string                 `json:"error_code,omitempty"`
-	ErrorHTTPStatus int                    `json:"error_http_status,omitempty"`
-	ErrorRetryable  bool                   `json:"error_retryable"`
-	ErrorRetryAt    string                 `json:"error_retry_at,omitempty"`
-	ErrorAction     string                 `json:"error_action,omitempty"`
+	ID               string                 `json:"id"`
+	PublicationID    string                 `json:"publication_id"`
+	SocialAccountID  string                 `json:"social_account_id"`
+	TargetKey        string                 `json:"target_key"`
+	Platform         string                 `json:"platform"`
+	Profile          string                 `json:"profile"`
+	OutputProfile    string                 `json:"output_profile"`
+	FormatLocked     bool                   `json:"format_locked"`
+	Body             string                 `json:"body"`
+	Title            string                 `json:"title"`
+	Description      string                 `json:"description"`
+	Settings         map[string]interface{} `json:"settings"`
+	Status           string                 `json:"status"`
+	ScheduleOverride string                 `json:"schedule_override,omitempty"`
+	Delivery         *ProviderDelivery      `json:"delivery,omitempty"`
+	Segments         []RenditionSegment     `json:"segments"`
+	Media            []MediaSummary         `json:"media"`
+	ExternalID       string                 `json:"external_id,omitempty"`
+	ExternalURL      string                 `json:"external_url,omitempty"`
+	ErrorMessage     string                 `json:"error_message,omitempty"`
+	ErrorKind        string                 `json:"error_kind,omitempty"`
+	ErrorCode        string                 `json:"error_code,omitempty"`
+	ErrorHTTPStatus  int                    `json:"error_http_status,omitempty"`
+	ErrorRetryable   bool                   `json:"error_retryable"`
+	ErrorRetryAt     string                 `json:"error_retry_at,omitempty"`
+	ErrorAction      string                 `json:"error_action,omitempty"`
 }
 
 type ListPublicationsInput struct {
@@ -1289,15 +1451,20 @@ func (c *Client) RevokeAPIToken(ctx context.Context, id string) error {
 
 // ----- Jobs -----
 
+// Job mirrors the served JobResponse shape. Payload was already
+// projected; created_at, publication_id and locked_at complete it.
 type Job struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"`
-	Payload     string `json:"payload"`
-	Status      string `json:"status"`
-	RunAt       string `json:"run_at"`
-	Attempts    int    `json:"attempts"`
-	MaxAttempts int    `json:"max_attempts"`
-	LastError   string `json:"last_error,omitempty"`
+	ID            string `json:"id"`
+	Type          string `json:"type"`
+	Payload       string `json:"payload"`
+	Status        string `json:"status"`
+	RunAt         string `json:"run_at"`
+	Attempts      int    `json:"attempts"`
+	MaxAttempts   int    `json:"max_attempts"`
+	LastError     string `json:"last_error,omitempty"`
+	CreatedAt     string `json:"created_at"`
+	PublicationID string `json:"publication_id,omitempty"`
+	LockedAt      string `json:"locked_at,omitempty"`
 }
 
 type ListJobsInput struct {
