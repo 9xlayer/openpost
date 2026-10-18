@@ -40,9 +40,7 @@
     class={["instagram-preview", `platform-${platform}`, compact && "compact"]}
   >
     <header>
-      <span class:story-ring={platform === "instagram"}>
-        <PreviewAvatar identity={model.identity} size={32} />
-      </span>
+      <PreviewAvatar identity={model.identity} size={32} ring={platform === "instagram"} />
       <div class="identity">
         <div>
           <strong
@@ -133,18 +131,6 @@
     gap: 0.65rem;
     min-height: 3.75rem;
     padding: 0.55rem 0.85rem;
-  }
-
-  .story-ring {
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: conic-gradient(#d300c5, #ff3040, #ffdc80, #d300c5);
-    padding: 2px;
-  }
-
-  .story-ring :global(.preview-avatar) {
-    box-shadow: 0 0 0 2px var(--native-bg);
   }
 
   .identity {
