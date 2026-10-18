@@ -33,7 +33,7 @@
 	import { formatSocialAccountName, getPlatformName } from '$lib/utils';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import CommunicationsNavigation from '$lib/components/communications-navigation.svelte';
-	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import AppToast from '$lib/components/app-toast.svelte';
@@ -636,15 +636,6 @@
 		return `${m.engagement_all_accounts()}: ${accountName(account)}, ${getPlatformName(account.platform)}`;
 	}
 
-	function initials(value: string) {
-		return value
-			.split(/\s+/)
-			.slice(0, 2)
-			.map((part) => part[0] ?? '')
-			.join('')
-			.toUpperCase();
-	}
-
 	function dateLabel(value: string) {
 		const date = new Date(value);
 		if (Number.isNaN(date.getTime())) return '';
@@ -908,25 +899,14 @@
 								onclick={() => void selectConversation(conversation)}
 							>
 								<div class="relative shrink-0">
-									{#if conversation.counterpart_avatar_url}
-										<img
-											class="size-10 rounded-full object-cover"
-											src={conversation.counterpart_avatar_url}
-											alt=""
-										/>
-									{:else}
-										<div
-											class="flex size-10 items-center justify-center rounded-full bg-muted text-xs font-semibold"
-											aria-hidden="true"
-										>
-											{initials(counterpartLabel(conversation))}
-										</div>
-									{/if}
-									<span
-										class="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full border-2 border-card bg-muted"
-									>
-										<PlatformIcon platform={conversation.platform} class="size-3" />
-									</span>
+									<!-- The counterpart is a person, not a connected account. The platform
+										badge marks the destination of the conversation. -->
+									<SocialAccountAvatar
+										name={counterpartLabel(conversation)}
+										platform={conversation.platform}
+										avatarUrl={conversation.counterpart_avatar_url}
+										size="lg"
+									/>
 								</div>
 								<span class="min-w-0 flex-1">
 									<span class="flex items-center gap-2">
