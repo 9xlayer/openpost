@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openpost/backend/internal/discordwebhook"
 )
 
 const (
@@ -176,20 +178,9 @@ func postDiscordReport(ctx context.Context, client *http.Client, webhookURL stri
 	if err != nil {
 		return err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("build diagnostics discord request: %w", err)
-	}
-	request.Header.Set("Content-Type", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return fmt.Errorf("deliver diagnostics discord report: %w", err)
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("diagnostics discord receiver returned %d", response.StatusCode)
-	}
-	return nil
+	// The payload is already JSON-encoded; the shared sender performs the
+	// POST, the bounded drain, and the status check with the injected client.
+	return discordwebhook.SendBody(ctx, client, webhookURL, bytes.NewReader(body), "application/json")
 }
 
 type discordDiagnosticsPayload struct {

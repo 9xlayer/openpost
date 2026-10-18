@@ -1,19 +1,16 @@
 package billing
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/PaddleHQ/paddle-go-sdk/v5"
+	"github.com/openpost/backend/internal/discordwebhook"
 	"github.com/openpost/backend/internal/models"
 )
 
@@ -90,7 +87,7 @@ func newBillingDiscordNotifier(webhookURL string) (*billingDiscordNotifier, erro
 	if webhookURL == "" {
 		return nil, nil
 	}
-	return &billingDiscordNotifier{webhookURL: webhookURL, client: &http.Client{Timeout: 8 * time.Second}}, nil
+	return &billingDiscordNotifier{webhookURL: webhookURL, client: discordwebhook.NewClient()}, nil
 }
 
 func validateBillingDiscordWebhookURL(rawURL string) error {
@@ -112,25 +109,7 @@ func validateBillingDiscordWebhookURL(rawURL string) error {
 }
 
 func (n *billingDiscordNotifier) send(ctx context.Context, payload discordWebhookPayload) error {
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("encoding billing Discord notification: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, n.webhookURL, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("creating billing Discord notification request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := n.client.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending billing Discord notification: %w", err)
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("billing Discord notification returned HTTP %d", resp.StatusCode)
-	}
-	return nil
+	return discordwebhook.Send(ctx, n.client, n.webhookURL, payload)
 }
 
 func (s *Service) notifyPaddleEvent(ctx context.Context, event paddleEvent, customer *paddle.Customer, subscription *paddle.Subscription, transaction *paddle.Transaction) error {

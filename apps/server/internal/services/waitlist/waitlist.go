@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net/http"
 	"net/mail"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/openpost/backend/internal/discordwebhook"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/telemetry"
 	"github.com/uptrace/bun"
@@ -34,11 +36,12 @@ type notificationPayload struct {
 type Service struct {
 	db         *bun.DB
 	webhookURL string
+	client     *http.Client
 	telemetry  telemetry.Recorder
 }
 
 func NewService(db *bun.DB, webhookURL string) *Service {
-	return &Service{db: db, webhookURL: strings.TrimSpace(webhookURL)}
+	return &Service{db: db, webhookURL: strings.TrimSpace(webhookURL), client: discordwebhook.NewClient()}
 }
 
 func (s *Service) SetTelemetry(recorder telemetry.Recorder) { s.telemetry = recorder }

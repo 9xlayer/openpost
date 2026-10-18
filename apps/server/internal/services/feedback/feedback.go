@@ -11,13 +11,13 @@ import (
 	_ "image/jpeg" // Register the JPEG decoder used by screenshot validation.
 	_ "image/png"  // Register the PNG decoder used by screenshot validation.
 	"net"
-	"net/http"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
 
+	"github.com/openpost/backend/internal/discordwebhook"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/uptrace/bun"
 )
@@ -473,6 +473,6 @@ func NewDiscordDestination(webhookURL string) (Destination, error) {
 	}
 	return &DiscordDestination{
 		webhookURL: parsed.String(),
-		client:     &http.Client{Timeout: 8 * time.Second},
+		client:     discordwebhook.NewClient(),
 	}, nil
 }

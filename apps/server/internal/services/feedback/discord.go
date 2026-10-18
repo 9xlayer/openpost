@@ -6,11 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"strings"
+
+	"github.com/openpost/backend/internal/discordwebhook"
 )
 
 type DiscordDestination struct {
@@ -64,49 +64,34 @@ func (d *DiscordDestination) Deliver(ctx context.Context, report Report) error {
 		return errors.New("failed to encode feedback destination payload")
 	}
 
-	var body io.Reader = bytes.NewReader(payloadJSON)
-	contentType := "application/json"
-	if report.Screenshot != nil {
-		screenshot, err := base64.StdEncoding.DecodeString(report.Screenshot.Data)
-		if err != nil {
-			return errors.New("invalid feedback screenshot")
-		}
-		var multipartBody bytes.Buffer
-		writer := multipart.NewWriter(&multipartBody)
-		if err := writer.WriteField("payload_json", string(payloadJSON)); err != nil {
-			return errors.New("failed to encode feedback destination payload")
-		}
-		extension := "png"
-		if report.Screenshot.MIMEType == "image/jpeg" {
-			extension = "jpg"
-		}
-		part, err := writer.CreateFormFile("files[0]", "openpost-feedback."+extension)
-		if err != nil {
-			return errors.New("failed to encode feedback screenshot")
-		}
-		if _, err := part.Write(screenshot); err != nil {
-			return errors.New("failed to encode feedback screenshot")
-		}
-		if err := writer.Close(); err != nil {
-			return errors.New("failed to finish feedback payload")
-		}
-		body = &multipartBody
-		contentType = writer.FormDataContentType()
+	if report.Screenshot == nil {
+		return discordwebhook.SendBody(ctx, d.client, d.webhookURL, bytes.NewReader(payloadJSON), "application/json")
 	}
 
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, d.webhookURL, body)
+	screenshot, err := base64.StdEncoding.DecodeString(report.Screenshot.Data)
 	if err != nil {
-		return errors.New("failed to create feedback destination request")
+		return errors.New("invalid feedback screenshot")
 	}
-	request.Header.Set("Content-Type", contentType)
-	response, err := d.client.Do(request)
+	var multipartBody bytes.Buffer
+	writer := multipart.NewWriter(&multipartBody)
+	if err := writer.WriteField("payload_json", string(payloadJSON)); err != nil {
+		return errors.New("failed to encode feedback destination payload")
+	}
+	extension := "png"
+	if report.Screenshot.MIMEType == "image/jpeg" {
+		extension = "jpg"
+	}
+	part, err := writer.CreateFormFile("files[0]", "openpost-feedback."+extension)
 	if err != nil {
-		return errors.New("feedback destination is unavailable")
+		return errors.New("failed to encode feedback screenshot")
 	}
-	defer response.Body.Close()
-	_, _ = io.CopyN(io.Discard, response.Body, 8192)
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("feedback destination returned HTTP %d", response.StatusCode)
+	if _, err := part.Write(screenshot); err != nil {
+		return errors.New("failed to encode feedback screenshot")
 	}
-	return nil
+	if err := writer.Close(); err != nil {
+		return errors.New("failed to finish feedback payload")
+	}
+	// Multipart uploads keep their own body shape; the POST, bounded drain,
+	// and status check still go through the shared sender.
+	return discordwebhook.SendBody(ctx, d.client, d.webhookURL, &multipartBody, writer.FormDataContentType())
 }
