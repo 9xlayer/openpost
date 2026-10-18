@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { MEDIA_IMAGE_MAX_BYTES, mediaFileSignature } from '../media-input';
 import {
-	MAX_PASTED_IMAGE_BYTES,
 	ComposerSessionMediaQueue,
 	acceptedPastedImageFiles,
 	availablePasteMediaSlots,
@@ -116,7 +116,7 @@ describe('acceptedPastedImageFiles', () => {
 			clipboardItem(
 				'file',
 				'image/jpeg',
-				fakeFile('large.jpg', 'image/jpeg', MAX_PASTED_IMAGE_BYTES + 1)
+				fakeFile('large.jpg', 'image/jpeg', MEDIA_IMAGE_MAX_BYTES + 1)
 			),
 			clipboardItem('file', 'image/png', first),
 			clipboardItem('file', 'image/png', duplicate),
@@ -127,6 +127,15 @@ describe('acceptedPastedImageFiles', () => {
 		expect(acceptedPastedImageFiles(items, 2, ['first.png\u000010\u00001'])).toEqual([second]);
 		expect(availablePasteMediaSlots(2, 1, 4)).toBe(1);
 		expect(availablePasteMediaSlots(4, 2, 4)).toBe(0);
+	});
+
+	it('accepts an image by filename extension when the browser provides no MIME type', () => {
+		const extensionOnly = fakeFile('photo.png', '', 10, 3);
+		const selection = selectPastedImageFiles([clipboardItem('file', '', extensionOnly)], 1);
+
+		expect(selection.hasImageFiles).toBe(true);
+		expect(selection.accepted).toEqual([extensionOnly]);
+		expect(selection.rejected).toEqual([]);
 	});
 
 	it('reports partial acceptance and each actionable rejection without consuming text paste', () => {
@@ -140,7 +149,7 @@ describe('acceptedPastedImageFiles', () => {
 				clipboardItem(
 					'file',
 					'image/jpeg',
-					fakeFile('large.jpg', 'image/jpeg', MAX_PASTED_IMAGE_BYTES + 1)
+					fakeFile('large.jpg', 'image/jpeg', MEDIA_IMAGE_MAX_BYTES + 1)
 				),
 				clipboardItem('file', 'image/png', accepted),
 				clipboardItem('file', 'image/png', duplicate),
@@ -154,7 +163,7 @@ describe('acceptedPastedImageFiles', () => {
 			hasImageFiles: true,
 			rejected: [
 				{ file: expect.objectContaining({ name: 'empty.png' }), reason: 'empty' },
-				{ file: expect.objectContaining({ name: 'large.jpg' }), reason: 'too_large' },
+				{ file: expect.objectContaining({ name: 'large.jpg' }), reason: 'file_too_large' },
 				{ file: duplicate, reason: 'duplicate' },
 				{ file: overflow, reason: 'capacity' }
 			]

@@ -1,4 +1,14 @@
-export const MAX_PASTED_IMAGE_BYTES = 50 * 1024 * 1024;
+import {
+	MEDIA_IMAGE_MAX_BYTES,
+	MEDIA_VIDEO_MAX_BYTES,
+	inferredMediaMime,
+	mediaFileSignature,
+	selectMediaInputFiles,
+	type MediaInputRejectionReason
+} from '$lib/media-input';
+
+/** @deprecated Use MEDIA_IMAGE_MAX_BYTES from '$lib/media-input'. */
+export const MAX_PASTED_IMAGE_BYTES = MEDIA_IMAGE_MAX_BYTES;
 
 export interface PasteMediaUploadTarget {
 	workspaceId: string;
@@ -24,7 +34,7 @@ export interface ClipboardFileItem {
 	getAsFile(): File | null;
 }
 
-export type PastedImageRejectionReason = 'empty' | 'too_large' | 'duplicate' | 'capacity';
+export type PastedImageRejectionReason = MediaInputRejectionReason;
 
 export interface PastedImageSelection {
 	accepted: File[];
@@ -61,9 +71,8 @@ export function pasteMediaTargetKey(target: PasteMediaUploadTarget): string {
 	return `${target.workspaceId}\u0000${target.postKey}\u0000${target.variantAccountId ?? ''}`;
 }
 
-export function pastedImageFileSignature(file: File): string {
-	return `${file.name}\u0000${file.size}\u0000${file.lastModified}`;
-}
+/** @deprecated Use mediaFileSignature from '$lib/media-input'. */
+export const pastedImageFileSignature = mediaFileSignature;
 
 export function availablePasteMediaSlots(
 	persistedCount: number,
@@ -102,36 +111,32 @@ export function selectPastedImageFiles(
 	capacity: number,
 	existingSignatures: Iterable<string> = []
 ): PastedImageSelection {
-	const signatures = new Set(existingSignatures);
-	const accepted: File[] = [];
-	const rejected: PastedImageSelection['rejected'] = [];
+	const seen = [...existingSignatures];
+	const files: File[] = [];
 	let hasImageFiles = false;
 	for (const item of items) {
-		if (item.kind !== 'file' || !item.type.startsWith('image/')) continue;
+		if (item.kind !== 'file') continue;
 		const file = item.getAsFile();
-		if (!file || !file.type.startsWith('image/')) continue;
+		if (!file) continue;
+		const looksLikeImage =
+			item.type.startsWith('image/') ||
+			file.type.startsWith('image/') ||
+			inferredMediaMime(file.name).startsWith('image/');
+		if (!looksLikeImage) continue;
 		hasImageFiles = true;
-		if (file.size <= 0) {
-			rejected.push({ file, reason: 'empty' });
-			continue;
-		}
-		if (file.size > MAX_PASTED_IMAGE_BYTES) {
-			rejected.push({ file, reason: 'too_large' });
-			continue;
-		}
-		const signature = pastedImageFileSignature(file);
-		if (signatures.has(signature)) {
-			rejected.push({ file, reason: 'duplicate' });
-			continue;
-		}
-		signatures.add(signature);
-		if (accepted.length >= Math.max(0, capacity)) {
-			rejected.push({ file, reason: 'capacity' });
-			continue;
-		}
-		accepted.push(file);
+		files.push(file);
 	}
-	return { accepted, rejected, hasImageFiles };
+	const selection = selectMediaInputFiles(
+		files,
+		{
+			accept: ['image/*'],
+			maxBytes: MEDIA_IMAGE_MAX_BYTES,
+			maxVideoBytes: MEDIA_VIDEO_MAX_BYTES,
+			maxFiles: seen.length + Math.max(0, capacity)
+		},
+		seen
+	);
+	return { accepted: selection.accepted, rejected: selection.rejected, hasImageFiles };
 }
 
 export class ComposerSessionMediaQueue<Result> {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { ActivityIndicator } from '@openpost/ui';
 	import { untrack } from 'svelte';
 	import { captureTelemetryEvent } from '@openpost/telemetry';
 	import { Button } from '$lib/components/ui/button';
@@ -8,6 +9,16 @@
 	import StockMediaBrowser from '$lib/components/stock-media-browser.svelte';
 	import VideoEditorDialog from '$lib/components/video-editor-dialog.svelte';
 	import { uploadMediaFile, type MediaUploadResult } from '$lib/media-upload-client';
+	import {
+		MEDIA_IMAGE_MAX_BYTES,
+		MEDIA_VIDEO_MAX_BYTES,
+		isVideoMediaFile as isVideoFile,
+		mediaFileSignature,
+		mediaInputRejection,
+		selectMediaInputFiles,
+		type MediaInputRejectionReason,
+		type MediaInputRules
+	} from '$lib/media-input';
 	import { formatBytes } from '$lib/video/constraints';
 	import { videoPreparationErrorMessage } from '$lib/video/errors';
 	import type {
@@ -142,6 +153,54 @@
 		if (fileInput) fileInput.value = '';
 	}
 
+	function inputRules(): MediaInputRules {
+		return {
+			accept,
+			maxBytes: MEDIA_IMAGE_MAX_BYTES,
+			maxVideoBytes: MEDIA_VIDEO_MAX_BYTES,
+			maxFiles
+		};
+	}
+
+	function mediaInputErrorMessage(file: File, reason: MediaInputRejectionReason): string {
+		switch (reason) {
+			case 'empty':
+				return m.media_upload_empty_file({ name: file.name });
+			case 'unsupported':
+				return m.media_upload_unsupported({ name: file.name });
+			case 'video_too_large':
+				return m.media_upload_video_too_large({ name: file.name });
+			case 'file_too_large':
+				return m.media_upload_file_too_large({ name: file.name });
+			case 'duplicate':
+				return m.media_upload_duplicates();
+			case 'capacity':
+				return m.media_upload_too_many({ maximum: maxFiles });
+		}
+	}
+
+	function createQueueItem(
+		file: File,
+		validationError: string,
+		status: QueueStatus,
+		source: QueueItem['source'],
+		provenance?: StockMediaProvenance
+	): QueueItem {
+		return {
+			id: crypto.randomUUID(),
+			file,
+			previewURL:
+				file.type.startsWith('image/') || isVideoFile(file) ? URL.createObjectURL(file) : '',
+			status,
+			progress: 0,
+			progressIndeterminate: false,
+			stage: 'ready' as const,
+			error: validationError,
+			source,
+			provenance
+		};
+	}
+
 	function addFiles(
 		files: File[],
 		source: QueueItem['source'],
@@ -149,30 +208,29 @@
 	): QueueItem[] {
 		error = '';
 		const remaining = Math.max(0, maxFiles - queue.length);
-		const accepted = files.slice(0, remaining);
-		const signatures = queue.map(
-			(item) => `${item.file.name}:${item.file.size}:${item.file.lastModified}`
+		const selection = selectMediaInputFiles(
+			files,
+			inputRules(),
+			queue.map((item) => mediaFileSignature(item.file))
 		);
-		const additions = accepted.flatMap((file) => {
-			const signature = `${file.name}:${file.size}:${file.lastModified}`;
-			if (signatures.includes(signature)) return [];
-			signatures.push(signature);
-			const validationError = validateFile(file);
-			return [
-				{
-					id: crypto.randomUUID(),
-					file,
-					previewURL:
-						file.type.startsWith('image/') || isVideoFile(file) ? URL.createObjectURL(file) : '',
-					status: validationError ? ('error' as const) : ('ready' as const),
-					progress: 0,
-					progressIndeterminate: false,
-					stage: 'ready' as const,
-					error: validationError,
-					source,
-					provenance
-				}
-			];
+		const skipped = new Set(
+			selection.rejected
+				.filter(({ reason }) => reason === 'duplicate' || reason === 'capacity')
+				.map(({ file }) => file)
+		);
+		const invalidReasons = new Map<File, MediaInputRejectionReason>();
+		for (const { file, reason } of selection.rejected) {
+			if (!skipped.has(file)) invalidReasons.set(file, reason);
+		}
+		const additions = files.flatMap((file) => {
+			if (skipped.has(file)) return [];
+			const reason = invalidReasons.get(file);
+			if (reason) {
+				return [
+					createQueueItem(file, mediaInputErrorMessage(file, reason), 'error', source, provenance)
+				];
+			}
+			return [createQueueItem(file, '', 'ready', source, provenance)];
 		});
 		queue = [...queue, ...additions];
 		if (files.length > remaining) {
@@ -184,39 +242,9 @@
 	}
 
 	function validateFile(file: File): string {
-		if (file.size <= 0) return m.media_upload_empty_file({ name: file.name });
-		if (!mimeAllowed(file)) return m.media_upload_unsupported({ name: file.name });
-		const video = isVideoFile(file);
-		const limit = video ? 16 * 1024 * 1024 * 1024 : 50 * 1024 * 1024;
-		if (file.size > limit) {
-			return video
-				? m.media_upload_video_too_large({ name: file.name })
-				: m.media_upload_file_too_large({ name: file.name });
-		}
-		return '';
-	}
-
-	function mimeAllowed(file: File): boolean {
-		const inferred = inferredMIME(file.name);
-		return accept.some((accepted) => {
-			if (accepted === '*/*') return true;
-			if (accepted.endsWith('/*')) {
-				const prefix = accepted.slice(0, -1);
-				return file.type.startsWith(prefix) || inferred.startsWith(prefix);
-			}
-			return file.type === accepted || inferred === accepted;
-		});
-	}
-
-	function inferredMIME(name: string): string {
-		if (/\.(png|jpe?g|gif|webp|avif|svg|heic|heif)$/i.test(name)) return 'image/unknown';
-		if (/\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg)$/i.test(name)) return 'video/unknown';
-		if (/\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(name)) return 'audio/unknown';
-		return '';
-	}
-
-	function isVideoFile(file: File): boolean {
-		return file.type.startsWith('video/') || inferredMIME(file.name).startsWith('video/');
+		const rejection = mediaInputRejection(file, inputRules());
+		if (!rejection) return '';
+		return mediaInputErrorMessage(file, rejection.reason);
 	}
 
 	async function uploadReady(): Promise<void> {
@@ -626,9 +654,7 @@
 					{m.media_upload_paste_hint()}
 				</p>
 				<Button onclick={uploadReady} disabled={busy || readyCount === 0 || !workspaceId}>
-					{#if busy}<ProtectedIcon icon="loading" class="animate-spin" />{:else}<ThemeIcon
-							role="upload"
-						/>{/if}
+					{#if busy}<ActivityIndicator class="size-4" />{:else}<ThemeIcon role="upload" />{/if}
 					{readyCount === 1
 						? m.media_upload_one_file_action()
 						: m.media_upload_files_action({ count: readyCount })}
@@ -645,7 +671,7 @@
 		<CameraCapture onCapture={capturePhoto} />
 		{#if busy}
 			<p class="mt-3 flex items-center gap-2 text-sm text-muted-foreground" role="status">
-				<ProtectedIcon icon="loading" class="size-4 animate-spin" />
+				<ActivityIndicator class="size-4" />
 				{m.media_uploading()}
 			</p>
 		{/if}
