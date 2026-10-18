@@ -110,6 +110,74 @@ it('names month-grid publication buttons with their account count', async () => 
 	await expect.element(item).toBeVisible();
 });
 
+const AVATAR_URL = 'https://cdn.example/founder.jpg';
+
+function mockPhotoReads(publication: ReturnType<typeof scheduledPublication>) {
+	vi.spyOn(client, 'GET').mockImplementation(async (path) => {
+		if (path === '/publications') {
+			// SAFETY: the overloaded GET mock cannot express the publications-list union; the cast
+			// bridges the calendar fixture whose renditions the account stacks read.
+			return {
+				data: [publication],
+				response: new Response(null, { headers: { 'X-Total-Count': '1' } })
+			} as never;
+		}
+		if (path === '/accounts') {
+			// SAFETY: Connected account identity and label are the only fields this calendar read uses.
+			return {
+				data: [
+					{
+						id: 'account-1',
+						platform: 'x',
+						alias: 'Launch account',
+						account_username: 'founder',
+						account_avatar_url: AVATAR_URL,
+						is_active: true
+					},
+					{
+						id: 'account-2',
+						platform: 'linkedin',
+						alias: 'Company page',
+						account_username: 'company',
+						account_avatar_url: '',
+						is_active: true
+					}
+				]
+			} as never;
+		}
+		// SAFETY: All other reads in this calendar fixture return empty lists.
+		return { data: [] } as never;
+	});
+}
+
+it('renders the account photo for a photo-bearing account', async () => {
+	queryClient.clear();
+	seedWorkspace();
+	mockPhotoReads(scheduledPublication());
+	const screen = await render(
+		CalendarPage,
+		{},
+		{ wrapper: QueryClientProvider, wrapperProps: { client: queryClient } }
+	);
+	await expect
+		.element(screen.getByRole('button', { name: 'Launch week post · 2 accounts' }))
+		.toBeVisible();
+	// Fails without the fix: calendar badges render a platform icon with no avatar image.
+	const badgeImages = Array.from(screen.container.querySelectorAll('img')).filter(
+		(image) => image.getAttribute('src') === AVATAR_URL
+	);
+	expect(badgeImages.length).toBeGreaterThan(0);
+	await screen.getByRole('button', { name: 'Filters', exact: true }).click();
+	await screen.getByRole('button', { name: /^(Accounts|All accounts)/ }).click();
+	await expect
+		.element(screen.getByRole('menuitemcheckbox', { name: 'Launch account', exact: true }))
+		.toBeVisible();
+	const filterImages = Array.from(document.querySelectorAll('img')).filter(
+		(image) => image.getAttribute('src') === AVATAR_URL
+	);
+	expect(filterImages.length).toBeGreaterThan(0);
+});
+
 it('announces the day-drawer account count as text instead of an ignored label', async () => {
 	const screen = await renderCalendar(scheduledPublication());
 	await screen.getByRole('button', { name: /View 1 posts on/ }).click();

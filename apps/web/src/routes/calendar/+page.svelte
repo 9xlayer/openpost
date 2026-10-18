@@ -39,6 +39,7 @@
 		workspaceScheduleToISO
 	} from '$lib/components/compose/schedule-timezone';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -78,6 +79,7 @@
 		id: string;
 		platform: string;
 		label: string;
+		avatarUrl: string;
 	};
 
 	type CalendarItem = {
@@ -229,6 +231,14 @@
 			selectedAccountIds = selectedAccountIds.filter((candidate) => candidate !== id);
 		else selectedAccountIds = [...selectedAccountIds, id];
 	}
+	const selectedFilterAccounts = $derived(
+		selectedAccountIds !== null
+			? selectedAccountIds.flatMap((id) => {
+					const account = availableAccounts.find((candidate) => candidate.id === id);
+					return account ? [account] : [];
+				})
+			: []
+	);
 	const visibleItems = $derived.by(() =>
 		allItems.filter((item) => {
 			const scheduledDay = workspaceDateKeyFromISO(item.occursAt, viewerTimeZone);
@@ -535,7 +545,8 @@
 				return {
 					id: rendition.social_account_id,
 					platform: rendition.platform,
-					label: platformLabel(rendition.platform)
+					label: platformLabel(rendition.platform),
+					avatarUrl: ''
 				};
 			})
 		);
@@ -554,8 +565,19 @@
 			label:
 				formatSocialAccountName(account.account_username, account.platform, account.alias) ||
 				account.slug ||
-				platformLabel(account.platform)
+				platformLabel(account.platform),
+			avatarUrl: account.account_avatar_url ?? ''
 		};
+	}
+
+	function accountMonogram(label: string) {
+		const normalized = label.trim().replace(/^@+/, '');
+		if (!normalized) return '?';
+		const words = normalized.split(/\s+/).filter(Boolean);
+		if (words.length > 1) {
+			return `${words[0][0]}${words.at(-1)?.[0] ?? ''}`.toUpperCase();
+		}
+		return normalized.slice(0, 2).toUpperCase();
 	}
 
 	function toggleWorkspace(workspaceId: string) {
@@ -1174,6 +1196,29 @@
 	class="flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
 	style="container-type: inline-size;"
 >
+	{#snippet tinyAccountAvatar(account: AccountBadge)}
+		{@const monogram = accountMonogram(account.label)}
+		<span
+			class="relative flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-[8px] font-semibold text-muted-foreground ring-1 ring-background"
+			title={`${platformLabel(account.platform)} ${account.label}`}
+			aria-hidden="true"
+		>
+			<span>{monogram}</span>
+			{#if account.avatarUrl}
+				<img
+					src={account.avatarUrl}
+					alt=""
+					loading="lazy"
+					referrerpolicy="no-referrer"
+					class="absolute inset-0 size-full object-cover"
+					onerror={(event) => {
+						const image = event.currentTarget;
+						if (image instanceof HTMLImageElement) image.style.display = 'none';
+					}}
+				/>
+			{/if}
+		</span>
+	{/snippet}
 	<PageContainer
 		contentLayout="fill"
 		headerActionLayout="inline"
@@ -1359,10 +1404,22 @@
 													{...props}
 													variant="outline"
 													class="w-full justify-between"
-													><span
-														>{selectedAccountIds === null
-															? m.analytics_all_accounts()
-															: `${m.sidebar_accounts()} (${selectedAccountIds?.length ?? 0})`}</span
+													><span class="flex min-w-0 items-center gap-2"
+														>{#if selectedAccountIds === null}
+															<span class="truncate">{m.analytics_all_accounts()}</span>
+														{:else}
+															<span
+																class="flex shrink-0 items-center -space-x-1"
+																aria-hidden="true"
+															>
+																{#each selectedFilterAccounts.slice(0, 3) as account (account.id)}
+																	{@render tinyAccountAvatar(account)}
+																{/each}
+															</span>
+															<span class="truncate"
+																>{`${m.sidebar_accounts()} (${selectedAccountIds?.length ?? 0})`}</span
+															>
+														{/if}</span
 													></Button
 												>{/snippet}
 										</DropdownMenu.Trigger>
@@ -1383,9 +1440,12 @@
 													onCheckedChange={() => toggleAccount(account.id)}
 													class="min-h-11 gap-2"
 												>
-													<PlatformIcon platform={account.platform} class="size-4 shrink-0" /><span
-														class="truncate">{account.label}</span
-													>
+													<SocialAccountAvatar
+														name={account.label}
+														platform={account.platform}
+														avatarUrl={account.avatarUrl}
+														size="sm"
+													/><span class="truncate">{account.label}</span>
 												</DropdownMenu.CheckboxItem>
 											{/each}
 										</DropdownMenu.Content>
@@ -1596,8 +1656,8 @@
 												<span>{item.workspaceName}</span>
 												{#each item.accounts.slice(0, 3) as account (account.id)}<span
 														class="inline-flex max-w-28 items-center gap-1"
-														><PlatformIcon platform={account.platform} class="size-3" /><span
-															class="truncate">{account.label}</span
+														>{@render tinyAccountAvatar(account)}<span class="truncate"
+															>{account.label}</span
 														></span
 													>{/each}
 											</span>
@@ -1734,12 +1794,7 @@
 													<!-- Decorative avatar stack: the button label already announces the account count. -->
 													<span class="flex shrink-0 items-center -space-x-1" aria-hidden="true">
 														{#each item.accounts.slice(0, 3) as account (account.id)}
-															<span
-																class="flex size-4 items-center justify-center rounded-full border border-border bg-background ring-1 ring-background"
-																title={`${platformLabel(account.platform)} ${account.label}`}
-															>
-																<PlatformIcon platform={account.platform} class="size-2.5" />
-															</span>
+															{@render tinyAccountAvatar(account)}
 														{/each}
 														{#if item.accounts.length > 3}
 															<span
@@ -1848,9 +1903,11 @@
 															reschedulingKey === item.key && 'pointer-events-none opacity-60'
 														)}
 														style={`top: calc(${(timeParts(item.occursAt).minute / 60) * 100}% + 0.125rem);`}
-														aria-label={m.calendar_publication_card({
-															title: item.title
-														})}
+														aria-label={item.accounts.length > 0
+															? `${m.calendar_publication_card({ title: item.title })} · ${m.calendar_account_count({ count: item.accounts.length })}`
+															: m.calendar_publication_card({
+																	title: item.title
+																})}
 														onpointerdown={(event) => onWeekPointerDown(event, item)}
 														onpointermove={onWeekPointerMove}
 														onpointerup={onWeekPointerUp}
@@ -1867,6 +1924,17 @@
 															<span class="truncate"
 																>{formatTime(item.occursAt)} · {item.title}</span
 															>
+															{#if item.accounts.length > 0}
+																<!-- Decorative avatar stack: the button label already announces the account count. -->
+																<span
+																	class="flex shrink-0 items-center -space-x-1"
+																	aria-hidden="true"
+																>
+																	{#each item.accounts.slice(0, 3) as account (account.id)}
+																		{@render tinyAccountAvatar(account)}
+																	{/each}
+																</span>
+															{/if}
 														</span>
 													</button>
 												{/each}
@@ -1952,11 +2020,13 @@
 									>
 									<span class="flex items-center -space-x-1" aria-hidden="true">
 										{#each item.accounts.slice(0, 5) as account (account.id)}
-											<span
-												class="flex size-6 items-center justify-center rounded-full border border-border bg-background ring-2 ring-background"
-												title={`${platformLabel(account.platform)} ${account.label}`}
-											>
-												<PlatformIcon platform={account.platform} class="size-3.5" />
+											<span title={`${platformLabel(account.platform)} ${account.label}`}>
+												<SocialAccountAvatar
+													name={account.label}
+													platform={account.platform}
+													avatarUrl={account.avatarUrl}
+													size="sm"
+												/>
 											</span>
 										{/each}
 										{#if item.accounts.length > 5}

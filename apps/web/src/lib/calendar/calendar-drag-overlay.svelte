@@ -1,11 +1,12 @@
 <script lang="ts">
-	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import type { WeekCalendarTarget } from './calendar-drag';
 
 	type DragAccount = {
 		id: string;
 		platform: string;
 		label: string;
+		avatarUrl: string;
 	};
 
 	let {
@@ -49,11 +50,14 @@
 			{#if accounts.length > 0}
 				<span class="flex shrink-0 items-center -space-x-1">
 					{#each accounts.slice(0, 3) as account (account.id)}
-						<span
-							class="flex size-5 items-center justify-center rounded-full border border-border bg-background ring-1 ring-background"
-							title={`${account.label}`}
-						>
-							<PlatformIcon platform={account.platform} class="size-3" />
+						<span title={account.label} class="flex shrink-0">
+							<SocialAccountAvatar
+								name={account.label}
+								platform={account.platform}
+								avatarUrl={account.avatarUrl}
+								size="default"
+								class="size-5"
+							/>
 						</span>
 					{/each}
 				</span>

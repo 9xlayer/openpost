@@ -7,7 +7,8 @@
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
-	import { client } from '$lib/api/client';
+	import { client, type SocialAccount } from '$lib/api/client';
+	import { loadWorkspaceAccounts } from '$lib/api/performance-cache';
 	import { openPostQueryKeys, schedulingPublicationsQueryOptions } from '@openpost/query-catalog';
 	import { queryClient } from '$lib/query/client';
 	import {
@@ -27,8 +28,8 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { CalendarDate, type DateValue } from '@internationalized/date';
 	import { ThemeIcon } from '$lib/themes/icons';
-	import { getStatusColor } from '$lib/utils';
-	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import { formatSocialAccountName, getStatusColor } from '$lib/utils';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { resolveAppPath } from '$lib/app-path';
@@ -39,6 +40,7 @@
 	type Publication = components['schemas']['PublicationResponse'];
 
 	let posts = $state.raw<Publication[]>([]);
+	let accountById = $state<Record<string, SocialAccount>>({});
 	let loading = $state(false);
 	let error = $state('');
 	let open = $state(false);
@@ -138,6 +140,7 @@
 		if (workspaceId !== currentWorkspaceId) return;
 		if (postsWorkspaceId !== workspaceId) {
 			posts = [];
+			accountById = {};
 			postsWorkspaceId = workspaceId;
 			postsDataReady = false;
 		}
@@ -163,6 +166,10 @@
 				posts = sortedPosts(cached);
 				postsDataReady = true;
 			}
+			const accountsRequest = loadWorkspaceAccounts(workspaceId, force).then(
+				(accounts) => Object.fromEntries(accounts.map((account) => [account.id, account] as const)),
+				(): Record<string, SocialAccount> => ({})
+			);
 			if (force) {
 				await queryClient.invalidateQueries({
 					queryKey: options.queryKey,
@@ -174,6 +181,9 @@
 			if (!isCurrentRequest()) return;
 			posts = sortedPosts(publications);
 			postsDataReady = true;
+			const resolvedAccounts = await accountsRequest;
+			if (!isCurrentRequest()) return;
+			accountById = resolvedAccounts;
 		} catch (cause) {
 			if (!isCurrentRequest()) return;
 			error = cause instanceof Error ? cause.message : m.day_posts_load_failed();
@@ -413,10 +423,23 @@
 											data-testid="day-post-destinations"
 										>
 											{#each visibleDestinations as destination (destination.social_account_id)}
-												<span
-													class="flex size-6 items-center justify-center rounded-full border border-border bg-background ring-2 ring-background"
-												>
-													<PlatformIcon platform={destination.platform} class="size-3.5" />
+												{@const account = accountById[destination.social_account_id]}
+												{@const destinationName =
+													(account &&
+														(formatSocialAccountName(
+															account.account_username,
+															account.platform,
+															account.alias
+														) ||
+															account.slug)) ||
+													destination.platform}
+												<span title={destinationName} class="shrink-0">
+													<SocialAccountAvatar
+														name={destinationName}
+														platform={destination.platform}
+														avatarUrl={account?.account_avatar_url ?? ''}
+														size="sm"
+													/>
 												</span>
 											{/each}
 											{#if hiddenDestinationCount > 0}
