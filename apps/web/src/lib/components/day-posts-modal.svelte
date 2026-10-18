@@ -3,6 +3,7 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { Button } from '$lib/components/ui/button';
 	import DestructiveConfirmDialog from '$lib/components/destructive-confirm-dialog.svelte';
+	import OverflowMenu from '$lib/components/overflow-menu.svelte';
 	import type { DestructiveActionOutcome } from '$lib/destructive-action-outcome';
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
@@ -453,20 +454,8 @@
 									{/if}
 								</div>
 							</button>
-							<DropdownMenu.Root>
-								<DropdownMenu.Trigger>
-									{#snippet child({ props })}
-										<Button
-											{...props}
-											variant="ghost"
-											size="icon"
-											class="size-11"
-											aria-label={m.day_posts_actions()}
-											><ThemeIcon role="more-horizontal" class="size-4" /></Button
-										>
-									{/snippet}
-								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end">
+							<OverflowMenu label={m.day_posts_actions()}>
+								{#snippet items()}
 									<DropdownMenu.Item onclick={() => handleEdit(post)}
 										><ThemeIcon role="edit" class="mr-2 size-4" />{canDeletePublication(post)
 											? m.day_posts_edit_in_composer()
@@ -483,8 +472,8 @@
 											/>{m.day_posts_delete_action()}</DropdownMenu.Item
 										>
 									{/if}
-								</DropdownMenu.Content>
-							</DropdownMenu.Root>
+								{/snippet}
+							</OverflowMenu>
 						</article>
 					{/each}
 				</div>
