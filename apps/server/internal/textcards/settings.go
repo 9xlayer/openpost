@@ -15,6 +15,15 @@ const (
 	Width         = 1080
 )
 
+// DefaultColor and DefaultColorEnd are the only place the server
+// materializes the default card background gradient. Parse applies them;
+// capability catalogue entries, docs and clients must read them from there
+// rather than keeping their own literal copy.
+const (
+	DefaultColor    = "#c4b5fd"
+	DefaultColorEnd = "#93c5fd"
+)
+
 type Style struct {
 	Mode       string `json:"mode"`
 	Appearance string `json:"appearance"`
@@ -54,7 +63,7 @@ func NewPostDefaults(provider string, settings map[string]any) map[string]any {
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func Parse(settings map[string]any) (Style, error) {
-	style := Style{Mode: "off", Appearance: "light", Background: "gradient", Color: "#c4b5fd", ColorEnd: "#93c5fd", Rounded: true, Shadow: true}
+	style := Style{Mode: "off", Appearance: "light", Background: "gradient", Color: DefaultColor, ColorEnd: DefaultColorEnd, Rounded: true, Shadow: true}
 	for _, field := range []struct {
 		key     string
 		target  *string

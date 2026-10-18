@@ -60,7 +60,7 @@ func Render(ctx context.Context, body, outputProfile string, style Style, identi
 			draw.Draw(canvas, canvas.Bounds(), imaging.Blur(shadow, 22), image.Point{}, draw.Over)
 		}
 		paintRounded(canvas, card, radius, paper)
-		paintAvatar(canvas, avatar, identity.Name, faces, top)
+		paintAvatar(canvas, avatar, identity.Name, faces, top, style)
 		drawLabel(canvas, identity.Name, faces, 34, 238, top+86, 690, ink)
 		handle := strings.TrimPrefix(identity.Handle, "@")
 		if handle != "" {
@@ -189,9 +189,10 @@ func paintArrow(canvas *image.NRGBA, x, y int, ink color.NRGBA) {
 	}
 }
 
-func paintAvatar(canvas *image.NRGBA, avatar image.Image, name string, faces fontMap, top int) {
+func paintAvatar(canvas *image.NRGBA, avatar image.Image, name string, faces fontMap, top int, style Style) {
 	avatarRect := image.Rect(136, top+54, 214, top+132)
-	paintRounded(canvas, avatarRect, 39, parseColor("#c4b5fd"))
+	disc, initialInk := avatarPlaceholderColors(style)
+	paintRounded(canvas, avatarRect, 39, disc)
 	if avatar != nil {
 		photo := imaging.Fill(avatar, 78, 78, imaging.Center, imaging.Lanczos)
 		mask := image.NewAlpha(image.Rect(0, 0, 78, 78))
@@ -204,10 +205,52 @@ func paintAvatar(canvas *image.NRGBA, avatar image.Image, name string, faces fon
 		}
 		draw.DrawMask(canvas, avatarRect, photo, image.Point{}, mask, image.Point{}, draw.Over)
 	} else {
-		initial := "O"
+		letter := "O"
 		if runes := []rune(strings.TrimSpace(name)); len(runes) > 0 {
-			initial = strings.ToUpper(string(runes[0]))
+			letter = strings.ToUpper(string(runes[0]))
 		}
-		drawLabel(canvas, initial, faces, 36, 154, top+108, 70, parseColor("#312e81"))
+		drawLabel(canvas, letter, faces, 36, 154, top+108, 70, initialInk)
 	}
+}
+
+// avatarPlaceholderColors owns the text-card avatar placeholder palette.
+//
+// The disc follows the card's authored text_card_color (falling back to
+// DefaultColor when unset) so the monogram reads as part of the card rather
+// than a fixed violet patch. The initial keeps the brand indigo #312e81 on
+// light discs and switches to white on dark discs, whichever contrasts more
+// with the disc. Both candidates contrast against the default gradient in
+// either appearance; arbitrary author colors cannot guarantee a ratio, so the
+// rule maximizes rather than floors it.
+func avatarPlaceholderColors(style Style) (disc, initial color.NRGBA) {
+	disc = parseColor(DefaultColor)
+	if hexColor.MatchString(style.Color) {
+		disc = parseColor(style.Color)
+	}
+	indigo := parseColor("#312e81")
+	light := parseColor("#ffffff")
+	initial = indigo
+	if contrastRatio(disc, light) > contrastRatio(disc, indigo) {
+		initial = light
+	}
+	return disc, initial
+}
+
+func linearChannel(v float64) float64 {
+	if v <= 0.03928 {
+		return v / 12.92
+	}
+	return math.Pow((v+0.055)/1.055, 2.4)
+}
+
+func relativeLuminance(c color.NRGBA) float64 {
+	return 0.2126*linearChannel(float64(c.R)/255) + 0.7152*linearChannel(float64(c.G)/255) + 0.0722*linearChannel(float64(c.B)/255)
+}
+
+func contrastRatio(a, b color.NRGBA) float64 {
+	la, lb := relativeLuminance(a), relativeLuminance(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
 }
