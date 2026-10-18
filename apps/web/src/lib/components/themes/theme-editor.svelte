@@ -5,6 +5,7 @@
 	import * as Select from '$lib/components/ui/select';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Button } from '$lib/components/ui/button';
+	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import { ImageEditorHistory } from '$lib/image-editor/history';
 	import { getCurrentLocale, onLocaleChange } from '$lib/i18n';
 	import { m } from '$lib/paraglide/messages';
@@ -762,13 +763,9 @@
 		</header>
 
 		{#if operationError}
-			<div
-				class="flex flex-wrap items-center justify-between gap-3 rounded-[var(--theme-radius-md,var(--radius))] border border-destructive/35 bg-destructive/8 px-3 py-2"
-				role="alert"
-			>
-				<p class="text-sm text-destructive">{operationError}</p>
-				{#if onReload}
-					<div class="flex flex-wrap gap-2">
+			<InlineNotice tone="error" message={operationError}>
+				{#snippet actions()}
+					{#if onReload}
 						<Button
 							size="sm"
 							intent="quiet"
@@ -781,9 +778,9 @@
 							onclick={() => (reloadDialogOpen = true)}
 							disabled={editorBusy}>{m.theme_editor_reload_latest()}</Button
 						>
-					</div>
-				{/if}
-			</div>
+					{/if}
+				{/snippet}
+			</InlineNotice>
 		{/if}
 
 		<section
@@ -1075,28 +1072,30 @@
 					interactive
 					{runtime}
 				/>
-				{#if previewTheme.fallbackReason}<p
-						class="rounded-[var(--theme-radius-md,var(--radius))] border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-foreground"
-						role="status"
+				{#if previewTheme.fallbackReason}<InlineNotice
+						tone="warning"
+						size="compact"
+						message={previewFallbackMessage}
+					/>{/if}
+				{#if validationIssues.length > 0}<InlineNotice
+						tone="error"
+						size="compact"
+						label={m.theme_editor_validation_issues()}
 					>
-						{previewFallbackMessage}
-					</p>{/if}
-				{#if validationIssues.length > 0}<div
-						class="space-y-2 rounded-[var(--theme-radius-lg,var(--radius))] border border-destructive/35 bg-destructive/8 p-3"
-						role="alert"
-						aria-label={m.theme_editor_validation_issues()}
-					>
-						{#each validationIssues as issue (`${issue.path}:${issue.message}`)}<p class="text-xs">
-								<span class="font-mono font-semibold">{issue.path}</span>
-								{themeValidationIssueMessage(activeLocale)}
-							</p>{/each}
-					</div>{/if}
-				{#if localValidationError}<div
-						class="rounded-[var(--theme-radius-lg,var(--radius))] border border-destructive/35 bg-destructive/8 p-3 text-xs"
-						role="alert"
-					>
-						{m.theme_editor_draft_incomplete({ error: localValidationError })}
-					</div>{/if}
+						<div class="grid gap-1">
+							{#each validationIssues as issue (`${issue.path}:${issue.message}`)}<p
+									class="text-xs"
+								>
+									<span class="font-mono font-semibold">{issue.path}</span>
+									{themeValidationIssueMessage(activeLocale)}
+								</p>{/each}
+						</div>
+					</InlineNotice>{/if}
+				{#if localValidationError}<InlineNotice
+						tone="error"
+						size="compact"
+						message={m.theme_editor_draft_incomplete({ error: localValidationError })}
+					/>{/if}
 			</section>
 		</div>
 

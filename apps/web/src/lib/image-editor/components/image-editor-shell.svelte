@@ -4637,9 +4637,7 @@
 					{/if}
 				{/if}
 				{#if historyError}
-					<p class="rounded-md bg-destructive/10 p-3 text-sm text-destructive" role="alert">
-						{historyError}
-					</p>
+					<InlineNotice tone="error" message={historyError} />
 				{/if}
 			</div>
 			<section class="min-h-0 overflow-y-auto rounded-lg border bg-muted/20 p-3" aria-live="polite">
@@ -5050,25 +5048,27 @@
 			</div>
 
 			{#if exportHasTransparency && !exportSupportsTransparency}
-				<div class="space-y-3 rounded-lg border border-amber-500/35 bg-amber-500/8 p-3">
-					<p class="text-sm leading-relaxed">{m.image_editor_jpeg_transparency_warning()}</p>
-					<ColorPicker
-						label={m.image_editor_jpeg_matte_color()}
-						value={editor.document?.export_defaults.matte_color ?? '#ffffff'}
-						disabled={!editor.canEdit}
-						brandColors={editor.brandKit?.colors ?? []}
-						recentColors={editor.recentColors}
-						onChange={(matteColor) =>
-							editor.mutate(
-								'Change export matte color',
-								(document) => {
-									document.export_defaults.matte_color = matteColor;
-								},
-								'export-matte-color'
-							)}
-						onCommit={(color) => editor.rememberColor(color)}
-					/>
-				</div>
+				<InlineNotice tone="warning">
+					<div class="grid gap-2">
+						<p class="text-sm leading-relaxed">{m.image_editor_jpeg_transparency_warning()}</p>
+						<ColorPicker
+							label={m.image_editor_jpeg_matte_color()}
+							value={editor.document?.export_defaults.matte_color ?? '#ffffff'}
+							disabled={!editor.canEdit}
+							brandColors={editor.brandKit?.colors ?? []}
+							recentColors={editor.recentColors}
+							onChange={(matteColor) =>
+								editor.mutate(
+									'Change export matte color',
+									(document) => {
+										document.export_defaults.matte_color = matteColor;
+									},
+									'export-matte-color'
+								)}
+							onCommit={(color) => editor.rememberColor(color)}
+						/>
+					</div>
+				</InlineNotice>
 			{/if}
 
 			{#if !guestMode}

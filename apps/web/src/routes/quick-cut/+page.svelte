@@ -40,6 +40,7 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 	import { Label } from '$lib/components/ui/label';
 	import * as RadioGroup from '$lib/components/ui/radio-group';
 	import DestructiveConfirmDialog from '$lib/components/destructive-confirm-dialog.svelte';
+	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import { dismissToast, showToast } from '$lib/toast';
 	import { onDestroy, tick, untrack } from 'svelte';
 	import SegmentList from '$lib/quick-cut/components/SegmentList.svelte';
@@ -2095,17 +2096,14 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 			</EditorStart>
 		{:else}
 			{#if cloudConflictId}
-				<section
-					class="rounded-xl border border-destructive/40 bg-destructive/5 p-4"
-					aria-labelledby="quick-cut-cloud-conflict-title"
-				>
-					<h2 id="quick-cut-cloud-conflict-title" class="text-sm font-semibold">
+				<InlineNotice tone="error" label={m.video_editor_conflict_title()}>
+					<span class="block text-sm font-semibold">
 						{m.video_editor_conflict_title()}
-					</h2>
-					<p class="mt-1 text-xs text-muted-foreground">
+					</span>
+					<span class="mt-1 block text-xs text-muted-foreground">
 						{m.video_editor_conflict_preserved()}
-					</p>
-					<div class="mt-3 flex flex-wrap gap-2">
+					</span>
+					{#snippet actions()}
 						<Button
 							size="sm"
 							disabled={cloudConflictWorking}
@@ -2121,8 +2119,8 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 						>
 							{m.video_editor_conflict_reload()}
 						</Button>
-					</div>
-				</section>
+					{/snippet}
+				</InlineNotice>
 			{/if}
 
 			{#if panel !== 'repurpose'}

@@ -9,6 +9,7 @@
 	import { firstPlatformVideoCodec } from '$lib/video/support';
 	import type { VideoEditRecipe, VideoMetadata } from '$lib/video/types';
 	import { ProtectedIcon } from '$lib/themes/icons';
+	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import VideoCropOverlay from './video-crop-overlay.svelte';
 
 	interface Props {
@@ -464,9 +465,7 @@
 				{/if}
 
 				{#if error}
-					<p class="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-						{error}
-					</p>
+					<InlineNotice tone="error" size="compact" message={error} />
 				{/if}
 			</div>
 		</div>

@@ -8,6 +8,8 @@
 
 	interface Props {
 		tone?: NoticeTone;
+		size?: 'default' | 'compact';
+		label?: string;
 		message?: string;
 		children?: Snippet;
 		actions?: Snippet;
@@ -18,6 +20,8 @@
 
 	let {
 		tone = 'info',
+		size = 'default',
+		label,
 		message,
 		children,
 		actions,
@@ -48,9 +52,15 @@
 
 <div
 	data-slot="inline-notice"
-	class={cn('flex items-center gap-3 rounded-md border px-3 py-2.5 text-sm', toneClass, className)}
+	class={cn(
+		'flex items-center gap-3 rounded-md border text-sm',
+		size === 'compact' ? 'gap-2 px-2.5 py-1.5 text-xs' : 'px-3 py-2.5',
+		toneClass,
+		className
+	)}
 	role={tone === 'error' ? 'alert' : 'status'}
 	aria-live={tone === 'error' ? 'assertive' : 'polite'}
+	aria-label={label}
 >
 	<div class="flex min-w-0 flex-1 items-start gap-3">
 		<ProtectedIcon icon={protectedIcon} class="mt-0.5 size-4 shrink-0" />
