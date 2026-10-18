@@ -51,6 +51,11 @@
 	}
 
 	async function activate(event: ActionEvent) {
+		// Guard rapid re-activation (double click, repeat Enter/Space) while the
+		// handler is in flight. For `type="submit"` inside a native form this
+		// covers the button's own click; an Enter-key submission bypasses button
+		// click handlers, so the form's submit handler must gate on the same
+		// pending flag the caller passes via `state`.
 		if (!isButtonEvent(event)) return;
 		if (disabled || running || actionState === 'pending') return;
 		running = true;

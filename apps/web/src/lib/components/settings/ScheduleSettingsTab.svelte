@@ -9,6 +9,7 @@
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import SectionHeader from '$lib/components/section-header.svelte';
 	import SettingsFormFooter from '$lib/components/settings-form-footer.svelte';
+	import AsyncActionButton from '$lib/components/async-action-button.svelte';
 	import DestructiveConfirmDialog from '$lib/components/destructive-confirm-dialog.svelte';
 	import type { DestructiveActionOutcome } from '$lib/destructive-action-outcome';
 	import { client } from '$lib/api/client';
@@ -570,20 +571,14 @@
 					<Button onclick={() => (showSuggestSchedule = false)} variant="outline" size="sm"
 						>{m.common_cancel()}</Button
 					>
-					<Button
-						onclick={generateSuggestedSchedule}
+					<AsyncActionButton
+						label={m.settings_generate()}
+						pendingLabel={m.settings_generate()}
 						size="sm"
+						state={generatingSchedule ? 'pending' : 'idle'}
 						disabled={generatingSchedule}
-						aria-busy={generatingSchedule}
-					>
-						{#if generatingSchedule}
-							<ProtectedIcon
-								icon="loading"
-								class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-							/>
-						{/if}
-						{m.settings_generate()}
-					</Button>
+						onclick={generateSuggestedSchedule}
+					/>
 				</div>
 			</div>
 		</div>

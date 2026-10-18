@@ -23,6 +23,7 @@
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import PageLoading from '$lib/components/page-loading.svelte';
 	import SectionHeader from '$lib/components/section-header.svelte';
+	import AsyncActionButton from '$lib/components/async-action-button.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { ProtectedIcon, ThemeIcon } from '$lib/themes/icons';
 	import { resolveAppPath } from '$lib/app-path';
@@ -377,21 +378,15 @@
 >
 	{#snippet actions()}
 		{#if billingStatus?.can_manage_billing && hasBillingSubscription}
-			<Button
+			<AsyncActionButton
 				variant="outline"
-				onclick={() => void openBillingPortal()}
+				label={m.settings_customer_portal()}
+				pendingLabel={m.settings_customer_portal()}
+				icon="external-link"
+				state={billingPortalBusy ? 'pending' : 'idle'}
 				disabled={billingPortalBusy}
-			>
-				{#if billingPortalBusy}
-					<ProtectedIcon
-						icon="loading"
-						class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-					/>
-				{:else}
-					<ThemeIcon role="external-link" class="mr-2 h-4 w-4" />
-				{/if}
-				{m.settings_customer_portal()}
-			</Button>
+				onclick={() => void openBillingPortal()}
+			/>
 		{/if}
 	{/snippet}
 </SectionHeader>
@@ -434,20 +429,15 @@
 							: m.billing_recovery_notice_member_action()}
 					</p>
 					{#if billingStatus.can_manage_billing}
-						<Button
+						<AsyncActionButton
 							variant="destructive"
 							class="mt-3 w-full sm:w-auto"
-							onclick={() => void openBillingPortal('update_payment_method')}
+							label={m.billing_recovery_update_payment_method()}
+							pendingLabel={m.billing_recovery_update_payment_method()}
+							state={billingPortalBusy ? 'pending' : 'idle'}
 							disabled={billingPortalBusy}
-						>
-							{#if billingPortalBusy}
-								<ProtectedIcon
-									icon="loading"
-									class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-								/>
-							{/if}
-							{m.billing_recovery_update_payment_method()}
-						</Button>
+							onclick={() => void openBillingPortal('update_payment_method')}
+						/>
 					{/if}
 				</div>
 			</InlineNotice>
@@ -705,6 +695,12 @@
 			{m.settings_plan_price_estimate_note()}
 		</p>
 		{#each billingPlans as plan (plan.id)}
+			{@const checkoutLabel =
+				hasActiveBillingPlan && billingStatus?.plan_id === plan.id
+					? m.settings_current_plan()
+					: hasActiveBillingPlan
+						? m.settings_use_portal()
+						: m.settings_choose_named_plan({ plan: plan.name })}
 			<article
 				class={`rounded-lg border p-4 ${plan.featured ? 'border-primary bg-primary/5 shadow-sm' : 'bg-background'}`}
 			>
@@ -729,30 +725,18 @@
 						<li>{limit}</li>
 					{/each}
 				</ul>
-				<Button
+				<AsyncActionButton
 					class="w-full"
 					variant={plan.featured ? 'default' : 'outline'}
-					onclick={() => startCheckout(plan.id)}
+					label={checkoutLabel}
+					pendingLabel={checkoutLabel}
+					state={billingBusyPlan === plan.id ? 'pending' : 'idle'}
 					disabled={Boolean(billingBusyPlan) ||
 						hasActiveBillingPlan ||
 						billingRecoveryRequired ||
 						Boolean(billingStatus && !billingStatus.can_manage_billing)}
-					aria-busy={billingBusyPlan === plan.id}
-				>
-					{#if billingBusyPlan === plan.id}
-						<ProtectedIcon
-							icon="loading"
-							class="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none"
-						/>
-					{/if}
-					{#if hasActiveBillingPlan && billingStatus?.plan_id === plan.id}
-						{m.settings_current_plan()}
-					{:else if hasActiveBillingPlan}
-						{m.settings_use_portal()}
-					{:else}
-						{m.settings_choose_named_plan({ plan: plan.name })}
-					{/if}
-				</Button>
+					onclick={() => startCheckout(plan.id)}
+				/>
 			</article>
 		{/each}
 	</div>

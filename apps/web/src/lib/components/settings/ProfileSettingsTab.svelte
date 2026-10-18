@@ -178,6 +178,9 @@
 
 	async function saveProfile(event: SubmitEvent) {
 		event.preventDefault();
+		// The footer submit button reflects profileBusy via its pending face, but
+		// Enter-key submissions bypass button click handlers, so gate here too.
+		if (profileBusy) return;
 		const identity = auth.captureIdentity();
 		if (!identity || identity.userID !== lastProfileUserID) return;
 		const generation = profileMutationGeneration;
