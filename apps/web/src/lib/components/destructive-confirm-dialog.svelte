@@ -58,7 +58,13 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content aria-busy={pending} showCloseButton={false} class="sm:max-w-md">
+	<Dialog.Content
+		aria-busy={pending}
+		escapeKeydownBehavior={pending ? 'ignore' : 'close'}
+		interactOutsideBehavior={pending ? 'ignore' : 'close'}
+		showCloseButton={false}
+		class="sm:max-w-md"
+	>
 		<Dialog.Header>
 			<Dialog.Title>{title}</Dialog.Title>
 			<Dialog.Description>{description}</Dialog.Description>

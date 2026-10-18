@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import { setLocale } from '$lib/paraglide/runtime';
 import DestructiveConfirmDialog from './destructive-confirm-dialog.svelte';
@@ -55,5 +55,64 @@ describe('DestructiveConfirmDialog', () => {
 		} finally {
 			main.remove();
 		}
+	});
+
+	it('still closes on Escape while idle', async () => {
+		const onConfirm = vi.fn(async () => ({ ok: true }));
+		const screen = await render(DestructiveConfirmDialog, {
+			open: true,
+			title: 'Delete this item?',
+			description: 'This cannot be undone.',
+			onConfirm
+		});
+
+		await userEvent.keyboard('{Escape}');
+		await expect.element(screen.getByRole('dialog')).not.toBeInTheDocument();
+		expect(onConfirm).not.toHaveBeenCalled();
+	});
+
+	it('refuses Escape and outside dismissal while the action is pending and keeps the failure visible', async () => {
+		let resolveConfirm!: (value: { ok: false; message: string }) => void;
+		const onConfirm = vi.fn(
+			() =>
+				new Promise<{ ok: false; message: string }>((resolve) => {
+					resolveConfirm = resolve;
+				})
+		);
+		const screen = await render(DestructiveConfirmDialog, {
+			open: true,
+			title: 'Delete this item?',
+			description: 'This cannot be undone.',
+			onConfirm
+		});
+
+		await screen.getByRole('button', { name: 'Delete' }).click();
+		expect(onConfirm).toHaveBeenCalledOnce();
+
+		await userEvent.keyboard('{Escape}');
+		await expect.element(screen.getByRole('dialog')).toBeVisible();
+
+		const overlay = document.querySelector('[data-slot="dialog-overlay"]');
+		if (!overlay) throw new Error('Expected dialog overlay');
+		// Explicit far-below coordinates: bits-ui accepts an outside interaction only
+		// when the pointer position falls outside the content rect, and synthetic
+		// events default to (0, 0), which can land inside unstyled content.
+		overlay.dispatchEvent(
+			new PointerEvent('pointerdown', {
+				bubbles: true,
+				cancelable: true,
+				button: 0,
+				clientX: 10,
+				clientY: 1000
+			})
+		);
+		// bits-ui evaluates outside interactions on a short debounce; let it fire
+		// while the action is still pending so the guard is what keeps the dialog open.
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		await expect.element(screen.getByRole('dialog')).toBeVisible();
+
+		resolveConfirm({ ok: false, message: 'The server rejected deletion.' });
+		await expect.element(screen.getByText('The server rejected deletion.')).toBeVisible();
+		await expect.element(screen.getByRole('dialog')).toBeVisible();
 	});
 });
