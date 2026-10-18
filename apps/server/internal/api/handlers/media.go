@@ -51,6 +51,7 @@ const (
 	ThumbnailSizeSM                   = 150
 	ThumbnailSizeMD                   = 400
 	MaxBufferedMediaUploadBytes int64 = 50 * 1024 * 1024
+	MaxBrandFontUploadBytes     int64 = 10 * 1024 * 1024
 	mediaUploadMaxImagePixels   int64 = 64_000_000
 	MaxMediaUploadBytes         int64 = 16 * 1024 * 1024 * 1024
 	MaxDirectMediaUploadBytes   int64 = 5_000_000_000
@@ -267,13 +268,20 @@ type GetMediaStorageInput struct {
 	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID"`
 }
 
+type MediaUploadLimits struct {
+	DefaultBytes   int64 `json:"default_bytes" doc:"Upload ceiling in bytes for non-video, non-brand-font assets"`
+	VideoBytes     int64 `json:"video_bytes" doc:"Upload ceiling in bytes for video assets"`
+	BrandFontBytes int64 `json:"brand_font_bytes" doc:"Upload ceiling in bytes for brand-font assets"`
+}
+
 type GetMediaStorageOutput struct {
 	Body struct {
-		UsedBytes             int64 `json:"used_bytes" doc:"Quota-counted media bytes"`
-		AssetCount            int   `json:"asset_count" doc:"Quota-counted media assets"`
-		InternalBytes         int64 `json:"internal_bytes" doc:"Hidden preview bytes excluded from quota"`
-		LimitBytes            int64 `json:"limit_bytes" doc:"Storage limit, or zero when no fixed limit is exposed"`
-		DirectUploadSupported bool  `json:"direct_upload_supported" doc:"Whether this instance supports direct-to-storage or server-streamed upload sessions"`
+		UsedBytes             int64             `json:"used_bytes" doc:"Quota-counted media bytes"`
+		AssetCount            int               `json:"asset_count" doc:"Quota-counted media assets"`
+		InternalBytes         int64             `json:"internal_bytes" doc:"Hidden preview bytes excluded from quota"`
+		LimitBytes            int64             `json:"limit_bytes" doc:"Storage limit, or zero when no fixed limit is exposed"`
+		DirectUploadSupported bool              `json:"direct_upload_supported" doc:"Whether this instance supports direct-to-storage or server-streamed upload sessions"`
+		UploadLimits          MediaUploadLimits `json:"upload_limits" doc:"Per-kind upload ceilings matching the enforced admission limits"`
 	}
 }
 
@@ -954,6 +962,15 @@ func (h *MediaHandler) getMediaStorage(ctx context.Context, input *GetMediaStora
 	out.Body.AssetCount = storageUsage.AssetCount
 	out.Body.InternalBytes = storageUsage.InternalBytes
 	out.Body.DirectUploadSupported = h.supportsUploadSessions()
+	// Publish the enforced ceilings through the same rules the upload
+	// admission applies, so clients validate against the server instead of
+	// restating its constants. Representative inputs select each branch of
+	// mediaUploadSizeLimit by construction.
+	out.Body.UploadLimits = MediaUploadLimits{
+		DefaultBytes:   mediaUploadSizeLimit("", "upload.bin", "application/octet-stream"),
+		VideoBytes:     mediaUploadSizeLimit("", "upload.mp4", "video/mp4"),
+		BrandFontBytes: mediaUploadSizeLimit("brand_font", "font.woff2", "font/woff2"),
+	}
 	return out, nil
 }
 
@@ -1658,7 +1675,7 @@ func cleanUploadFilename(filename string) string {
 
 func mediaUploadSizeLimit(assetKind, filename, mimeType string) int64 {
 	if assetKind == "brand_font" {
-		return 10 * 1024 * 1024
+		return MaxBrandFontUploadBytes
 	}
 	if isVideoUpload(filename, mimeType) {
 		return MaxMediaUploadBytes
@@ -1682,7 +1699,7 @@ func mediaUploadSizeError(limit int64) string {
 	switch limit {
 	case MaxMediaUploadBytes:
 		return "video file size exceeds 16 GiB limit"
-	case 10 * 1024 * 1024:
+	case MaxBrandFontUploadBytes:
 		return "brand fonts must be 10MB or smaller"
 	default:
 		return "file size exceeds 50MB limit"
@@ -2216,7 +2233,7 @@ func validateMediaAssetContent(assetKind, filename, declaredMimeType string, con
 }
 
 func validateBrandFontAsset(filename, declaredMimeType string, content []byte) error {
-	if len(content) > 10*1024*1024 {
+	if int64(len(content)) > MaxBrandFontUploadBytes {
 		return errors.New("brand fonts must be 10MB or smaller")
 	}
 	extension := strings.ToLower(filepath.Ext(filename))

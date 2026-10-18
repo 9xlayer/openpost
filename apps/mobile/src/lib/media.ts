@@ -12,19 +12,57 @@ import {
 export const MAX_MOBILE_ATTACHMENT_COUNT = 10;
 export const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 export const MAX_VIDEO_ATTACHMENT_BYTES = 16 * 1024 * 1024 * 1024;
+export const MAX_BRAND_FONT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const ORIGINAL_IMAGE_QUALITY = 1;
 
 export interface AttachmentLimits {
   videoBytes: number;
   defaultBytes: number;
+  brandFontBytes?: number;
 }
 
-// Mirrors the server's published ceilings (media.go: MaxMediaUploadBytes and
-// MaxBufferedMediaUploadBytes) until the shared source in #395 lands.
+// Documented fallback while the served GET /media/storage upload_limits are
+// unavailable (offline, older server, or not yet fetched). The server remains
+// the enforcement boundary and rejects over-limit uploads regardless.
 export const ATTACHMENT_SIZE_LIMITS: AttachmentLimits = {
   videoBytes: MAX_VIDEO_ATTACHMENT_BYTES,
   defaultBytes: MAX_ATTACHMENT_BYTES,
+  brandFontBytes: MAX_BRAND_FONT_ATTACHMENT_BYTES,
 };
+
+/** Wire shape of the served GET /media/storage upload_limits. */
+export interface MediaStorageUploadLimits {
+  upload_limits?: {
+    default_bytes?: number;
+    video_bytes?: number;
+    brand_font_bytes?: number;
+  } | null;
+}
+
+function asLimitBytes(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value > 0) return value;
+  return fallback;
+}
+
+/**
+ * Read the per-kind upload ceilings the server publishes on
+ * GET /media/storage, falling back per field to the documented constants
+ * when the response predates upload_limits. A stale limit only affects the
+ * pre-flight message; the server still rejects at the boundary.
+ */
+export function attachmentLimitsFromStorage(
+  body: MediaStorageUploadLimits | null | undefined,
+): AttachmentLimits {
+  const served = body?.upload_limits ?? null;
+  return {
+    videoBytes: asLimitBytes(served?.video_bytes, ATTACHMENT_SIZE_LIMITS.videoBytes),
+    defaultBytes: asLimitBytes(served?.default_bytes, ATTACHMENT_SIZE_LIMITS.defaultBytes),
+    brandFontBytes: asLimitBytes(
+      served?.brand_font_bytes,
+      ATTACHMENT_SIZE_LIMITS.brandFontBytes ?? MAX_BRAND_FONT_ATTACHMENT_BYTES,
+    ),
+  };
+}
 
 function formatAttachmentLimit(limit: number): string {
   if (limit >= 1024 * 1024 * 1024 && limit % (1024 * 1024 * 1024) === 0) {
@@ -44,10 +82,14 @@ export function isVideoAttachment(mimeType: string, filename: string): boolean {
 }
 
 export function attachmentSizeError(
-  file: { mimeType: string; filename: string; size: number | null },
+  file: { mimeType: string; filename: string; size: number | null; assetKind?: string },
   limits: AttachmentLimits = ATTACHMENT_SIZE_LIMITS,
 ): string | null {
   if (file.size === null) return null;
+  if (file.assetKind === "brand_font" && limits.brandFontBytes !== undefined) {
+    if (file.size <= limits.brandFontBytes) return null;
+    return `Brand fonts must be ${formatAttachmentLimit(limits.brandFontBytes)} or smaller.`;
+  }
   const video = isVideoAttachment(file.mimeType, file.filename);
   const limit = video ? limits.videoBytes : limits.defaultBytes;
   if (file.size <= limit) return null;
@@ -75,11 +117,14 @@ export async function uploadAttachment(
     workspaceId,
     source,
     altText,
+    limits = ATTACHMENT_SIZE_LIMITS,
   }: {
     client?: Api;
     workspaceId: string;
     source?: "screenshot_template";
     altText?: string;
+    /** Served GET /media/storage upload limits via attachmentLimitsFromStorage. */
+    limits?: AttachmentLimits;
   },
 ): Promise<string> {
   const identity = captureApiRequestIdentity();
@@ -94,7 +139,7 @@ export async function uploadAttachment(
   }
   const sizeError = attachmentSizeError(
     { mimeType: file.mimeType, filename: file.filename, size },
-    ATTACHMENT_SIZE_LIMITS,
+    limits,
   );
   if (sizeError) {
     throw new Error(sizeError);

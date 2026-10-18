@@ -9,7 +9,8 @@ mock.module("expo-secure-store", () => ({
   setItemAsync: async () => undefined,
   deleteItemAsync: async () => undefined,
 }));
-const { attachmentSizeError, uploadAttachment } = await import("./media");
+const { attachmentLimitsFromStorage, attachmentSizeError, uploadAttachment } =
+  await import("./media");
 
 beforeEach(() => {
   resetFileSystem();
@@ -101,4 +102,73 @@ test("attachmentSizeError allows unknown size to defer to the upload path", () =
       { videoBytes: 16 * 1024 * 1024 * 1024, defaultBytes: 50 * 1024 * 1024 },
     ),
   ).toBeNull();
+});
+
+test("attachmentLimitsFromStorage reads the served per-kind limits", () => {
+  expect(
+    attachmentLimitsFromStorage({
+      upload_limits: {
+        default_bytes: 50 * 1024 * 1024,
+        video_bytes: 16 * 1024 * 1024 * 1024,
+        brand_font_bytes: 10 * 1024 * 1024,
+      },
+    }),
+  ).toEqual({
+    videoBytes: 16 * 1024 * 1024 * 1024,
+    defaultBytes: 50 * 1024 * 1024,
+    brandFontBytes: 10 * 1024 * 1024,
+  });
+});
+
+test("attachmentLimitsFromStorage falls back per field when the response predates limits", () => {
+  expect(attachmentLimitsFromStorage(null)).toEqual(attachmentLimitsFromStorage(undefined));
+  const fallback = attachmentLimitsFromStorage({});
+  expect(fallback.defaultBytes).toBe(50 * 1024 * 1024);
+  expect(fallback.videoBytes).toBe(16 * 1024 * 1024 * 1024);
+  expect(fallback.brandFontBytes).toBe(10 * 1024 * 1024);
+});
+
+test("attachmentSizeError enforces served limits rather than restated constants", () => {
+  const served = attachmentLimitsFromStorage({
+    upload_limits: {
+      default_bytes: 10 * 1024 * 1024,
+      video_bytes: 16 * 1024 * 1024 * 1024,
+      brand_font_bytes: 10 * 1024 * 1024,
+    },
+  });
+  const message = attachmentSizeError(
+    { mimeType: "image/jpeg", filename: "photo.jpg", size: 11 * 1024 * 1024 },
+    served,
+  );
+  expect(typeof message).toBe("string");
+  expect(message as string).toMatch(/10\s?MB/);
+  expect(
+    attachmentSizeError(
+      { mimeType: "image/jpeg", filename: "photo.jpg", size: 11 * 1024 * 1024 },
+      { videoBytes: 16 * 1024 * 1024 * 1024, defaultBytes: 50 * 1024 * 1024 },
+    ),
+  ).toBeNull();
+});
+
+test("uploadAttachment preflights with served limits when provided", async () => {
+  files.set("file:///big.webp", "x".repeat(2048));
+  const served = attachmentLimitsFromStorage({
+    upload_limits: {
+      default_bytes: 1024,
+      video_bytes: 16 * 1024 * 1024 * 1024,
+      brand_font_bytes: 10 * 1024 * 1024,
+    },
+  });
+  await expect(
+    uploadAttachment(
+      {
+        localId: "picker",
+        uri: "file:///big.webp",
+        mimeType: "image/webp",
+        filename: "big.webp",
+        size: null,
+      },
+      { client: undefined as never, workspaceId: "workspace", limits: served },
+    ),
+  ).rejects.toThrow(/or smaller/);
 });
