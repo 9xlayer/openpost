@@ -13,6 +13,7 @@
 	import { onMount, tick } from 'svelte';
 	import type { Attachment as SvelteAttachment } from 'svelte/attachments';
 	import { resolve } from '$app/paths';
+	import { accountFilterLabel, accountName } from '$lib/account-filter-label';
 	import { client } from '$lib/api/client';
 	import type { components } from '$lib/api/types';
 	import { queryAPI } from '$lib/query/api';
@@ -30,7 +31,7 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { getLocaleTag } from '$lib/i18n';
-	import { formatSocialAccountName, getPlatformName } from '$lib/utils';
+	import { getPlatformName } from '$lib/utils';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import CommunicationsNavigation from '$lib/components/communications-navigation.svelte';
 	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
@@ -620,20 +621,6 @@
 			conversation.counterpart_handle ||
 			conversation.remote_conversation_id
 		);
-	}
-
-	function accountName(account: SocialAccount): string {
-		return (
-			formatSocialAccountName(account.account_username, account.platform) ||
-			account.slug ||
-			account.account_id ||
-			account.platform
-		);
-	}
-
-	function accountFilterLabel(account: SocialAccount | undefined): string {
-		if (!account) return m.engagement_all_accounts();
-		return `${m.engagement_all_accounts()}: ${accountName(account)}, ${getPlatformName(account.platform)}`;
 	}
 
 	function dateLabel(value: string) {

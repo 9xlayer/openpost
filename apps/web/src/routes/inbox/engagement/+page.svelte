@@ -19,6 +19,7 @@
 	import { createInfiniteQuery, createQuery, type InfiniteData } from '@tanstack/svelte-query';
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { accountFilterLabel, accountName } from '$lib/account-filter-label';
 	import { client } from '$lib/api/client';
 	import type { components } from '$lib/api/types';
 	import { queryAPI } from '$lib/query/api';
@@ -628,20 +629,6 @@
 
 	function authorLabel(item: EngagementItem) {
 		return item.author_name || item.author_handle || m.common_untitled_user();
-	}
-
-	function accountName(account: SocialAccount): string {
-		return (
-			formatSocialAccountName(account.account_username, account.platform) ||
-			account.slug ||
-			account.account_id ||
-			account.platform
-		);
-	}
-
-	function accountFilterLabel(account: SocialAccount | undefined): string {
-		if (!account) return m.engagement_all_accounts();
-		return `${m.engagement_all_accounts()}: ${accountName(account)}, ${getPlatformName(account.platform)}`;
 	}
 
 	function hasTimestamp(value: string | undefined) {
