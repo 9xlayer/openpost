@@ -24,7 +24,10 @@ const surfaceScopes = ["frontend", "backend", "cli", "marketing", "docs"];
 const browserScopes = ["e2e", "e2e-app"];
 
 const checks = {
-  contracts: stage("generated contracts", [bun("scripts/check-contracts.mjs")]),
+  contracts: stage("contracts", [
+    bun("scripts/check-contracts.mjs"),
+    bun("scripts/check-handwritten-contracts.mjs"),
+  ]),
   // The payload assertions run after both builds because they inspect the
   // built dist output that clean checkouts only produce here.
   "npm-packages": stage("npm packages", [
