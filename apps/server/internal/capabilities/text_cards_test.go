@@ -4,8 +4,53 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openpost/backend/internal/textcards"
 	"github.com/stretchr/testify/require"
 )
+
+// TestTextCardCatalogueOptionsParseThroughRenderer guards
+// getopenpost/openpost#420: the renderer owns the allowed text-card values
+// and defaults, and the capability catalogue derives from it. Every option
+// the composer offers must parse successfully through textcards.Parse, so
+// adding an option to textcards reaches the composer with no second edit.
+func TestTextCardCatalogueOptionsParseThroughRenderer(t *testing.T) {
+	defs := TextCardSettings()
+	byKey := make(map[string]SettingDefinition, len(defs))
+	for _, def := range defs {
+		byKey[def.Key] = def
+	}
+
+	require.Equal(t, textcards.ModeOptions, byKey["text_card"].Options, "mode options derive from textcards")
+	require.Equal(t, textcards.AppearanceOptions, byKey["text_card_appearance"].Options, "appearance options derive from textcards")
+	require.Equal(t, textcards.BackgroundOptions, byKey["text_card_background"].Options, "background options derive from textcards")
+	require.Equal(t, textcards.DefaultStyle.Mode, byKey["text_card"].Default)
+	require.Equal(t, textcards.DefaultStyle.Appearance, byKey["text_card_appearance"].Default)
+	require.Equal(t, textcards.DefaultStyle.Background, byKey["text_card_background"].Default)
+	require.Equal(t, textcards.DefaultStyle.Color, byKey["text_card_color"].Default)
+	require.Equal(t, textcards.DefaultStyle.ColorEnd, byKey["text_card_color_end"].Default)
+	require.Equal(t, textcards.DefaultStyle.Rounded, byKey["text_card_rounded"].Default)
+	require.Equal(t, textcards.DefaultStyle.Shadow, byKey["text_card_shadow"].Default)
+
+	for _, mode := range byKey["text_card"].Options {
+		style, err := textcards.Parse(map[string]any{"text_card": mode})
+		require.NoError(t, err, "catalogue mode %q parses", mode)
+		require.Equal(t, mode, style.Mode)
+	}
+	for _, appearance := range byKey["text_card_appearance"].Options {
+		style, err := textcards.Parse(map[string]any{"text_card_appearance": appearance})
+		require.NoError(t, err, "catalogue appearance %q parses", appearance)
+		require.Equal(t, appearance, style.Appearance)
+	}
+	for _, background := range byKey["text_card_background"].Options {
+		style, err := textcards.Parse(map[string]any{"text_card_background": background})
+		require.NoError(t, err, "catalogue background %q parses", background)
+		require.Equal(t, background, style.Background)
+	}
+
+	empty, err := textcards.Parse(map[string]any{})
+	require.NoError(t, err)
+	require.Equal(t, textcards.DefaultStyle, empty, "empty settings parse to the owned defaults")
+}
 
 func TestTextCardsResolveTheDeliveredMediaShape(t *testing.T) {
 	for _, provider := range []string{ProviderInstagram, ProviderPixelfed} {

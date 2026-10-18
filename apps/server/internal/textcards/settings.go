@@ -24,6 +24,21 @@ const (
 	DefaultColorEnd = "#93c5fd"
 )
 
+// ModeOptions, AppearanceOptions and BackgroundOptions are the single owner
+// of the allowed text-card setting values. The capability catalogue builds
+// its composer options from them (see getopenpost/openpost#420), so adding
+// an option here reaches the composer with no second edit.
+var (
+	ModeOptions       = []string{"off", "text_only", "always"}
+	AppearanceOptions = []string{"light", "dark"}
+	BackgroundOptions = []string{"solid", "gradient", "mesh"}
+)
+
+// DefaultStyle is the single owner of the text-card defaults. Parse applies
+// it; capability catalogue entries, docs and clients must read it from here
+// rather than keeping their own literal copy.
+var DefaultStyle = Style{Mode: "off", Appearance: "light", Background: "gradient", Color: DefaultColor, ColorEnd: DefaultColorEnd, Rounded: true, Shadow: true}
+
 type Style struct {
 	Mode       string `json:"mode"`
 	Appearance string `json:"appearance"`
@@ -63,15 +78,15 @@ func NewPostDefaults(provider string, settings map[string]any) map[string]any {
 var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
 
 func Parse(settings map[string]any) (Style, error) {
-	style := Style{Mode: "off", Appearance: "light", Background: "gradient", Color: DefaultColor, ColorEnd: DefaultColorEnd, Rounded: true, Shadow: true}
+	style := DefaultStyle
 	for _, field := range []struct {
 		key     string
 		target  *string
 		allowed []string
 	}{
-		{"text_card", &style.Mode, []string{"off", "text_only", "always"}},
-		{"text_card_appearance", &style.Appearance, []string{"light", "dark"}},
-		{"text_card_background", &style.Background, []string{"solid", "gradient", "mesh"}},
+		{"text_card", &style.Mode, ModeOptions},
+		{"text_card_appearance", &style.Appearance, AppearanceOptions},
+		{"text_card_background", &style.Background, BackgroundOptions},
 		{"text_card_color", &style.Color, nil},
 		{"text_card_color_end", &style.ColorEnd, nil},
 	} {

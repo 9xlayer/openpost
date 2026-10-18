@@ -2,19 +2,26 @@ package capabilities
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/openpost/backend/internal/textcards"
 )
 
+// TextCardSettings describes the text-card destination settings for the
+// composer. The allowed values and defaults are owned by textcards (see
+// getopenpost/openpost#420); this catalogue only adds presentation (labels
+// and controls), so adding an option to textcards reaches the composer with
+// no second edit.
 func TextCardSettings() []SettingDefinition {
+	style := textcards.DefaultStyle
 	fields := []SettingDefinition{
-		{Key: "text_card", Label: "Text as image", Type: "select", Options: []string{"off", "text_only", "always"}, Default: "off", Control: "text_card"},
-		{Key: "text_card_appearance", Label: "Card appearance", Type: "select", Options: []string{"light", "dark"}, Default: "light"},
-		{Key: "text_card_background", Label: "Background", Type: "select", Options: []string{"solid", "gradient", "mesh"}, Default: "gradient"},
-		{Key: "text_card_color", Label: "Background color", Type: "text", Default: "#c4b5fd"},
-		{Key: "text_card_color_end", Label: "Second color", Type: "text", Default: "#93c5fd"},
-		{Key: "text_card_rounded", Label: "Rounded corners", Type: "boolean", Default: true},
-		{Key: "text_card_shadow", Label: "Drop shadow", Type: "boolean", Default: true},
+		{Key: "text_card", Label: "Text as image", Type: "select", Options: slices.Clone(textcards.ModeOptions), Default: style.Mode, Control: "text_card"},
+		{Key: "text_card_appearance", Label: "Card appearance", Type: "select", Options: slices.Clone(textcards.AppearanceOptions), Default: style.Appearance},
+		{Key: "text_card_background", Label: "Background", Type: "select", Options: slices.Clone(textcards.BackgroundOptions), Default: style.Background},
+		{Key: "text_card_color", Label: "Background color", Type: "text", Default: style.Color},
+		{Key: "text_card_color_end", Label: "Second color", Type: "text", Default: style.ColorEnd},
+		{Key: "text_card_rounded", Label: "Rounded corners", Type: "boolean", Default: style.Rounded},
+		{Key: "text_card_shadow", Label: "Drop shadow", Type: "boolean", Default: style.Shadow},
 	}
 	for i := range fields {
 		fields[i].Scope = SettingScopeDestination
