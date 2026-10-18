@@ -161,6 +161,7 @@ export const previewTools = [
     name: "Reddit post preview",
     title: "Free Reddit post preview - OpenPost",
     description: "Check a community post title, discussion text, image gallery, or poll.",
+    previewOnly: true,
     checks: [
       "The community and title set the context before anyone reads the body. Use the community field and check a long title on a small screen.",
       "Use the gallery controls for multi-image posts or add a poll for a choice-based discussion. Each community can restrict allowed post types.",

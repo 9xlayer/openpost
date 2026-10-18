@@ -170,6 +170,7 @@ export const imageFormats: readonly {
 
 export interface PreviewTool {
   checks: readonly string[];
+  previewOnly?: boolean;
   platform:
     | "x"
     | "bluesky"

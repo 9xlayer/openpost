@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { counterPlatforms, marketingRouteManifest } from '@openpost/social-images';
+import { counterPlatforms, marketingRouteManifest, previewTools } from '@openpost/social-images';
+import { toolArticles } from '../_articles';
 import { COUNTER_PLATFORMS, platformTextCount, splitSmartThread } from './tool-utils';
 
 describe('public text tools', () => {
@@ -32,6 +33,32 @@ describe('public text tools', () => {
 			expect(Number.isFinite(platform.limit)).toBe(true);
 			expect(platform.name.length).toBeGreaterThan(0);
 			expect(platform.note.length).toBeGreaterThan(0);
+		}
+	});
+
+	it('marks preview-only catalogue entries with a no-publishing guide section', () => {
+		const marked = previewTools.filter((tool) => tool.previewOnly);
+		expect(marked.map((tool) => tool.slug)).toContain('reddit-post-preview');
+		for (const tool of previewTools) {
+			const article = toolArticles[tool.slug];
+			expect(article).toBeDefined();
+			const guideText: string[] = article.sections.flatMap(
+				(section: { title: string; paragraphs: readonly string[] }) => [
+					section.title,
+					...section.paragraphs
+				]
+			);
+			const platformName = tool.name.replace(' post preview', '');
+			if (tool.previewOnly) {
+				expect(
+					guideText.some(
+						(text: string) =>
+							text.includes(`does not publish to ${platformName}`) && text.includes('native layout')
+					)
+				).toBe(true);
+			} else {
+				expect(guideText.some((text: string) => text.includes('does not publish to'))).toBe(false);
+			}
 		}
 	});
 });

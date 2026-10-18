@@ -11,6 +11,7 @@ import {
   counterPlatforms,
   marketingPrerenderEntries,
   marketingSocialEntries,
+  previewTools,
   resolveMarketingSocial,
   marketingTelemetryPath,
   documentationTelemetryPath,
@@ -156,5 +157,17 @@ test("documentation corpus policy is complete canonical metadata", () => {
 test("published social images use the declared 1200 x 630 dimensions", async () => {
   for (const image of ["../../../assets/brand/og-image.png", "../../../assets/brand/og-docs.png"]) {
     assert.deepEqual(await pngDimensions(image), { width: 1200, height: 630 });
+  }
+});
+
+test("preview-only platforms carry a marker without merging publishing catalogues", () => {
+  const reddit = previewTools.find((tool) => tool.slug === "reddit-post-preview");
+  assert.ok(reddit, "reddit preview tool entry is missing");
+  assert.equal(reddit.previewOnly, true, "reddit preview tool must be marked preview-only");
+  for (const tool of previewTools) {
+    assert.ok(!("publishing" in tool), `${tool.slug} must not carry a publishing-catalogue field`);
+    if (tool.slug !== "reddit-post-preview") {
+      assert.ok(!tool.previewOnly, `${tool.slug} must not be marked preview-only`);
+    }
   }
 });

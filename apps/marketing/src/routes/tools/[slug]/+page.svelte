@@ -29,6 +29,9 @@
 	});
 	const extension = $derived(browserExtensions.find((item) => item.slug === slug));
 	const previewTool = $derived(previewTools.find((item) => item.slug === slug));
+	const previewOnlyPlatform = $derived(
+		previewTool?.previewOnly ? previewTool.name.replace(' post preview', '') : null
+	);
 	const mediaTool = $derived(mediaConversionTools.find((item) => item.slug === slug));
 	const conversion = $derived(imageConversions.find((item) => item.slug === slug));
 </script>
@@ -44,6 +47,12 @@
 {#if extension}
 	<ExtensionPage {extension} />
 {:else}
+	{#if previewOnlyPlatform}
+		<p class="preview-only-note" role="note">
+			Preview only: this tool shows {previewOnlyPlatform}'s native layout. OpenPost does not publish
+			to {previewOnlyPlatform}.
+		</p>
+	{/if}
 	<ToolPageShell {slug}>
 		{#if slug === 'social-media-video-editor'}
 			<VideoEditorLauncher />
@@ -91,3 +100,15 @@
 		{/if}
 	</ToolPageShell>
 {/if}
+
+<style>
+	.preview-only-note {
+		margin-top: 24px;
+		padding: 12px 16px;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		font-size: 14px;
+		line-height: 1.6;
+		color: var(--muted-foreground);
+	}
+</style>

@@ -12,6 +12,21 @@ type ToolArticle = {
 };
 
 // SAFETY: Every catalog entry contributes one article under its canonical preview-tool slug.
+// Preview-only entries (marked with `previewOnly` on the catalogue entry) get an
+// explicit no-publishing section derived from that marker, never a hardcoded string.
+function previewOnlySection(tool: PreviewTool): ToolArticle['sections'] {
+	if (!tool.previewOnly) return [];
+	const platformName = tool.name.replace(' post preview', '');
+	return [
+		{
+			title: `Preview only: OpenPost does not publish to ${platformName}`,
+			paragraphs: [
+				`This tool shows ${platformName}'s native layout so you can check your copy and media. OpenPost does not publish to ${platformName}; copy the finished text into ${platformName} to share it.`
+			]
+		}
+	];
+}
+
 const previewArticles = Object.fromEntries<ToolArticle>(
 	previewTools.map((tool) => [
 		tool.slug,
@@ -30,6 +45,7 @@ const previewArticles = Object.fromEntries<ToolArticle>(
 					title: `What to check on ${tool.name.replace(' post preview', '')}`,
 					paragraphs: tool.checks
 				},
+				...previewOnlySection(tool),
 				{
 					title: 'Native layout and publishing availability',
 					paragraphs: [
