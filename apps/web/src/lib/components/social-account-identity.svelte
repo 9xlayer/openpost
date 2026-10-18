@@ -7,6 +7,7 @@
 		platform: string;
 		platformLabel?: string;
 		avatarUrl?: string | null;
+		handle?: string | null;
 		detail?: string;
 		size?: 'sm' | 'default' | 'lg';
 		compactOnMobile?: boolean;
@@ -19,6 +20,7 @@
 		platform,
 		platformLabel = '',
 		avatarUrl = '',
+		handle = undefined,
 		detail = '',
 		size = 'default',
 		compactOnMobile = false,
@@ -30,7 +32,7 @@
 </script>
 
 <span class={cn('flex min-w-0 items-center gap-2.5 text-left', className)} data-size={size}>
-	<SocialAccountAvatar {name} {platform} {avatarUrl} {size} />
+	<SocialAccountAvatar {name} {platform} {avatarUrl} {handle} {size} />
 	{#if size === 'sm'}
 		<span class="flex min-w-0 items-baseline gap-1.5">
 			<span class="truncate font-medium">{name}</span>

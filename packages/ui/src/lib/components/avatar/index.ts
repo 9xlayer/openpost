@@ -4,6 +4,7 @@ import Fallback from "./avatar-fallback.svelte";
 import Badge from "./avatar-badge.svelte";
 import Group from "./avatar-group.svelte";
 import GroupCount from "./avatar-group-count.svelte";
+import { monogramFor } from "./monogram.js";
 
 export {
   Root,
@@ -12,6 +13,7 @@ export {
   Badge,
   Group,
   GroupCount,
+  monogramFor,
   //
   Root as Avatar,
   Image as AvatarImage,

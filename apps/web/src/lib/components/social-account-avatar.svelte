@@ -2,11 +2,13 @@
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import { cn, getPlatformColor } from '$lib/utils';
+	import { monogramFor } from '@openpost/ui/components/avatar/monogram.js';
 
 	interface Props {
 		name: string;
 		platform: string;
 		avatarUrl?: string | null;
+		handle?: string | null;
 		size?: 'sm' | 'default' | 'lg';
 		class?: string;
 		'data-testid'?: string;
@@ -16,20 +18,13 @@
 		name,
 		platform,
 		avatarUrl = '',
+		handle = undefined,
 		size = 'default',
 		class: className = '',
 		'data-testid': testId
 	}: Props = $props();
 
-	const fallback = $derived.by(() => {
-		const normalized = name.trim().replace(/^@+/, '');
-		if (!normalized) return '?';
-		const words = normalized.split(/\s+/).filter(Boolean);
-		if (words.length > 1) {
-			return `${words[0][0]}${words.at(-1)?.[0] ?? ''}`.toUpperCase();
-		}
-		return normalized.slice(0, 2).toUpperCase();
-	});
+	const fallback = $derived(monogramFor(name, handle));
 
 	let loadedAvatarUrl = $state('');
 	const avatarLoaded = $derived(Boolean(avatarUrl) && loadedAvatarUrl === avatarUrl);
