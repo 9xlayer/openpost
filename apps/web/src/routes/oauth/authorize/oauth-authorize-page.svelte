@@ -16,6 +16,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import StandaloneShell from '$lib/components/standalone-shell.svelte';
 	import { client } from '$lib/api/client';
 	import { queryClient } from '$lib/query/client';
@@ -448,10 +449,16 @@
 								</Label>
 								{#if !allCurrentAccounts[workspace.id]}
 									{#each accountsByWorkspace[workspace.id] ?? [] as account (account.id)}
-										<Label class="flex items-center gap-2 text-sm font-normal">
+										<Label class="flex min-h-11 items-center gap-2 text-sm font-normal">
 											<Checkbox
 												checked={(selectedAccountIDs[workspace.id] ?? []).includes(account.id)}
 												onCheckedChange={() => toggleAccount(workspace.id, account.id)}
+											/>
+											<SocialAccountAvatar
+												name={account.account_username || account.platform}
+												platform={account.platform}
+												avatarUrl={account.account_avatar_url}
+												size="sm"
 											/>
 											<span>{account.account_username || account.platform}</span>
 											<span class="text-muted-foreground">{account.platform}</span>

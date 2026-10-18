@@ -202,6 +202,45 @@ describe('OAuth authorization request validation', () => {
 		});
 	});
 
+	it('shows the account photo on consent rows without changing the grant payload', async () => {
+		mocks.pageValue.url = new URL(
+			'http://localhost/oauth/authorize?response_type=code&client_id=op_app_1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=workspace%3Aread+accounts%3Aread&code_challenge=challenge&code_challenge_method=S256'
+		);
+		mocks.get.mockImplementation(async (path) => {
+			if (path === '/external-applications/oauth/request') {
+				return { data: { application: { name: 'Workflow app' } }, error: undefined };
+			}
+			return {
+				data: [
+					{
+						id: 'account-1',
+						account_username: 'photo-account',
+						account_avatar_url: 'https://example.com/photo.png',
+						platform: 'x',
+						is_active: true
+					}
+				],
+				error: undefined
+			};
+		});
+		mocks.post.mockResolvedValue({ data: undefined, error: { detail: 'stop redirect' } });
+
+		const screen = await renderAuthorizePage();
+		await expect.element(screen.getByText('photo-account', { exact: true })).toBeVisible();
+		const row = screen.getByText('photo-account', { exact: true }).element();
+		const container = row.closest('label') ?? row.parentElement;
+		if (!container) throw new Error('Consent account row is unavailable');
+		expect(container.querySelector('img[src="https://example.com/photo.png"]')).not.toBeNull();
+		await screen.getByRole('button', { name: 'Authorize' }).click();
+		expect(mocks.post).toHaveBeenCalledWith('/external-applications/oauth/authorize', {
+			body: expect.objectContaining({
+				workspace_grants: [
+					expect.objectContaining({ workspace_id: 'workspace-1', account_ids: ['account-1'] })
+				]
+			})
+		});
+	});
+
 	it('blocks approval until every selected workspace account list is loaded', async () => {
 		mocks.pageValue.url = new URL(
 			'http://localhost/oauth/authorize?response_type=code&client_id=op_app_1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=workspace%3Aread+accounts%3Aread&code_challenge=challenge&code_challenge_method=S256'

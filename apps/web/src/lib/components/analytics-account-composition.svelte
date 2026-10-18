@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ditherSurface } from '@openpost/dither';
 	import type { components } from '$lib/api/types';
-	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import { m } from '$lib/paraglide/messages';
 
 	type Account = components['schemas']['AccountOverview'];
@@ -86,9 +86,12 @@
 							style:background={slice.color}
 							aria-hidden="true"
 						></span>
-						{#if slice.account}<PlatformIcon
+						{#if slice.account}<SocialAccountAvatar
+								name={slice.label}
 								platform={slice.account.platform}
-								class="size-4 shrink-0"
+								avatarUrl={slice.account.avatar_url}
+								size="sm"
+								class="shrink-0"
 							/>{/if}
 						<span class="truncate">{slice.label}</span>
 					</dt>

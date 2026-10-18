@@ -5,11 +5,16 @@ import { resolveBuiltInTheme, WebThemeRuntime } from '$lib/themes';
 import AnalyticsAccountComposition from './analytics-account-composition.svelte';
 import '../../routes/layout.css';
 
-function account(id: string, followers?: number): components['schemas']['AccountOverview'] {
+function account(
+	id: string,
+	followers?: number,
+	avatar_url = ''
+): components['schemas']['AccountOverview'] {
 	return {
 		id,
 		username: id,
 		platform: 'x',
+		avatar_url,
 		metrics: followers === undefined ? {} : { followers },
 		metric_metadata: {},
 		account_supported: true,
@@ -26,7 +31,7 @@ describe('AnalyticsAccountComposition', () => {
 	it('shows follower totals and named accounts, grouping the remaining audience without changing chart geometry between themes', async () => {
 		const screen = render(AnalyticsAccountComposition, {
 			accounts: [
-				account('Launch', 40),
+				account('Launch', 40, 'https://example.com/launch.png'),
 				account('Journal', 30),
 				account('Notes', 20),
 				account('Studio', 5),
@@ -41,16 +46,23 @@ describe('AnalyticsAccountComposition', () => {
 		if (!(figure instanceof HTMLElement)) throw new Error('Chart is unavailable');
 		await expect.element(screen.getByText('100', { exact: true })).toBeVisible();
 		const values = [...figure.querySelectorAll('dl > div')].map((row) => [
-			row.querySelector('dt')?.textContent?.trim(),
+			row.querySelector('dt span.truncate')?.textContent?.trim(),
 			row.querySelector('dd')?.textContent?.trim()
 		]);
 		expect(values).toEqual([
-			['X Launch', '40'],
-			['X Journal', '30'],
-			['X Notes', '20'],
-			['X Studio', '5'],
+			['Launch', '40'],
+			['Journal', '30'],
+			['Notes', '20'],
+			['Studio', '5'],
 			['Other accounts', '5']
 		]);
+		const legendRows = [...figure.querySelectorAll('dl > div')];
+		const launchRow = legendRows[0];
+		expect(launchRow.querySelector('img[src="https://example.com/launch.png"]')).not.toBeNull();
+		expect(
+			launchRow.querySelector('span[style*="--chart-1"]') ??
+				launchRow.querySelector('[style*="--chart"]')
+		).not.toBeNull();
 		const rings = [...figure.querySelectorAll<SVGCircleElement>('[data-chart-ring]')];
 		const geometry = () =>
 			rings.map((ring) => ring.parentElement?.getAttribute('stroke-dasharray'));
