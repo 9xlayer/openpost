@@ -7,7 +7,7 @@ import {
 } from "@openpost/query-catalog";
 import { gradientSvg } from "@openpost/dither/paint";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 
@@ -26,8 +26,9 @@ import {
   Screen,
 } from "@/components/ui";
 import { WorkspaceHeader } from "@/components/workspace-header";
+import { analyticsAccountOptions } from "@/lib/analytics-accounts";
 import { accountHandle, platformLabel } from "@/lib/format";
-import { useAccounts, useAnalytics, useWorkspaceId } from "@/lib/queries";
+import { useAnalytics, useWorkspaceId } from "@/lib/queries";
 import { useNativeTheme } from "@/theme";
 
 const RANGES: readonly AnalyticsRangeDays[] = [7, 30, 90];
@@ -47,10 +48,30 @@ function AnalyticsDashboard() {
   const [trend, setTrend] = useState<"views" | "engagement" | "followers">("views");
   const [accountId, setAccountId] = useState("");
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
-  const accounts = useAccounts();
   const query = useAnalytics({ days, accountId });
   const overview = query.data?.pages[0];
-  const selectedAccount = accounts.data?.find((account) => account.id === accountId);
+  // The filter offers exactly the accounts the overview describes, using the
+  // same identity as the audience and post rows below.
+  const { options: overviewAccounts, effectiveAccountId } = analyticsAccountOptions(
+    overview?.accounts,
+    accountId,
+  );
+  const selectedAccount = overviewAccounts.find((account) => account.id === effectiveAccountId);
+  useEffect(() => {
+    // Reconcile a selection that a successful fresh overview no longer
+    // contains. A transient empty (loading), error, or offline/paused
+    // response never clears the filter.
+    if (
+      accountId &&
+      !effectiveAccountId &&
+      overview &&
+      !query.isPending &&
+      !query.isError &&
+      query.fetchStatus !== "paused"
+    ) {
+      setAccountId("");
+    }
+  }, [accountId, effectiveAccountId, overview, query.fetchStatus, query.isError, query.isPending]);
   const error = query.error instanceof Error ? query.error.message : "Try again.";
   return (
     <Screen>
@@ -77,7 +98,7 @@ function AnalyticsDashboard() {
         <Button
           title={
             selectedAccount
-              ? `${platformLabel(selectedAccount.platform)} · ${accountHandle(selectedAccount.account_username, platformLabel(selectedAccount.platform), selectedAccount.platform, selectedAccount.alias)}`
+              ? `${platformLabel(selectedAccount.platform)} · ${accountHandle(selectedAccount.username, platformLabel(selectedAccount.platform), selectedAccount.platform)}`
               : "All accounts"
           }
           intent="quiet"
@@ -318,21 +339,21 @@ function AnalyticsDashboard() {
       </ScrollView>
       {accountPickerOpen ? (
         <BottomDrawer open title="Accounts" onDismiss={() => setAccountPickerOpen(false)}>
-          {accounts.isError ? (
-            <QueryNotice message="Could not load accounts." retry={() => void accounts.refetch()} />
+          {query.isError && !overview ? (
+            <QueryNotice message="Could not load accounts." retry={() => void query.refetch()} />
           ) : null}
           <Button
             title="All accounts"
-            intent={accountId ? "ordinary" : "primary"}
-            accessibilityState={{ selected: !accountId }}
+            intent={effectiveAccountId ? "ordinary" : "primary"}
+            accessibilityState={{ selected: !effectiveAccountId }}
             onPress={() => {
               setAccountId("");
               setAccountPickerOpen(false);
             }}
           />
-          {accounts.data?.map((account) => {
-            const selected = accountId === account.id;
-            const label = `${platformLabel(account.platform)} · ${accountHandle(account.account_username, platformLabel(account.platform), account.platform, account.alias)}`;
+          {overviewAccounts.map((account) => {
+            const selected = effectiveAccountId === account.id;
+            const label = `${platformLabel(account.platform)} · ${accountHandle(account.username, platformLabel(account.platform), account.platform)}`;
             return (
               <DitherPressable
                 key={account.id}
@@ -360,13 +381,12 @@ function AnalyticsDashboard() {
                 })}
               >
                 <AccountAvatar
-                  name={
-                    account.alias || account.account_username || platformLabel(account.platform)
-                  }
+                  name={account.username || platformLabel(account.platform)}
                   platform={account.platform}
-                  avatarUrl={account.account_avatar_url}
+                  avatarUrl={account.avatar_url}
                   size={32}
                 />
+                <PlatformIcon platform={account.platform} size={20} />
                 <Text style={[typography.bodyLarge, { flex: 1, color: colors.onSurface }]}>
                   {label}
                 </Text>
