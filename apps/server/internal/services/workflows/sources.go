@@ -108,10 +108,10 @@ func (s *Service) readURL(ctx context.Context, address, token string) ([]byte, e
 	// A token is sent only to api.github.com. Never forward it to a redirect.
 	client := *s.client
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
-		if len(via) >= 5 {
-			return errors.New("source redirected too many times")
-		}
-		if token != "" && (next.URL.Host != remote.Host || next.URL.Scheme != "https") {
+		if err := netguard.SameHostHTTPSRedirectPolicy(next, via, maxWorkflowRedirects, token != ""); err != nil {
+			if errors.Is(err, netguard.ErrTooManyRedirects) {
+				return errors.New("source redirected too many times")
+			}
 			return errors.New("authenticated source redirected to another host")
 		}
 		return netguard.ValidateURL(next.Context(), next.URL, sourceURLPolicy)

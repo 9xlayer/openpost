@@ -20,6 +20,10 @@ import (
 
 const maxResponseDiagnosticHeaderBytes = 256
 
+// maxWorkflowRedirects preserves the historical len(via) >= 5 redirect bound:
+// four redirects are followed and the fifth is refused.
+const maxWorkflowRedirects = 4
+
 var headerNamePattern = regexp.MustCompile("^[!#$%&'*+.^_`|~0-9a-zA-Z-]+$")
 
 func forbiddenHeader(name string) bool {
@@ -58,13 +62,12 @@ func (s *Service) request(ctx context.Context, workspaceID, key string, inputs m
 	if err != nil {
 		return nil, err
 	}
-	address := request.URL
 	client := *s.client
 	client.CheckRedirect = func(next *http.Request, via []*http.Request) error {
-		if len(via) >= 5 {
-			return errors.New("too many redirects")
-		}
-		if secret != "" && (next.URL.Host != address.Host || next.URL.Scheme != "https") {
+		if err := netguard.SameHostHTTPSRedirectPolicy(next, via, maxWorkflowRedirects, secret != ""); err != nil {
+			if errors.Is(err, netguard.ErrTooManyRedirects) {
+				return errors.New("too many redirects")
+			}
 			return errors.New("credentialed redirects must stay on the same HTTPS host")
 		}
 		return netguard.ValidateURL(next.Context(), next.URL, sourceURLPolicy)

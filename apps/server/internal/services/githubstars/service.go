@@ -6,14 +6,16 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/openpost/backend/internal/netguard"
 )
 
 const (
 	repositoryAPIURL = "https://api.github.com/repos/getopenpost/openpost"
 	maxResponseBytes = 64 << 10
+	maxRedirects     = 3
 	requestTimeout   = 3 * time.Second
 	successCacheTTL  = 24 * time.Hour
 	failureCacheTTL  = 15 * time.Minute
@@ -109,13 +111,10 @@ func (s *Service) fetch(ctx context.Context) (int, bool) {
 }
 
 func sameHostRedirectPolicy(req *http.Request, via []*http.Request) error {
-	if len(via) > 3 {
-		return errors.New("GitHub star lookup stopped after three redirects")
-	}
-	if len(via) == 0 ||
-		req.URL.Scheme != "https" ||
-		req.URL.Port() != "" ||
-		!strings.EqualFold(req.URL.Hostname(), via[0].URL.Hostname()) {
+	if err := netguard.SameHostHTTPSRedirectPolicy(req, via, maxRedirects, true); err != nil {
+		if errors.Is(err, netguard.ErrTooManyRedirects) {
+			return errors.New("GitHub star lookup stopped after three redirects")
+		}
 		return errors.New("GitHub star lookup refused a cross-host redirect")
 	}
 	return nil
