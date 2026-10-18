@@ -3,6 +3,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
+	import FormField from '$lib/components/form-field.svelte';
 	import ColorPicker from '$lib/components/color-picker.svelte';
 	import MediaPicker from '$lib/components/media-picker.svelte';
 	import SectionHeader from '$lib/components/section-header.svelte';
@@ -155,14 +156,19 @@
 			</div>
 		</div>
 	</div>
-	<div id="workspace-name" class="max-w-sm space-y-2">
-		<Label for="workspace-name-input">{m.onboarding_workspace_name()}</Label>
-		<Input
-			id="workspace-name-input"
-			bind:value={workspaceCtx.settings.name}
-			maxlength={100}
-			required
-		/>
+	<div id="workspace-name" class="max-w-sm">
+		<FormField id="workspace-name-input" label={m.onboarding_workspace_name()} required>
+			{#snippet children({ id, describedBy, invalid })}
+				<Input
+					{id}
+					aria-describedby={describedBy}
+					aria-invalid={invalid}
+					bind:value={workspaceCtx.settings.name}
+					maxlength={100}
+					required
+				/>
+			{/snippet}
+		</FormField>
 	</div>
 	<div class="mt-4 max-w-sm space-y-2">
 		<Label for="workspace-color">{m.settings_workspace_color()}</Label>

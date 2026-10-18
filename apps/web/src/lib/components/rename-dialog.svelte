@@ -2,6 +2,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import FormField from '$lib/components/form-field.svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { ProtectedIcon } from '$lib/themes/icons';
 
@@ -28,18 +29,21 @@
 	let value = $state('');
 	let pending = $state(false);
 	let error = $state('');
+	let attempted = $state(false);
 
 	function handleOpenChange(nextOpen: boolean): void {
 		open = nextOpen;
 		if (nextOpen) {
 			value = initialValue;
 			error = '';
+			attempted = false;
 		}
 	}
 
 	async function submit(): Promise<void> {
 		const nextValue = value.trim();
 		if (!nextValue || pending) return;
+		attempted = true;
 		pending = true;
 		error = '';
 		try {
@@ -66,11 +70,19 @@
 				<Dialog.Title>{title}</Dialog.Title>
 				<Dialog.Description>{description}</Dialog.Description>
 			</Dialog.Header>
-			<label class="grid gap-1.5 text-sm font-medium">
-				<span>{label}</span>
-				<Input bind:value maxlength={maxLength} autocomplete="off" />
-			</label>
-			{#if error}<p class="text-sm text-destructive" role="alert">{error}</p>{/if}
+			<FormField id="rename-value" {label} {error} touched={attempted} required>
+				{#snippet children({ id, describedBy, invalid })}
+					<Input
+						{id}
+						aria-describedby={describedBy}
+						aria-invalid={invalid}
+						bind:value
+						maxlength={maxLength}
+						autocomplete="off"
+						required
+					/>
+				{/snippet}
+			</FormField>
 			<Dialog.Footer>
 				<Button
 					type="button"

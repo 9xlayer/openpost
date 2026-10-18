@@ -15,6 +15,8 @@
 		placeholder?: string;
 		id?: string;
 		ariaLabel?: string;
+		ariaDescribedBy?: string;
+		ariaInvalid?: boolean | 'true' | 'false';
 		disabled?: boolean;
 		class?: string;
 		contentClass?: string;
@@ -27,6 +29,8 @@
 		placeholder = '',
 		id,
 		ariaLabel,
+		ariaDescribedBy,
+		ariaInvalid,
 		disabled = false,
 		class: className = 'w-full',
 		contentClass,
@@ -47,7 +51,13 @@
 		onValueChange?.(nextValue);
 	}}
 >
-	<Select.Trigger {id} class={className} aria-label={ariaLabel}>
+	<Select.Trigger
+		{id}
+		class={className}
+		aria-label={ariaLabel}
+		aria-describedby={ariaDescribedBy}
+		aria-invalid={ariaInvalid}
+	>
 		<span class="truncate">{selectedLabel}</span>
 	</Select.Trigger>
 	<Select.Content class={contentClass}>

@@ -13,6 +13,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import FormField from '$lib/components/form-field.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import SectionHeader from '$lib/components/section-header.svelte';
 	import SettingsFormFooter from '$lib/components/settings-form-footer.svelte';
@@ -392,38 +393,45 @@
 			</button>
 		</div>
 		<div class="min-w-0 flex-1 space-y-3">
-			<div class="space-y-2">
-				<Label for="profile-display-name">{m.settings_display_name()}</Label>
-				<Input
-					id="profile-display-name"
-					bind:value={profileDisplayName}
-					placeholder={m.settings_your_name()}
-					maxlength={120}
-				/>
-			</div>
-			<div class="space-y-2">
-				<Label for="profile-username">{m.settings_username()}</Label>
-				<div class="relative">
-					<span
-						class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground"
-						aria-hidden="true">@</span
-					>
+			<FormField id="profile-display-name" label={m.settings_display_name()}>
+				{#snippet children({ id, describedBy, invalid })}
 					<Input
-						id="profile-username"
-						bind:value={profileUsername}
-						class="pl-7"
-						required
-						minlength={3}
-						maxlength={30}
-						pattern="[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?"
-						autocomplete="username"
-						aria-describedby="profile-username-help"
+						{id}
+						aria-describedby={describedBy}
+						aria-invalid={invalid}
+						bind:value={profileDisplayName}
+						placeholder={m.settings_your_name()}
+						maxlength={120}
 					/>
-				</div>
-				<p id="profile-username-help" class="text-xs leading-5 text-muted-foreground">
-					{m.settings_username_help()}
-				</p>
-			</div>
+				{/snippet}
+			</FormField>
+			<FormField
+				id="profile-username"
+				label={m.settings_username()}
+				description={m.settings_username_help()}
+				required
+			>
+				{#snippet children({ id, describedBy, invalid })}
+					<div class="relative">
+						<span
+							class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground"
+							aria-hidden="true">@</span
+						>
+						<Input
+							{id}
+							aria-describedby={describedBy}
+							aria-invalid={invalid}
+							bind:value={profileUsername}
+							class="pl-7"
+							required
+							minlength={3}
+							maxlength={30}
+							pattern="[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9])?"
+							autocomplete="username"
+						/>
+					</div>
+				{/snippet}
+			</FormField>
 			<p class="text-sm text-muted-foreground">{profileEmail}</p>
 			<div class="flex flex-wrap gap-2">
 				<Button type="button" variant="outline" onclick={openAvatarUploader}

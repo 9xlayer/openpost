@@ -6,6 +6,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import AppSelect from '$lib/components/app-select.svelte';
+	import FormField from '$lib/components/form-field.svelte';
 	import DestructiveConfirmDialog from '$lib/components/destructive-confirm-dialog.svelte';
 	import type { DestructiveActionOutcome } from '$lib/destructive-action-outcome';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
@@ -790,30 +791,37 @@
 			onsubmit={createInvitation}
 			class="mb-5 grid gap-3 rounded-lg border bg-muted/10 p-4 lg:grid-cols-[minmax(0,1fr)_220px_auto]"
 		>
-			<div class="space-y-2">
-				<Label for="team-invite-email">{m.settings_invite_email()}</Label>
-				<Input
-					id="team-invite-email"
-					data-testid="team-invite-email"
-					type="email"
-					bind:value={inviteEmail}
-					placeholder="teammate@example.com"
-					autocomplete="email"
-					required
-				/>
-			</div>
-			<div class="space-y-2">
-				<Label for="team-invite-role">{m.settings_role()}</Label>
-				<AppSelect
-					id="team-invite-role"
-					bind:value={inviteRole}
-					options={editableRoleOptions}
-					ariaLabel={m.settings_role()}
-				/>
-				<p class="text-xs text-muted-foreground">
-					{roleDescription(inviteRole)}
-				</p>
-			</div>
+			<FormField id="team-invite-email" label={m.settings_invite_email()} required>
+				{#snippet children({ id, describedBy, invalid })}
+					<Input
+						{id}
+						aria-describedby={describedBy}
+						aria-invalid={invalid}
+						data-testid="team-invite-email"
+						type="email"
+						bind:value={inviteEmail}
+						placeholder="teammate@example.com"
+						autocomplete="email"
+						required
+					/>
+				{/snippet}
+			</FormField>
+			<FormField
+				id="team-invite-role"
+				label={m.settings_role()}
+				description={roleDescription(inviteRole)}
+			>
+				{#snippet children({ id, describedBy, invalid })}
+					<AppSelect
+						{id}
+						ariaDescribedBy={describedBy}
+						ariaInvalid={invalid}
+						bind:value={inviteRole}
+						options={editableRoleOptions}
+						ariaLabel={m.settings_role()}
+					/>
+				{/snippet}
+			</FormField>
 			<div class="flex items-end">
 				<Button type="submit" disabled={Boolean(busyKey) || !inviteEmail.trim()}>
 					{#if busyKey === 'invite'}

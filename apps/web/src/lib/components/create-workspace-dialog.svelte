@@ -3,7 +3,7 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import FormField from '$lib/components/form-field.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import { ProtectedIcon } from '$lib/themes/icons';
 	import { client } from '$lib/api/client';
@@ -120,17 +120,21 @@
 				<InlineNotice tone="error" message={error} />
 			{/if}
 
-			<div class="space-y-2">
-				<Label for="new-workspace-name">{m.onboarding_workspace_name()}</Label>
-				<Input
-					id="new-workspace-name"
-					bind:value={workspaceName}
-					placeholder={m.onboarding_workspace_placeholder()}
-					disabled={pending}
-					autocomplete="off"
-					autofocus
-				/>
-			</div>
+			<FormField id="new-workspace-name" label={m.onboarding_workspace_name()} required>
+				{#snippet children({ id, describedBy, invalid })}
+					<Input
+						{id}
+						aria-describedby={describedBy}
+						aria-invalid={invalid}
+						bind:value={workspaceName}
+						placeholder={m.onboarding_workspace_placeholder()}
+						disabled={pending}
+						autocomplete="off"
+						autofocus
+						required
+					/>
+				{/snippet}
+			</FormField>
 
 			<Dialog.Footer>
 				<Button type="button" variant="outline" disabled={pending} onclick={close}>
