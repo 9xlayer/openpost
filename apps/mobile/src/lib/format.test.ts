@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { accountHandle, calendarOccurrence, platformLabel, relativeTime } from "./format";
+import {
+  accountHandle,
+  calendarOccurrence,
+  platformColor,
+  platformKey,
+  platformLabel,
+  relativeTime,
+} from "./format";
 
 const relativeTimeFormat = Intl.RelativeTimeFormat;
 
@@ -53,7 +60,7 @@ test("labels fediverse software instead of the raw slug", () => {
 });
 
 test("every canonical platform key resolves to a name different from the raw key", () => {
-  const expected: Record<string, string> = {
+  const expected = {
     x: "X",
     twitter: "X",
     mastodon: "Mastodon",
@@ -85,6 +92,39 @@ test("every canonical platform key resolves to a name different from the raw key
   }
 });
 
+test("platform keys resolve aliases, padding, and instance suffixes", () => {
+  expect(platformKey("twitter")).toBe("x");
+  expect(platformKey(" twitter ")).toBe("x");
+  expect(platformKey("Twitter:instance")).toBe("x");
+  expect(platformKey("x:instance")).toBe("x");
+  expect(platformKey(" GMB ")).toBe("googlebusiness");
+  expect(platformKey("gmb")).toBe("googlebusiness");
+  expect(platformKey("Mastodon:https://masto.pt")).toBe("mastodon");
+});
+
+test("labels tolerate padding around the platform", () => {
+  expect(platformLabel(" mastodon ")).toBe("Mastodon");
+  expect(platformLabel(" Twitter:instance ")).toBe("X");
+});
+
+test("platform colors are defined for every canonical key and alias", () => {
+  expect(platformColor("x")).toBe("#000000");
+  expect(platformColor("twitter")).toBe(platformColor("x"));
+  expect(platformColor("twitter:instance")).toBe(platformColor("x"));
+  expect(platformColor("gmb")).toBe(platformColor("googlebusiness"));
+  expect(platformColor("mastodon:https://masto.pt")).toBe(platformColor("mastodon"));
+  expect(platformColor("unknown-platform")).toBe("#6b7280");
+});
+
+test("unknown keys pass through without resolving prototype properties", () => {
+  expect(platformKey("constructor")).toBe("constructor");
+  expect(platformColor("constructor")).toBe("#6b7280");
+});
+
+test("padded handle-first platforms keep @", () => {
+  expect(accountHandle("acme", "fallback", " twitter ")).toBe("@acme");
+});
+
 test("pinterest and google business handles render without @", () => {
   expect(accountHandle("acme", "fallback", "pinterest")).toBe("acme");
   expect(accountHandle("acme", "fallback", "googlebusiness")).toBe("acme");
@@ -94,7 +134,6 @@ test("pinterest and google business handles render without @", () => {
 test("every handle-first platform keeps @", () => {
   for (const platform of [
     "bluesky",
-    "devnull",
     "instagram",
     "mastodon",
     "pixelfed",

@@ -24,6 +24,20 @@ const providerIcons: Record<string, string> = {
   discord: docsPath("/assets/logos/discord.svg"),
 };
 
+/**
+ * Resolve a provider slug the way the clients resolve platform keys: trim,
+ * case-fold, strip any `:instance` suffix, and map legacy aliases
+ * (`twitter` → `x`, `gmb` → `googlebusiness`). Mirrors `getPlatformKey`
+ * (`apps/web/src/lib/utils.ts`) and `platformKey`
+ * (`apps/mobile/src/lib/format.ts`); keep the three in sync.
+ */
+function providerIconKey(name: string): string {
+  const key = name.trim().toLowerCase().split(":")[0];
+  if (key === "twitter") return "x";
+  if (key === "gmb") return "googlebusiness";
+  return key;
+}
+
 const serviceIcons: Record<string, string> = {
   casaos: docsPath("/assets/logos/casaos.svg"),
   coolify: docsPath("/assets/logos/coolify.svg"),
@@ -84,9 +98,15 @@ export function documentationIcon(name: string | undefined) {
         }
       />
     );
-  if (name && providerIcons[name])
+  if (name && providerIcons[providerIconKey(name)])
     return (
-      <img src={providerIcons[name]} alt="" width={16} height={16} className="docs-provider-icon" />
+      <img
+        src={providerIcons[providerIconKey(name)]}
+        alt=""
+        width={16}
+        height={16}
+        className="docs-provider-icon"
+      />
     );
   if (name && serviceIcons[name])
     return (

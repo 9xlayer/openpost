@@ -43,10 +43,9 @@ const PLATFORM_LABEL: Record<string, string> = {
 };
 
 export function platformLabel(platform: string): string {
-  platform = platform.split(":")[0];
-  return (
-    PLATFORM_LABEL[platform.toLowerCase()] ?? platform.charAt(0).toUpperCase() + platform.slice(1)
-  );
+  const key = platformKey(platform);
+  const raw = platform.trim().split(":")[0];
+  return PLATFORM_LABEL[key] ?? raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 const HANDLE_FIRST_PLATFORMS = new Set([
@@ -59,11 +58,64 @@ const HANDLE_FIRST_PLATFORMS = new Set([
   "x",
 ]);
 
-function platformKey(platform: string): string {
-  const key = platform.split(":")[0]?.toLowerCase() ?? "";
-  if (key === "twitter") return "x";
-  if (key === "gmb") return "googlebusiness";
+/**
+ * Canonical platform-key normalization for native. Mirrors `getPlatformKey`
+ * (`apps/web/src/lib/utils.ts`): trim, case-fold, strip any `:instance`
+ * suffix, then resolve legacy aliases (`twitter` → `x`,
+ * `gmb` → `googlebusiness`). The native bundle cannot import the web module,
+ * so keep the two in sync; the proposed long-term home for both is
+ * `@openpost/platform-text`.
+ */
+const PLATFORM_KEY_ALIASES = {
+  twitter: "x",
+  gmb: "googlebusiness",
+} as const;
+
+export function platformKey(platform: string): string {
+  const key = platform.trim().toLowerCase().split(":")[0] ?? "";
+  if (Object.hasOwn(PLATFORM_KEY_ALIASES, key)) {
+    // SAFETY: `key` was just checked with `Object.hasOwn` against this exact table,
+    // so narrowing to its key union cannot yield a missing entry.
+    return PLATFORM_KEY_ALIASES[key as keyof typeof PLATFORM_KEY_ALIASES];
+  }
   return key;
+}
+
+/**
+ * Brand-chip colors per canonical platform key, as hex so they work in React
+ * Native. Each value matches the web `PLATFORM_COLORS` Tailwind token in
+ * `apps/web/src/lib/utils.ts` (same palette shade, e.g. sky-500 → #0ea5e9);
+ * unknown platforms fall back to gray-500.
+ */
+export const PLATFORM_COLORS = {
+  x: "#000000",
+  mastodon: "#6366f1",
+  pixelfed: "#8b5cf6",
+  peertube: "#f97316",
+  lemmy: "#059669",
+  piefed: "#3b82f6",
+  threads: "#f97316",
+  bluesky: "#0ea5e9",
+  discord: "#6366f1",
+  linkedin: "#2563eb",
+  instagram: "#ec4899",
+  facebook: "#1d4ed8",
+  youtube: "#dc2626",
+  tiktok: "#18181b",
+  pinterest: "#b91c1c",
+  telegram: "#0ea5e9",
+} as const;
+
+export const PLATFORM_COLOR_FALLBACK = "#6b7280";
+
+export function platformColor(platform: string): string {
+  const key = platformKey(platform);
+  if (Object.hasOwn(PLATFORM_COLORS, key)) {
+    // SAFETY: `key` was just checked with `Object.hasOwn` against this exact table,
+    // so narrowing to its key union cannot yield a missing entry.
+    return PLATFORM_COLORS[key as keyof typeof PLATFORM_COLORS];
+  }
+  return PLATFORM_COLOR_FALLBACK;
 }
 
 export function accountHandle(

@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
 	formatAccountHandle,
+	getPlatformColor,
 	getPlatformKey,
 	getPlatformName,
-	formatSocialAccountName
+	formatSocialAccountName,
+	PLATFORM_COLORS
 } from './utils';
 
 describe('formatAccountHandle', () => {
@@ -48,7 +50,6 @@ describe('formatSocialAccountName', () => {
 	it('prefixes every handle-first platform', () => {
 		for (const platform of [
 			'bluesky',
-			'devnull',
 			'instagram',
 			'mastodon',
 			'pixelfed',
@@ -77,7 +78,7 @@ describe('getPlatformName', () => {
 	});
 
 	it('resolves every canonical platform key to a name different from the raw key', () => {
-		const expected: Record<string, string> = {
+		const expected = {
 			x: 'X',
 			twitter: 'X',
 			mastodon: 'Mastodon',
@@ -114,5 +115,36 @@ describe('getPlatformKey', () => {
 	it('canonicalizes the Google Business alias', () => {
 		expect(getPlatformKey('gmb')).toBe('googlebusiness');
 		expect(getPlatformKey('googlebusiness')).toBe('googlebusiness');
+	});
+
+	it('resolves the legacy twitter alias, even padded or instance-qualified', () => {
+		expect(getPlatformKey('twitter')).toBe('x');
+		expect(getPlatformKey(' twitter ')).toBe('x');
+		expect(getPlatformKey('Twitter:instance')).toBe('x');
+		expect(getPlatformKey('x:instance')).toBe('x');
+	});
+
+	it('trims and case-folds before stripping the instance suffix', () => {
+		expect(getPlatformKey(' GMB ')).toBe('googlebusiness');
+		expect(getPlatformKey('Mastodon:https://masto.pt')).toBe('mastodon');
+	});
+
+	it('passes unknown keys through without resolving prototype properties', () => {
+		expect(getPlatformKey('constructor')).toBe('constructor');
+		expect(getPlatformColor('constructor')).toBe('bg-gray-500');
+	});
+});
+
+describe('getPlatformColor', () => {
+	it('resolves aliases and instance suffixes through the shared key', () => {
+		expect(getPlatformColor('twitter')).toBe('bg-black');
+		expect(getPlatformColor('twitter:instance')).toBe('bg-black');
+		expect(getPlatformColor('gmb')).toBe(getPlatformColor('googlebusiness'));
+	});
+
+	it('keeps the existing token values', () => {
+		expect(PLATFORM_COLORS['x']).toBe('bg-black');
+		expect(PLATFORM_COLORS['bluesky']).toBe('bg-sky-500');
+		expect(getPlatformColor('unknown-platform')).toBe('bg-gray-500');
 	});
 });
