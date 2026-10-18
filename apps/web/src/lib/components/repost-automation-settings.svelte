@@ -244,6 +244,15 @@
 		policies.splice(index, 1);
 	}
 
+	function setSourceScope(policy: RepostPolicy, checked: boolean) {
+		if (checked) {
+			policy.source_account_ids = [];
+			return;
+		}
+		const first = sourceAccounts[0];
+		policy.source_account_ids = first ? [first.id] : [];
+	}
+
 	function toggleSource(policy: RepostPolicy, accountID: string) {
 		const selected = policy.source_account_ids ?? [];
 		policy.source_account_ids = selected.includes(accountID)
@@ -521,7 +530,7 @@
 								<label class="flex min-h-11 items-center gap-3 rounded-md border px-3 py-2 text-sm">
 									<Checkbox
 										checked={(policy.source_account_ids ?? []).length === 0}
-										onCheckedChange={() => (policy.source_account_ids = [])}
+										onCheckedChange={(checked) => setSourceScope(policy, checked === true)}
 										disabled={!settings.can_manage}
 									/>
 									<span>{m.repost_any_compatible_source()}</span>

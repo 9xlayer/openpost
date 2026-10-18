@@ -22,6 +22,15 @@
 		onchange: (source: Source) => void;
 	} = $props();
 	const feedIssue = $derived(feedURLIssue(source.url));
+
+	function setAnySource(checked: boolean) {
+		if (checked) {
+			onchange({ ...source, account_ids: [] });
+			return;
+		}
+		const first = accounts[0];
+		onchange({ ...source, account_ids: first ? [first.id] : [] });
+	}
 </script>
 
 <div class="space-y-5">
@@ -119,7 +128,7 @@
 			<label class="flex min-h-11 items-center gap-2 text-sm"
 				><Checkbox
 					checked={!source.account_ids?.length}
-					onCheckedChange={() => onchange({ ...source, account_ids: [] })}
+					onCheckedChange={(checked) => setAnySource(checked === true)}
 				/>{m.repost_any_compatible_source()}</label
 			>
 			{#each accounts as account (account.id)}<label

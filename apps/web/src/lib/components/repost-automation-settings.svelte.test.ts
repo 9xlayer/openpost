@@ -83,6 +83,37 @@ describe('repost automation mutation ownership', () => {
 			}
 		});
 	});
+
+	it('unchecking the any-source checkbox selects a specific account and rechecking clears it', async () => {
+		const initial = repostSettings('workspace-a', 'Source rule');
+		queryClient.setQueryData(schedulingQueryKeys.repostAutomation('workspace-a'), initial);
+		putMock.mockResolvedValue({ data: initial, error: undefined, response: new Response(null) });
+
+		const screen = await render(RepostAutomationSettings, { workspaceID: 'workspace-a' });
+		const anySource = screen.getByRole('checkbox', { name: 'Any compatible source account' });
+		const sourceGroup = screen.getByRole('group', { name: 'Source accounts' });
+		const specificSource = sourceGroup.getByRole('checkbox', { name: /@workspace-a/ });
+		await expect.element(anySource).toBeChecked();
+
+		await anySource.click();
+		await expect.element(specificSource).toBeChecked();
+		await expect.element(anySource).not.toBeChecked();
+
+		await anySource.click();
+		await expect.element(anySource).toBeChecked();
+		await expect.element(specificSource).not.toBeChecked();
+
+		await anySource.click();
+		await expect.element(specificSource).toBeChecked();
+
+		await screen.getByRole('button', { name: 'Save changes' }).click();
+		expect(putMock).toHaveBeenCalledWith('/repost-automation', {
+			body: {
+				workspace_id: 'workspace-a',
+				policies: [expect.objectContaining({ source_account_ids: ['workspace-a-account'] })]
+			}
+		});
+	});
 });
 
 function repostSettings(workspaceID: string, ruleName: string): RepostSettings {
