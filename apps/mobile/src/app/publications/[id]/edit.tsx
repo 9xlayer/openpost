@@ -40,9 +40,9 @@ import { reconcileDestinationSelection } from "@/lib/destination-selection";
 import { accountHandle, formatDateTime, platformLabel } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
 import {
-  MAX_ATTACHMENT_BYTES,
   MAX_MOBILE_ATTACHMENT_COUNT,
   ORIGINAL_IMAGE_QUALITY,
+  attachmentSizeError,
   uploadAttachment,
   type PendingAttachment,
 } from "@/lib/media";
@@ -776,14 +776,11 @@ function Composer({
   };
 
   function appendAttachments(items: LocalAttachmentInput[], focus?: () => void) {
-    const validItems = items.filter(
-      (item) =>
-        !item.mimeType.startsWith("image/") ||
-        item.size === null ||
-        item.size <= MAX_ATTACHMENT_BYTES,
-    );
-    if (validItems.length < items.length) {
-      setActionError("Each image must be 50 MB or smaller.");
+    const sizeErrors = items.map((item) => attachmentSizeError(item));
+    const validItems = items.filter((_, index) => !sizeErrors[index]);
+    const firstSizeError = sizeErrors.find((message) => message !== null);
+    if (firstSizeError) {
+      setActionError(firstSizeError);
       void errorHaptic();
     }
 

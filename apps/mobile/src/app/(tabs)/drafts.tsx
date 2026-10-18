@@ -30,7 +30,7 @@ import {
 import { api, errorMessage } from "@/lib/api/client";
 import { relativeTime } from "@/lib/format";
 import { errorHaptic, selectionHaptic, successHaptic } from "@/lib/haptics";
-import { MAX_ATTACHMENT_BYTES, ORIGINAL_IMAGE_QUALITY, type PendingAttachment } from "@/lib/media";
+import { ORIGINAL_IMAGE_QUALITY, attachmentSizeError, type PendingAttachment } from "@/lib/media";
 import { stashPendingAttachments, stashSharedFiles } from "@/lib/share";
 import { cacheCreatedPublication, invalidatePublicationData } from "@/lib/query-cache";
 import { queryKeys } from "@/lib/query-policy";
@@ -192,8 +192,9 @@ export default function DraftsScreen() {
   }
 
   function applyImage(nextImage: PendingAttachment, focus?: () => void) {
-    if (nextImage.size !== null && nextImage.size > MAX_ATTACHMENT_BYTES) {
-      setCaptureError("Images must be 50 MB or smaller.");
+    const sizeError = attachmentSizeError(nextImage);
+    if (sizeError) {
+      setCaptureError(sizeError);
       void errorHaptic();
       focus?.();
       return;

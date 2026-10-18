@@ -11,7 +11,49 @@ import {
 
 export const MAX_MOBILE_ATTACHMENT_COUNT = 10;
 export const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
+export const MAX_VIDEO_ATTACHMENT_BYTES = 16 * 1024 * 1024 * 1024;
 export const ORIGINAL_IMAGE_QUALITY = 1;
+
+export interface AttachmentLimits {
+  videoBytes: number;
+  defaultBytes: number;
+}
+
+// Mirrors the server's published ceilings (media.go: MaxMediaUploadBytes and
+// MaxBufferedMediaUploadBytes) until the shared source in #395 lands.
+export const ATTACHMENT_SIZE_LIMITS: AttachmentLimits = {
+  videoBytes: MAX_VIDEO_ATTACHMENT_BYTES,
+  defaultBytes: MAX_ATTACHMENT_BYTES,
+};
+
+function formatAttachmentLimit(limit: number): string {
+  if (limit >= 1024 * 1024 * 1024 && limit % (1024 * 1024 * 1024) === 0) {
+    return `${limit / (1024 * 1024 * 1024)} GB`;
+  }
+  return `${Math.round(limit / (1024 * 1024))} MB`;
+}
+
+export function isVideoAttachment(mimeType: string, filename: string): boolean {
+  if (mimeType.trim().toLowerCase().startsWith("video/")) return true;
+  const dot = filename.toLowerCase().lastIndexOf(".");
+  if (dot >= 0) {
+    const ext = filename.toLowerCase().slice(dot);
+    if (ext === ".mp4" || ext === ".mov" || ext === ".m4v" || ext === ".webm") return true;
+  }
+  return false;
+}
+
+export function attachmentSizeError(
+  file: { mimeType: string; filename: string; size: number | null },
+  limits: AttachmentLimits = ATTACHMENT_SIZE_LIMITS,
+): string | null {
+  if (file.size === null) return null;
+  const video = isVideoAttachment(file.mimeType, file.filename);
+  const limit = video ? limits.videoBytes : limits.defaultBytes;
+  if (file.size <= limit) return null;
+  if (video) return `Videos must be ${formatAttachmentLimit(limit)} or smaller.`;
+  return `Attachments must be ${formatAttachmentLimit(limit)} or smaller.`;
+}
 
 export type PendingAttachment = {
   localId: string;
@@ -50,8 +92,12 @@ export async function uploadAttachment(
   if (!Number.isSafeInteger(size) || size <= 0) {
     throw new Error("This attachment is empty or its size could not be read.");
   }
-  if (size > MAX_ATTACHMENT_BYTES) {
-    throw new Error("Attachments must be 50 MB or smaller.");
+  const sizeError = attachmentSizeError(
+    { mimeType: file.mimeType, filename: file.filename, size },
+    ATTACHMENT_SIZE_LIMITS,
+  );
+  if (sizeError) {
+    throw new Error(sizeError);
   }
   const {
     data: session,
