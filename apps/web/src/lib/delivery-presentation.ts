@@ -1,6 +1,13 @@
 import type { components } from '$lib/api/types';
 import { m } from '$lib/paraglide/messages';
 
+export type {
+	DeliveryOutcomeBucket,
+	DeliveryOutcomeCounts,
+	DeliveryOutcomeInput
+} from './delivery-outcome';
+export { deliveryOutcomeBucket, deliveryOutcomeSummary } from './delivery-outcome';
+
 export type DeliveryRecoveryAction =
 	components['schemas']['ProviderDeliveryResponse']['recovery_action'];
 

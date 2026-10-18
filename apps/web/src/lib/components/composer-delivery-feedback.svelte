@@ -2,6 +2,7 @@
 	import type { components } from '$lib/api/types';
 	import { Button } from '$lib/components/ui/button';
 	import { m } from '$lib/paraglide/messages';
+	import { deliveryOutcomeSummary } from '$lib/delivery-outcome';
 	import PublicationDeliveryCard from './publication-delivery-card.svelte';
 
 	type Rendition = components['schemas']['RenditionActionOutcome'];
@@ -28,26 +29,7 @@
 		onCreateAnother: () => void | Promise<void>;
 	} = $props();
 
-	function outcomeGroup(rendition: Rendition): 'succeeded' | 'pending' | 'failed' | 'manual' {
-		const state = rendition.delivery?.state || rendition.status;
-		if (state === 'live' || state === 'published') return 'succeeded';
-		if (
-			state === 'ambiguous' ||
-			state === 'manual_resolution' ||
-			rendition.delivery?.recovery_action === 'reconcile' ||
-			rendition.delivery?.recovery_action === 'manual_resolution'
-		) {
-			return 'manual';
-		}
-		if (state === 'rejected' || state === 'failed') return 'failed';
-		return 'pending';
-	}
-
-	const summary = $derived.by(() => {
-		const counts = { succeeded: 0, pending: 0, failed: 0, manual: 0 };
-		for (const rendition of renditions) counts[outcomeGroup(rendition)] += 1;
-		return counts;
-	});
+	const summary = $derived(deliveryOutcomeSummary(renditions));
 </script>
 
 <section
