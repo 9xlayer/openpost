@@ -12,6 +12,7 @@
 	let {
 		account,
 		values,
+		defaults = {},
 		outputProfile = '',
 		text = '',
 		attachmentCount = 0,
@@ -20,6 +21,10 @@
 	}: {
 		account: SocialAccount;
 		values: ComposerSettings;
+		// Catalogue defaults resolved once via textCardDefaultsFrom. The caller
+		// already normalizes values against the same catalogue, so this only
+		// fills keys the values do not carry; it must not restate server literals.
+		defaults?: ComposerSettings;
 		outputProfile?: string;
 		text?: string;
 		attachmentCount?: number;
@@ -94,12 +99,12 @@
 				</div>
 				<ColorPicker
 					label={m.image_editor_background_color()}
-					value={String(values.text_card_color ?? '#c4b5fd')}
+					value={String(values.text_card_color ?? defaults.text_card_color ?? '')}
 					onChange={(value) => onChange('text_card_color', value)}
 				/>
 				{#if background !== 'solid'}<ColorPicker
 						label={m.image_editor_gradient_end_color()}
-						value={String(values.text_card_color_end ?? '#93c5fd')}
+						value={String(values.text_card_color_end ?? defaults.text_card_color_end ?? '')}
 						onChange={(value) => onChange('text_card_color_end', value)}
 					/>{/if}
 				<div class="flex min-h-11 items-center gap-2">

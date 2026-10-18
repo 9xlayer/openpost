@@ -42,15 +42,13 @@ Use `text_card: "always"` to prepend the card to attached media, or `"off"` to d
     "text_card": "always",
     "text_card_appearance": "dark",
     "text_card_background": "gradient",
-    "text_card_color": "#c4b5fd",
-    "text_card_color_end": "#93c5fd",
     "text_card_rounded": true,
     "text_card_shadow": true
   }
 }
 ```
 
-Appearance accepts `light` or `dark`; background accepts `solid`, `gradient` or `mesh`. Colors are six-digit hex values. Use `instagram.story` for vertical Story cards. Reels are not converted. Text is limited to 2,200 characters and can span multiple images, subject to the destination's media count limit.
+Appearance accepts `light` or `dark`; background accepts `solid`, `gradient` or `mesh`. Colors are six-digit hex values. Omit `text_card_color` and `text_card_color_end` to use the capability catalogue defaults: the resolved capability carries the default for each `text_card_*` setting, and the server applies those defaults when the keys are absent, so clients must read them from the catalogue rather than restating a literal. Use `instagram.story` for vertical Story cards. Reels are not converted. Text is limited to 2,200 characters and can span multiple images, subject to the destination's media count limit.
 
 `POST /api/v1/publications/preview-text-card` accepts `social_account_id`, effective `text`, `output_profile`, `attachment_count`, and the same `settings`. It returns private JPEG data URLs in `images` without saving media. MCP exposes this renderer through `preview_text_card`, returning image content directly.
 

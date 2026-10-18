@@ -122,6 +122,7 @@
 	import TextCardPreview from './text-card-preview.svelte';
 	import {
 		supportsTextCards,
+		textCardDefaultsFrom,
 		textCardRequest,
 		textCardIdentityForAccount,
 		textCardRequestKey,
@@ -248,12 +249,12 @@
 		firstFailedPasteMediaUpload,
 		hasUnsettledPasteMediaUploads,
 		pasteMediaTargetKey,
-		pastedImageFileSignature,
 		selectPastedImageFiles,
 		type PasteMediaUploadItem,
 		type PasteMediaUploadTarget,
 		type PastedImageRejectionReason
 	} from '$lib/composer/media-queue';
+	import { mediaFileSignature } from '$lib/media-input';
 
 	// --------------------------------------------------------------------------
 	// Types
@@ -1646,11 +1647,20 @@
 		);
 	}
 
+	// Catalogue text-card defaults for one account, resolved once from the
+	// account's resolved capability (falling back to the capability catalogue
+	// while it is still resolving) and merged into settings before the request
+	// key is computed, so omitted styling follows the catalogue.
+	function textCardDefaultsForAccount(account: SocialAccount): ComposerSettings {
+		return textCardDefaultsFrom(resolvedCapabilities[account.id] ?? visibleSettings(account));
+	}
+
 	function previewForAccount(account: SocialAccount) {
 		const model = authoredPreviewForAccount(account);
 		const requestKey = textCardRequestKey(
 			cardRequestForAccount(account),
-			textCardIdentityForAccount(account)
+			textCardIdentityForAccount(account),
+			textCardDefaultsForAccount(account)
 		);
 		const saved = savedCardPreviews[account.id];
 		const result = saved?.key === requestKey ? saved : textCardResults.get(account.id);
@@ -3246,7 +3256,11 @@
 			].map((media) => [media.id, media.alt_text ?? ''])
 		);
 		hydrateCanonicalSettings(publication);
-		savedCardPreviews = savedTextCardPreviews(publication.renditions ?? [], textCardIdentities);
+		savedCardPreviews = savedTextCardPreviews(
+			publication.renditions ?? [],
+			textCardIdentities,
+			textCardDefaultsFrom(capabilities.flatMap((capability) => capability.settings ?? []))
+		);
 		if (resolveAfter) await resolveCapabilities();
 		lastSavedSnapshot = getSaveSnapshot();
 	}
@@ -4649,8 +4663,12 @@
 		switch (reason) {
 			case 'empty':
 				return m.media_upload_empty_file({ name: file.name });
-			case 'too_large':
+			case 'unsupported':
+				return m.media_upload_unsupported({ name: file.name });
+			case 'file_too_large':
 				return m.media_upload_file_too_large({ name: file.name });
+			case 'video_too_large':
+				return m.media_upload_video_too_large({ name: file.name });
 			case 'duplicate':
 				return m.media_upload_duplicates();
 			case 'capacity':
@@ -4769,7 +4787,7 @@
 		const selection = selectPastedImageFiles(
 			Array.from(items),
 			capacity,
-			targetUploads.map((upload) => pastedImageFileSignature(upload.file))
+			targetUploads.map((upload) => mediaFileSignature(upload.file))
 		);
 		if (selection.hasImageFiles && selection.rejected.length > 0) {
 			pasteMediaFeedback = {

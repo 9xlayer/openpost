@@ -26,6 +26,7 @@
 	import { showToast } from '$lib/toast';
 	import DiscordEmbedEditor from './discord-embed-editor.svelte';
 	import type { TextCardResult } from '$lib/text-cards';
+	import { textCardDefaultsFrom } from '$lib/text-cards';
 	import TextCardSettings from './text-card-settings.svelte';
 
 	type SettingDefinition = components['schemas']['SettingDefinition'];
@@ -149,6 +150,9 @@
 			.filter((entry) => entry.settings.length > 0)
 	);
 	const mediaSettings = $derived(settings.filter((setting) => setting.scope === 'media_item'));
+	// The resolved catalogue owns the text-card defaults; the settings panel must
+	// show them rather than restating a colour literal.
+	const textCardDefaults = $derived(textCardDefaultsFrom(settings));
 	const unavailableSettings = $derived(
 		settings.filter(
 			(setting) =>
@@ -493,6 +497,7 @@
 					savedPreview={textCardSavedPreview}
 					{account}
 					{values}
+					defaults={textCardDefaults}
 					outputProfile={formatValue}
 					text={textCardText}
 					attachmentCount={textCardAttachmentCount}

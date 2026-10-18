@@ -46,6 +46,66 @@ export function textCardSettings(settings: ComposerSettings): ComposerSettings {
 	);
 }
 
+// Minimal structural view of a capability setting definition. The resolved
+// capability (settings plus setting groups) carries the catalogue default for
+// every text-card key; the server textcards package owns those values and the
+// client must read them here rather than restating its own literal copy.
+export interface TextCardCatalogueDefinition {
+	key: string;
+	default?: unknown;
+}
+
+export interface TextCardCatalogueSource {
+	settings?: readonly (TextCardCatalogueDefinition | null | undefined)[] | null | undefined;
+	setting_groups?:
+		| readonly {
+				settings?: readonly (TextCardCatalogueDefinition | null | undefined)[] | null | undefined;
+		  }[]
+		| null
+		| undefined;
+}
+
+// textCardDefaultsFrom resolves the text-card defaults once from the capability
+// catalogue (a resolved account capability or a flat setting-definition list).
+// Callers merge the result into authored settings before computing a request
+// key so omitted styling keys follow the catalogue instead of a literal.
+export function textCardDefaultsFrom(
+	source:
+		| TextCardCatalogueSource
+		| readonly (TextCardCatalogueDefinition | null | undefined)[]
+		| null
+		| undefined
+): ComposerSettings {
+	const definitions: readonly (TextCardCatalogueDefinition | null | undefined)[] = Array.isArray(
+		source
+	)
+		? source
+		: [
+				...(source?.settings ?? []),
+				...(source?.setting_groups ?? []).flatMap((group) => group?.settings ?? [])
+			];
+	const defaults: ComposerSettings = {};
+	for (const definition of definitions) {
+		if (!definition || !definition.key.startsWith('text_card')) continue;
+		if (definition.default === undefined || definition.default === null) continue;
+		defaults[definition.key] = definition.default as ComposerSettings[string];
+	}
+	return defaults;
+}
+
+// withTextCardDefaults merges catalogue defaults under authored settings.
+// Explicit values win; only undefined falls back to the catalogue default.
+export function withTextCardDefaults(
+	settings: ComposerSettings,
+	defaults: ComposerSettings
+): ComposerSettings {
+	const merged: ComposerSettings = { ...defaults };
+	for (const [key, value] of Object.entries(settings)) {
+		if (value !== undefined) merged[key] = value;
+	}
+	return merged;
+}
+
 export function textCardRequest(
 	accountId: string,
 	model: PreviewModel,
@@ -97,10 +157,15 @@ export function withTextCardImages(model: PreviewModel, images: TextCardImage[])
 
 export function textCardRequestKey(
 	request: TextCardRequest | null,
-	identity?: TextCardIdentity | null
+	identity?: TextCardIdentity | null,
+	defaults: ComposerSettings = {}
 ): string {
 	if (!request) return '';
-	const settings = request.settings ?? {};
+	// Callers merge catalogue defaults (textCardDefaultsFrom) into the settings
+	// before this key is computed, so omitted styling matches the resolved
+	// capability instead of a restated literal. The neutral fallbacks below only
+	// fire when the catalogue itself has no default for the key.
+	const settings = withTextCardDefaults(request.settings ?? {}, defaults);
 	return JSON.stringify([
 		request.social_account_id,
 		request.text.trim(),
@@ -109,18 +174,19 @@ export function textCardRequestKey(
 		identity?.name ?? '',
 		identity?.handle ?? '',
 		identity?.avatar ?? '',
-		settings.text_card_appearance ?? 'light',
-		settings.text_card_background ?? 'gradient',
-		settings.text_card_color ?? '#c4b5fd',
-		settings.text_card_color_end ?? '#93c5fd',
-		settings.text_card_rounded ?? true,
-		settings.text_card_shadow ?? true
+		settings.text_card_appearance ?? '',
+		settings.text_card_background ?? '',
+		settings.text_card_color ?? '',
+		settings.text_card_color_end ?? '',
+		settings.text_card_rounded ?? null,
+		settings.text_card_shadow ?? null
 	]);
 }
 
 export function savedTextCardPreviews(
 	renditions: components['schemas']['RenditionResponse'][] = [],
-	identities: Record<string, TextCardIdentity | undefined> = {}
+	identities: Record<string, TextCardIdentity | undefined> = {},
+	defaults: ComposerSettings = {}
 ) {
 	const previews: Record<string, TextCardResult> = {};
 	for (const rendition of renditions) {
@@ -142,7 +208,7 @@ export function savedTextCardPreviews(
 			settings: rendition.settings ?? {}
 		};
 		previews[rendition.social_account_id] = {
-			key: textCardRequestKey(request, identities[rendition.social_account_id]),
+			key: textCardRequestKey(request, identities[rendition.social_account_id], defaults),
 			images: cards.map((media) => ({
 				data_url: media.url,
 				width: media.width,
