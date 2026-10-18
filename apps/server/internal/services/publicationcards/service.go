@@ -15,15 +15,13 @@ import (
 	_ "image/gif" // Decode connected-account avatars.
 	_ "image/png"
 	"io"
-	"net/http"
-	"net/url"
 	"path"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/openpost/backend/internal/avatarfetch"
 	"github.com/openpost/backend/internal/models"
-	"github.com/openpost/backend/internal/netguard"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/medialifecycle"
 	"github.com/openpost/backend/internal/services/mediastore"
@@ -41,14 +39,13 @@ type Service struct {
 	db      *bun.DB
 	storage mediastore.BlobStorage
 	quota   entitlements.Service
-	http    *http.Client
 }
 
 func New(db *bun.DB, storage mediastore.BlobStorage, quota entitlements.Service) *Service {
 	if quota == nil {
 		quota = entitlements.NewSelfHostedService()
 	}
-	return &Service{db: db, storage: storage, quota: quota, http: netguard.NewHTTPClient(5*time.Second, netguard.URLPolicy{Label: "profile photo", AllowedSchemes: []string{"https"}})}
+	return &Service{db: db, storage: storage, quota: quota}
 }
 
 type cleanupKey struct{}
@@ -125,17 +122,8 @@ func (s *Service) avatar(ctx context.Context, raw string) (image.Image, string) 
 	if raw == "" {
 		return nil, avatarMissing
 	}
-	reader, err := s.openAvatar(ctx, raw)
-	if err != nil || reader == nil {
-		return nil, avatarFailed
-	}
-	defer reader.Close()
-	data, err := io.ReadAll(io.LimitReader(reader, 4*1024*1024+1))
-	if err != nil || len(data) > 4*1024*1024 {
-		return nil, avatarFailed
-	}
-	config, _, err := image.DecodeConfig(bytes.NewReader(data))
-	if err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 16_000_000 {
+	data, ok := s.avatarBytes(ctx, raw)
+	if !ok {
 		return nil, avatarFailed
 	}
 	photo, _, err := image.Decode(bytes.NewReader(data))
@@ -143,6 +131,35 @@ func (s *Service) avatar(ctx context.Context, raw string) (image.Image, string) 
 		return nil, avatarFailed
 	}
 	return photo, avatarOK
+}
+
+// avatarBytes reads the stored photo without network for rehosted /avatars/
+// URLs, and fetches provider URLs through the shared bounded adapter. Any
+// fetch failure keeps the monogram fallback and records a retryable outcome.
+func (s *Service) avatarBytes(ctx context.Context, raw string) ([]byte, bool) {
+	if strings.HasPrefix(raw, "/avatars/") && s.storage != nil {
+		reader, err := s.storage.Open(ctx, path.Base(raw))
+		if err != nil {
+			return nil, false
+		}
+		defer reader.Close()
+		data, err := io.ReadAll(io.LimitReader(reader, 4*1024*1024+1))
+		if err != nil || len(data) > 4*1024*1024 {
+			return nil, false
+		}
+		if config, _, err := image.DecodeConfig(bytes.NewReader(data)); err != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > 16_000_000 {
+			return nil, false
+		}
+		return data, true
+	}
+	result, err := avatarfetch.Fetch(ctx, raw, avatarfetch.Bounds{
+		Label: "profile photo", Timeout: 5 * time.Second,
+		MaxBytes: 4 * 1024 * 1024, MaxPixels: 16_000_000,
+	})
+	if err != nil {
+		return nil, false
+	}
+	return result.Data, true
 }
 
 // RefreshSegment changes only generated media relations. Existing output bytes
@@ -304,36 +321,6 @@ func (s *Service) Finalize(ctx context.Context, tx bun.Tx, workspaceID string, p
 }
 
 func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }
-
-func (s *Service) openAvatar(ctx context.Context, raw string) (io.ReadCloser, error) {
-	var reader io.ReadCloser
-	var err error
-	if strings.HasPrefix(raw, "/avatars/") && s.storage != nil {
-		reader, err = s.storage.Open(ctx, path.Base(raw))
-	} else {
-		remote, parseErr := url.Parse(raw)
-		if parseErr != nil || remote.Scheme != "https" || remote.User != nil {
-			return nil, nil
-		}
-		req, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
-		if requestErr != nil {
-			return nil, nil
-		}
-		response, requestErr := s.http.Do(req)
-		if requestErr != nil {
-			return nil, nil
-		}
-		if response.StatusCode != http.StatusOK {
-			_ = response.Body.Close()
-			return nil, nil
-		}
-		reader = response.Body
-	}
-	if err != nil {
-		return nil, nil
-	}
-	return reader, err
-}
 
 func segmentAttachments(rows []models.RenditionSegmentMedia) (int, []models.RenditionSegmentMedia) {
 	attachments := 0
