@@ -32,6 +32,7 @@
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { auth, type AuthIdentityToken } from '$lib/stores/auth';
 	import { openPostQueryKeys, seedPublicationDetail } from '@openpost/query-catalog';
+	import { publicationActivityOccurrence } from '$lib/publication-calendar';
 	import { queryClient } from '$lib/query/client';
 	import {
 		loadPublicationForWorkspace,
@@ -462,7 +463,7 @@
 				<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
 					<span class="font-medium text-foreground">{statusLabel(publication.status)}</span>
 					<span>·</span>
-					<span>{formatDateTime(publication.actual_run_at || publication.updated_at)}</span>
+					<span>{formatDateTime(publicationActivityOccurrence(publication))}</span>
 				</div>
 				<div class="mt-4 space-y-4">
 					{#if publication.source_text}

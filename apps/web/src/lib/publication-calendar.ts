@@ -24,10 +24,12 @@ export function publicationCalendarOccurrence(publication: CalendarPublication):
 }
 
 export function publicationActivityOccurrence(publication: CalendarPublication): string {
-	return (
-		publicationCalendarOccurrence(publication) ||
-		publication.actual_run_at ||
-		publication.scheduled_at ||
-		publication.created_at
-	);
+	const planned = publicationCalendarOccurrence(publication);
+	if (planned) return planned;
+	if (publication.status === 'scheduled' || publication.status === 'publishing') {
+		// A queued retry can carry a stale previous-run timestamp with no authored
+		// schedule; show the queued time instead of the previous run.
+		return publication.updated_at || publication.created_at;
+	}
+	return publication.actual_run_at || publication.scheduled_at || publication.created_at;
 }
