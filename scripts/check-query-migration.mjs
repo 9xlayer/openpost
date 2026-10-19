@@ -11,7 +11,6 @@ import {
   mobileQueryAdapters,
   sourceExtensions,
   sourceFiles,
-  webQueryAdapterPrefix,
 } from "./check-query-shared.mjs";
 
 const sourceRoots = ["apps/web/src", "apps/mobile/src"];
@@ -534,7 +533,9 @@ export function findImperativeQueryViolations(
     const root = resolve(repoRoot, sourceRoot);
     for (const file of sourceFiles(root).sort()) {
       const repoPath = relative(repoRoot, file).replaceAll("\\", "/");
-      if (repoPath.startsWith(webQueryAdapterPrefix) && /\.test\.[jt]sx?$/u.test(repoPath)) {
+      // Tests never run as app reads; they exercise the transport and adapters
+      // directly, so their fixture GETs must not count against the catalog.
+      if (/\.test\.[jt]sx?$/u.test(repoPath)) {
         continue;
       }
       const source = readFileSync(file, "utf8");
