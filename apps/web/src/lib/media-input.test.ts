@@ -17,8 +17,12 @@ const panelRules: MediaInputRules = {
 	maxFiles: 10
 };
 
+// Metadata is all these rules read. Reporting the size without allocating it
+// keeps the 16 GiB video-limit case from exhausting the test runtime.
 function fakeFile(name: string, type: string, size = 128, lastModified = 1): File {
-	return new File([new Uint8Array(size)], name, { type, lastModified });
+	const file = new File([], name, { type, lastModified });
+	Object.defineProperty(file, 'size', { value: size });
+	return file;
 }
 
 describe('mediaFileSignature', () => {
