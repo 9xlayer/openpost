@@ -12,7 +12,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function mockserved(status: number, body: unknown = { detail: 'Session expired' }) {
+function mockserved(status: number, body: Record<string, string> = { detail: 'Session expired' }) {
 	const fetchMock: typeof fetch = vi.fn(
 		async () =>
 			new Response(JSON.stringify(body), {

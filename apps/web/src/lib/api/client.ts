@@ -23,11 +23,11 @@ export function applyAPIRequestHeaders(headers: Headers): Headers {
 }
 
 function createApiClient(baseUrl = '/api/v1', fetchImpl?: typeof fetch) {
-	const c = createClient<paths>({
-		baseUrl,
-		credentials: 'include',
-		...(fetchImpl ? { fetch: fetchImpl } : {})
-	});
+	const c = createClient<paths>(
+		fetchImpl
+			? { baseUrl, credentials: 'include', fetch: fetchImpl }
+			: { baseUrl, credentials: 'include' }
+	);
 	c.use({
 		async onRequest({ request }) {
 			feedbackDiagnostics.recordRequestStart(request);
@@ -50,15 +50,19 @@ type APIClientMethods = Pick<APIClient, 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELE
 // mutations cannot leave the app on a stale authenticated shell. The boundary
 // keeps the "identity captured before the request" guard, so a 401 for a
 // superseded identity is a no-op.
-function withQueryAuthorizationSettlement<TMethod>(invoke: TMethod): TMethod {
-	return (async (...args: unknown[]) => {
+type SettledResponseMethod = (...args: never[]) => Promise<{ response: Response }>;
+
+function withQueryAuthorizationSettlement<TMethod extends SettledResponseMethod>(
+	invoke: TMethod
+): TMethod {
+	// SAFETY: the wrapper forwards the original arguments unchanged and returns
+	// the original result, so it satisfies the declared method signature.
+	return (async (...args: Parameters<TMethod>) => {
 		const authorizationIdentity = captureQueryAuthorizationIdentity();
-		const result = await (invoke as (...args: unknown[]) => Promise<{ response: Response }>)(
-			...args
-		);
+		const result = await invoke(...args);
 		if (result.response?.status === 401) settleQueryUnauthorized(authorizationIdentity);
 		return result;
-	}) as unknown as TMethod;
+	}) as TMethod;
 }
 
 function settleClientMethods(raw: APIClient): APIClientMethods {

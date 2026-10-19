@@ -40,8 +40,8 @@
 
 	$effect(() => {
 		// Reset the retry state whenever the still selection changes.
-		stillURL;
-		originalURL;
+		void stillURL;
+		void originalURL;
 		shownURL = stillURL;
 		retriedOriginal = false;
 		missing = false;

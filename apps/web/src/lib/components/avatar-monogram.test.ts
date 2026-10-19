@@ -5,7 +5,7 @@ import { monogramFor } from '@openpost/ui/components/avatar/monogram.js';
 // adapter must agree with this table. The preview package and the Go
 // text-card renderer mirror the same rule in their own owners.
 describe('shared account monogram', () => {
-	it.each([
+	it.each<[string, string | undefined, string]>([
 		['Rodrigo Garcia', undefined, 'RG'],
 		['Rodrigo', undefined, 'RO'],
 		['OpenPost', undefined, 'OP'],
@@ -18,10 +18,7 @@ describe('shared account monogram', () => {
 		['', '@ada', 'AD'],
 		['   ', 'rodrigo', 'RO'],
 		['Rodrigo Garcia', '@other', 'RG']
-	] as Array<[string, string | undefined, string]>)(
-		'monogramFor(%j, %j) is %j',
-		(displayName, handle, expected) => {
-			expect(monogramFor(displayName, handle)).toBe(expected);
-		}
-	);
+	])('monogramFor(%j, %j) is %j', (displayName, handle, expected) => {
+		expect(monogramFor(displayName, handle)).toBe(expected);
+	});
 });

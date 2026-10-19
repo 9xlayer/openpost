@@ -17,12 +17,12 @@ const imageItem = {
 	original_filename: 'team.png'
 };
 
-function imageElement(
-	screen: { getByRole: (role: string, options?: Record<string, unknown>) => unknown },
-	name: string
-): HTMLImageElement {
-	const locator = screen.getByRole('img', { name }) as { element: () => unknown };
-	const element = locator.element();
+interface RoleScreen {
+	getByRole(role: string, options?: { name?: string }): { element(): Element | null };
+}
+
+function imageElement(screen: RoleScreen, name: string): HTMLImageElement {
+	const element = screen.getByRole('img', { name }).element();
 	if (!(element instanceof HTMLImageElement)) throw new Error('Expected an image element.');
 	return element;
 }

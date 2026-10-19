@@ -82,6 +82,18 @@ function isCatalogueDefinitionList(
 	return Array.isArray(source);
 }
 
+function isComposerSettingScalar(value: unknown): value is string | number | boolean {
+	return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+// Catalogue defaults arrive as untyped JSON. Only scalar and scalar-array
+// values are composer settings; anything else is ignored rather than stored.
+function isComposerSettingValue(value: unknown): value is ComposerSettingValue {
+	if (value === null) return true;
+	if (isComposerSettingScalar(value)) return true;
+	return Array.isArray(value) && value.every(isComposerSettingScalar);
+}
+
 // textCardDefaultsFrom resolves the text-card defaults once from the capability
 // catalogue (a resolved account capability or a flat setting-definition list).
 // Callers merge the result into authored settings before computing a request
@@ -104,7 +116,8 @@ export function textCardDefaultsFrom(
 	for (const definition of definitions) {
 		if (!definition || !definition.key.startsWith('text_card')) continue;
 		if (definition.default === undefined || definition.default === null) continue;
-		defaults[definition.key] = definition.default as ComposerSettings[string];
+		if (!isComposerSettingValue(definition.default)) continue;
+		defaults[definition.key] = definition.default;
 	}
 	return defaults;
 }
@@ -221,6 +234,9 @@ export function savedTextCardPreviews(
 			attachment_count: new Set(
 				segments.flatMap((segment) => (segment.media ?? []).map((media) => media.id))
 			).size,
+			// SAFETY: stored rendition settings are authored through the composer,
+			// so their values are ComposerSettingValue; the preview endpoint
+			// revalidates every key it receives.
 			settings: (rendition.settings ?? {}) as ComposerSettings
 		};
 		previews[rendition.social_account_id] = {

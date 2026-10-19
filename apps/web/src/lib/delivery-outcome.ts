@@ -25,8 +25,13 @@ export function deliveryOutcomeBucket(rendition: DeliveryOutcomeInput): Delivery
 	return 'pending';
 }
 
-export function deliveryOutcomeSummary(renditions: DeliveryOutcomeInput[]): DeliveryOutcomeCounts {
-	const counts: DeliveryOutcomeCounts = { succeeded: 0, pending: 0, failed: 0, manual: 0 };
+export function deliveryOutcomeSummary(renditions: DeliveryOutcomeInput[]) {
+	const counts = {
+		succeeded: 0,
+		pending: 0,
+		failed: 0,
+		manual: 0
+	} satisfies DeliveryOutcomeCounts;
 	for (const rendition of renditions) counts[deliveryOutcomeBucket(rendition)] += 1;
 	return counts;
 }
