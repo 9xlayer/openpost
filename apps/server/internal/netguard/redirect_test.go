@@ -1,6 +1,7 @@
 package netguard
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"testing"
@@ -10,7 +11,7 @@ import (
 
 func redirectTestRequest(t testing.TB, raw string) *http.Request {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodGet, raw, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, raw, nil)
 	require.NoError(t, err)
 	return req
 }

@@ -263,7 +263,7 @@ func (d *DevNullAdapter) Publish(ctx context.Context, accessToken, _ string, req
 	if len(req.PlatformMediaIDs) > 0 {
 		return PublishResult{}, fmt.Errorf("dev/null images are attached when the commit is sent")
 	}
-	signer, replyTo, err := d.prepareCommit(accessToken, req, nil)
+	signer, replyTo, err := d.prepareCommit(accessToken, req)
 	if err != nil {
 		return PublishResult{}, err
 	}
@@ -302,7 +302,7 @@ type devNullImagePayload struct {
 // (fresh timestamp and nonce per attempt) and the POST itself happen inside
 // the fence, so content errors fail fast instead of recording an ambiguous
 // provider write.
-func (d *DevNullAdapter) prepareCommit(accessToken string, req *PublishRequest, media []UploadMediaRequest) (ssh.Signer, string, error) {
+func (d *DevNullAdapter) prepareCommit(accessToken string, req *PublishRequest) (ssh.Signer, string, error) {
 	_, privateKeyPEM, err := splitDevNullCredential(accessToken)
 	if err != nil {
 		return nil, "", err
@@ -322,7 +322,7 @@ func (d *DevNullAdapter) prepareCommit(accessToken string, req *PublishRequest, 
 }
 
 func (d *DevNullAdapter) prepareImageCommit(accessToken string, req *PublishRequest, media []UploadMediaRequest) (ssh.Signer, string, []devNullImagePayload, error) {
-	signer, replyTo, err := d.prepareCommit(accessToken, req, media)
+	signer, replyTo, err := d.prepareCommit(accessToken, req)
 	if err != nil {
 		return nil, "", nil, err
 	}

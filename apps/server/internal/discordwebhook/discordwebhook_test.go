@@ -73,7 +73,7 @@ func TestSendPostsJSONPayload(t *testing.T) {
 
 func TestSendDrainsResponseToBoundedSize(t *testing.T) {
 	var drained int
-	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	client := &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 		return &http.Response{
 			Status:     "204 No Content",
 			StatusCode: http.StatusNoContent,
@@ -93,7 +93,7 @@ func TestSendErrorOmitsWebhookURL(t *testing.T) {
 	require.NotContains(t, err.Error(), "secret-token-abc123")
 	require.NotContains(t, err.Error(), webhookURL)
 
-	leaky := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	leaky := &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 		return nil, fmt.Errorf(`Post "%s": connection refused`, webhookURL)
 	})}
 	err = Send(context.Background(), leaky, webhookURL, map[string]any{})
