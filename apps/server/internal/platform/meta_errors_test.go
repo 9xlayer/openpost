@@ -61,6 +61,9 @@ func TestNormalizeMetaPublishErrorClassifiesSubcodes(t *testing.T) {
 		},
 		{name: "trial reel limit", body: `{"error":{"code":9,"error_subcode":2207078}}`, statusCode: http.StatusTooManyRequests, code: "meta:trial_reel_limit:2207078", subcode: "2207078"},
 		{name: "temporary posting block", body: `{"error":{"code":368,"error_subcode":1390008}}`, statusCode: http.StatusTooManyRequests, code: "meta:rate_limit:368:1390008", subcode: "1390008"},
+		{name: "container propagation exhaustion", body: `{"error":{"code":9004,"error_subcode":2207052}}`, statusCode: http.StatusBadRequest, code: "meta:media_not_ready:9004:2207052", subcode: "2207052"},
+		{name: "invalid collaborator", body: `{"error":{"code":110,"error_subcode":2207018}}`, statusCode: http.StatusBadRequest, code: "meta:invalid_collaborator:110:2207018", subcode: "2207018"},
+		{name: "first comment rejected", body: `{"error":{"code":20,"error_subcode":1772107}}`, statusCode: http.StatusBadRequest, code: "meta:first_comment_rejected:20:1772107", subcode: "1772107"},
 		{name: "other policy block stays terminal", body: `{"error":{"code":368,"error_subcode":1390009}}`, statusCode: http.StatusBadRequest, code: "meta:368", subcode: "1390009"},
 		{name: "policy block without subcode stays terminal", body: `{"error":{"code":368}}`, statusCode: http.StatusBadRequest, code: "meta:368"},
 		{
@@ -86,6 +89,12 @@ func TestNormalizeMetaPublishErrorClassifiesSubcodes(t *testing.T) {
 			body:       `{"error":{"code":2207009}}`,
 			statusCode: http.StatusBadRequest,
 			code:       "meta:media_rejected:2207009",
+		},
+		{
+			name:       "video limits are a terminal media rejection",
+			body:       `{"error":{"code":2207053}}`,
+			statusCode: http.StatusBadRequest,
+			code:       "meta:media_rejected:2207053",
 		},
 	}
 	for _, test := range tests {
@@ -201,15 +210,19 @@ func TestEmbeddedGraphErrorsClassifyWithoutRetainingMessages(t *testing.T) {
 
 func TestMetaFailureMessagesAreCurated(t *testing.T) {
 	for code, hint := range map[string]string{
-		"meta:checkpoint:190:459":         "security check",
-		"meta:checkpoint:instagram":       "instagram.com",
-		"meta:missing_page_role:190:492":  "role on this Page",
-		"meta:nonexistent:100:33":         "no longer exists",
-		"meta:media_silent_audio:2207082": "volume to 0",
-		"meta:media_format:2207085":       "format, duration",
-		"meta:media_rejected:2207042":     "25 posts per day",
-		"meta:media_rejected:2207009":     "Aspect ratio",
-		"meta:media_rejected:9999999":     "Replace the media",
+		"meta:checkpoint:190:459":                "security check",
+		"meta:checkpoint:instagram":              "instagram.com",
+		"meta:missing_page_role:190:492":         "role on this Page",
+		"meta:nonexistent:100:33":                "no longer exists",
+		"meta:media_silent_audio:2207082":        "volume to 0",
+		"meta:media_format:2207085":              "format, duration",
+		"meta:media_rejected:2207042":            "25 posts per day",
+		"meta:media_rejected:2207009":            "Aspect ratio",
+		"meta:media_not_ready:9004:2207052":      "try again",
+		"meta:invalid_collaborator:110:2207018":  "collaborator",
+		"meta:first_comment_rejected:20:1772107": "first comment",
+		"meta:media_rejected:2207053":            "video limits",
+		"meta:media_rejected:9999999":            "Replace the media",
 	} {
 		message := MetaFailureMessage(code)
 		require.NotEmpty(t, message, "code %s needs a curated message", code)

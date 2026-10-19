@@ -16,6 +16,7 @@ var metaInsightMetricByName = map[string]string{
 	"views":                              MetricViews,
 	"plays":                              MetricViews,
 	"fb_reels_total_plays":               MetricViews,
+	"total_video_views":                  MetricViews,
 	"impressions":                        MetricImpressions,
 	"post_media_view":                    MetricImpressions,
 	"page_story_impressions_by_story_id": MetricImpressions,
@@ -108,8 +109,12 @@ func facebookContentInsightRequest(input ContentAnalyticsRequest, externalID str
 			"post_clicks",
 		}, true
 	}
+	viewMetric := "fb_reels_total_plays"
+	if input.Profile == "long_video" || input.OutputProfile == "facebook.video" {
+		viewMetric = "total_video_views"
+	}
 	return "video_insights", []string{
-		"fb_reels_total_plays",
+		viewMetric,
 		"post_video_likes_by_reaction_type",
 		"post_video_social_actions",
 	}, false

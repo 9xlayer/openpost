@@ -15,6 +15,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestTikTokPhotoValidationRejectsOversizedShortSide(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		media        MediaItem
+		shouldReject bool
+	}{
+		{name: "portrait oversized", media: MediaItem{ID: "portrait", MimeType: "image/jpeg", Width: 2172, Height: 2896}, shouldReject: true},
+		{name: "landscape oversized", media: MediaItem{ID: "landscape", MimeType: "image/webp", Width: 2896, Height: 2172}, shouldReject: true},
+		{name: "exact boundary", media: MediaItem{ID: "boundary", MimeType: "image/jpeg", Width: 1080, Height: 1440}},
+		{name: "unknown dimensions", media: MediaItem{ID: "legacy", MimeType: "image/jpeg"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			issues := validateTikTokMedia([]MediaItem{test.media})
+			if test.shouldReject {
+				if len(issues) != 1 || issues[0].MediaID != test.media.ID || !strings.Contains(issues[0].Message, "1080 pixels on the shorter side") {
+					t.Fatalf("unexpected validation issues: %#v", issues)
+				}
+			} else if len(issues) != 0 {
+				t.Fatalf("unexpected validation issues: %#v", issues)
+			}
+		})
+	}
+}
+
+func TestTikTokPhotoPublishRejectsOversizedShortSideBeforeProviderIO(t *testing.T) {
+	originalClient := httpClient
+	t.Cleanup(func() { httpClient = originalClient })
+	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		t.Fatalf("oversized image reached provider I/O: %s", req.URL)
+		return nil, nil
+	})}
+	_, err := NewTikTokAdapter("", "", "").publishPhotoPost(t.Context(), "token", &PublishRequest{
+		PlatformMediaIDs: []string{"https://media.example/photo.jpg"},
+		Media:            []MediaItem{{ID: "photo-1", MimeType: "image/jpeg", Width: 1081, Height: 1441}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "1080 pixels on the shorter side") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestTikTokGenerateAuthURL(t *testing.T) {
 	adapter := NewTikTokAdapter("client-key", "client-secret", "https://app.example/api/v1/accounts/tiktok/callback")
 

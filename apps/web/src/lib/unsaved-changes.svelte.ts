@@ -2,7 +2,10 @@ import { createContext } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
 export class UnsavedChangesContext {
-	private sources = new SvelteMap<string, { message: string; discardable: boolean }>();
+	private sources = new SvelteMap<
+		string,
+		{ message: string; discardable: boolean; guardWorkspaceSwitch: boolean }
+	>();
 
 	get hasChanges(): boolean {
 		return this.sources.size > 0;
@@ -15,11 +18,17 @@ export class UnsavedChangesContext {
 		return false;
 	}
 
-	set(key: string, dirty: boolean, message: string, options: { discardable?: boolean } = {}): void {
+	set(
+		key: string,
+		dirty: boolean,
+		message: string,
+		options: { discardable?: boolean; guardWorkspaceSwitch?: boolean } = {}
+	): void {
 		if (dirty) {
 			this.sources.set(key, {
 				message,
-				discardable: options.discardable ?? true
+				discardable: options.discardable ?? true,
+				guardWorkspaceSwitch: options.guardWorkspaceSwitch ?? true
 			});
 		} else this.sources.delete(key);
 	}
@@ -28,21 +37,17 @@ export class UnsavedChangesContext {
 		this.sources.delete(key);
 	}
 
-	confirmDiscard(): boolean {
-		if (!this.hasChanges) return true;
-		let blockingSource: { message: string; discardable: boolean } | undefined;
-		for (const source of this.sources.values()) {
-			if (source.discardable) continue;
-			blockingSource = source;
-			break;
-		}
+	confirmDiscard(context: 'navigation' | 'workspace-switch' = 'navigation'): boolean {
+		const sources = [...this.sources.values()].filter(
+			(source) => context !== 'workspace-switch' || source.guardWorkspaceSwitch
+		);
+		if (sources.length === 0) return true;
+		const blockingSource = sources.find((source) => !source.discardable);
 		if (blockingSource) {
 			window.alert(blockingSource.message);
 			return false;
 		}
-		return window.confirm(
-			this.sources.values().next().value?.message ?? 'Discard unsaved changes?'
-		);
+		return window.confirm(sources[0]?.message ?? 'Discard unsaved changes?');
 	}
 }
 

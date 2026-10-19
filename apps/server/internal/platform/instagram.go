@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openpost/backend/internal/providerlimits"
 )
 
 const (
@@ -368,6 +370,9 @@ func (i *InstagramAdapter) publish(ctx context.Context, accessToken, instagramUs
 
 //nolint:gocyclo
 func (i *InstagramAdapter) createMediaContainer(ctx context.Context, accessToken, instagramUserID, caption, mediaURL string, video bool, carouselItem bool, req *PublishRequest, mediaSettings map[string]interface{}, altText string) (string, error) {
+	if err := validateInstagramRequestSettings(req); err != nil {
+		return "", err
+	}
 	values := map[string]string{
 		"caption":             strings.TrimSpace(caption),
 		oauthParamAccessToken: accessToken,
@@ -389,7 +394,7 @@ func (i *InstagramAdapter) createMediaContainer(ctx context.Context, accessToken
 		values["is_carousel_item"] = "true"
 		delete(values, "caption")
 	}
-	if collaborators := settingString(req.Settings, "collaborators"); collaborators != "" && !carouselItem {
+	if collaborators := settingString(req.Settings, "collaborators"); collaborators != "" && !carouselItem && !instagramIsStory(req) && !settingBool(req.Settings, "is_trial_reel") {
 		values["collaborators"] = stringListJSON(collaborators)
 	}
 	if locationID := settingString(req.Settings, "location_id"); locationID != "" && !carouselItem {
@@ -430,7 +435,7 @@ func (i *InstagramAdapter) createMediaContainer(ctx context.Context, accessToken
 		values["product_tags"] = normalized
 	}
 
-	respBody, err := DoFormURLEncoded(ctx, http.MethodPost, i.graphURL(instagramUserID+"/media"), values, nil)
+	respBody, err := doMetaPropagationForm(ctx, i.graphURL(instagramUserID+"/media"), values, metaCodeKey{code: "9004", subcode: "2207052"})
 	if err != nil {
 		return "", fmt.Errorf("instagram media container: %w", err)
 	}
@@ -544,6 +549,9 @@ func (i *InstagramAdapter) publishStories(ctx context.Context, accessToken, inst
 }
 
 func (i *InstagramAdapter) createCarouselContainer(ctx context.Context, accessToken, instagramUserID string, req *PublishRequest, childIDs []string) (string, error) {
+	if err := validateInstagramRequestSettings(req); err != nil {
+		return "", err
+	}
 	values := map[string]string{
 		"media_type":          "CAROUSEL",
 		"children":            strings.Join(childIDs, ","),
@@ -585,16 +593,30 @@ func mediaAltTextAt(req *PublishRequest, index int) string {
 	return req.MediaAltTexts[index]
 }
 
-func stringListJSON(raw string) string {
-	values := strings.FieldsFunc(raw, func(r rune) bool { return r == ',' || r == '\n' })
-	clean := make([]string, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			clean = append(clean, value)
-		}
+func validateInstagramRequestSettings(req *PublishRequest) error {
+	if req == nil {
+		return nil
 	}
+	profile := req.Profile
+	if instagramIsStory(req) {
+		profile = "story"
+	} else if instagramIsReel(req) {
+		profile = "short_video"
+	}
+	for _, violation := range providerlimits.ValidateInstagramSettings(profile, settingBool(req.Settings, "is_trial_reel"), providerlimits.InstagramCollaborators(settingString(req.Settings, "collaborators"))) {
+		return errors.New(violation.Message)
+	}
+	return nil
+}
+
+func stringListJSON(raw string) string {
+	clean := instagramCollaborators(raw)
 	encoded, _ := json.Marshal(clean)
 	return string(encoded)
+}
+
+func instagramCollaborators(raw string) []string {
+	return providerlimits.InstagramCollaborators(raw)
 }
 
 func (i *InstagramAdapter) publishCommentReply(ctx context.Context, accessToken, commentID, message string) (string, error) {

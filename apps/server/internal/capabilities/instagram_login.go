@@ -27,7 +27,7 @@ func ApplyInstagramLoginSettings(resolved *ResolvedCapability, settings map[stri
 
 func InstagramLoginSettingsIssues(capability Capability, settings map[string]any) []ValidationIssue {
 	var issues []ValidationIssue
-	for _, field := range instagramSettings() {
+	for _, field := range instagramSettings(capability.Profile) {
 		value := settingsValue(settings, field.Key)
 		if providerlimits.InstagramLoginSettingUnavailable(field.Key) && value != "" && value != "[]" && value != "<nil>" {
 			issues = append(issues, settingValidationIssue(capability, field, "unsupported_setting", "This setting requires an Instagram connection through Facebook."))

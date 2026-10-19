@@ -115,7 +115,6 @@ export default function DraftsScreen() {
 
   async function quickCapture(buildWithAI = false) {
     const text = idea.trim();
-    if (!text && !image) return;
     if (buildWithAI) {
       stashPendingAttachments(image ? [image] : []);
       router.push({
@@ -124,6 +123,7 @@ export default function DraftsScreen() {
       });
       return;
     }
+    if (!text && !image) return;
     const scope = captureWorkspaceQueryScope(currentWorkspaceId());
     setCaptureError(null);
     try {
@@ -258,11 +258,7 @@ export default function DraftsScreen() {
   return (
     <Screen>
       <Stack.Screen options={{ headerShown: false }} />
-      <WorkspaceHeader>
-        {canEdit ? (
-          <IconButton role="sparkles" label="Ideate" onPress={() => router.push("/ideate")} />
-        ) : null}
-      </WorkspaceHeader>
+      <WorkspaceHeader />
 
       <ScrollView
         contentContainerStyle={{
@@ -385,7 +381,7 @@ export default function DraftsScreen() {
                 icon="sparkles"
                 intent="focal"
                 onPress={() => void quickCapture(true)}
-                disabled={createDraft.isPending || idea.trim().length === 0}
+                disabled={createDraft.isPending}
                 loading={createDraft.isPending}
                 style={{ flex: 1, minWidth: 120 }}
               />

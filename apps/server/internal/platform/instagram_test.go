@@ -8,8 +8,87 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
+
+func TestInstagramContainerSettingsStayWithinProviderRules(t *testing.T) {
+	t.Setenv("META_GRAPH_API_VERSION", "v25.0")
+	adapter := NewInstagramAdapter("", "", "")
+
+	t.Run("story omits stale collaborators", func(t *testing.T) {
+		originalClient := httpClient
+		defer func() { httpClient = originalClient }()
+		httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			if req.Form.Get("media_type") != "STORIES" || req.Form.Get("collaborators") != "" {
+				t.Fatalf("unexpected Story container payload: %s", req.Form.Encode())
+			}
+			return jsonResponse(req, `{"id":"container-1"}`), nil
+		})}
+		_, err := adapter.createMediaContainer(t.Context(), "token", "ig-1", "Story", "https://media.example/story.jpg", false, false, &PublishRequest{
+			OutputProfile: "instagram.story", Settings: map[string]interface{}{"collaborators": "one,two"},
+		}, nil, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	for _, test := range []struct {
+		name     string
+		profile  string
+		settings map[string]interface{}
+		message  string
+	}{
+		{name: "trial requires Reel", profile: "instagram.feed", settings: map[string]interface{}{"is_trial_reel": true, "graduation_strategy": "MANUAL"}, message: "require the Reel format"},
+		{name: "trial rejects collaborators", profile: "instagram.reel", settings: map[string]interface{}{"is_trial_reel": true, "graduation_strategy": "MANUAL", "collaborators": "one"}, message: "cannot include collaborators"},
+		{name: "collaborators are capped", profile: "instagram.reel", settings: map[string]interface{}{"collaborators": "one,two,three,four"}, message: "at most 3 collaborators"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := adapter.createMediaContainer(t.Context(), "token", "ig-1", "Caption", "https://media.example/reel.mp4", true, false, &PublishRequest{
+				OutputProfile: test.profile, Settings: test.settings,
+			}, nil, "")
+			if err == nil || !strings.Contains(err.Error(), test.message) {
+				t.Fatalf("expected %q rejection, got %v", test.message, err)
+			}
+		})
+	}
+}
+
+func TestInstagramRetriesExactMediaContainerPropagationFailure(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		t.Setenv("META_GRAPH_API_VERSION", "v25.0")
+		originalClient := httpClient
+		defer func() { httpClient = originalClient }()
+		attempts := 0
+		var firstPayload string
+		httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			attempts++
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			if attempts == 1 {
+				firstPayload = req.Form.Encode()
+			} else if req.Form.Encode() != firstPayload {
+				t.Fatal("container retry changed the payload")
+			}
+			if attempts < 3 {
+				return &http.Response{StatusCode: http.StatusBadRequest, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":{"code":9004,"error_subcode":2207052}}`)), Request: req}, nil
+			}
+			return jsonResponse(req, `{"id":"container-1"}`), nil
+		})}
+		started := time.Now()
+		id, err := NewInstagramAdapter("", "", "").createMediaContainer(t.Context(), "token", "ig-1", "Caption", "https://media.example/image.jpg", false, false, &PublishRequest{}, nil, "")
+		if err != nil || id != "container-1" || attempts != 3 {
+			t.Fatalf("id=%q attempts=%d err=%v", id, attempts, err)
+		}
+		if time.Since(started) < 4*time.Second {
+			t.Fatal("container propagation retries must back off")
+		}
+	})
+}
 
 func TestInstagramReportsNoPageLinkedProfessionalAccount(t *testing.T) {
 	t.Setenv("META_GRAPH_API_VERSION", "v25.0")

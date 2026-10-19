@@ -95,6 +95,7 @@
 		providerMediaWarningMessages
 	} from '$lib/media-capabilities';
 	import { workspaceCtx, type WorkspaceSwitchRequest } from '$lib/stores/workspace.svelte';
+	import { getOptionalUnsavedChanges } from '$lib/unsaved-changes.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
@@ -359,6 +360,8 @@
 		copyingDraft = false,
 		hideSetupGuideOnDesktop = false
 	}: Props = $props();
+	const unsavedChangesKey = $props.id();
+	const unsavedChanges = getOptionalUnsavedChanges();
 	let isEditMode = $derived(Boolean(initialPublication));
 
 	let posts = $state<PostItem[]>([makeEmptyPost()]);
@@ -890,6 +893,16 @@
 			((hasContent || Boolean(lastSavedSnapshot)) && getSaveSnapshot() !== lastSavedSnapshot) ||
 			Boolean(draftConflict)
 	);
+	$effect(() => {
+		unsavedChanges?.set(
+			unsavedChangesKey,
+			!loadingWorkspaces && !autoSavesDraft && composerWorkspaceStateDirty,
+			m.compose_leave_without_saving(),
+			// Workspace changes already have a save/discard/stay flow.
+			{ guardWorkspaceSwitch: false }
+		);
+		return () => unsavedChanges?.clear(unsavedChangesKey);
+	});
 	const selectedAccounts = $derived(
 		selectedAccountIds
 			.map((id) => accounts.find((account) => account.id === id))
@@ -3521,6 +3534,7 @@
 		const workspaceId = workspaceCtx.currentWorkspace?.id ?? '';
 		if (isEditMode && leaveEditorForWorkspaceID && workspaceId === leaveEditorForWorkspaceID) {
 			leaveEditorForWorkspaceID = '';
+			unsavedChanges?.clear(unsavedChangesKey);
 			onSuccess?.();
 		} else if (
 			!isEditMode &&
@@ -4254,6 +4268,7 @@
 			selectedTime = null;
 			randomDelayOverride = 'default';
 			showDeleteConfirm = false;
+			unsavedChanges?.clear(unsavedChangesKey);
 			await onDeleted?.();
 			return {
 				ok: true,

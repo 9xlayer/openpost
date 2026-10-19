@@ -639,3 +639,85 @@ esac
     }
   },
 );
+
+test("screenshot PR recovery updates an existing remote branch and review", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "screenshot-review-retry-"));
+  const remote = path.join(directory, "remote.git");
+  const tools = path.join(directory, "bin");
+  const log = path.join(directory, "gh-calls.jsonl");
+  const run = (command, args, cwd, env = {}) => {
+    const result = spawnSync(command, args, {
+      cwd,
+      encoding: "utf8",
+      env: { ...process.env, ...env },
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    mkdirSync(tools);
+    const gh = path.join(tools, "gh");
+    writeFileSync(
+      gh,
+      `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.GH_CALL_LOG, JSON.stringify(args) + '\\n');
+if (args[0] === 'pr' && args[1] === 'list' && process.env.REVIEW_EXISTS === '1') console.log('https://github.com/example/repo/pull/1');
+`,
+    );
+    chmodSync(gh, 0o755);
+    run("git", ["init", "--bare", remote], directory);
+    const script = workflowStepScript(
+      screenshotRefresh,
+      "refresh",
+      "Open a review PR when screenshots drifted",
+    );
+    const heads = [];
+    for (const attempt of [1, 2]) {
+      const checkout = path.join(directory, `attempt-${attempt}`);
+      run(
+        "git",
+        [
+          "clone",
+          ...(attempt === 2 ? ["--single-branch", "--branch", "main"] : []),
+          remote,
+          checkout,
+        ],
+        directory,
+      );
+      run("git", ["config", "user.name", "Test author"], checkout);
+      run("git", ["config", "user.email", "test@example.com"], checkout);
+      if (attempt === 1) {
+        run("git", ["checkout", "-b", "main"], checkout);
+        mkdirSync(path.join(checkout, "assets/screenshots"), { recursive: true });
+        writeFileSync(path.join(checkout, "assets/screenshots/example.png"), "original");
+        run("git", ["add", "."], checkout);
+        run("git", ["commit", "-m", "initial"], checkout);
+        run("git", ["push", "origin", "main"], checkout);
+      } else run("git", ["checkout", "main"], checkout);
+      writeFileSync(path.join(checkout, "assets/screenshots/example.png"), `capture-${attempt}`);
+      run("bash", ["-e", "-c", script], checkout, {
+        PATH: tools + path.delimiter + process.env.PATH,
+        BOT_SLUG: "",
+        GH_CALL_LOG: log,
+        REVIEW_EXISTS: attempt === 2 ? "1" : "0",
+      });
+      heads.push(run("git", ["rev-parse", "HEAD"], checkout));
+      const branch = run("git", ["branch", "--show-current"], checkout);
+      assert.equal(
+        run("git", ["ls-remote", "origin", `refs/heads/${branch}`], checkout).split(/\s+/)[0],
+        heads.at(-1),
+      );
+    }
+    assert.notEqual(heads[0], heads[1]);
+    const calls = readFileSync(log, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.equal(calls.filter((args) => args[0] === "pr" && args[1] === "create").length, 1);
+    assert.equal(calls.filter((args) => args[0] === "pr" && args[1] === "edit").length, 1);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -4,6 +4,59 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.22.9] - 2026-10-17
+
+### Fixed
+
+- Opening or editing generated mobile drafts no longer crashes when a destination segment has empty settings.
+- Removed the duplicate Ideate shortcut from the mobile draft header. Ideate remains available beside quick capture.
+- The bottom Ideate button opens the AI workspace even before you enter an idea, preserving the shortcut removed from the header.
+- Drafts remain available in the desktop sidebar across Posts, Inbox, Analytics, Media, and other workspace pages. The list fills the available space and scrolls through all drafts.
+- Changing pages or languages with sidebar drafts no longer causes background composer-import errors.
+
+### Changed
+
+- The sidebar calendar is visible by default, with workspace navigation below the drafts. Turn off Sidebar calendar in Preferences to use the compact layout. Existing saved choices are preserved.
+
+## [7.22.4] - 2026-10-17
+
+### Changed
+
+- Keep Google provider authorization limited to the scopes OpenPost requests instead of merging unrelated grants from a reused OAuth client.
+
+### Fixed
+
+- Enforce verified Instagram collaborator and Trial Reel combinations before publishing, while preserving older Story drafts by omitting their unsupported collaborator values.
+- Reject TikTok photo uploads whose shorter side exceeds 1080 pixels when stored dimensions are available.
+- Recover from Instagram's exact media-container propagation delay without retrying the wider publication flow.
+- Report actionable Instagram collaborator, first-comment, and video-limit failures without exposing provider response text.
+- Collect regular Facebook video views through the supported metric without double-counting Reel plays.
+- Explain YouTube thumbnail failures that require channel phone verification while preserving the already published video.
+
+## [7.22.2] - 2026-10-16
+
+### Fixed
+
+- Publish video posts with a selected cover frame when MCP or API media settings are omitted, including existing posts with null settings.
+- Record destination and post failures after publishing panics, preserving diagnostics and checking saved provider receipts before any retry.
+- Allow deletion of failed posts when no delivery is active or unresolved.
+- Handle null JSON objects in legacy messaging settings and legacy publication-job migration without panicking.
+- Keep joined-source and inherited text-card attachment settings as objects when refreshing existing posts.
+- Protect unsaved scheduled-post edits when navigating away from the composer.
+- Connect and refresh LinkedIn Organization Pages when LinkedIn rejects optional profile projections.
+
+### Maintenance
+
+- Update compatible Expo SDK 57 patches and use the shared app icon for iOS validation.
+- Refresh product screenshots and make automated screenshot and README asset refreshes more reliable.
+- Document the sidebar-calendar browser preference and align navigation checks with the current post and workspace controls.
+- Give the public-site determinism check enough time to build both sites twice and verify their complete outputs on CI.
+
+### Added
+
+- Browse posts in a masonry grid and use the draft gallery to search, select, and schedule drafts.
+- Show or hide the sidebar calendar through personal preferences.
+
 ## [7.21.1] - 2026-10-14
 
 ### Added

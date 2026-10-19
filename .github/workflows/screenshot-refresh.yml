@@ -82,7 +82,7 @@ jobs:
         # OPENPOST_BOT_APP_ID / OPENPOST_BOT_PRIVATE_KEY, workflows fall
         # back to the built-in token and the github-actions[bot] author below.
         if: vars.OPENPOST_BOT_APP_ID != ''
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: ${{ vars.OPENPOST_BOT_APP_ID }}
           private-key: ${{ secrets.OPENPOST_BOT_PRIVATE_KEY }}
@@ -135,11 +135,21 @@ jobs:
           files="$(git diff --cached --name-only | sort)"
           count="$(echo "$files" | wc -l | tr -d ' ')"
           git commit -m "chore: refresh product screenshots (${stamp}) [skip ci]"
-          git push --force-with-lease origin "$branch"
+          # Checkout fetches only main, so an implicit lease cannot see an earlier attempt.
+          remote_head="$(git ls-remote --heads origin "refs/heads/$branch" | cut -f1)"
+          git push --force-with-lease="refs/heads/$branch:$remote_head" origin "$branch"
           # \140 is a backtick: literal markdown fences without tripping SC2016 (no expansion in single quotes).
           body="$(printf 'Scheduled re-capture drifted on %s changed file(s).\n\nReview the images before merging; guides embed these shots directly.\n\n\140\140\140\n%s\n\140\140\140' "$count" "$files")"
-          gh pr create \
-            --base main \
-            --head "$branch" \
-            --title "chore: review refreshed product screenshots (${stamp})" \
-            --body "$body"
+          body_file="$(mktemp)"
+          trap 'rm -f "$body_file"' EXIT
+          printf '%s\n' "$body" > "$body_file"
+          existing_pr="$(gh pr list --head "$branch" --base main --state open --json url --jq '.[0].url // empty')"
+          if [ -n "$existing_pr" ]; then
+            gh pr edit "$existing_pr" --body-file "$body_file"
+          else
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "chore: review refreshed product screenshots (${stamp})" \
+              --body-file "$body_file"
+          fi

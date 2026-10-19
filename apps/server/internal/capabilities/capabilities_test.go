@@ -235,6 +235,45 @@ func TestResolveDoesNotInferStoryWithoutStoryPreset(t *testing.T) {
 	requireIssueCode(t, resolved.Issues, "format_selection_required")
 }
 
+func TestValidateInstagramRejectsUnsupportedCollaboratorCombinations(t *testing.T) {
+	video := MediaItem{ID: "video-1", MimeType: "video/mp4", Size: 1024, Width: 1080, Height: 1920, DurationMS: 20_000, AnalysisStatus: "ready", PublicURLReady: true, PublicURLStatus: 200}
+	for _, test := range []struct {
+		name, outputProfile, fallbackProfile, code string
+		media                                      []MediaItem
+		settings                                   map[string]any
+	}{
+		{
+			name: "trial reel collaborators", outputProfile: "instagram.reel", fallbackProfile: models.ContentProfileShortVideo,
+			media: []MediaItem{video}, settings: map[string]any{"is_trial_reel": true, "graduation_strategy": "MANUAL", "collaborators": "one"}, code: "instagram_trial_reel_collaborators_conflict",
+		},
+		{
+			name: "more than three collaborators", outputProfile: "instagram.reel", fallbackProfile: models.ContentProfileShortVideo,
+			media: []MediaItem{video}, settings: map[string]any{"collaborators": "one,two,three,four"}, code: "setting_max_items",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			issues := ValidateOutput(ProviderInstagram, test.outputProfile, test.fallbackProfile, "Caption", "", "", test.media, test.settings)
+			requireIssueCode(t, issues, test.code)
+		})
+	}
+}
+
+func TestValidateInstagramStoryWarnsWhenCollaboratorsWillBeOmitted(t *testing.T) {
+	story, found := Find(ProviderInstagram, models.ContentProfileStory)
+	require.True(t, found)
+	for _, setting := range story.Settings {
+		require.NotEqual(t, "collaborators", setting.Key)
+	}
+
+	issues := ValidateOutput(ProviderInstagram, "instagram.story", models.ContentProfileStory, "", "", "", []MediaItem{{
+		ID: "image-1", MimeType: "image/jpeg", Size: 1024, Width: 1080, Height: 1920, PublicURLReady: true, PublicURLStatus: 200,
+	}}, map[string]any{"collaborators": "one,two,three,four"})
+	requireIssueCode(t, issues, "instagram_story_collaborators_omitted")
+	for _, issue := range issues {
+		require.NotEqual(t, "error", issue.Severity)
+	}
+}
+
 func TestResolveRequiresFormatOnlyForGenuinelyAmbiguousDestinations(t *testing.T) {
 	image := MediaItem{ID: "image-1", MimeType: "image/jpeg", Size: 1024, Width: 1080, Height: 1080, PublicURLReady: true, PublicURLStatus: 200}
 	video := MediaItem{ID: "video-1", MimeType: "video/mp4", Size: 1024, Width: 1080, Height: 1920, DurationMS: 20_000, AnalysisStatus: "ready", PublicURLReady: true, PublicURLStatus: 200}
@@ -264,6 +303,18 @@ func TestResolveRequiresFormatOnlyForGenuinelyAmbiguousDestinations(t *testing.T
 			}
 		})
 	}
+}
+
+func TestValidateTikTokPhotoShortSideLimit(t *testing.T) {
+	issues := ValidateOutput(ProviderTikTok, "tiktok.photo", models.ContentProfileCarousel, "Caption", "", "", []MediaItem{
+		{ID: "portrait", MimeType: "image/jpeg", Size: 1024, Width: 1080, Height: 1440, PublicURLReady: true, PublicURLStatus: 200},
+		{ID: "oversized", MimeType: "image/jpeg", Size: 1024, Width: 2172, Height: 2896, PublicURLReady: true, PublicURLStatus: 200},
+	}, map[string]any{"content_posting_method": "DIRECT_POST", "privacy_level": "SELF_ONLY", "music_usage_confirmed": true})
+	require.Len(t, issues, 1)
+	require.Equal(t, "media_short_side_max", issues[0].Code)
+	require.Equal(t, "oversized", issues[0].MediaID)
+	require.Contains(t, issues[0].Message, "2172x2896")
+	require.Contains(t, issues[0].Message, "1080 pixels on the shorter side")
 }
 
 func TestBlueskyImageValidationEnforcesProviderByteLimit(t *testing.T) {

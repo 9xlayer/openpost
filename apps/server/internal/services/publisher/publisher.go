@@ -568,6 +568,8 @@ func (s *Service) publishRendition(
 			ID:               media.ID,
 			MimeType:         media.MimeType,
 			Size:             media.Size,
+			Width:            media.Width,
+			Height:           media.Height,
 			OriginalFilename: media.OriginalFilename,
 		})
 	}
@@ -829,6 +831,8 @@ func (s *Service) publishRenditionSegments(
 				ID:               media.ID,
 				MimeType:         media.MimeType,
 				Size:             media.Size,
+				Width:            media.Width,
+				Height:           media.Height,
 				OriginalFilename: media.OriginalFilename,
 			})
 		}

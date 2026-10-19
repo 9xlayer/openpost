@@ -11620,6 +11620,11 @@ export interface components {
             max_height?: number;
             /** Format: int64 */
             max_image_size_bytes?: number;
+            /**
+             * Format: int64
+             * @description Maximum image dimension on its shorter side
+             */
+            max_short_side?: number;
             /** Format: int64 */
             max_size_bytes?: number;
             max_video_aspect_ratio?: string;

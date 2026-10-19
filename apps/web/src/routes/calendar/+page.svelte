@@ -38,6 +38,8 @@
 		workspaceScheduleMoveToDate,
 		workspaceScheduleToISO
 	} from '$lib/components/compose/schedule-timezone';
+	import { publicationPreviewMedia } from '$lib/publication-preview';
+	import MediaPreviewImage from '$lib/components/media-preview-image.svelte';
 	import PlatformIcon from '$lib/components/platform-icon.svelte';
 	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import PageContainer from '$lib/components/page-container.svelte';
@@ -139,6 +141,9 @@
 	let pendingCompactFocus = $state('');
 	let selectedMonthDayKey = $state('');
 	let monthDayOpen = $state(false);
+	let monthGridHeight = $state(0);
+	const monthRowHeight = $derived(monthGridHeight / 6);
+	const monthVisibleLimit = $derived(monthRowHeight >= 140 ? 3 : monthRowHeight >= 106 ? 2 : 1);
 	let calendarContent: HTMLElement | undefined = $state();
 	let filtersTriggerElement = $state<HTMLElement | null>(null);
 	let workspaceFilterTriggerElement = $state<HTMLElement | null>(null);
@@ -1226,11 +1231,6 @@
 		themeIconRole="publications"
 		title={m.activity_title()}
 	>
-		{#snippet actions()}
-			<Button href={resolve('/')} variant="focal" size="sm"
-				><ThemeIcon role="add" class="mr-1.5 size-3.5" />{m.activity_new_post()}</Button
-			>
-		{/snippet}
 		{#snippet navigation()}
 			<div class="space-y-3">
 				<PublicationViewSwitch view="calendar" />
@@ -1552,7 +1552,7 @@
 					</InlineNotice>
 				{/if}
 				<section
-					class="grid min-w-0 gap-5 sm:grid-cols-[minmax(20rem,22rem)_minmax(0,1fr)] xl:hidden"
+					class="compact-calendar grid min-w-0 gap-5 sm:grid-cols-[minmax(20rem,22rem)_minmax(0,1fr)] xl:hidden"
 					aria-label={viewMode === 'week' ? m.calendar_week_grid() : m.calendar_month_grid()}
 				>
 					<div
@@ -1675,7 +1675,7 @@
 
 				{#if viewMode === 'month'}
 					<section
-						class="month-shell hidden min-w-[980px] overflow-hidden rounded-lg border bg-card xl:grid"
+						class="month-shell hidden min-w-0 overflow-hidden rounded-lg border bg-card xl:grid"
 						aria-label={m.calendar_month_grid()}
 					>
 						<div class="grid grid-cols-7 border-b bg-muted/45">
@@ -1685,7 +1685,7 @@
 								</div>
 							{/each}
 						</div>
-						<div class="month-grid grid min-h-0 grid-cols-7">
+						<div class="month-grid grid min-h-0 grid-cols-7" bind:clientHeight={monthGridHeight}>
 							{#each days as day (day.key)}
 								{@const dayItems = itemsByDay.get(day.key) ?? []}
 								<div
@@ -1702,81 +1702,45 @@
 									ondragleave={() => onDragLeave(day)}
 									ondrop={(event) => onDrop(event, day)}
 								>
-									<div class="mb-1 flex h-5 items-center justify-between gap-1.5">
-										<div class="flex min-w-0 items-center gap-1">
-											<span
-												class={cn(
-													'flex size-5 shrink-0 items-center justify-center rounded-sm text-[11px] font-semibold',
-													day.today && 'bg-primary text-primary-foreground',
-													day.outsideMonth && !day.today && 'text-muted-foreground'
-												)}
+									<div class="mb-1 flex h-6 items-center">
+										<button
+											type="button"
+											class={cn(
+												'flex size-6 items-center justify-center rounded-sm text-xs font-medium hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+												day.today && 'bg-primary text-primary-foreground'
+											)}
+											aria-label={m.calendar_view_day_posts({
+												count: dayItems.length,
+												date: formatAgendaDate(day.date)
+											})}
+											onclick={() => openMonthDay(day)}>{day.date.getDate()}</button
+										>
+										{#if dayItems.length > monthVisibleLimit}
+											<button
+												type="button"
+												class="ml-auto rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+												aria-label={m.calendar_view_day_posts({
+													count: dayItems.length,
+													date: formatAgendaDate(day.date)
+												})}
+												onclick={() => openMonthDay(day)}
+												>+{dayItems.length - monthVisibleLimit}</button
 											>
-												{day.date.getDate()}
-											</span>
-											{#if dayItems.length > 0}
-												<Tooltip.Root>
-													<Tooltip.Trigger>
-														{#snippet child({ props })}
-															<button
-																{...props}
-																type="button"
-																class="relative flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 text-[10px] font-semibold text-muted-foreground transition-colors before:absolute before:-inset-1.5 hover:bg-muted/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-																aria-label={m.calendar_view_day_posts({
-																	count: dayItems.length,
-																	date: formatAgendaDate(day.date)
-																})}
-																data-calendar-day-count
-																onclick={(event) => {
-																	event.stopPropagation();
-																	openMonthDay(day);
-																}}
-															>
-																{m.calendar_day_item_count({ count: dayItems.length })}
-															</button>
-														{/snippet}
-													</Tooltip.Trigger>
-													<Tooltip.Content>
-														{m.calendar_view_day_posts({
-															count: dayItems.length,
-															date: formatAgendaDate(day.date)
-														})}
-													</Tooltip.Content>
-												</Tooltip.Root>
-											{/if}
-										</div>
-										<Tooltip.Root>
-											<Tooltip.Trigger>
-												{#snippet child({ props })}
-													<Button
-														{...props}
-														type="button"
-														variant="ghost"
-														size="icon-xs"
-														class="relative size-5 shrink-0 rounded-sm opacity-60 group-hover/day:opacity-100 before:absolute before:-inset-1.5 hover:bg-muted"
-														aria-label={`${m.calendar_create_post()} ${day.key}`}
-														disabled={isPastDay(day)}
-														data-calendar-day-action
-														onclick={(event) => {
-															event.stopPropagation();
-															createPostOnDate(day.date);
-														}}
-													>
-														<ThemeIcon role="add" class="size-3" />
-													</Button>
-												{/snippet}
-											</Tooltip.Trigger>
-											<Tooltip.Content>{m.calendar_create_post()}</Tooltip.Content>
-										</Tooltip.Root>
+										{/if}
 									</div>
 
 									<div class="min-h-0 flex-1 space-y-1 overflow-hidden">
-										{#each dayItems.slice(0, 2) as item (item.key)}
+										{#each dayItems.slice(0, monthVisibleLimit) as item (item.key)}
+											{@const media = item.publication
+												? publicationPreviewMedia(item.publication)
+												: undefined}
 											<button
 												type="button"
 												draggable={item.movable}
 												data-calendar-item
 												class={cn(
-													'month-event flex h-6 w-full items-center gap-1 overflow-hidden rounded-sm border px-1.5 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+													'month-event flex w-full flex-col overflow-hidden rounded-sm border px-1.5 text-left text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+													dayItems.length === 1 && monthRowHeight >= 100 ? 'gap-0.5 py-1' : 'py-0',
 													itemTone(item),
 													draggingKey === item.key && 'opacity-50',
 													reschedulingKey === item.key && 'pointer-events-none opacity-60'
@@ -1789,43 +1753,69 @@
 												ondragend={onDragEnd}
 												onclick={() => openItem(item)}
 											>
+												<span class="flex w-full min-w-0 items-start gap-1.5">
+													{#if dayItems.length === 1 && monthRowHeight >= 100 && media?.mime_type.startsWith('image/')}<MediaPreviewImage
+															mediaId={media.id}
+															alt=""
+															thumbnailSize="sm"
+															class="size-9 shrink-0 rounded-sm object-cover"
+														/>{/if}
+													<span
+														class={cn(
+															'min-w-0 flex-1 font-medium',
+															dayItems.length === 1 && monthRowHeight >= 100
+																? 'line-clamp-2 leading-4'
+																: 'truncate leading-4'
+														)}>{item.title}</span
+													>
+												</span>
 												<span
-													class="size-1.5 shrink-0 rounded-full"
-													style={workspaceDotStyle(item.workspaceId)}
-													aria-hidden="true"
-												></span>
-												{#if item.accounts.length > 0}
-													<!-- Decorative avatar stack: the button label already announces the account count. -->
-													<span class="flex shrink-0 items-center -space-x-1" aria-hidden="true">
-														{#each item.accounts.slice(0, 3) as account (account.id)}
-															{@render tinyAccountAvatar(account)}
-														{/each}
-														{#if item.accounts.length > 3}
-															<span
-																class="flex size-4 items-center justify-center rounded-full border border-border bg-muted text-[8px] font-medium text-muted-foreground ring-1 ring-background"
-															>
-																+{item.accounts.length - 3}
-															</span>
+													class="flex w-full min-w-0 items-center gap-1 text-[11px] leading-3 text-current/80"
+												>
+													{#if item.accounts.length > 0}
+														<!-- Decorative avatar stack: the button label already announces the account count. -->
+														<span class="flex shrink-0 items-center -space-x-1" aria-hidden="true">
+															{#each item.accounts.slice(0, 3) as account (account.id)}
+																{@render tinyAccountAvatar(account)}
+															{/each}
+															{#if item.accounts.length > 3}
+																<span
+																	class="flex size-4 items-center justify-center rounded-full border border-border bg-muted text-[8px] font-medium text-muted-foreground ring-1 ring-background"
+																>
+																	+{item.accounts.length - 3}
+																</span>
+															{/if}
+														</span>
+													{/if}
+													<time
+														class="shrink-0 text-[11px] font-medium text-current/75 tabular-nums"
+													>
+														{formatTime(item.occursAt)}
+													</time>
+													{#if activeWorkspaceIds.length > 1}
+														<span
+															class="size-1.5 shrink-0 rounded-full"
+															style={workspaceDotStyle(item.workspaceId)}
+															aria-hidden="true"
+														></span>
+														<span class="min-w-0 truncate">{item.workspaceName}</span>
+													{/if}
+													<span class="ml-auto flex shrink-0 items-center gap-1">
+														{#if item.status === 'published'}
+															<ThemeIcon role="lock" class="size-3" />
+															<span class="sr-only">{m.calendar_status_published()}</span>
+														{:else}
+															<span class="sr-only">{m.calendar_status_scheduled()}</span>
+														{/if}
+														{#if reschedulingKey === item.key}
+															<ProtectedIcon
+																icon="loading"
+																class="size-3 animate-spin motion-reduce:animate-none"
+															/>
 														{/if}
 													</span>
-												{/if}
-												<time class="shrink-0 text-[11px] font-medium text-current/75 tabular-nums">
-													{formatTime(item.occursAt)}
-												</time>
-												<span class="min-w-0 flex-1 truncate font-medium">{item.title}</span>
-												{#if item.status === 'published'}
-													<ThemeIcon role="lock" class="size-3 shrink-0 text-current/65" />
-													<span class="sr-only">{m.calendar_status_published()}</span>
-												{:else}
-													<span class="sr-only">{m.calendar_status_scheduled()}</span>
-												{/if}
-												{#if reschedulingKey === item.key}
-													<ProtectedIcon
-														icon="loading"
-														class="size-3 shrink-0 animate-spin text-current/60 motion-reduce:animate-none"
-													/>
-												{/if}
-											</button>
+												</span></button
+											>
 										{/each}
 									</div>
 								</div>
@@ -1835,7 +1825,7 @@
 				{:else}
 					<section
 						bind:this={weekScrollElement}
-						class="hidden h-full min-h-[720px] overflow-auto rounded-lg border bg-card shadow-sm xl:block"
+						class="week-shell hidden h-full min-h-[720px] overflow-auto rounded-lg border bg-card xl:block"
 						aria-label={m.calendar_week_grid()}
 					>
 						<div class="min-w-[1120px]">
@@ -2052,6 +2042,16 @@
 </Sheet.Root>
 
 <style>
+	@media (pointer: coarse) {
+		.compact-calendar {
+			display: grid;
+		}
+		.month-shell,
+		.week-shell {
+			display: none;
+		}
+	}
+
 	.month-shell {
 		grid-template-rows: auto minmax(0, 1fr);
 		height: 100%;
@@ -2061,12 +2061,6 @@
 
 	.month-grid {
 		grid-template-rows: repeat(6, minmax(0, 1fr));
-	}
-
-	@media (max-height: 52rem) {
-		.month-event:nth-child(n + 2) {
-			display: none;
-		}
 	}
 
 	@media (min-width: 90rem) {

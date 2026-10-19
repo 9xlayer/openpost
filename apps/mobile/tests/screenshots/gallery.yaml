@@ -26,8 +26,10 @@ appId: com.openpost.app
 - extendedWaitUntil:
     visible: Recent drafts
     timeout: 20000
-- tapOn: ".*A few thoughts on building in public.*"
-- assertVisible: ".*Social Set.*"
+- openLink: com.openpost.app:///publications/draft-one/edit
+- extendedWaitUntil:
+    visible: ".*Social Set.*"
+    timeout: 20000
 - assertVisible: Queue next slot
 - takeScreenshot: composer-${SCHEME}
 - tapOn: ".*Choose Social Set and destinations.*"

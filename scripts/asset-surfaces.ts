@@ -72,6 +72,7 @@ export const assetSurfaceManifest = {
     "logos/lemmy.svg",
     "logos/piefed.svg",
     "logos/discord.svg",
+    "logos/devnull.svg",
     "screenshots/image-export-detail-light.webp",
     "screenshots/image-export-detail-dark.webp",
   ],
