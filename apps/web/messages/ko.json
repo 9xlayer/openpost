@@ -9974,5 +9974,12 @@
 	"accounts_instagram_facebook": "Facebook으로 계속",
 	"accounts_instagram_facebook_description": "Facebook에 로그인하여 관리하는 페이지에 연결된 Instagram 계정을 선택하세요.",
 	"accounts_instagram_method_unavailable": "이 방법은 이 서버에 설정되어 있지 않습니다.",
-	"accounts_instagram_direct_app": "Instagram (직접 로그인)"
+	"accounts_instagram_direct_app": "Instagram (직접 로그인)",
+	"accounts_connect_devnull": "dev/null 연결",
+	"accounts_devnull_description": "dev/null 사용자 이름과 공개 키가 GitHub 계정에 등록된 SSH 개인 키를 입력하세요. 커밋은 공식 커밋 스크립트와 동일하게 이 키로 서명됩니다.",
+	"accounts_devnull_fields_required": "dev/null 사용자 이름과 SSH 개인 키를 입력하세요.",
+	"accounts_devnull_private_key": "SSH 개인 키",
+	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+	"accounts_devnull_username": "사용자 이름",
+	"accounts_provider_devnull": "dev/null에 커밋 게시"
 }

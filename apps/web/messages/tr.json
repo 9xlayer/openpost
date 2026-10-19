@@ -9974,5 +9974,12 @@
 	"accounts_instagram_facebook": "Facebook ile devam et",
 	"accounts_instagram_facebook_description": "Yönettiğiniz bir Sayfaya bağlı Instagram hesabını seçmek için Facebook ile giriş yapın.",
 	"accounts_instagram_method_unavailable": "Bu yöntem bu sunucuda ayarlanmamış.",
-	"accounts_instagram_direct_app": "Instagram (doğrudan giriş)"
+	"accounts_instagram_direct_app": "Instagram (doğrudan giriş)",
+	"accounts_connect_devnull": "dev/null bağla",
+	"accounts_devnull_description": "dev/null kullanıcı adınızı ve açık anahtarı GitHub hesabınızda bulunan SSH özel anahtarını girin. Commit'ler tıpkı resmi commit betiğinde olduğu gibi bu anahtarla imzalanır.",
+	"accounts_devnull_fields_required": "dev/null kullanıcı adınızı ve SSH özel anahtarınızı girin.",
+	"accounts_devnull_private_key": "SSH özel anahtarı",
+	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+	"accounts_devnull_username": "Kullanıcı adı",
+	"accounts_provider_devnull": "dev/null'a commit gönder"
 }

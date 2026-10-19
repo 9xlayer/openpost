@@ -9974,5 +9974,12 @@
 	"accounts_instagram_facebook": "Facebookで続行",
 	"accounts_instagram_facebook_description": "Facebookにログインし、管理するページにリンクされたInstagramアカウントを選択します。",
 	"accounts_instagram_method_unavailable": "この方法はこのサーバーで設定されていません。",
-	"accounts_instagram_direct_app": "Instagram（直接ログイン）"
+	"accounts_instagram_direct_app": "Instagram（直接ログイン）",
+	"accounts_connect_devnull": "dev/null を接続",
+	"accounts_devnull_description": "dev/null のユーザー名と、公開鍵を GitHub アカウントに登録した SSH 秘密鍵を入力してください。コミットは公式のコミットスクリプトと同様に、この鍵で署名されます。",
+	"accounts_devnull_fields_required": "dev/null のユーザー名と SSH 秘密鍵を入力してください。",
+	"accounts_devnull_private_key": "SSH 秘密鍵",
+	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+	"accounts_devnull_username": "ユーザー名",
+	"accounts_provider_devnull": "dev/null にコミットを投稿"
 }

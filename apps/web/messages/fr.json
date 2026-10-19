@@ -9974,5 +9974,12 @@
 	"accounts_instagram_facebook": "Continuer avec Facebook",
 	"accounts_instagram_facebook_description": "Connectez-vous avec Facebook pour choisir un compte Instagram lié à une Page que vous gérez.",
 	"accounts_instagram_method_unavailable": "Cette méthode n’est pas configurée sur ce serveur.",
-	"accounts_instagram_direct_app": "Instagram (connexion directe)"
+	"accounts_instagram_direct_app": "Instagram (connexion directe)",
+	"accounts_connect_devnull": "Connecter dev/null",
+	"accounts_devnull_description": "Saisissez votre nom d'utilisateur dev/null et la clé privée SSH dont la partie publique se trouve sur votre compte GitHub. Les commits sont signés avec cette clé, exactement comme avec le script de commit officiel.",
+	"accounts_devnull_fields_required": "Saisissez votre nom d'utilisateur dev/null et votre clé privée SSH.",
+	"accounts_devnull_private_key": "Clé privée SSH",
+	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+	"accounts_devnull_username": "Nom d'utilisateur",
+	"accounts_provider_devnull": "Publier des commits sur dev/null"
 }

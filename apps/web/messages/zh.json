@@ -9974,5 +9974,12 @@
 	"accounts_instagram_facebook": "使用 Facebook 继续",
 	"accounts_instagram_facebook_description": "登录 Facebook，选择与您管理的公共主页关联的 Instagram 账号。",
 	"accounts_instagram_method_unavailable": "此服务器尚未配置此方式。",
-	"accounts_instagram_direct_app": "Instagram（直接登录）"
+	"accounts_instagram_direct_app": "Instagram（直接登录）",
+	"accounts_connect_devnull": "连接 dev/null",
+	"accounts_devnull_description": "输入你的 dev/null 用户名，以及公钥已添加到 GitHub 账户的 SSH 私钥。提交会像官方提交脚本一样使用该密钥签名。",
+	"accounts_devnull_fields_required": "输入你的 dev/null 用户名和 SSH 私钥。",
+	"accounts_devnull_private_key": "SSH 私钥",
+	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+	"accounts_devnull_username": "用户名",
+	"accounts_provider_devnull": "向 dev/null 发布提交"
 }
