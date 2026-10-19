@@ -24,16 +24,14 @@ describe('pending spinners under reduced motion', () => {
 		const screen = await render(DialogLoadingStatus);
 		await expect.element(screen.getByRole('status')).toBeVisible();
 
-		const cells = [...screen.container.querySelectorAll('[data-slot="activity-indicator"] > span')];
-		expect(cells.length).toBeGreaterThan(0);
-		for (const cell of cells) {
-			expect(getComputedStyle(cell).animationName).toBe('none');
-		}
+		const indicator = screen.container.querySelector('[role="status"] svg');
+		if (!(indicator instanceof SVGElement)) throw new Error('Expected the loading indicator.');
+		expect(getComputedStyle(indicator).animationName).toBe('none');
 
 		// The emulation genuinely toggles the animation; the assertion above is not vacuous.
 		await emulateReducedMotion('no-preference');
 		expect(matchMedia('(prefers-reduced-motion: reduce)').matches).toBe(false);
-		expect(getComputedStyle(cells[0]).animationName).toContain('activity-cell');
+		expect(getComputedStyle(indicator).animationName).not.toBe('none');
 	});
 
 	it('settings save keeps a busy cue without spinning', async () => {
@@ -48,8 +46,8 @@ describe('pending spinners under reduced motion', () => {
 		await expect.element(screen.getByRole('button')).toHaveAttribute('aria-busy', 'true');
 
 		const spinner = screen.container.querySelector('.animate-spin');
-		expect(spinner).not.toBeNull();
-		expect(getComputedStyle(spinner as Element).animationName).toBe('none');
+		if (!(spinner instanceof Element)) throw new Error('Expected a spinner element.');
+		expect(getComputedStyle(spinner).animationName).toBe('none');
 	});
 
 	it('async pending button keeps its busy announcement without spinning', async () => {
@@ -66,7 +64,7 @@ describe('pending spinners under reduced motion', () => {
 			.toHaveAttribute('aria-busy', 'true');
 
 		const spinner = screen.container.querySelector('.animate-spin');
-		expect(spinner).not.toBeNull();
-		expect(getComputedStyle(spinner as Element).animationName).toBe('none');
+		if (!(spinner instanceof Element)) throw new Error('Expected a spinner element.');
+		expect(getComputedStyle(spinner).animationName).toBe('none');
 	});
 });
