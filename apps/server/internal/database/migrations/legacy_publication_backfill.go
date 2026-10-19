@@ -30,6 +30,11 @@ const (
 	legacyPublicationBackfillPhaseComplete  = "complete"
 )
 
+var (
+	errLegacyPublicationAuthorizationMissing = errors.New("authorization batch binding is missing")
+	errLegacyPublicationAuthorizationInvalid = errors.New("invalid publication job authorization")
+)
+
 type legacyPublicationBackfillState struct {
 	bun.BaseModel `bun:"table:legacy_publication_authoring_backfill_state"`
 
@@ -638,17 +643,12 @@ func authorizePendingLegacyPublicationJob(ctx context.Context, db *bun.DB, jobID
 				return quarantineProtectedLegacyPublicationJob(txCtx, tx, jobID)
 			}
 			if err := verifyPendingLegacyPublicationJobAuthorization(txCtx, tx, jobID); err != nil {
-				return quarantineProtectedLegacyPublicationJob(txCtx, tx, jobID)
+				return quarantineInvalidLegacyPublicationJob(txCtx, tx, jobID, err)
 			}
 			return resetInterruptedCanonicalPublicationTargets(txCtx, tx, jobID)
 		}
-		if err := publicationauth.AuthorizeLegacyJobs(txCtx, tx, publicationauth.LegacyJobsInput{
-			JobID: jobID,
-		}); err != nil {
-			return err
-		}
-		if err := verifyPendingLegacyPublicationJobAuthorization(txCtx, tx, jobID); err != nil {
-			return err
+		if err := ensurePendingLegacyPublicationJobAuthorization(txCtx, tx, jobID); err != nil {
+			return quarantineInvalidLegacyPublicationJob(txCtx, tx, jobID, err)
 		}
 		return resetInterruptedCanonicalPublicationTargets(txCtx, tx, jobID)
 	}); err != nil {
@@ -837,15 +837,12 @@ func reconcileStaleCanonicalPublicationJobTx(
 			return quarantineProtectedLegacyPublicationJob(ctx, tx, job.ID)
 		}
 		if err := verifyPendingLegacyPublicationJobAuthorization(ctx, tx, job.ID); err != nil {
-			return quarantineProtectedLegacyPublicationJob(ctx, tx, job.ID)
+			return quarantineInvalidLegacyPublicationJob(ctx, tx, job.ID, err)
 		}
 		return resetInterruptedCanonicalPublicationTargets(ctx, tx, job.ID)
 	}
-	if err := publicationauth.AuthorizeLegacyJobs(ctx, tx, publicationauth.LegacyJobsInput{JobID: job.ID}); err != nil {
-		return err
-	}
-	if err := verifyPendingLegacyPublicationJobAuthorization(ctx, tx, job.ID); err != nil {
-		return err
+	if err := ensurePendingLegacyPublicationJobAuthorization(ctx, tx, job.ID); err != nil {
+		return quarantineInvalidLegacyPublicationJob(ctx, tx, job.ID, err)
 	}
 	return resetInterruptedCanonicalPublicationTargets(ctx, tx, job.ID)
 }
@@ -897,9 +894,22 @@ func protectedLegacyPublicationJobUsesCurrentAuthorization(ctx context.Context, 
 }
 
 func quarantineProtectedLegacyPublicationJob(ctx context.Context, tx bun.Tx, jobID string) error {
+	return quarantineLegacyPublicationJob(ctx, tx, jobID, "Provider delivery may already have succeeded before authorization receipts were introduced. OpenPost preserved this job and did not retry it.")
+}
+
+func quarantineInvalidLegacyPublicationJob(ctx context.Context, tx bun.Tx, jobID string, err error) error {
+	// Operational errors must still abort startup, rather than silently failing
+	// valid work when the database cannot read its authorization receipts.
+	if !errors.Is(err, errLegacyPublicationAuthorizationInvalid) && !errors.Is(err, errLegacyPublicationAuthorizationMissing) {
+		return err
+	}
+	return quarantineLegacyPublicationJob(ctx, tx, jobID, "OpenPost did not run this job because its authorization could not be verified. Review the post before retrying. Reason: "+err.Error())
+}
+
+func quarantineLegacyPublicationJob(ctx context.Context, tx bun.Tx, jobID, message string) error {
 	result, err := tx.NewUpdate().Model((*models.Job)(nil)).
 		Set("status = ?", "failed").
-		Set("last_error = ?", "Provider delivery may already have succeeded before authorization receipts were introduced. OpenPost preserved this job and did not retry it.").
+		Set("last_error = ?", message).
 		Set("locked_at = NULL").
 		Set("locked_by = ''").
 		Where("id = ? AND status = ?", jobID, "pending").
@@ -914,7 +924,7 @@ func quarantineProtectedLegacyPublicationJob(ctx context.Context, tx bun.Tx, job
 	if affected != 1 {
 		return errors.New("protected legacy publication job could not be quarantined")
 	}
-	return failInterruptedQuarantinedPublication(ctx, tx, jobID)
+	return failQuarantinedPublication(ctx, tx, jobID, message)
 }
 
 func resetInterruptedCanonicalPublicationTargets(ctx context.Context, db bun.IDB, jobID string) error {
@@ -977,15 +987,14 @@ func resetInterruptedCanonicalPublicationTargets(ctx context.Context, db bun.IDB
 	return err
 }
 
-func failInterruptedQuarantinedPublication(ctx context.Context, db bun.IDB, jobID string) error {
+func failQuarantinedPublication(ctx context.Context, db bun.IDB, jobID, message string) error {
 	var job models.Job
 	if err := db.NewSelect().Model(&job).Where("id = ?", jobID).Scan(ctx); err != nil {
 		return err
 	}
 	payload := map[string]any{}
-	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
-		return err
-	}
+	// A quarantined malformed payload still has a durable aggregate scope.
+	_ = json.Unmarshal([]byte(job.Payload), &payload)
 	if strings.EqualFold(strings.TrimSpace(stringPayloadField(payload, "action")), publicationauth.ActionReply) {
 		return nil
 	}
@@ -993,7 +1002,7 @@ func failInterruptedQuarantinedPublication(ctx context.Context, db bun.IDB, jobI
 	if err != nil || len(renditionIDs) == 0 {
 		return err
 	}
-	return failInterruptedQuarantinedRenditions(ctx, db, job.ScopeID, renditionIDs)
+	return failQuarantinedRenditions(ctx, db, job.ScopeID, renditionIDs, message)
 }
 
 func interruptedQuarantinedRenditionIDs(
@@ -1037,7 +1046,7 @@ func interruptedQuarantinedRenditionIDs(
 	}
 	if len(renditionIDs) == 0 {
 		if err := db.NewSelect().Model((*models.Rendition)(nil)).Column("id").
-			Where("publication_id = ? AND status = ?", job.ScopeID, models.RenditionStatusPublishing).
+			Where("publication_id = ? AND status IN (?)", job.ScopeID, bun.List([]string{models.RenditionStatusScheduled, models.RenditionStatusPublishing})).
 			Scan(ctx, &renditionIDs); err != nil {
 			return nil, err
 		}
@@ -1048,13 +1057,13 @@ func interruptedQuarantinedRenditionIDs(
 	return renditionIDs, nil
 }
 
-func failInterruptedQuarantinedRenditions(
+func failQuarantinedRenditions(
 	ctx context.Context,
 	db bun.IDB,
 	publicationID string,
 	renditionIDs []string,
+	message string,
 ) error {
-	const message = "Provider delivery may have succeeded, so OpenPost did not retry this interrupted publication."
 	now := time.Now().UTC()
 	for _, query := range []*bun.UpdateQuery{
 		db.NewUpdate().Model((*models.Rendition)(nil)).
@@ -1064,7 +1073,7 @@ func failInterruptedQuarantinedRenditions(
 			Set("error_retry_at = NULL").
 			Set("updated_at = ?", now).
 			Where("id IN (?)", bun.List(renditionIDs)).
-			Where("status = ?", models.RenditionStatusPublishing),
+			Where("status IN (?)", bun.List([]string{models.RenditionStatusScheduled, models.RenditionStatusPublishing})),
 		db.NewUpdate().Model((*models.RenditionSegment)(nil)).
 			Set("status = ?", models.RenditionStatusFailed).
 			Set("error_message = ?", message).
@@ -1072,14 +1081,14 @@ func failInterruptedQuarantinedRenditions(
 			Set("error_retry_at = NULL").
 			Set("updated_at = ?", now).
 			Where("rendition_id IN (?)", bun.List(renditionIDs)).
-			Where("status = ?", models.RenditionStatusPublishing),
+			Where("status IN (?)", bun.List([]string{models.RenditionStatusScheduled, models.RenditionStatusPublishing})),
 		db.NewUpdate().Model((*models.Publication)(nil)).
 			Set("status = ?", models.PublicationStatusFailed).
 			Set("updated_at = ?", now).
-			Where("id = ? AND status = ?", publicationID, models.PublicationStatusPublishing),
+			Where("id = ? AND status IN (?)", publicationID, bun.List([]string{models.PublicationStatusScheduled, models.PublicationStatusPublishing})),
 		db.NewUpdate().Model((*models.Post)(nil)).
 			Set("status = ?", models.PostStatusFailed).
-			Where("publication_id = ? AND status = ?", publicationID, models.PostStatusPublishing),
+			Where("publication_id = ? AND status IN (?)", publicationID, bun.List([]string{models.PostStatusScheduled, models.PostStatusPublishing})),
 		db.NewUpdate().Model((*models.PostDestination)(nil)).
 			Set("status = ?", "failed").
 			Set("error_message = ?", message).
@@ -1275,6 +1284,19 @@ func legacyPublicationJobHasProtectedAttempt(ctx context.Context, db bun.IDB, jo
 	return count > 0, nil
 }
 
+func ensurePendingLegacyPublicationJobAuthorization(ctx context.Context, db bun.IDB, jobID string) error {
+	err := verifyPendingLegacyPublicationJobAuthorization(ctx, db, jobID)
+	if !errors.Is(err, errLegacyPublicationAuthorizationMissing) {
+		return err
+	}
+	// Only genuinely unbound legacy work may acquire a new receipt. Never
+	// replace an existing invalid binding, which could authorize changed content.
+	if err := publicationauth.AuthorizeLegacyJobs(ctx, db, publicationauth.LegacyJobsInput{JobID: jobID}); err != nil {
+		return err
+	}
+	return verifyPendingLegacyPublicationJobAuthorization(ctx, db, jobID)
+}
+
 func verifyPendingLegacyPublicationJobAuthorization(ctx context.Context, db bun.IDB, jobID string) error {
 	var job models.Job
 	if err := db.NewSelect().Model(&job).
@@ -1287,7 +1309,7 @@ func verifyPendingLegacyPublicationJobAuthorization(ctx context.Context, db bun.
 	}
 	payload := map[string]any{}
 	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
-		return fmt.Errorf("decode pending legacy publication job payload: %w", err)
+		return fmt.Errorf("%w: payload is not a JSON object", errLegacyPublicationAuthorizationInvalid)
 	}
 	publicationID, _ := payload["publication_id"].(string)
 	publicationID = strings.TrimSpace(publicationID)
@@ -1295,38 +1317,52 @@ func verifyPendingLegacyPublicationJobAuthorization(ctx context.Context, db bun.
 	batchID = strings.TrimSpace(batchID)
 	scheduledAt, _ := payload["authorization_scheduled_at"].(string)
 	if publicationID == "" || publicationID != strings.TrimSpace(job.ScopeID) {
-		return errors.New("payload publication does not match its aggregate scope")
+		return fmt.Errorf("%w: payload publication does not match its aggregate scope", errLegacyPublicationAuthorizationInvalid)
+	}
+	action := strings.TrimSpace(stringPayloadField(payload, "action"))
+	if action != "" && action != publicationauth.ActionPublish && action != publicationauth.ActionReply {
+		return fmt.Errorf("%w: unsupported action", errLegacyPublicationAuthorizationInvalid)
 	}
 	if batchID == "" {
-		protected, err := legacyPublicationJobHasProtectedAttempt(ctx, db, job.ID)
-		if err != nil {
-			return err
-		}
-		if protected {
-			return errors.New("protected provider write has no authorization batch binding")
-		}
-		discarded, err := discardPendingLegacyPublicationJobsWithoutDestinations(ctx, db, publicationID)
-		if err != nil {
-			return err
-		}
-		if discarded {
-			return nil
-		}
-		return errors.New("authorization batch binding is missing")
+		return verifyUnboundLegacyPublicationJobAuthorization(ctx, db, job)
 	}
-	if strings.TrimSpace(scheduledAt) != job.RunAt.UTC().Format(time.RFC3339Nano) {
-		return errors.New("authorization scheduled time does not match the pending job")
+	authorizedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(scheduledAt))
+	if err != nil {
+		return fmt.Errorf("%w: invalid authorization scheduled time", errLegacyPublicationAuthorizationInvalid)
 	}
-	receiptCount, err := db.NewSelect().Model((*models.PublicationAuthorization)(nil)).
+	var receipts []models.PublicationAuthorization
+	err = db.NewSelect().Model(&receipts).Column("scheduled_at").
 		Where("batch_id = ? AND job_id = ? AND publication_id = ?", batchID, job.ID, publicationID).
-		Count(ctx)
+		Scan(ctx)
 	if err != nil {
 		return fmt.Errorf("load pending legacy publication authorization receipt: %w", err)
 	}
-	if receiptCount < 1 {
-		return errors.New("authorization receipt is missing")
+	if len(receipts) == 0 {
+		return fmt.Errorf("%w: authorization receipt is missing", errLegacyPublicationAuthorizationInvalid)
+	}
+	for _, receipt := range receipts {
+		// Authorization is immutable; run_at is a mutable retry/continuation
+		// dispatch time. Match receipt precision, as publicationauth does.
+		if !receipt.ScheduledAt.UTC().Truncate(time.Microsecond).Equal(authorizedAt.UTC().Truncate(time.Microsecond)) {
+			return fmt.Errorf("%w: authorization scheduled time does not match its receipt", errLegacyPublicationAuthorizationInvalid)
+		}
 	}
 	return nil
+}
+
+func verifyUnboundLegacyPublicationJobAuthorization(ctx context.Context, db bun.IDB, job models.Job) error {
+	protected, err := legacyPublicationJobHasProtectedAttempt(ctx, db, job.ID)
+	if err != nil {
+		return err
+	}
+	if protected {
+		return fmt.Errorf("%w: protected provider write has no authorization batch binding", errLegacyPublicationAuthorizationInvalid)
+	}
+	discarded, err := discardPendingLegacyPublicationJobsWithoutDestinations(ctx, db, strings.TrimSpace(job.ScopeID))
+	if err != nil || discarded {
+		return err
+	}
+	return errLegacyPublicationAuthorizationMissing
 }
 
 func repairLegacyPublicationJobScope(ctx context.Context, db bun.IDB, job *models.Job) error {
