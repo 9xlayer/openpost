@@ -1130,6 +1130,22 @@ export const docsPageCatalog = Object.freeze([
     }
   },
   {
+    "page": "self-hosting/integrations/devnull.mdx",
+    "title": "dev/null",
+    "description": "Publish commits and replies to dev/null through its SSH-signed commit API.",
+    "route": "/self-hosting/integrations/devnull",
+    "agentRepresentation": {
+      "membership": "ordinary"
+    },
+    "agentDiscovery": {
+      "membership": "unlisted"
+    },
+    "agentCorpus": {
+      "membership": "included",
+      "section": "self-hosting"
+    }
+  },
+  {
     "page": "self-hosting/integrations/discord.mdx",
     "title": "Discord",
     "description": "Connect a channel webhook or an instance-owned Discord bot.",

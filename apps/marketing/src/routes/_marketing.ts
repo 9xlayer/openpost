@@ -1134,6 +1134,63 @@ const platformImplementations = [
 		verification:
 			'Test the exact webhook and file type before you rely on it for scheduled messages.',
 		docsUrl: 'https://openpo.st/docs/guides/accounts'
+	},
+	{
+		slug: 'devnull',
+		name: 'dev/null',
+		short: 'devnull',
+		tag: 'Commits, replies, images',
+		requiresProviderApproval: false,
+		implementationDetail: 'Built-in SSH key connection',
+		description:
+			'Connect your dev/null username and SSH key, then schedule commits, replies, and image posts.',
+		heroTitle: 'Schedule a commit without opening a terminal.',
+		preview: {
+			label: 'dev/null commit',
+			headline: 'A scheduled commit',
+			body: 'Each commit is signed with the key on your GitHub account before dev/null publishes it.',
+			detail: `${PLATFORM_LIMITS.devnull.charLimit.toLocaleString('en-US')} characters`,
+			chips: ['SSH key', 'Up to 3 images', 'Replies']
+		},
+		accountRequirement:
+			'A dev/null username and a dedicated SSH private key whose public half is on your GitHub account.',
+		auth: 'SSH private key',
+		setup: [
+			'Add the public half of an SSH key to your GitHub account, then sign in at dev-null.sh so it picks the key up.',
+			'Connect your dev/null username and private key from Social accounts in OpenPost.',
+			'Publish a test commit and open the resulting link from the post details.'
+		],
+		formats: [
+			{
+				name: 'Commit',
+				text: `3 to ${PLATFORM_LIMITS.devnull.charLimit.toLocaleString('en-US')} characters`,
+				media: 'Text only'
+			},
+			{
+				name: 'Commit with images',
+				text: `3 to ${PLATFORM_LIMITS.devnull.charLimit.toLocaleString('en-US')} characters`,
+				media: 'Up to 3 JPEG, PNG, or WebP images of 10 MB or less'
+			},
+			{
+				name: 'Reply',
+				text: `3 to ${PLATFORM_LIMITS.devnull.charLimit.toLocaleString('en-US')} characters`,
+				media: 'Text only'
+			}
+		],
+		limits: [
+			'3 to 4000 characters per commit',
+			'Up to 3 images, 10 MB each',
+			'10 commits a minute',
+			'New accounts need approval before commits go public'
+		],
+		limitations: [
+			'OpenPost stores your SSH private key encrypted and uses it only to sign commit payloads.',
+			'Polls, quotes, and image descriptions are not supported by the dev/null commit API.',
+			'Pending commits are visible only to you until dev/null approves the account.'
+		],
+		verification:
+			'Publish a test commit and confirm the link before you rely on scheduled commits.',
+		docsUrl: 'https://openpo.st/docs/self-hosting/integrations/devnull'
 	}
 ] as const;
 

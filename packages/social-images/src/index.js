@@ -73,6 +73,7 @@ const platformNames = [
   ["googlebusiness", "Google Business"],
   ["telegram", "Telegram"],
   ["discord", "Discord"],
+  ["devnull", "dev/null"],
 ];
 
 const toolPages = [

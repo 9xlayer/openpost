@@ -25,6 +25,7 @@ The table below is an implementation and setup inventory. It is not a Hosted ser
 | Google Business | Google OAuth                  | Google-approved provider app                    | Unavailable  | Development and certification paths only; no public Hosted claim.                      |
 | Telegram        | Instance-owned bot            | Bot token, username, and webhook secret         | Unavailable  | Bot mode stays gated until current live certification.                                 |
 | Discord         | OAuth bot or incoming webhook | Bot application for OAuth bot mode              | Built-in     | Users can connect a bot guild or webhook; text and streamed attachments are supported. |
+| dev/null        | SSH private key               | None                                            | Built-in     | Users connect with username + private key; commits are signed on their GitHub account. |
 
 Start with one network. Check that its callback works before you add another. A configured app may still need approval, a valid account grant, current local and live proof, an allowed policy mode, and an enabled runtime control.
 
@@ -64,6 +65,7 @@ This matrix reflects implemented OpenPost code paths, not the full theoretical c
 | Google Business | Gated      | Gated       | No                          | Gated           | Gated; no public Hosted claim                                   | Gated            | No per-post insights; location analytics pending     |
 | Telegram        | Gated      | Gated       | No                          | Gated           | Gated; no public Hosted claim                                   | Gated            | Gated; no public Hosted claim                        |
 | Discord         | Yes        | Yes         | Reply links between parts   | Yes             | Yes, within the webhook's file-size limit                       | Yes              | No analytics                                         |
+| dev/null        | Yes        | Yes         | Replies                     | Yes             | No                                                              | Yes              | No                                                   |
 
 Direct messages, Comments and replies, Analytics, and Grow are optional and per connected account. Each feature starts off for a newly connected account. Enable supported features after connection or in Account details. Disabling a feature stops future provider reads and writes without deleting stored history or revoking provider authorization. Availability depends on provider support, required scopes, and plan access as distinct facts. Grow never follows automatically. Existing accounts keep their current behavior after upgrade. Use each provider page to see which optional features that provider supports.
 
@@ -88,6 +90,7 @@ Use this table when checking implemented formats and safe provider limits. An im
 | Google Business  | Certification-only code path; 1500 characters         | One JPEG/PNG photo by public URL                  | No video path; photo only                                                                                            | No threading path                                        | Gated       | Gated       |
 | Telegram bot     | Certification-only code path                          | Photos, documents, and media groups               | Video and media groups through the instance bot; every operation remains publicly gated                              | Visible ordered caption-overflow follow-up               | Gated       | Gated       |
 | Discord Webhooks | Implemented                                           | Up to 10 file attachments                         | MP4, MOV, or WebM; OpenPost uses Discord's safe 10 MiB default because the actual limit can vary                     | Reply references between segments                        | Implemented | Implemented |
+| dev/null         | 3-4,000 characters                                    | Up to 3 JPEG/PNG/WebP images, 10 MB each          | No video path                                                                                                        | Replies                                                  | Implemented | Implemented |
 
 ## Known limitations
 
@@ -115,6 +118,7 @@ A platform can offer a feature while OpenPost still marks its implementation mis
 - **Google Business:** Use provider key `googlebusiness`. OpenPost connects a selected location and supports STANDARD, EVENT, and OFFER local posts with durable reconciliation. The adapter remains publicly unavailable until Google API access and current live certification exist. See the [Google Business boundary](googlebusiness.md).
 - **Telegram:** Bot mode remains publicly unavailable until current live certification exists for each operation. See the [Telegram bot boundary](telegram.md).
 - **Discord:** Connect an incoming webhook URL or an instance-configured OAuth bot. OpenPost streams attachments and uses a safe 10 MiB file limit because Discord's actual limit can vary by server and account.
+- **dev/null:** Connect with a username and a dedicated SSH private key whose public half is on your GitHub account. New accounts need approval before commits are public, and dev/null allows 10 commits a minute. See the [dev/null boundary](devnull.md).
 
 Social network API rules, access, request limits, and app review can change. Check that network's docs if a feature stops working.
 

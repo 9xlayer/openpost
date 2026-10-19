@@ -20,6 +20,7 @@ export const publishedProviderAssetSlugs = [
   "instagram",
   "tiktok",
   "youtube",
+  "devnull",
 ] as const;
 
 export const assetSurfaceManifest = {
