@@ -13,5 +13,5 @@
 	role="status"
 	aria-label={m.common_loading()}
 >
-	<ProtectedIcon icon="loading" class="size-5 animate-spin" />
+	<ProtectedIcon icon="loading" class="size-5 animate-spin motion-reduce:animate-none" />
 </div>

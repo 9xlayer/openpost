@@ -11,7 +11,7 @@ import DeleteAccountDialog from './delete-account-dialog.svelte';
 // same role and accessible name. Drop this mock once the export lands.
 // oxlint-disable-next-line anti-slop/no-module-mocking
 vi.mock('$lib/components/dialog-loading-status.svelte', async () => {
-	const stub = await import('./dialog-loading-status-stub.svelte');
+	const stub = await import('./dialog-loading-status.fixture.svelte');
 	return { default: stub.default };
 });
 

@@ -32,7 +32,7 @@ function renderMessages() {
 	);
 }
 
-function mockInbox(items: ReturnType<typeof conversation>) {
+function mockInbox(items: ReturnType<typeof conversation>[]) {
 	getMock.mockImplementation(async (path) => {
 		if (path === '/messages') {
 			return { data: { items, total: items.length, sync_states: [], next_cursor: '' } };
@@ -70,11 +70,11 @@ describe('messages counterpart avatar', () => {
 	it('loads the counterpart photo lazily without sending a referrer', async () => {
 		mockInbox([conversation('Ava Stone', 1, 'https://example.com/avatars/ava.png')]);
 		const screen = await renderMessages();
-		let image: HTMLImageElement | null = null;
 		await vi.waitFor(() => {
-			image = rowByName(screen.container, 'Ava Stone').querySelector('img');
-			expect(image).not.toBeNull();
+			const candidate = rowByName(screen.container, 'Ava Stone').querySelector('img');
+			expect(candidate).not.toBeNull();
 		});
+		const image = rowByName(screen.container, 'Ava Stone').querySelector('img');
 		expect(image?.getAttribute('referrerpolicy')).toBe('no-referrer');
 		expect(image?.getAttribute('loading')).toBe('lazy');
 	});
