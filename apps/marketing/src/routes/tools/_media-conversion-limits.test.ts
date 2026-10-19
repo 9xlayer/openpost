@@ -26,6 +26,7 @@ describe('browser media tool byte limits', () => {
 	});
 
 	it('derives the oversized-input error from the input constant', () => {
+		// SAFETY: openLocalMedia reads only size before rejecting oversized input.
 		const oversized = { size: MEDIA_MAX_BYTES + 1 } as File;
 		let message = '';
 		try {
