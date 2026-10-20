@@ -14,7 +14,7 @@ export function InboxSegments<T extends string>({
   onSelect: (value: T) => void;
 }) {
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: 8 }}>
+    <View accessibilityRole="tablist" style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
       {values.map(({ value, label }) => (
         <Button
           key={value}
@@ -23,7 +23,7 @@ export function InboxSegments<T extends string>({
           accessibilityState={{ selected: selected === value }}
           intent={selected === value ? "primary" : "ordinary"}
           onPress={() => onSelect(value)}
-          style={{ flex: 1, minHeight: 48 }}
+          style={{ flexGrow: 1, flexShrink: 0, flexBasis: "auto", minHeight: 48 }}
         />
       ))}
     </View>
