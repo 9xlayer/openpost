@@ -176,6 +176,7 @@
 			pendingInitialMeme = requestedMode === 'meme' && !canUseMeme;
 			pickerMode = pendingInitialMeme ? 'library' : requestedMode;
 			if (loadedForWorkspace !== workspaceId) {
+				media = [];
 				selectedTagIDs = [];
 				showUntagged = false;
 				mediaType = 'all';
