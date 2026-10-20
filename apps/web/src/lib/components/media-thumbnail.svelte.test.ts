@@ -1,4 +1,4 @@
-import { tick } from 'svelte';
+import { createRawSnippet, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import MediaThumbnail from './media-thumbnail.svelte';
@@ -105,6 +105,33 @@ describe('media thumbnail', () => {
 
 		await expect.element(screen.getByRole('img')).not.toBeInTheDocument();
 		await expect.element(screen.getByRole('presentation')).toBeVisible();
+	});
+
+	it('waits for the poster still instead of rendering the video fallback first', async () => {
+		let fallbackRenders = 0;
+		const noStill = createRawSnippet(() => ({
+			render: () => {
+				fallbackRenders += 1;
+				return '<span data-testid="video-fallback"></span>';
+			}
+		}));
+		const screen = await render(MediaThumbnail, {
+			props: {
+				item: {
+					mime_type: 'video/mp4',
+					thumbnail_url: null,
+					poster_thumbnail_url: ORIGINAL_SRC,
+					url: '/media/original.mp4',
+					alt_text: null,
+					original_filename: 'clip.mp4'
+				},
+				fallbackAlt: 'Media',
+				noStill
+			}
+		});
+
+		await expect.element(screen.getByRole('img', { name: 'clip.mp4' })).toBeVisible();
+		expect(fallbackRenders).toBe(0);
 	});
 
 	it('prefers the poster still for video', async () => {

@@ -35,6 +35,7 @@
 	const alt = $derived(mediaThumbAlt(item, fallbackAlt));
 
 	let shownURL = $state('');
+	let settled = $state(false);
 	let retriedOriginal = $state(false);
 	let missing = $state(false);
 
@@ -45,6 +46,7 @@
 		shownURL = stillURL;
 		retriedOriginal = false;
 		missing = false;
+		settled = true;
 	});
 
 	function handleError(event: Event): void {
@@ -74,7 +76,7 @@
 
 {#if !missing && shownURL}
 	<img src={shownURL} {alt} class={className} {loading} onerror={handleError} />
-{:else if !missing && noStill}
+{:else if !missing && noStill && settled}
 	{@render noStill()}
 {:else}
 	{@render placeholder()}
