@@ -3,6 +3,7 @@ import type { paths, components } from './types';
 import { feedbackDiagnostics } from '$lib/feedback-diagnostics';
 import {
 	captureQueryAuthorizationIdentity,
+	isSessionUnauthorized,
 	settleQueryUnauthorized
 } from '$lib/query/authorization-boundary';
 import { applyTelemetryRequestHeaders } from '@openpost/telemetry';
@@ -46,10 +47,11 @@ type APIClient = ReturnType<typeof createApiClient>;
 type APIClientMethods = Pick<APIClient, 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
 
 // Settlement is a property of the API client: every request captures the query
-// authorization identity before dispatch and settles a 401 against it, so direct
-// mutations cannot leave the app on a stale authenticated shell. The boundary
-// keeps the "identity captured before the request" guard, so a 401 for a
-// superseded identity is a no-op.
+// authorization identity before dispatch and settles a rejected session against
+// it, so direct mutations cannot leave the app on a stale authenticated shell.
+// The boundary keeps the "identity captured before the request" guard, so a 401
+// for a superseded identity is a no-op. Action-level 401s, such as a wrong
+// password for recent reauthentication, stay with their caller.
 type SettledResponseMethod = (...args: never[]) => Promise<{ response: Response }>;
 
 function withQueryAuthorizationSettlement<TMethod extends SettledResponseMethod>(
@@ -60,7 +62,8 @@ function withQueryAuthorizationSettlement<TMethod extends SettledResponseMethod>
 	return (async (...args: Parameters<TMethod>) => {
 		const authorizationIdentity = captureQueryAuthorizationIdentity();
 		const result = await invoke(...args);
-		if (result.response?.status === 401) settleQueryUnauthorized(authorizationIdentity);
+		if (result.response && isSessionUnauthorized(result.response))
+			settleQueryUnauthorized(authorizationIdentity);
 		return result;
 	}) as TMethod;
 }
