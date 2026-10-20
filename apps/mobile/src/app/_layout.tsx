@@ -42,6 +42,7 @@ import { readAppBootstrap } from "@/lib/app-bootstrap";
 import { registerSignedOutDeviceDataPurge } from "@/lib/auth";
 import { LaunchSessionProvider, type LaunchSessionState } from "@/lib/launch-session";
 import { loadSessionState, synchronizeSession } from "@/lib/session";
+import { purgeInboxDeviceData } from "@/lib/inbox/storage";
 import { purgeVideoProjectDeviceData } from "@/lib/video-projects";
 import {
   bindNativeThemeSession,
@@ -64,8 +65,11 @@ export function ErrorBoundary(props: ErrorBoundaryProps) {
 }
 
 SplashScreen.preventAutoHideAsync();
-registerSignedOutDeviceDataPurge(purgeVideoProjectDeviceData);
-registerUnauthorizedDeviceDataPurge(purgeVideoProjectDeviceData);
+const purgeDeviceData = async () => {
+  await Promise.all([purgeVideoProjectDeviceData(), purgeInboxDeviceData()]);
+};
+registerSignedOutDeviceDataPurge(purgeDeviceData);
+registerUnauthorizedDeviceDataPurge(purgeDeviceData);
 configureNativeQueryLifecycle();
 
 function useSessionReady() {
