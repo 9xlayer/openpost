@@ -27,6 +27,7 @@ type XAdapter struct {
 	apiBaseURL     string
 	uploadBaseURL  string
 	requestStore   XRequestStore
+	messagingQuota XMessagingQuotaGate
 	requestMeta    sync.Map
 	cleanupDone    chan struct{}
 }
@@ -948,6 +949,10 @@ func validXReplySettings(value string) bool {
 }
 
 func (x *XAdapter) doSignedRequest(ctx context.Context, combinedAccessToken, method, requestURL string, body io.Reader, headers map[string]string) ([]byte, error) {
+	return x.doSignedRequestObserved(ctx, combinedAccessToken, method, requestURL, body, headers, nil)
+}
+
+func (x *XAdapter) doSignedRequestObserved(ctx context.Context, combinedAccessToken, method, requestURL string, body io.Reader, headers map[string]string, observe func(int, http.Header) error) ([]byte, error) {
 	accessToken, accessSecret, err := splitXCombinedToken(combinedAccessToken)
 	if err != nil {
 		return nil, err
@@ -956,6 +961,10 @@ func (x *XAdapter) doSignedRequest(ctx context.Context, combinedAccessToken, met
 	config := oauth1.NewConfig(x.consumerKey, x.consumerSecret)
 	token := oauth1.NewToken(accessToken, accessSecret)
 	client := config.Client(ctx, token)
+	if observe != nil {
+		client.Timeout = 30 * time.Second
+		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	}
 
 	req, err := http.NewRequestWithContext(ctx, method, requestURL, body)
 	if err != nil {
@@ -970,6 +979,11 @@ func (x *XAdapter) doSignedRequest(ctx context.Context, combinedAccessToken, met
 		return nil, fmt.Errorf("request failed: %w", sanitizeTransportError(err))
 	}
 	defer resp.Body.Close()
+	if observe != nil {
+		if err := observe(resp.StatusCode, resp.Header); err != nil {
+			return nil, err
+		}
+	}
 
 	// X API responses are small JSON payloads. Bound the read with the
 	// shared 16 MB cap.

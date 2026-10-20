@@ -18,7 +18,7 @@ func (x *XAdapter) MessagingSupport() MessagingSupport {
 		CanSend:           true,
 		RequiresOptIn:     true,
 		ConversationModel: "direct_message",
-		Unavailable:       "The X app must have Direct Messages permission. Existing accounts may need to reconnect.",
+		Unavailable:       "The X app must have Direct Messages permission. Legacy DMs only. Live events require separate OAuth2 authorization and an operator budget; encrypted XChat is unavailable.",
 	}
 }
 
@@ -33,7 +33,7 @@ func (x *XAdapter) FetchMessages(ctx context.Context, accessToken string, input 
 	if input.Cursor != "" {
 		query.Set("pagination_token", input.Cursor)
 	}
-	body, err := x.doSignedRequest(ctx, accessToken, http.MethodGet, x.apiURL("/2/dm_events")+"?"+query.Encode(), nil, nil)
+	body, err := x.doMessagingRequest(ctx, accessToken, input.AccountID, XMessagingRead, http.MethodGet, x.apiURL("/2/dm_events")+"?"+query.Encode(), nil, nil)
 	if err != nil {
 		return FetchMessagesResult{}, fmt.Errorf("fetching X direct messages: %w", err)
 	}
@@ -99,7 +99,7 @@ func (x *XAdapter) FetchMessages(ctx context.Context, accessToken string, input 
 		missingCounterparts = append(missingCounterparts, counterpartID)
 	}
 	if len(missingCounterparts) > 0 {
-		hydrated, err := x.fetchMessageUsers(ctx, accessToken, missingCounterparts)
+		hydrated, err := x.fetchMessageUsers(ctx, accessToken, input.AccountID, missingCounterparts)
 		if err == nil {
 			for id, profile := range hydrated {
 				users[id] = profile
@@ -127,14 +127,14 @@ func (x *XAdapter) FetchMessages(ctx context.Context, accessToken string, input 
 	return result, nil
 }
 
-func (x *XAdapter) fetchMessageUsers(ctx context.Context, accessToken string, ids []string) (map[string]struct {
+func (x *XAdapter) fetchMessageUsers(ctx context.Context, accessToken, accountID string, ids []string) (map[string]struct {
 	Username, Name, Avatar string
 }, error) {
 	query := url.Values{
 		"ids":         {strings.Join(ids, ",")},
 		"user.fields": {"username,name,profile_image_url"},
 	}
-	body, err := x.doSignedRequest(ctx, accessToken, http.MethodGet, x.apiURL("/2/users")+"?"+query.Encode(), nil, nil)
+	body, err := x.doMessagingRequest(ctx, accessToken, accountID, XMessagingUsers, http.MethodGet, x.apiURL("/2/users")+"?"+query.Encode(), nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("fetching X message participants: %w", err)
 	}
@@ -163,7 +163,7 @@ func (x *XAdapter) SendMessage(ctx context.Context, accessToken string, input Se
 		return SendMessageResult{}, fmt.Errorf("x conversation id is required")
 	}
 	body, _ := json.Marshal(map[string]string{"text": strings.TrimSpace(input.Body)})
-	response, err := x.doSignedRequest(ctx, accessToken, http.MethodPost,
+	response, err := x.doMessagingRequest(ctx, accessToken, input.AccountID, XMessagingSend, http.MethodPost,
 		x.apiURL("/2/dm_conversations/")+url.PathEscape(input.RemoteConversationID)+"/messages",
 		bytes.NewReader(body), map[string]string{headerContentType: contentTypeJSON})
 	if err != nil {
@@ -176,6 +176,9 @@ func (x *XAdapter) SendMessage(ctx context.Context, accessToken string, input Se
 	}
 	if err := json.Unmarshal(response, &result); err != nil {
 		return SendMessageResult{}, fmt.Errorf("decoding X direct message: %w", err)
+	}
+	if result.Data.ID == "" {
+		return SendMessageResult{}, fmt.Errorf("x send returned no message identity")
 	}
 	return SendMessageResult{RemoteMessageID: result.Data.ID, CreatedAt: time.Now().UTC()}, nil
 }
