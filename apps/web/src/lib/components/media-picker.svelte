@@ -783,6 +783,9 @@
 								<MediaThumbnail
 									{item}
 									fallbackAlt={item.original_filename}
+									still={item.mime_type.startsWith('image/')
+										? `/media/${item.id}/thumb/md`
+										: undefined}
 									class="size-full object-cover transition-transform group-hover:scale-[1.02]"
 								>
 									{#snippet noStill()}
