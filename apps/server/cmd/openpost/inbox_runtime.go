@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"github.com/uptrace/bun"
 	"log"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/uptrace/bun"
 
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/platform"
@@ -33,7 +34,10 @@ func (w inboxWorkers) Wait(ctx context.Context) error {
 // Callback IDs are stable public app identities, including provider/login mode.
 // They are never bearer credentials. Keep Instagram and Page callback routes
 // distinct even when they share the same Facebook application client ID.
+// Handlers capture the startup configuration. Restart after changing a Meta
+// app, client secret or webhook verification token, including DB admin edits.
 func registerMetaInbox(e *echo.Echo, ingress *providerinbox.Service, apps []platform.AppConfig) {
+	handlers := make(map[string]http.Handler)
 	for _, app := range apps {
 		app = platform.NormalizeAppConfig(app)
 		if app.Provider != "facebook" && app.Provider != "instagram" {
@@ -43,11 +47,18 @@ func registerMetaInbox(e *echo.Echo, ingress *providerinbox.Service, apps []plat
 			continue
 		}
 		id := platform.AppConfigMergeKey(app) + ":" + app.ClientID
-		handler := ingress.MetaHandler(providerinbox.MetaApp{ID: id, ClientID: app.ClientID, Platform: app.Provider, ConnectionMode: app.ConnectionMode, AppSecret: app.ClientSecret, VerifyToken: app.WebhookSecret})
-		path := "/api/v1/provider-inbox/meta/" + id
-		e.Add(http.MethodGet, path, echo.WrapHandler(handler))
-		e.Add(http.MethodPost, path, echo.WrapHandler(handler))
+		handlers[id] = ingress.MetaHandler(providerinbox.MetaApp{ID: id, ClientID: app.ClientID, Platform: app.Provider, ConnectionMode: app.ConnectionMode, AppSecret: app.ClientSecret, VerifyToken: app.WebhookSecret})
 	}
+	handle := func(c echo.Context) error {
+		handler, ok := handlers[c.Param("appID")]
+		if !ok {
+			return echo.ErrNotFound
+		}
+		handler.ServeHTTP(c.Response(), c.Request())
+		return nil
+	}
+	// Colons belong to the opaque app ID, never to Echo's route syntax.
+	e.Match([]string{http.MethodGet, http.MethodPost}, "/api/v1/provider-inbox/meta/:appID", handle)
 }
 
 func runInboxMaintenance(ctx context.Context, db *bun.DB, ingress *providerinbox.Service, schedule func(context.Context) error) {
