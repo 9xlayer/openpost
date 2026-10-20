@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/accountfeatures"
@@ -57,38 +58,10 @@ func (f *countingGrowthProvider) FollowGrowthCandidate(_ context.Context, _, _, 
 
 func newFeatureEnforcementDB(t *testing.T) *bun.DB {
 	t.Helper()
-	db := createHandlerTestDB(t,
-		(*models.Workspace)(nil),
-		(*models.WorkspaceMember)(nil),
-		(*models.SocialAccount)(nil),
-		(*models.AccountFeature)(nil),
-		(*models.User)(nil),
-		(*models.Organization)(nil),
-		(*models.Job)(nil),
-		(*models.Conversation)(nil),
-		(*models.DirectMessage)(nil),
-		(*models.MessagingSyncState)(nil),
-		(*models.EngagementItem)(nil),
-		(*models.EngagementSyncState)(nil),
-		(*models.XEngagementReadBudget)(nil),
-		(*models.Publication)(nil),
-		(*models.Rendition)(nil),
-		(*models.AnalyticsSyncState)(nil),
-		(*models.AnalyticsAccountSnapshot)(nil),
-		(*models.AnalyticsRenditionSnapshot)(nil),
-		(*models.GrowthRecommendation)(nil),
-		(*models.GrowthSyncState)(nil),
-		(*models.ProviderWriteAttempt)(nil),
-	)
-	// Include production job dedupe and communication identity constraints for durable work.
-	for _, statement := range []string{
-		`CREATE UNIQUE INDEX IF NOT EXISTS jobs_active_dedupe_unique_idx ON jobs (type, scope_id, dedupe_key) WHERE status IN ('pending','processing') AND scope_id <> '' AND dedupe_key <> ''`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS conversations_remote_idx ON conversations (social_account_id, remote_conversation_id)`,
-		`CREATE UNIQUE INDEX IF NOT EXISTS direct_messages_remote_idx ON direct_messages (conversation_id, remote_message_id) WHERE remote_message_id <> ''`,
-	} {
-		_, err := db.ExecContext(context.Background(), statement)
-		require.NoError(t, err)
-	}
+	db, err := database.InitDBWithDriver("sqlite", "file:"+t.Name()+"?mode=memory&cache=shared")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	require.NoError(t, database.CreateSchema(db))
 	return db
 }
 
@@ -146,6 +119,9 @@ func TestFeatureGateMessagingEnforcement(t *testing.T) {
 			require.NoError(t, db.NewSelect().Model(&saved).Where("social_account_id = ? AND feature = ?", "acc-msg", accountfeatures.FeatureMessaging).Scan(ctx))
 			require.True(t, saved.Enabled)
 			require.Equal(t, "user_save", saved.Source)
+			// Finish activation so the sweep must admit fresh durable work.
+			_, err = db.NewUpdate().Model((*models.Job)(nil)).Set("status = ?", "completed").Where("type = ?", messagingservice.JobTypeMessagesSync).Exec(ctx)
+			require.NoError(t, err)
 			// The automatic sweep must queue fresh work, not rely on the activation job.
 			beforeSweep, err := db.NewSelect().Model((*models.Job)(nil)).Where("type = ?", messagingservice.JobTypeMessagesSync).Count(ctx)
 			require.NoError(t, err)
@@ -155,7 +131,7 @@ func TestFeatureGateMessagingEnforcement(t *testing.T) {
 			require.Greater(t, len(jobs), beforeSweep, "automatic sweep must admit the canonical messaging preference")
 			queued, err = msgSvc.RefreshWorkspace(ctx, workspaceAccessActor(), "ws-1", true)
 			require.NoError(t, err)
-			require.Equal(t, 1, queued)
+			require.Zero(t, queued, "manual refresh reuses the pending sweep collection")
 			// Consume the sweep's durable sync job and verify actual collected records.
 			require.NoError(t, msgSvc.HandleJob(ctx, messagingservice.JobTypeMessagesSync, jobs[0].Payload))
 			require.Equal(t, 1, msgFake.FetchCount())
@@ -436,7 +412,11 @@ func TestFeatureGateDisablingPreservesStoredData(t *testing.T) {
 	// Seed stored data
 	_, err = db.NewInsert().Model(&models.Conversation{ID: "conv-pres", WorkspaceID: "ws-1", SocialAccountID: "acc-pres", Platform: "facebook", RemoteConversationID: "rem-pres", CreatedAt: now, UpdatedAt: now}).Exec(ctx)
 	require.NoError(t, err)
-	_, err = db.NewInsert().Model(&models.DirectMessage{ID: "msg-pres", WorkspaceID: "ws-1", ConversationID: "conv-pres", Body: "hello", CreatedAt: now, UpdatedAt: now}).Exec(ctx)
+	_, err = db.NewInsert().Model(&models.DirectMessage{Direction: "inbound", SendStatus: "received", ID: "msg-pres", WorkspaceID: "ws-1", ConversationID: "conv-pres", Body: "hello", CreatedAt: now, UpdatedAt: now}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Publication{ID: "post-pres", WorkspaceID: "ws-1", Status: models.PublicationStatusPublished}).Exec(ctx)
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Rendition{ID: "rend-pres", PublicationID: "post-pres", SocialAccountID: "acc-pres", Platform: "facebook", Status: models.RenditionStatusPublished}).Exec(ctx)
 	require.NoError(t, err)
 	_, err = db.NewInsert().Model(&models.EngagementItem{ID: "eng-pres", WorkspaceID: "ws-1", RenditionID: "rend-pres", SocialAccountID: "acc-pres", Platform: "facebook", RemoteID: "rem-eng", Body: "hi", CreatedAt: now, UpdatedAt: now, LastSeenAt: now}).Exec(ctx)
 	require.NoError(t, err)

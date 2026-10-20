@@ -82,22 +82,29 @@ func (s *Service) persistHistoryPage(ctx context.Context, account models.SocialA
 		if err := organizationguard.LockWorkspace(txCtx, tx, account.WorkspaceID); err != nil {
 			return err
 		}
+		deletions := make([]platform.DeletedProviderMessage, 0, len(page.DeletedMessages))
+		for _, deleted := range page.DeletedMessages {
+			// A history page can only delete messages in its requested conversation.
+			deleted.ConversationID = c.RemoteConversationID
+			deletions = append(deletions, deleted)
+		}
+		changes, err := s.applyDeletedMessages(txCtx, tx, account, deletions)
+		if err != nil {
+			return err
+		}
 		// History is not a new incoming event: retain its position and unread state.
 		for _, remote := range page.Messages {
 			if _, err := insertProviderMessage(txCtx, tx, account, c.ID, remote, s.now()); err != nil {
 				return err
 			}
 		}
-		for _, deleted := range page.DeletedMessages {
-			if _, err := tx.NewUpdate().Model((*models.DirectMessage)(nil)).Set("body=''").Set("attachments_json='[]'").Set("author_remote_id=''").Set("deleted_at=?", s.now()).Set("updated_at=?", s.now()).Where("conversation_id=? AND remote_message_id=?", c.ID, deleted.MessageID).Exec(txCtx); err != nil {
-				return err
-			}
-		}
-		_, err := tx.NewRaw(`INSERT INTO message_history_checkpoints(conversation_id,cursor,complete) VALUES(?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET cursor=EXCLUDED.cursor,complete=EXCLUDED.complete`, c.ID, page.NextCursor, page.NextCursor == "").Exec(txCtx)
+
+		_, err = tx.NewRaw(`INSERT INTO message_history_checkpoints(conversation_id,cursor,complete) VALUES(?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET cursor=EXCLUDED.cursor,complete=EXCLUDED.complete`, c.ID, page.NextCursor, page.NextCursor == "").Exec(txCtx)
 		if err != nil {
 			return err
 		}
-		return inboxchanges.Append(txCtx, tx, account.WorkspaceID, inboxchanges.Change{Kind: "message", ConversationID: c.ID})
+		changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: c.ID})
+		return inboxchanges.Append(txCtx, tx, account.WorkspaceID, changes...)
 	})
 }
 
