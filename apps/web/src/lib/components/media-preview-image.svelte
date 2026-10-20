@@ -10,14 +10,16 @@
 	}: {
 		mediaId: string;
 		alt: string;
-		thumbnailSize?: 'sm' | 'md';
+		thumbnailSize?: 'sm' | 'md' | 'original';
 		class?: string;
 		onMissing?: () => void;
 	} = $props();
 	let originalAttemptedFor = $state('');
 
-	const thumbnailURL = $derived(
-		getAuthenticatedMediaURL(`/media/${mediaId}/thumb/${thumbnailSize}`)
+	const imageURL = $derived(
+		thumbnailSize === 'original'
+			? getAuthenticatedMediaURL(`/media/${mediaId}`)
+			: getAuthenticatedMediaURL(`/media/${mediaId}/thumb/${thumbnailSize}`)
 	);
 	const originalURL = $derived(getAuthenticatedMediaURL(`/media/${mediaId}`));
 
@@ -33,4 +35,4 @@
 	}
 </script>
 
-<img src={thumbnailURL} {alt} class={className} onerror={useOriginal} />
+<img src={imageURL} {alt} class={className} onerror={useOriginal} />
