@@ -1795,6 +1795,7 @@ type DirectMessage struct {
 	WorkspaceID       string    `bun:"workspace_id,notnull" json:"workspace_id"`
 	ConversationID    string    `bun:"conversation_id,notnull" json:"conversation_id"`
 	RemoteMessageID   string    `bun:"remote_message_id,notnull,default:''" json:"remote_message_id"`
+	ReplyToRemoteID   string    `bun:"reply_to_remote_id,notnull,default:''" json:"-"`
 	ClientOperationID string    `bun:"client_operation_id,notnull,default:''" json:"client_operation_id,omitempty"`
 	DeletedAt         time.Time `bun:"deleted_at,nullzero" json:"deleted_at,omitempty,omitzero"`
 	ProviderReadAt    time.Time `bun:"provider_read_at,nullzero" json:"provider_read_at,omitempty,omitzero"`

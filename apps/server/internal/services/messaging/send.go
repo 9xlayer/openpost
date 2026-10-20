@@ -131,6 +131,8 @@ func (s *Service) queueMessageWithDB(ctx context.Context, db bun.IDB, conversati
 		ID: uuid.NewString(), WorkspaceID: conversation.WorkspaceID, ConversationID: conversation.ID,
 		Direction: "outbound", Body: body, AttachmentsJSON: "[]", SendStatus: "queued",
 		CreatedAt: now, UpdatedAt: now,
+		// Snapshot the fenced reply anchor before new activity or retries.
+		ReplyToRemoteID: messageReplyTarget(account.Platform, conversation.LastRemoteMessageID),
 	}
 	payload, _ := json.Marshal(subjectJob{ID: message.ID})
 	job, err := jobregistry.NewJob(JobTypeMessageSend, string(payload), now)
@@ -154,6 +156,13 @@ func (s *Service) queueMessageWithDB(ctx context.Context, db bun.IDB, conversati
 		return nil, err
 	}
 	return message, nil
+}
+
+func messageReplyTarget(provider, lastRemoteMessageID string) string {
+	if provider == "mastodon" {
+		return lastRemoteMessageID
+	}
+	return ""
 }
 
 func (s *Service) sendMessage(ctx context.Context, messageID string) error {
@@ -273,7 +282,7 @@ func (s *Service) sendMessageThroughFence(
 	request := platform.SendMessageRequest{
 		AccountID: account.AccountID, RemoteConversationID: conversation.RemoteConversationID,
 		CounterpartRemoteID: conversation.CounterpartRemoteID, CounterpartHandle: conversation.CounterpartHandle,
-		Body: message.Body,
+		ReplyToRemoteID: message.ReplyToRemoteID, Body: message.Body,
 	}
 	fingerprint, err := providerwrite.Fingerprint("messaging-send-v1", request)
 	if err != nil {
