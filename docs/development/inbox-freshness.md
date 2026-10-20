@@ -36,6 +36,8 @@ Provider callbacks persist receipts before acknowledgement and enqueue an immedi
 
 ## Preserve one user operation across retries
 
+Native keeps drafts editable offline, disables Send and retry, and checks connectivity again before dispatch. Reconnection refreshes stored reads and enables the action, but never submits a saved draft. A definite disconnect during local admission restores the unsent draft.
+
 The client saves a random `client_operation_id` before submitting a DM or public reply. Admission binds it to the actor, Workspace and conversation or comment, plus a hash of the submitted content. An identical replay returns the original message or job. Reusing the ID with different content returns a conflict. Two intentional messages with identical text have different operation IDs.
 
 DM provider writes keep a stable fence based on the canonical local message ID. An echo received before the send response converges by remote message ID while retaining that local ID. The client reconciles optimistic rows using `client_operation_id`. Provider acceptance establishes Sent; it does not invent typing, delivery, or read state. Mastodon reply targets are captured at admission, so later incoming messages do not retarget a retry or change its provider-write fingerprint. Send finalization honors remote deletion identities even when deletion precedes the response or echo; it preserves the accepted receipt while redacting the canonical message.
