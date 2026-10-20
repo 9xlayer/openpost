@@ -20,6 +20,8 @@ export interface EngagementFilters {
 }
 
 export interface ConversationFilters {
+  readonly search?: string;
+  readonly unreadOnly?: boolean;
   readonly platform?: string;
   readonly accountId?: string;
   readonly archived?: boolean;
@@ -206,6 +208,8 @@ export function normalizeEngagementFilters(filters: EngagementFilters) {
 
 export function normalizeConversationFilters(filters: ConversationFilters) {
   return {
+    search: filters.search?.trim() ?? "",
+    unreadOnly: filters.unreadOnly ?? false,
     platform: filters.platform?.trim() ?? "",
     accountId: filters.accountId?.trim() ?? "",
     archived: filters.archived ?? false,

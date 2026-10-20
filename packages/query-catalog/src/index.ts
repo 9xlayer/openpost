@@ -49,3 +49,5 @@ export * from "./analytics-overview";
 export * from "./image-generation";
 
 export * from "./publication-reviews";
+
+export * from "./inbox-updates";
