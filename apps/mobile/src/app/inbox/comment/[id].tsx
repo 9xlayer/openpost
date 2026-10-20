@@ -40,7 +40,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const headerHeight = useHeaderHeight();
   const focused = useIsFocused();
   const item = useComment(id);
-  const comment = item.data;
+  const comment = item.data?.item;
   const accounts = useAccounts();
   const account = accounts.data?.find((row) => row.id === comment?.social_account_id);
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
@@ -62,12 +62,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const scope = useMemo(() => inboxStorageScope(workspaceId), [workspaceId]);
   const draftId = `comment-${id}`;
   const liveError = useInboxUpdates("comments");
-  const parentQuery = useComment(
-    comment?.parent_remote_id ?? "",
-    comment?.social_account_id ?? "",
-    true,
-  );
-  const parent = parentQuery.data;
+  const parent = item.data?.parents?.find((row) => row.remote_id === comment?.parent_remote_id);
   useEffect(() => {
     let active = true;
     void readConversationDraft(scope, draftId)
@@ -185,7 +180,10 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
         >
           <DelayedQueryPlaceholder pending={item.isPending} shape="detail" />
           {item.isError ? (
-            <QueryNotice message={item.error.message} retry={() => void item.refetch()} />
+            <QueryNotice
+              message={item.error instanceof Error ? item.error.message : "Could not load comment"}
+              retry={() => void item.refetch()}
+            />
           ) : null}
           {comment ? (
             <>
@@ -224,7 +222,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     </>
                   ) : (
                     <BodyText>
-                      {parentQuery.isPending
+                      {item.isPending
                         ? "Loading parent comment…"
                         : "The parent comment is not available in stored history."}
                     </BodyText>

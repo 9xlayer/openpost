@@ -1,3 +1,7 @@
+import { useQuery } from "@tanstack/react-query";
+import { inboxSummaryQueryOptions } from "@openpost/query-catalog";
+import { mobileInboxAPI } from "@/lib/inbox/api";
+import { useWorkspaceId } from "@/lib/queries";
 import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useColors } from "@/components/ui";
@@ -13,6 +17,12 @@ export default function TabLayout() {
 }
 function NativeTabLayout() {
   const colors = useColors();
+  const workspaceId = useWorkspaceId() ?? "";
+  const summary = useQuery({
+    ...inboxSummaryQueryOptions(mobileInboxAPI, workspaceId),
+    refetchInterval: 60_000,
+  });
+  const unread = (summary.data?.unread_conversations ?? 0) + (summary.data?.unread_comments ?? 0);
   const theme = useNativeTheme();
   const drafts = resolveNativeThemeNavigationIcon(theme.manifest, "drafts");
   const inbox = resolveNativeThemeNavigationIcon(theme.manifest, "inbox");
@@ -62,6 +72,9 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="inbox">
         <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Badge hidden={unread === 0}>
+          {unread > 99 ? "99+" : String(unread)}
+        </NativeTabs.Trigger.Badge>
         <NativeTabs.Trigger.Icon renderingMode="template" src={inbox} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="analytics">
