@@ -38,13 +38,13 @@ Provider callbacks persist receipts before acknowledgement and enqueue an immedi
 
 The client saves a random `client_operation_id` before submitting a DM or public reply. Admission binds it to the actor, Workspace and conversation or comment, plus a hash of the submitted content. An identical replay returns the original message or job. Reusing the ID with different content returns a conflict. Two intentional messages with identical text have different operation IDs.
 
-DM provider writes keep a stable fence based on the canonical local message ID. An echo received before the send response converges by remote message ID while retaining that local ID. The client reconciles optimistic rows using `client_operation_id`. Provider acceptance establishes Sent; it does not invent typing, delivery, or read state.
+DM provider writes keep a stable fence based on the canonical local message ID. An echo received before the send response converges by remote message ID while retaining that local ID. The client reconciles optimistic rows using `client_operation_id`. Provider acceptance establishes Sent; it does not invent typing, delivery, or read state. Mastodon reply targets are captured at admission, so later incoming messages do not retarget a retry or change its provider-write fingerprint. Send finalization honors remote deletion identities even when deletion precedes the response or echo; it preserves the accepted receipt while redacting the canonical message.
 
 A definite pre-send failure may be retried through the dedicated retry endpoint. An uncertain provider write remains inspectable and blocks automatic resend. Public-reply admission receipts outlive pruned job history, so a lost response cannot cause a second public reply on replay. Refresh responses expose active Workspace collection job IDs, and `/jobs/{id}` authorizes Inbox receipts through their Workspace scope. A refresh is complete only after those jobs finish, not when they are enqueued. Moderation completion updates stored state and the change journal in one transaction.
 
 ## Verify and operate
 
-Migrations 165 through 168 are additive for SQLite and PostgreSQL. Run migration once before separate Hosted web and worker roles. Self-hosted `all` follows the existing automatic migration policy. Downgrading binaries requires stopping new Inbox workers and explicit paid subscriptions first; keep the additive tables and unreconciled provider-write/cost records.
+Migrations 165 through 169 are additive for SQLite and PostgreSQL. Run migration once before separate Hosted web and worker roles. Self-hosted `all` follows the existing automatic migration policy. Downgrading binaries requires stopping new Inbox workers and explicit paid subscriptions first; keep the additive tables and unreconciled provider-write/cost records.
 
 The focused tests cover request replay, echo races, unread/archive behavior, stale reaction snapshots, credential revocation, foreground coalescing, queue separation, and PostgreSQL commit ordering. Run them in Devenv:
 
