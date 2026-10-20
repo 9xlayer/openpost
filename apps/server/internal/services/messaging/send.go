@@ -39,59 +39,66 @@ func (s *Service) QueueMessage(ctx context.Context, actor Actor, conversationID,
 	}
 	var message *models.DirectMessage
 	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-		if err := organizationguard.LockWorkspace(txCtx, tx, conversation.WorkspaceID); err != nil {
-			return err
-		}
-		decision, err := workspaceaccess.NewAuthorizer(tx).Authorize(txCtx, conversation.WorkspaceID, actor, workspaceaccess.LevelEdit)
-		if err != nil {
-			return err
-		}
-		if !decision.Allowed {
-			return ErrAccessDenied
-		}
-		operationID := ""
-		if len(operationIDs) > 0 {
-			operationID = strings.TrimSpace(operationIDs[0])
-		}
-		if len(operationID) > 128 {
-			return fmt.Errorf("client operation ID is too long")
-		}
-		digest := sha256.Sum256([]byte(body))
-		bodyHash := hex.EncodeToString(digest[:])
-		if operationID != "" {
-			var stored struct {
-				BodyHash  string
-				MessageID string
-			}
-			err = tx.NewRaw(`SELECT body_hash, message_id FROM message_operations WHERE workspace_id=? AND user_id=? AND conversation_id=? AND operation_id=?`, conversation.WorkspaceID, actor.UserID, conversation.ID, operationID).Scan(txCtx, &stored)
-			if err == nil {
-				if stored.BodyHash != bodyHash {
-					return ErrOperationConflict
-				}
-				message = &models.DirectMessage{}
-				return tx.NewSelect().Model(message).Where("id=? AND workspace_id=?", stored.MessageID, conversation.WorkspaceID).Scan(txCtx)
-			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-		}
-		message, err = s.queueMessageWithDB(txCtx, tx, conversation.ID, body)
-		if err != nil {
-			return err
-		}
-		if operationID != "" {
-			if _, err = tx.NewRaw(`INSERT INTO message_operations(workspace_id,user_id,conversation_id,operation_id,body_hash,message_id) VALUES(?,?,?,?,?,?)`, conversation.WorkspaceID, actor.UserID, conversation.ID, operationID, bodyHash, message.ID).Exec(txCtx); err != nil {
-				return err
-			}
-			message.ClientOperationID = operationID
-			_, err = tx.NewUpdate().Model(message).Set("client_operation_id=?", operationID).WherePK().Exec(txCtx)
-		}
+		var err error
+		message, err = s.queueMessageReceipt(txCtx, tx, actor, conversation, body, operationIDs)
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
 	return message, nil
+}
+
+func (s *Service) queueMessageReceipt(ctx context.Context, tx bun.Tx, actor Actor, conversation models.Conversation, body string, operationIDs []string) (*models.DirectMessage, error) {
+	var message *models.DirectMessage
+	if err := organizationguard.LockWorkspace(ctx, tx, conversation.WorkspaceID); err != nil {
+		return nil, err
+	}
+	decision, err := workspaceaccess.NewAuthorizer(tx).Authorize(ctx, conversation.WorkspaceID, actor, workspaceaccess.LevelEdit)
+	if err != nil {
+		return nil, err
+	}
+	if !decision.Allowed {
+		return nil, ErrAccessDenied
+	}
+	operationID := ""
+	if len(operationIDs) > 0 {
+		operationID = strings.TrimSpace(operationIDs[0])
+	}
+	if len(operationID) > 128 {
+		return nil, fmt.Errorf("client operation ID is too long")
+	}
+	digest := sha256.Sum256([]byte(body))
+	bodyHash := hex.EncodeToString(digest[:])
+	if operationID != "" {
+		var stored struct {
+			BodyHash  string
+			MessageID string
+		}
+		err = tx.NewRaw(`SELECT body_hash, message_id FROM message_operations WHERE workspace_id=? AND user_id=? AND conversation_id=? AND operation_id=?`, conversation.WorkspaceID, actor.UserID, conversation.ID, operationID).Scan(ctx, &stored)
+		if err == nil {
+			if stored.BodyHash != bodyHash {
+				return nil, ErrOperationConflict
+			}
+			message = &models.DirectMessage{}
+			return message, tx.NewSelect().Model(message).Where("id=? AND workspace_id=?", stored.MessageID, conversation.WorkspaceID).Scan(ctx)
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	message, err = s.queueMessageWithDB(ctx, tx, conversation.ID, body)
+	if err != nil {
+		return nil, err
+	}
+	if operationID != "" {
+		if _, err = tx.NewRaw(`INSERT INTO message_operations(workspace_id,user_id,conversation_id,operation_id,body_hash,message_id) VALUES(?,?,?,?,?,?)`, conversation.WorkspaceID, actor.UserID, conversation.ID, operationID, bodyHash, message.ID).Exec(ctx); err != nil {
+			return nil, err
+		}
+		message.ClientOperationID = operationID
+		_, err = tx.NewUpdate().Model(message).Set("client_operation_id=?", operationID).WherePK().Exec(ctx)
+	}
+	return message, err
 }
 
 func (s *Service) queueMessageWithDB(ctx context.Context, db bun.IDB, conversationID, body string) (*models.DirectMessage, error) {
@@ -203,22 +210,28 @@ func (s *Service) acceptSentMessage(ctx context.Context, message models.DirectMe
 		if err := organizationguard.LockWorkspace(txCtx, tx, message.WorkspaceID); err != nil {
 			return err
 		}
+		if err := tx.NewSelect().Model(&message).WherePK().Scan(txCtx); err != nil {
+			return err
+		}
 		var echo models.DirectMessage
 		err := tx.NewSelect().Model(&echo).Where("conversation_id=? AND remote_message_id=? AND id<>?", message.ConversationID, remoteID, message.ID).Scan(txCtx)
-		createdAt := s.now()
+		message.RemoteCreatedAt = s.now()
 		changes := []inboxchanges.Change{}
 		if err == nil {
-			if !echo.RemoteCreatedAt.IsZero() {
-				createdAt = echo.RemoteCreatedAt
-			}
-			if _, err = tx.NewDelete().Model(&echo).WherePK().Exec(txCtx); err != nil {
+			if err = mergeMessageEcho(txCtx, tx, &message, echo); err != nil {
 				return err
 			}
 			changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: echo.ID, Deleted: true})
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if _, err = tx.NewUpdate().Model(&message).Set("remote_message_id=?", remoteID).Set("send_status='sent'").Set("error_message=''").Set("remote_created_at=?", createdAt).Set("updated_at=?", s.now()).WherePK().Exec(txCtx); err != nil {
+		message.RemoteMessageID = remoteID
+		message.SendStatus = "sent"
+		message.ErrorMessage = ""
+		message.UpdatedAt = s.now()
+		if _, err = tx.NewUpdate().Model(&message).
+			Column("remote_message_id", "send_status", "error_message", "remote_created_at", "provider_read_at", "author_remote_id", "attachments_json", "updated_at").
+			WherePK().Exec(txCtx); err != nil {
 			return err
 		}
 		if _, err = tx.NewUpdate().Model(&conversation).Set("last_remote_message_id=?", remoteID).Set("updated_at=?", s.now()).WherePK().Exec(txCtx); err != nil {
@@ -227,6 +240,26 @@ func (s *Service) acceptSentMessage(ctx context.Context, message models.DirectMe
 		changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: message.ID})
 		return inboxchanges.Append(txCtx, tx, message.WorkspaceID, changes...)
 	})
+}
+
+func mergeMessageEcho(ctx context.Context, tx bun.Tx, message *models.DirectMessage, echo models.DirectMessage) error {
+	if !echo.RemoteCreatedAt.IsZero() {
+		message.RemoteCreatedAt = echo.RemoteCreatedAt
+	}
+	if echo.ProviderReadAt.After(message.ProviderReadAt) {
+		message.ProviderReadAt = echo.ProviderReadAt
+	}
+	message.AuthorRemoteID = firstNonEmpty(echo.AuthorRemoteID, message.AuthorRemoteID)
+	if echo.AttachmentsJSON != "" && echo.AttachmentsJSON != "null" && echo.AttachmentsJSON != "[]" {
+		message.AttachmentsJSON = echo.AttachmentsJSON
+	}
+	// Copy before deletion, since deleting the echo cascades to its reactions.
+	// The composite key deduplicates reactions already held by the admitted ID.
+	if _, err := tx.NewRaw(`INSERT INTO message_reactions(message_id,actor_remote_id,value) SELECT ?,actor_remote_id,value FROM message_reactions WHERE message_id=? ON CONFLICT DO NOTHING`, message.ID, echo.ID).Exec(ctx); err != nil {
+		return err
+	}
+	_, err := tx.NewDelete().Model(&echo).WherePK().Exec(ctx)
+	return err
 }
 
 func (s *Service) sendMessageThroughFence(

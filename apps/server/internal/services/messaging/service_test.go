@@ -68,19 +68,63 @@ func messagingFixture(t *testing.T) (*Service, *bun.DB, models.SocialAccount, Ac
 // The admitted local ID must survive so clients can reconcile their optimistic bubble.
 func TestSendReconcilesEchoBeforeAcceptance(t *testing.T) {
 	s, db, account, actor := messagingFixture(t)
+	sentAt := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	readAt := sentAt.Add(time.Minute)
+	echo := platform.FetchMessageEventsResult{
+		Conversations: []platform.ProviderConversation{{
+			ID: "remote-thread", LastMessageAt: sentAt,
+			Messages: []platform.ProviderMessage{{
+				ID: "remote-message", Direction: "outbound", Body: "hello",
+				AuthorRemoteID: account.AccountID, RemoteCreatedAt: sentAt,
+				Attachments:    []platform.MessageAttachment{{Type: "image", URL: "https://provider.example/image.png", Name: "image.png", MimeType: "image/png"}},
+				ReactionsKnown: true, Reactions: []platform.ProviderMessageReaction{{ActorRemoteID: "friend", Value: "heart"}, {ActorRemoteID: "friend", Value: "smile"}},
+			}},
+		}},
+		ReadStates: []platform.ProviderReadState{{ConversationID: "remote-thread", MessageID: "remote-message", ActorRemoteID: "friend", ReadAt: readAt}},
+	}
+	var queued *models.DirectMessage
 	s.SetProvider("bluesky", testProvider{send: func(ctx context.Context) (platform.SendMessageResult, error) {
-		_, err := s.persistConversations(ctx, account, []platform.ProviderConversation{{ID: "remote-thread", LastMessageAt: s.now(), Messages: []platform.ProviderMessage{{ID: "remote-message", Direction: "outbound", Body: "hello", RemoteCreatedAt: s.now()}}}})
+		// Both copies may already own reactions. Merging must deduplicate their
+		// shared reaction without discarding either copy's distinct reaction.
+		_, err := db.NewRaw(`INSERT INTO message_reactions(message_id,actor_remote_id,value) VALUES(?,?,?),(?,?,?)`, queued.ID, "friend", "heart", queued.ID, "viewer", "like").Exec(ctx)
+		if err != nil {
+			return platform.SendMessageResult{}, err
+		}
+		err = s.ApplyProviderEvents(ctx, account.ID, echo)
 		return platform.SendMessageResult{RemoteMessageID: "remote-message"}, err
 	}})
-	queued, err := s.QueueMessage(t.Context(), actor, "conversation", "hello")
+	var err error
+	queued, err = s.QueueMessage(t.Context(), actor, "conversation", "hello", "echo-operation")
 	require.NoError(t, err)
 	require.NoError(t, s.HandleJob(t.Context(), JobTypeMessageSend, `{"id":"`+queued.ID+`"}`))
+	// Replay the exact remote identity after acceptance, as a delayed callback
+	// or REST repair would. It must still resolve to the admitted message.
+	require.NoError(t, s.ApplyProviderEvents(t.Context(), account.ID, platform.FetchMessageEventsResult{Conversations: echo.Conversations}))
 	page, err := s.ListMessages(t.Context(), actor, MessageQuery{WorkspaceID: "workspace", ConversationID: "conversation"})
 	require.NoError(t, err)
 	require.Len(t, page.Items, 1)
-	require.Equal(t, queued.ID, page.Items[0].ID)
-	require.Equal(t, "sent", page.Items[0].SendStatus)
-	require.Equal(t, "remote-message", page.Items[0].RemoteMessageID)
+	message := page.Items[0]
+	require.Equal(t, queued.ID, message.ID)
+	require.Equal(t, "echo-operation", message.ClientOperationID)
+	require.True(t, queued.CreatedAt.Equal(message.CreatedAt))
+	require.Equal(t, "sent", message.SendStatus)
+	require.Equal(t, "remote-message", message.RemoteMessageID)
+	t.Run("provider metadata", func(t *testing.T) {
+		require.True(t, sentAt.Equal(message.RemoteCreatedAt))
+		require.True(t, readAt.Equal(message.ProviderReadAt), "the echo's read receipt must survive acceptance")
+		require.Equal(t, account.AccountID, message.AuthorRemoteID)
+		require.JSONEq(t, `[{"type":"image","url":"https://provider.example/image.png","name":"image.png","mime_type":"image/png"}]`, message.AttachmentsJSON)
+	})
+	t.Run("reactions", func(t *testing.T) {
+		var reactions []struct{ MessageID, ActorRemoteID, Value string }
+		require.NoError(t, db.NewRaw(`SELECT message_id,actor_remote_id,value FROM message_reactions`).Scan(t.Context(), &reactions))
+		require.ElementsMatch(t, []struct{ MessageID, ActorRemoteID, Value string }{
+			{queued.ID, "friend", "heart"}, {queued.ID, "friend", "smile"}, {queued.ID, "viewer", "like"},
+		}, reactions)
+	})
+	replay, err := s.QueueMessage(t.Context(), actor, "conversation", "hello", "echo-operation")
+	require.NoError(t, err)
+	require.Equal(t, queued.ID, replay.ID)
 	var jobs int
 	require.NoError(t, db.NewSelect().Model((*models.Job)(nil)).ColumnExpr("COUNT(*)").Scan(t.Context(), &jobs))
 	require.Equal(t, 1, jobs)
@@ -240,4 +284,66 @@ func TestForegroundEntryWakesColdAccountAndCoalescesDevices(t *testing.T) {
 		count, err := db.NewSelect().Model((*models.Job)(nil)).Where("type=?", JobTypeMessagesSync).Count(t.Context())
 		return err == nil && count == 1
 	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestCounterpartReadReceiptsRespectWatermarksAndNeverRegress(t *testing.T) {
+	for _, receiptKind := range []string{"watermark", "message ID"} {
+		t.Run(receiptKind, func(t *testing.T) {
+			s, db, account, actor := messagingFixture(t)
+			at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+			require.NoError(t, s.ApplyProviderEvents(t.Context(), account.ID, platform.FetchMessageEventsResult{Conversations: []platform.ProviderConversation{
+				{ID: "remote-thread", LastRemoteMessageID: "inbound", LastMessageAt: at.Add(time.Minute), Messages: []platform.ProviderMessage{
+					{ID: "before", Direction: "outbound", RemoteCreatedAt: at.Add(-time.Second)},
+					{ID: "boundary", Direction: "outbound", RemoteCreatedAt: at},
+					{ID: "after", Direction: "outbound", RemoteCreatedAt: at.Add(time.Second)},
+					{ID: "inbound", Direction: "inbound", RemoteCreatedAt: at.Add(-time.Minute)},
+					{ID: "unknown-time", Direction: "outbound"},
+				}},
+				{ID: "other-thread", Messages: []platform.ProviderMessage{{ID: "other", Direction: "outbound", RemoteCreatedAt: at.Add(-time.Minute)}}},
+			}}))
+			initial, err := s.Changes(t.Context(), actor, "workspace", "", 0)
+			require.NoError(t, err)
+			read := platform.ProviderReadState{ConversationID: "remote-thread", ActorRemoteID: "friend", ReadAt: at}
+			if receiptKind == "message ID" {
+				read.MessageID = "boundary"
+			}
+			apply := func(read platform.ProviderReadState) {
+				t.Helper()
+				require.NoError(t, s.ApplyProviderEvents(t.Context(), account.ID, platform.FetchMessageEventsResult{ReadStates: []platform.ProviderReadState{read}}))
+			}
+			apply(read)
+			changes, err := s.Changes(t.Context(), actor, "workspace", initial.Cursor, 0)
+			require.NoError(t, err)
+			wantIDs := []string{"boundary"}
+			if receiptKind == "watermark" {
+				wantIDs = append(wantIDs, "before")
+			}
+			changedIDs := make([]string, 0, len(changes.Messages))
+			for _, message := range changes.Messages {
+				changedIDs = append(changedIDs, message.RemoteMessageID)
+			}
+			require.ElementsMatch(t, wantIDs, changedIDs, "only read outbound messages should be emitted")
+			// Both a delayed receipt and its replay must leave the later read time intact.
+			read.ReadAt = at.Add(-time.Millisecond)
+			apply(read)
+			apply(read)
+			// A viewer's timestamp-only receipt and an anonymous receipt must not
+			// mark provider reads or clear the viewer's incoming unread state.
+			apply(platform.ProviderReadState{ConversationID: "remote-thread", ActorRemoteID: account.AccountID, ReadAt: at.Add(time.Hour)})
+			apply(platform.ProviderReadState{ConversationID: "remote-thread", ReadAt: at.Add(time.Hour)})
+			var messages []models.DirectMessage
+			require.NoError(t, db.NewSelect().Model(&messages).Scan(t.Context()))
+			for _, message := range messages {
+				if message.RemoteMessageID == "boundary" || (receiptKind == "watermark" && message.RemoteMessageID == "before") {
+					require.True(t, at.Equal(message.ProviderReadAt), "read time regressed for %s", message.RemoteMessageID)
+				} else {
+					require.True(t, message.ProviderReadAt.IsZero(), "unrelated message %s was marked read", message.RemoteMessageID)
+				}
+			}
+			var conversation models.Conversation
+			require.NoError(t, db.NewSelect().Model(&conversation).Where("id=?", "conversation").Scan(t.Context()))
+			require.Equal(t, 1, conversation.UnreadCount)
+			require.True(t, conversation.ReadAt.IsZero())
+		})
+	}
 }
