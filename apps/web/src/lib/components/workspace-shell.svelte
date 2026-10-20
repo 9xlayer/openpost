@@ -34,7 +34,7 @@
 	<Sidebar.Inset
 		id="main-content"
 		tabindex={-1}
-		class="pb-[var(--mobile-bottom-nav-clearance)] md:pb-0"
+		class="overflow-hidden pb-[var(--mobile-bottom-nav-clearance)] md:pb-0"
 	>
 		<div class="flex min-h-12 shrink-0 items-center justify-between gap-3 border-b px-4 md:hidden">
 			<span class="min-w-0 truncate text-sm font-medium"

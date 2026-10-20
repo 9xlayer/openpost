@@ -71,7 +71,7 @@ for (const scheme of ["light", "dark"] as const) {
                 followers: { value: 0, measured: 0 },
                 engagement: { value: 0, measured: 0 },
                 views: { value: 0, measured: 0 },
-                impressions: { value: 0, measured: 0 },
+                impressions: { value: 774, measured: 16 },
                 reach: { value: 0, measured: 0 },
                 published: 0,
               },
@@ -98,6 +98,7 @@ for (const scheme of ["light", "dark"] as const) {
         await filter.press("End");
         await filter.press("Enter");
         await expect(filter).toContainText("account8");
+        await expect(page.getByText(/^Impressions/)).toHaveCount(0);
         await expect.poll(() => requests.at(-1)).toBe("account-8");
         await filter.evaluate((element) => element.scrollIntoView({ block: "center" }));
         await filter.click();
@@ -185,7 +186,7 @@ for (const [themeID, scheme] of [
                 },
                 engagement: { value: 30, measured: 5 },
                 views: { value: 6000, measured: 5 },
-                impressions: { value: 0, measured: 0 },
+                impressions: { value: 774, measured: 16 },
                 reach: { value: 0, measured: 0 },
                 published: 5,
               },
@@ -265,6 +266,11 @@ for (const [themeID, scheme] of [
         const section = page.locator('section[aria-labelledby="analytics-content-heading"]');
         const row = page.getByTestId("analytics-content-row").first();
         await expect(row).toBeVisible();
+        // The shell owns scrolling: the document must not grow past the viewport
+        // while the page content is taller than it.
+        await expect
+          .poll(() => page.evaluate(() => document.documentElement.scrollHeight <= innerHeight))
+          .toBe(true);
         if (width >= 1200) {
           await expect(page.getByTestId("analytics-content-table-header")).toBeVisible();
         }
