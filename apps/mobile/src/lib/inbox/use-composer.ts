@@ -91,8 +91,6 @@ export function useChatComposer(
         },
         { eligible: () => mounted.current && getInboxOnline(), rollback: before },
       );
-      admitting.current = false;
-      if (mounted.current) setAdmissionBusy(false);
       if (!saved) {
         current.current = before;
         if (mounted.current && scope.current()) setDraft(before);
@@ -124,7 +122,7 @@ export function useChatComposer(
         ),
       });
     } catch (cause) {
-      if (cause instanceof InboxOfflineError && scope.current()) {
+      if (cause instanceof InboxOfflineError && scope.canRestore()) {
         const restored = await restoreUnsentConversationSend(
           scope,
           conversationId,

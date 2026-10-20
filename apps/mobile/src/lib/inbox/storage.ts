@@ -2,7 +2,11 @@ import * as FileSystem from "expo-file-system/legacy";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { uuid } from "expo-modules-core";
-import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "../api/client";
+import {
+  captureApiRequestIdentity,
+  apiRequestIdentityIsCurrent,
+  apiActorIdentityIsCurrent,
+} from "../api/client";
 import { parseDraft, type ConversationDraft, type PendingSend } from "./state";
 
 const directory = `${FileSystem.documentDirectory}inbox/`;
@@ -19,7 +23,12 @@ export function inboxStorageScope(workspaceId: string) {
   const hash = bytesToHex(
     sha256(utf8ToBytes(JSON.stringify([identity.serverBaseUrl, identity.token, workspaceId]))),
   );
-  return { key: hash, current: () => apiRequestIdentityIsCurrent(identity), generation };
+  return {
+    key: hash,
+    current: () => apiRequestIdentityIsCurrent(identity),
+    canRestore: () => apiActorIdentityIsCurrent(identity),
+    generation,
+  };
 }
 export type InboxStorageScope = ReturnType<typeof inboxStorageScope>;
 function path(scope: InboxStorageScope, conversationId: string) {
@@ -50,7 +59,7 @@ export function saveConversationDraft(
     await FileSystem.writeAsStringAsync(path(scope, conversationId), JSON.stringify(draft));
     // Roll back before a queued remount can read an operation that never reached HTTP.
     if (admission && !admission.eligible()) {
-      if (scope.current() && scope.generation === generation)
+      if (scope.canRestore() && scope.generation === generation)
         await FileSystem.writeAsStringAsync(
           path(scope, conversationId),
           JSON.stringify(admission.rollback),
@@ -68,7 +77,7 @@ export function restoreUnsentConversationSend(
   previous?: PendingSend,
 ) {
   return enqueue(async () => {
-    if (!scope.current() || scope.generation !== generation) return;
+    if (!scope.canRestore() || scope.generation !== generation) return;
     const file = path(scope, conversationId);
     if (!(await FileSystem.getInfoAsync(file)).exists) return;
     const draft = parseDraft(await FileSystem.readAsStringAsync(file));

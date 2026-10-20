@@ -30,7 +30,12 @@ const { readConversationDraft, saveConversationDraft, restoreUnsentConversationS
   await import("./storage");
 
 test("a chat reopened during the pending save sees its editable draft when connectivity is lost, without depending on the old screen", async () => {
-  const scope = { key: "pending-navigation", generation: 0, current: () => true };
+  const scope = {
+    key: "pending-navigation",
+    generation: 0,
+    current: () => true,
+    canRestore: () => true,
+  };
   const before = { text: "Still editable offline", sends: [] };
   await saveConversationDraft(scope, "chat", before);
   let began!: () => void;
@@ -70,7 +75,12 @@ test("a chat reopened during the pending save sees its editable draft when conne
 
 test("leaving a public reply during its pending device save cancels unsent admission before a remount reads it", async () => {
   const { PublicReplySession } = await import("./reply");
-  const scope = { key: "pending-reply-navigation", generation: 0, current: () => true };
+  const scope = {
+    key: "pending-reply-navigation",
+    generation: 0,
+    current: () => true,
+    canRestore: () => true,
+  };
   const before = { text: "A reply retained across navigation", sends: [] };
   await saveConversationDraft(scope, "comment", before);
   let began!: () => void;
@@ -107,7 +117,12 @@ test("leaving a public reply during its pending device save cancels unsent admis
 });
 
 test("definite no-dispatch recovery retains later text and never rolls back a newer server receipt", async () => {
-  const scope = { key: "offline-recovery-receipts", generation: 0, current: () => true };
+  const scope = {
+    key: "offline-recovery-receipts",
+    generation: 0,
+    current: () => true,
+    canRestore: () => true,
+  };
   const send = {
     operationId: "unsent-operation",
     body: "Original message",
@@ -129,4 +144,47 @@ test("definite no-dispatch recovery retains later text and never rolls back a ne
     text: "Next draft",
     sends: [{ operationId: "unsent-operation", state: "queued", serverId: "accepted-message" }],
   });
+});
+
+test("an undispatched draft returns to its original Workspace after a switch during persistence", async () => {
+  let workspace = "original";
+  const scope = {
+    key: "workspace-navigation",
+    generation: 0,
+    current: () => workspace === "original",
+    canRestore: () => true,
+  };
+  const before = { text: "Draft in the original Workspace", sends: [] };
+  await saveConversationDraft(scope, "chat", before);
+  let began!: () => void;
+  let release!: () => void;
+  const started = new Promise<void>((resolve) => {
+    began = resolve;
+  });
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  pendingWrite = { started: began, release: blocked };
+  const saving = saveConversationDraft(
+    scope,
+    "chat",
+    {
+      text: "",
+      sends: [
+        {
+          operationId: "unsent-workspace",
+          body: before.text,
+          state: "sending",
+          createdAt: "2026-10-20T12:00:00Z",
+        },
+      ],
+    },
+    { eligible: scope.current, rollback: before },
+  );
+  await started;
+  workspace = "other";
+  release();
+  await saving;
+  workspace = "original";
+  expect(await readConversationDraft(scope, "chat")).toEqual(before);
 });
