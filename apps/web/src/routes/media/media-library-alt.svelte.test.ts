@@ -4,6 +4,8 @@ import { QueryClientProvider } from '@tanstack/svelte-query';
 import { client } from '$lib/api/client';
 import { queryClient } from '$lib/query/client';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
+import posterFixture from '../../../../../assets/brand/pwa-512.png?url&no-inline';
+import imageFixture from '../../../../../assets/brand/pwa-192.png?url&no-inline';
 import MediaPage from './+page.svelte';
 
 // Component tests do not populate the SvelteKit page store, so provide its public readable contract.
@@ -50,7 +52,7 @@ it('names video poster thumbnails with their alt text like image thumbnails', as
 		workspace_id: 'workspace-a',
 		mime_type: 'video/mp4',
 		url: '/media/media-video-1/file.mp4',
-		thumbnail_url: '/assets/brand/pwa-512.png',
+		thumbnail_url: posterFixture,
 		poster_thumbnail_url: null,
 		original_filename: 'launch-teaser.mp4',
 		alt_text: 'Launch teaser poster',
@@ -65,7 +67,7 @@ it('names video poster thumbnails with their alt text like image thumbnails', as
 		workspace_id: 'workspace-a',
 		mime_type: 'image/png',
 		url: '/media/media-image-1/file.png',
-		thumbnail_url: '/assets/brand/pwa-192.png',
+		thumbnail_url: imageFixture,
 		poster_thumbnail_url: null,
 		original_filename: 'launch-hero.png',
 		alt_text: 'Launch hero art',
