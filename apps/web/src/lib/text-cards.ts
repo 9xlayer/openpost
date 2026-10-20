@@ -186,7 +186,7 @@ export function textCardRequestKey(
 export function savedTextCardPreviews(
 	renditions: components['schemas']['RenditionResponse'][] = [],
 	identities: Record<string, TextCardIdentity | undefined> = {},
-	defaults: ComposerSettings = {}
+	defaults: ComposerSettings
 ) {
 	const previews: Record<string, TextCardResult> = {};
 	for (const rendition of renditions) {
