@@ -2,16 +2,20 @@ package messaging
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/inboxchanges"
 	"github.com/openpost/backend/internal/services/notifications"
 	"github.com/openpost/backend/internal/services/organizationguard"
 	"github.com/openpost/backend/internal/services/providerwrite"
@@ -19,7 +23,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-func (s *Service) QueueMessage(ctx context.Context, actor Actor, conversationID, body string) (*models.DirectMessage, error) {
+func (s *Service) QueueMessage(ctx context.Context, actor Actor, conversationID, body string, operationIDs ...string) (*models.DirectMessage, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, fmt.Errorf("message is required")
@@ -45,10 +49,49 @@ func (s *Service) QueueMessage(ctx context.Context, actor Actor, conversationID,
 		if !decision.Allowed {
 			return ErrAccessDenied
 		}
+		operationID := ""
+		if len(operationIDs) > 0 {
+			operationID = strings.TrimSpace(operationIDs[0])
+		}
+		if len(operationID) > 128 {
+			return fmt.Errorf("client operation ID is too long")
+		}
+		digest := sha256.Sum256([]byte(body))
+		bodyHash := hex.EncodeToString(digest[:])
+		if operationID != "" {
+			var stored struct {
+				BodyHash  string
+				MessageID string
+			}
+			err = tx.NewRaw(`SELECT body_hash, message_id FROM message_operations WHERE workspace_id=? AND user_id=? AND conversation_id=? AND operation_id=?`, conversation.WorkspaceID, actor.UserID, conversation.ID, operationID).Scan(txCtx, &stored)
+			if err == nil {
+				if stored.BodyHash != bodyHash {
+					return ErrOperationConflict
+				}
+				message = &models.DirectMessage{}
+				return tx.NewSelect().Model(message).Where("id=? AND workspace_id=?", stored.MessageID, conversation.WorkspaceID).Scan(txCtx)
+			}
+			if !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+		}
 		message, err = s.queueMessageWithDB(txCtx, tx, conversation.ID, body)
+		if err != nil {
+			return err
+		}
+		if operationID != "" {
+			if _, err = tx.NewRaw(`INSERT INTO message_operations(workspace_id,user_id,conversation_id,operation_id,body_hash,message_id) VALUES(?,?,?,?,?,?)`, conversation.WorkspaceID, actor.UserID, conversation.ID, operationID, bodyHash, message.ID).Exec(txCtx); err != nil {
+				return err
+			}
+			message.ClientOperationID = operationID
+			_, err = tx.NewUpdate().Model(message).Set("client_operation_id=?", operationID).WherePK().Exec(txCtx)
+		}
 		return err
 	})
-	return message, err
+	if err != nil {
+		return nil, err
+	}
+	return message, nil
 }
 
 func (s *Service) queueMessageWithDB(ctx context.Context, db bun.IDB, conversationID, body string) (*models.DirectMessage, error) {
@@ -66,7 +109,7 @@ func (s *Service) queueMessageWithDB(ctx context.Context, db bun.IDB, conversati
 	} else if err != nil {
 		return nil, err
 	}
-	if !s.isMessagingEnabled(ctx, account.ID) {
+	if !s.isMessagingEnabledWithDB(ctx, db, account.ID) {
 		return nil, fmt.Errorf("messaging is disabled for this account")
 	}
 	provider := s.provider(account)
@@ -97,13 +140,22 @@ func (s *Service) queueMessageWithDB(ctx context.Context, db bun.IDB, conversati
 	_, err = db.NewUpdate().Model((*models.Conversation)(nil)).
 		Set("last_message_at = ?", now).Set("last_message_preview = ?", body).Set("updated_at = ?", now).
 		Where("id = ? AND workspace_id = ?", conversation.ID, conversation.WorkspaceID).Exec(ctx)
-	return message, err
+	if err != nil {
+		return nil, err
+	}
+	if err = inboxchanges.Append(ctx, db, conversation.WorkspaceID, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: message.ID}); err != nil {
+		return nil, err
+	}
+	return message, nil
 }
 
 func (s *Service) sendMessage(ctx context.Context, messageID string) error {
 	var message models.DirectMessage
 	if err := s.db.NewSelect().Model(&message).Where("id = ?", messageID).Scan(ctx); err != nil {
 		return err
+	}
+	if message.SendStatus == "sent" {
+		return nil
 	}
 	var conversation models.Conversation
 	if err := s.db.NewSelect().Model(&conversation).
@@ -113,6 +165,7 @@ func (s *Service) sendMessage(ctx context.Context, messageID string) error {
 	var account models.SocialAccount
 	if err := s.db.NewSelect().Model(&account).
 		Where("id = ? AND workspace_id = ? AND is_active = ?", conversation.SocialAccountID, conversation.WorkspaceID, true).Scan(ctx); err != nil {
+		s.recordSendFailure(ctx, message, conversation, account, err)
 		return err
 	}
 	if !s.isMessagingEnabled(ctx, account.ID) {
@@ -121,32 +174,58 @@ func (s *Service) sendMessage(ctx context.Context, messageID string) error {
 	}
 	provider := s.provider(account)
 	if provider == nil || !provider.MessagingSupport().CanSend {
-		return fmt.Errorf("sending messages is unsupported for this provider")
+		sendErr := fmt.Errorf("sending messages is unsupported for this provider")
+		s.recordSendFailure(ctx, message, conversation, account, sendErr)
+		return sendErr
 	}
-	if s.tokens == nil {
-		return errors.New("messaging token source is unavailable")
-	}
-	token, err := s.tokens.GetValidAccessToken(ctx, account.ID)
+	token, err := s.messagingToken(ctx, account)
 	if err != nil {
+		s.recordSendFailure(ctx, message, conversation, account, err)
 		return err
+	}
+	if !conversation.MessagingWindowExpiresAt.IsZero() && !conversation.MessagingWindowExpiresAt.After(s.now()) {
+		sendErr := errors.New("the provider reply window has closed")
+		s.recordSendFailure(ctx, message, conversation, account, sendErr)
+		return sendErr
 	}
 	writeResult, err := s.sendMessageThroughFence(ctx, message, conversation, account, provider, token)
 	if err != nil {
 		s.recordSendFailure(ctx, message, conversation, account, err)
 		return err
 	}
-	createdAt := s.now()
+	return s.acceptSentMessage(ctx, message, conversation, writeResult.ExternalID)
+}
+
+func (s *Service) acceptSentMessage(ctx context.Context, message models.DirectMessage, conversation models.Conversation, remoteID string) error {
 	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-		if _, err := tx.NewUpdate().Model(&message).
-			Set("remote_message_id = ?", writeResult.ExternalID).Set("send_status = 'sent'").
-			Set("error_message = ''").Set("remote_created_at = ?", createdAt).Set("updated_at = ?", s.now()).
-			WherePK().Exec(txCtx); err != nil {
+		// Lock before reading either copy. Keep the admitted ID even when an
+		// asynchronous echo was stored first; never match messages by text.
+		if err := organizationguard.LockWorkspace(txCtx, tx, message.WorkspaceID); err != nil {
 			return err
 		}
-		_, err := tx.NewUpdate().Model(&conversation).
-			Set("last_remote_message_id = ?", writeResult.ExternalID).Set("last_message_at = ?", createdAt).
-			Set("last_message_preview = ?", message.Body).Set("updated_at = ?", s.now()).WherePK().Exec(txCtx)
-		return err
+		var echo models.DirectMessage
+		err := tx.NewSelect().Model(&echo).Where("conversation_id=? AND remote_message_id=? AND id<>?", message.ConversationID, remoteID, message.ID).Scan(txCtx)
+		createdAt := s.now()
+		changes := []inboxchanges.Change{}
+		if err == nil {
+			if !echo.RemoteCreatedAt.IsZero() {
+				createdAt = echo.RemoteCreatedAt
+			}
+			if _, err = tx.NewDelete().Model(&echo).WherePK().Exec(txCtx); err != nil {
+				return err
+			}
+			changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: echo.ID, Deleted: true})
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		if _, err = tx.NewUpdate().Model(&message).Set("remote_message_id=?", remoteID).Set("send_status='sent'").Set("error_message=''").Set("remote_created_at=?", createdAt).Set("updated_at=?", s.now()).WherePK().Exec(txCtx); err != nil {
+			return err
+		}
+		if _, err = tx.NewUpdate().Model(&conversation).Set("last_remote_message_id=?", remoteID).Set("updated_at=?", s.now()).WherePK().Exec(txCtx); err != nil {
+			return err
+		}
+		changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: message.ID})
+		return inboxchanges.Append(txCtx, tx, message.WorkspaceID, changes...)
 	})
 }
 
@@ -161,17 +240,14 @@ func (s *Service) sendMessageThroughFence(
 	request := platform.SendMessageRequest{
 		AccountID: account.AccountID, RemoteConversationID: conversation.RemoteConversationID,
 		CounterpartRemoteID: conversation.CounterpartRemoteID, CounterpartHandle: conversation.CounterpartHandle,
-		ReplyToRemoteID: conversation.LastRemoteMessageID, Body: message.Body,
+		Body: message.Body,
 	}
 	fingerprint, err := providerwrite.Fingerprint("messaging-send-v1", request)
 	if err != nil {
 		return platform.PublishResult{}, err
 	}
 	execution, _ := providerwrite.JobExecutionFromContext(ctx)
-	owner := execution.ID
-	if owner == "" {
-		owner = message.ID
-	}
+	owner := message.ID
 	return providerwrite.New(s.db).Execute(ctx, providerwrite.Input{
 		OperationID: "messaging:" + owner, JobID: execution.ID, WorkspaceID: message.WorkspaceID,
 		SocialAccountID: account.ID, TargetKey: providerKey(account), Provider: account.Platform,
@@ -193,8 +269,21 @@ func (s *Service) recordSendFailure(ctx context.Context, message models.DirectMe
 	if providerwrite.IsAmbiguous(sendErr) {
 		errorMessage = "The provider may have accepted this message. OpenPost did not send it again."
 	}
-	_, _ = s.db.NewUpdate().Model(&message).Set("send_status = 'failed'").
-		Set("error_message = ?", errorMessage).Set("updated_at = ?", s.now()).WherePK().Exec(ctx)
+	status := "failed"
+	if providerwrite.IsAmbiguous(sendErr) {
+		status = "ambiguous"
+	}
+	if err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if err := organizationguard.LockWorkspace(txCtx, tx, message.WorkspaceID); err != nil {
+			return err
+		}
+		if _, err := tx.NewUpdate().Model(&message).Set("send_status=?", status).Set("error_message=?", errorMessage).Set("updated_at=?", s.now()).WherePK().Exec(txCtx); err != nil {
+			return err
+		}
+		return inboxchanges.Append(txCtx, tx, message.WorkspaceID, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: message.ID})
+	}); err != nil {
+		log.Printf("persist message delivery failure: %v", err)
+	}
 	if s.notifications == nil {
 		return
 	}

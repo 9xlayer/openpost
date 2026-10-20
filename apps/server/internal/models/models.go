@@ -1791,19 +1791,22 @@ type Conversation struct {
 type DirectMessage struct {
 	bun.BaseModel `bun:"table:direct_messages"`
 
-	ID              string    `bun:",pk" json:"id"`
-	WorkspaceID     string    `bun:"workspace_id,notnull" json:"workspace_id"`
-	ConversationID  string    `bun:"conversation_id,notnull" json:"conversation_id"`
-	RemoteMessageID string    `bun:"remote_message_id,notnull,default:''" json:"remote_message_id"`
-	Direction       string    `bun:",notnull" json:"direction"`
-	AuthorRemoteID  string    `bun:"author_remote_id,notnull,default:''" json:"author_remote_id"`
-	Body            string    `bun:",notnull,default:''" json:"body"`
-	AttachmentsJSON string    `bun:"attachments_json,notnull,default:'[]'" json:"attachments_json"`
-	SendStatus      string    `bun:"send_status,notnull,default:'received'" json:"send_status"`
-	ErrorMessage    string    `bun:"error_message,notnull,default:''" json:"error_message"`
-	RemoteCreatedAt time.Time `bun:"remote_created_at,nullzero" json:"remote_created_at"`
-	CreatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt       time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	ID                string    `bun:",pk" json:"id"`
+	WorkspaceID       string    `bun:"workspace_id,notnull" json:"workspace_id"`
+	ConversationID    string    `bun:"conversation_id,notnull" json:"conversation_id"`
+	RemoteMessageID   string    `bun:"remote_message_id,notnull,default:''" json:"remote_message_id"`
+	ClientOperationID string    `bun:"client_operation_id,notnull,default:''" json:"client_operation_id,omitempty"`
+	DeletedAt         time.Time `bun:"deleted_at,nullzero" json:"deleted_at,omitempty,omitzero"`
+	ProviderReadAt    time.Time `bun:"provider_read_at,nullzero" json:"provider_read_at,omitempty,omitzero"`
+	Direction         string    `bun:",notnull" json:"direction"`
+	AuthorRemoteID    string    `bun:"author_remote_id,notnull,default:''" json:"author_remote_id"`
+	Body              string    `bun:",notnull,default:''" json:"body"`
+	AttachmentsJSON   string    `bun:"attachments_json,notnull,default:'[]'" json:"attachments_json"`
+	SendStatus        string    `bun:"send_status,notnull,default:'received'" json:"send_status"`
+	ErrorMessage      string    `bun:"error_message,notnull,default:''" json:"error_message"`
+	RemoteCreatedAt   time.Time `bun:"remote_created_at,nullzero" json:"remote_created_at"`
+	CreatedAt         time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt         time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"updated_at"`
 }
 
 // EngagementSyncState is the latest safe cursor and collection state for one rendition.

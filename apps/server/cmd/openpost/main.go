@@ -69,11 +69,13 @@ import (
 	messagingservice "github.com/openpost/backend/internal/services/messaging"
 	"github.com/openpost/backend/internal/services/mfa"
 	"github.com/openpost/backend/internal/services/notifications"
+	"github.com/openpost/backend/internal/services/oauth2messaging"
 	"github.com/openpost/backend/internal/services/organizationownership"
 	"github.com/openpost/backend/internal/services/passwordmail"
 	"github.com/openpost/backend/internal/services/postgeneration"
 	postimportservice "github.com/openpost/backend/internal/services/postimport"
 	"github.com/openpost/backend/internal/services/providerapps"
+	"github.com/openpost/backend/internal/services/providerinbox"
 	"github.com/openpost/backend/internal/services/providerreadiness"
 	"github.com/openpost/backend/internal/services/proxyauth"
 	"github.com/openpost/backend/internal/services/publicationbuilder"
@@ -378,6 +380,7 @@ func main() {
 	emailChangeService := emailchange.NewService(db, emailchange.Config{Secret: cfg.JWTSecret})
 	tokenManager := tokenmanager.NewTokenManager(db, tokenEncryptor)
 	usageService := usage.NewService(db)
+	xMessagingConfig := config.LoadXMessaging()
 	publishSvc := publisher.NewService(db, tokenManager)
 	publishSvc.SetMediaStateEncryptor(tokenEncryptor)
 	publishSvc.SetUsage(usageService)
@@ -523,11 +526,11 @@ func main() {
 	publishSvc.SetConnectorRegistry(connectorRegistry, connectorStore)
 	if cfg.Edition == config.EditionCloud {
 		if _, xEnabled := providers[usage.ProviderX]; xEnabled {
-			if err := usageService.SetProviderCostPolicy(usage.NewXProviderCostPolicy(
+			if err := usageService.SetProviderCostPolicy(oauth2messaging.AddPricing(usage.NewXProviderCostPolicy(
 				cfg.XMonthlyBudgetMicrousd,
 				cfg.XPostCreateCostMicrousd,
 				cfg.XPostCreateWithURLCostMicrousd,
-			)); err != nil {
+			), xMessagingConfig.MonthlyBudgetMicrousd)); err != nil {
 				fatalfWithDiagnostics(diagnosticsReporter, "hosted X provider cost configuration is invalid: %v", err)
 			}
 			now := time.Now().UTC()
@@ -575,6 +578,34 @@ func main() {
 	engagementService := engagementservice.NewService(db, tokenManager, notificationService)
 	engagementService.SetXDailyReadBudget(cfg.XEngagementDailyReadBudget)
 	messagingService := messagingservice.NewService(db, tokenManager, notificationService)
+	if cfg.Edition != config.EditionCloud && xMessagingConfig.MonthlyBudgetMicrousd > 0 {
+		if err := usageService.SetProviderCostPolicy(oauth2messaging.AddPricing(usage.ProviderCostPolicy{}, xMessagingConfig.MonthlyBudgetMicrousd)); err != nil {
+			fatalfWithDiagnostics(diagnosticsReporter, "X messaging cost policy is invalid: %v", err)
+		}
+	}
+	xMessagingService := oauth2messaging.NewService(db, tokenEncryptor, oauth2messaging.Config{ClientID: xMessagingConfig.ClientID, ClientSecret: xMessagingConfig.ClientSecret, RedirectURI: xMessagingConfig.RedirectURI, WebhookID: xMessagingConfig.WebhookID, MonthlyBudgetMicrousd: xMessagingConfig.MonthlyBudgetMicrousd, ProviderSpendingLimitConfirmed: xMessagingConfig.ProviderSpendingLimitConfirmed}, usageService)
+	messagingService.SetMessagingTokenSource(xMessagingService, oauth2messaging.ErrNotConnected)
+	inboxIngress := providerinbox.NewService(db, tokenEncryptor)
+	inboxIngress.SetReceiptScheduler(messagingService.ScheduleReceiptDrain)
+	xMessagingService.SetReceiptScheduler(messagingService.ScheduleReceiptDrain)
+	drainInbox := func(ctx context.Context) error {
+		if _, err := inboxIngress.ProcessPending(ctx, 100, func(applyCtx context.Context, event providerinbox.Event) error {
+			return messagingService.ProcessMetaReceipt(applyCtx, event, engagementService.RefreshFromWebhook)
+		}); err != nil {
+			return err
+		}
+		_, err := xMessagingService.Drain(ctx, func(applyCtx context.Context, accountID string, batch platform.FetchMessagesResult) error {
+			return messagingService.ApplyProviderEvents(applyCtx, accountID, platform.FetchMessageEventsResult{Conversations: batch.Conversations})
+		}, 100)
+		return err
+	}
+	messagingService.SetReceiptDrainer(drainInbox)
+	for _, adapter := range providers {
+		if x, ok := adapter.(*platform.XAdapter); ok {
+			x.SetMessagingQuotaGate(xMessagingService)
+		}
+	}
+
 	for name, adapter := range providers {
 		tokenManager.SetProvider(name, adapter)
 		publishSvc.SetProvider(name, adapter)
@@ -751,6 +782,7 @@ func main() {
 	workflowService.SetAILimits(cfg.WorkflowsAIEnabled, cfg.WorkflowsAIMonthlyCalls)
 	workflowService.SetDecisionAI(decisionGenerator, cfg.WorkflowDecisionModel)
 	var worker *queue.BackgroundWorker
+	var chatWorkers inboxWorkers
 	var discordPresenceService *discordpresence.Service
 	if command.role.runsWorker() {
 		for _, app := range providerAppConfigs {
@@ -775,6 +807,16 @@ func main() {
 		worker.SetBotIngressService(botIngressService)
 		worker.SetEngagementService(engagementService)
 		worker.SetMessagingService(messagingService)
+		worker.ExcludeJobTypes(messagingservice.JobTypeMessagesSync, messagingservice.JobTypeMessageSend, engagementservice.JobTypeEngagementAct)
+		collectionWorker := queue.NewWorker(db, newWorkerID(), time.Second, nil, tokenManager, storage)
+		collectionWorker.SetJobTypes(messagingservice.JobTypeMessagesSync)
+		collectionWorker.SetMessagingService(messagingService)
+		sendWorker := queue.NewWorker(db, newWorkerID(), time.Second, nil, tokenManager, storage)
+		sendWorker.SetJobTypes(messagingservice.JobTypeMessageSend, engagementservice.JobTypeEngagementAct)
+		sendWorker.SetMessagingService(messagingService)
+		sendWorker.SetEngagementService(engagementService)
+		chatWorkers = inboxWorkers{collectionWorker, sendWorker}
+
 		worker.SetNotificationService(notificationService)
 		worker.SetOrganizationOwnershipService(organizationOwnershipService)
 		worker.SetRepostService(repostService)
@@ -814,6 +856,8 @@ func main() {
 	apiGroup := e.Group("/api/v1")
 	humaConfig := apiroutes.OpenAPIConfig("1.0.0")
 	api := humaecho.NewWithGroup(e, apiGroup, humaConfig)
+	registerMetaInbox(e, inboxIngress, providerAppConfigs)
+	handlers.NewXMessagingHandler(authenticator, xMessagingService).RegisterWebhook(e)
 	if telegramConnectionService != nil {
 		telegramConnectionService.RegisterWebhook(e, botIngressService)
 	}
@@ -944,6 +988,9 @@ func main() {
 				}
 			},
 			func(name string, adapter platform.Adapter) {
+				if x, ok := adapter.(*platform.XAdapter); ok {
+					x.SetMessagingQuotaGate(xMessagingService)
+				}
 				if messagingAdapter, ok := adapter.(platform.MessagingAdapter); ok {
 					messagingService.SetProvider(name, messagingAdapter)
 				}
@@ -970,6 +1017,7 @@ func main() {
 		AnalyticsService:             analyticsService,
 		PostImportService:            postImportService,
 		MessagingService:             messagingService,
+		XMessagingService:            xMessagingService,
 		EngagementService:            engagementService,
 		RepostService:                repostService,
 		GrowthService:                growthService,
@@ -996,8 +1044,15 @@ func main() {
 
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
 	defer cancelWorker()
+	var inboxBackground *inboxProcess
 	if worker != nil {
 		go worker.Start(workerCtx)
+		for _, chatWorker := range chatWorkers {
+			go chatWorker.Start(workerCtx)
+		}
+		inboxBackground = startInboxProcess(workerCtx, append(inboxWorkers{worker}, chatWorkers...), messagingService.RunCollector, func(ctx context.Context) { messagingService.RunTransports(ctx, inboxIngress) }, func(ctx context.Context) {
+			runInboxMaintenance(ctx, db, inboxIngress, messagingService.ScheduleReceiptDrain)
+		})
 		if discordPresenceService != nil {
 			discordPresenceService.Start(workerCtx)
 		}
@@ -1042,7 +1097,7 @@ func main() {
 	}
 	var workerRuntime workerProcess
 	if worker != nil {
-		workerRuntime = worker
+		workerRuntime = inboxBackground
 	}
 	for _, err := range drainRuntime(shutdownCtx, readiness, webRuntime, workerRuntime) {
 		log.Printf("Process drain error: %v", err)

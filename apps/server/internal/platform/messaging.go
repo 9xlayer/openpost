@@ -47,6 +47,7 @@ type ProviderConversation struct {
 	LastMessageAt        time.Time
 	LastMessagePreview   string
 	LastRemoteMessageID  string
+	UnreadCountKnown     bool
 	UnreadCount          int
 	ReplyWindowExpiresAt time.Time
 	Messages             []ProviderMessage

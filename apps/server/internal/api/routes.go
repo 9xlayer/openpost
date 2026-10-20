@@ -43,6 +43,7 @@ import (
 	messagingservice "github.com/openpost/backend/internal/services/messaging"
 	"github.com/openpost/backend/internal/services/mfa"
 	"github.com/openpost/backend/internal/services/notifications"
+	"github.com/openpost/backend/internal/services/oauth2messaging"
 	"github.com/openpost/backend/internal/services/organizationownership"
 	"github.com/openpost/backend/internal/services/passwordmail"
 	"github.com/openpost/backend/internal/services/postgeneration"
@@ -130,6 +131,7 @@ type RouteDeps struct {
 	AnalyticsService             *analyticsservice.Service
 	PostImportService            *postimport.Service
 	MessagingService             *messagingservice.Service
+	XMessagingService            *oauth2messaging.Service
 	EngagementService            *engagementservice.Service
 	RepostService                *repostservice.Service
 	NotificationService          *notifications.Service
@@ -350,6 +352,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	analyticsHandler.RegisterRoutes(api)
 	engagementMessagingHandler := handlers.NewEngagementMessagingHandler(deps.Authenticator, deps.MessagingService, deps.EngagementService)
 	engagementMessagingHandler.RegisterRoutes(api)
+	handlers.NewXMessagingHandler(deps.Authenticator, deps.XMessagingService).RegisterRoutes(api)
 	handlers.NewNotificationHandler(deps.DB, deps.Authenticator, deps.NotificationService).RegisterRoutes(api)
 	growthHandler := handlers.NewGrowthHandler(deps.GrowthService, deps.Authenticator)
 	growthHandler.RegisterRoutes(api)

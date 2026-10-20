@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/openpost/backend/internal/services/entitlements"
+	"github.com/uptrace/bun"
 )
 
 // EntitlementPlanPolicy backs plan_restricted decisions with the real entitlement source.
@@ -13,6 +14,7 @@ import (
 // that defines the limit can still trigger plan_restricted without code changes.
 type EntitlementPlanPolicy struct {
 	Entitlements entitlements.Service
+	DB           bun.IDB
 }
 
 func (p *EntitlementPlanPolicy) Allowed(ctx context.Context, workspaceID, feature string) (bool, string) {
@@ -34,12 +36,19 @@ func (p *EntitlementPlanPolicy) Allowed(ctx context.Context, workspaceID, featur
 	default:
 		return false, "unknown feature"
 	}
-	decision, err := p.Entitlements.Check(ctx, entitlements.Request{
+	request := entitlements.Request{
 		WorkspaceID: workspaceID,
 		Limit:       key,
 		Current:     0,
 		Amount:      1,
-	})
+	}
+	var decision entitlements.Decision
+	var err error
+	if p.DB != nil {
+		decision, err = entitlements.CheckWithDB(ctx, p.Entitlements, p.DB, request)
+	} else {
+		decision, err = p.Entitlements.Check(ctx, request)
+	}
 	if err != nil {
 		return false, err.Error()
 	}
@@ -50,4 +59,8 @@ func (p *EntitlementPlanPolicy) Allowed(ctx context.Context, workspaceID, featur
 		return false, "plan requires upgrade"
 	}
 	return true, ""
+}
+
+func (p *EntitlementPlanPolicy) WithDB(db bun.IDB) PlanPolicy {
+	return &EntitlementPlanPolicy{Entitlements: p.Entitlements, DB: db}
 }

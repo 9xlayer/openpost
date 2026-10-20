@@ -46,7 +46,7 @@ type blueskyChatConversation struct {
 
 func (c blueskyChatConversation) provider(accountID string) ProviderConversation {
 	at, _ := time.Parse(time.RFC3339Nano, c.LastMessage.SentAt)
-	result := ProviderConversation{ID: c.ID, LastMessageAt: at, LastRemoteMessageID: c.LastMessage.ID, UnreadCount: c.UnreadCount}
+	result := ProviderConversation{ID: c.ID, LastMessageAt: at, LastRemoteMessageID: c.LastMessage.ID, UnreadCount: c.UnreadCount, UnreadCountKnown: true}
 	if c.LastMessage.Type == "" || c.LastMessage.Type == blueskyChatMessageView {
 		result.LastMessagePreview = c.LastMessage.Text
 	}

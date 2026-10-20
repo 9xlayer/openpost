@@ -4,9 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/inboxchanges"
+	"github.com/openpost/backend/internal/services/organizationguard"
 	"github.com/openpost/backend/internal/services/workspaceaccess"
 	"github.com/uptrace/bun"
 )
@@ -20,6 +23,7 @@ type ConversationQuery struct {
 	WorkspaceID string
 	Platform    string
 	AccountID   string
+	Search      string
 	UnreadOnly  bool
 	Archived    bool
 	Limit       int
@@ -48,6 +52,10 @@ func (s *Service) ListConversations(ctx context.Context, actor Actor, input Conv
 		}
 		if input.AccountID != "" {
 			query = query.Where("social_account_id = ?", input.AccountID)
+		}
+		if search := strings.TrimSpace(input.Search); search != "" {
+			pattern := "%" + strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(strings.ToLower(search)) + "%"
+			query = query.Where(`(LOWER(counterpart_name) LIKE ? ESCAPE '\' OR LOWER(counterpart_handle) LIKE ? ESCAPE '\' OR LOWER(last_message_preview) LIKE ? ESCAPE '\' OR EXISTS (SELECT 1 FROM direct_messages AS searched WHERE searched.conversation_id=conversation.id AND searched.deleted_at IS NULL AND LOWER(searched.body) LIKE ? ESCAPE '\'))`, pattern, pattern, pattern, pattern)
 		}
 		if input.UnreadOnly {
 			query = query.Where("unread_count > 0")
@@ -100,8 +108,10 @@ type MessageQuery struct {
 }
 
 type MessagePage struct {
-	Items      []models.DirectMessage
-	NextCursor *MessageCursor
+	Conversation     models.Conversation
+	HistoryAvailable bool
+	Items            []models.DirectMessage
+	NextCursor       *MessageCursor
 }
 
 func (s *Service) ListMessages(ctx context.Context, actor Actor, input MessageQuery) (MessagePage, error) {
@@ -119,7 +129,11 @@ func (s *Service) ListMessages(ctx context.Context, actor Actor, input MessageQu
 	if limit <= 0 || limit > 200 {
 		limit = 100
 	}
-	page := MessagePage{Items: make([]models.DirectMessage, 0, limit)}
+	available, err := s.historyAvailable(ctx, conversation)
+	if err != nil {
+		return MessagePage{}, err
+	}
+	page := MessagePage{Items: make([]models.DirectMessage, 0, limit), HistoryAvailable: available, Conversation: conversation}
 	query := s.db.NewSelect().Model(&page.Items).
 		Join("JOIN conversations AS conversation ON conversation.id = direct_message.conversation_id").
 		Where("direct_message.conversation_id = ? AND conversation.workspace_id = ?", conversation.ID, input.WorkspaceID)
@@ -163,34 +177,46 @@ func (s *Service) SetConversationState(ctx context.Context, actor Actor, workspa
 	if err := s.authorize(ctx, workspaceID, actor, workspaceaccess.LevelEdit); err != nil {
 		return err
 	}
-	query := s.db.NewUpdate().Model((*models.Conversation)(nil)).Where("id = ? AND workspace_id = ?", conversationID, workspaceID)
-	now := s.now()
-	if read != nil {
-		if *read {
-			query = query.Set("read_at = ?", now).Set("unread_count = 0")
-		} else {
-			query = query.Set("read_at = NULL")
+	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if err := organizationguard.LockWorkspace(txCtx, tx, workspaceID); err != nil {
+			return err
 		}
-	}
-	if archived != nil {
-		if *archived {
-			query = query.Set("archived_at = ?", now)
-		} else {
-			query = query.Set("archived_at = NULL")
+		decision, err := workspaceaccess.NewAuthorizer(tx).Authorize(txCtx, workspaceID, actor, workspaceaccess.LevelEdit)
+		if err != nil {
+			return err
 		}
-	}
-	result, err := query.Set("updated_at = ?", now).Exec(ctx)
-	if err != nil {
-		return err
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if rows == 0 {
-		return ErrNotFound
-	}
-	return nil
+		if !decision.Allowed {
+			return ErrAccessDenied
+		}
+		query := tx.NewUpdate().Model((*models.Conversation)(nil)).Where("id=? AND workspace_id=?", conversationID, workspaceID)
+		now := s.now()
+		if read != nil {
+			if *read {
+				query = query.Set("read_at=?", now).Set("unread_count=0")
+			} else {
+				query = query.Set("read_at=NULL").Set("unread_count=CASE WHEN unread_count=0 THEN 1 ELSE unread_count END")
+			}
+		}
+		if archived != nil {
+			if *archived {
+				query = query.Set("archived_at=?", now)
+			} else {
+				query = query.Set("archived_at=NULL")
+			}
+		}
+		result, err := query.Set("updated_at=?", now).Exec(txCtx)
+		if err != nil {
+			return err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return ErrNotFound
+		}
+		return inboxchanges.Append(txCtx, tx, workspaceID, inboxchanges.Change{Kind: "conversation", ConversationID: conversationID})
+	})
 }
 
 func firstNonZero(values ...time.Time) time.Time {

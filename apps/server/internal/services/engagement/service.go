@@ -146,6 +146,7 @@ type subjectJob struct {
 }
 
 type engagementActionJob struct {
+	ClientOperationID string `json:"client_operation_id,omitempty"`
 	ItemID            string `json:"item_id,omitempty"`
 	JobID             string `json:"job_id,omitempty"`
 	WorkspaceID       string `json:"workspace_id,omitempty"`
@@ -582,6 +583,9 @@ func persistEngagementComment(
 		Set("last_seen_at = EXCLUDED.last_seen_at").
 		Set("updated_at = EXCLUDED.updated_at").
 		Exec(ctx)
+	if err == nil {
+		err = appendEngagementChange(ctx, tx, item)
+	}
 	return item, !exists && !comment.IsOurs, err
 }
 
@@ -726,24 +730,7 @@ func (s *Service) resolveAndStoreContentURL(
 }
 
 func (s *Service) QueueEngagementAction(ctx context.Context, actor Actor, itemID, action, message string) error {
-	var item models.EngagementItem
-	if err := s.db.NewSelect().Model(&item).Where("id = ?", itemID).Scan(ctx); errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	} else if err != nil {
-		return err
-	}
-	if err := s.authorize(ctx, item.WorkspaceID, actor, workspaceaccess.LevelEdit); err != nil {
-		return err
-	}
-	if !s.isEngagementEnabled(ctx, item.SocialAccountID) {
-		return fmt.Errorf("engagement is disabled for this account")
-	}
-	message, err := validateEngagementAction(item, action, message)
-	if err != nil {
-		return err
-	}
-	payload, _ := json.Marshal(engagementActionJob{ItemID: itemID, Action: action, Message: message, UserID: actor.UserID})
-	_, err = s.enqueue(ctx, item.WorkspaceID, JobTypeEngagementAct, string(payload), s.now())
+	_, err := s.QueueEngagementActionReceipt(ctx, actor, itemID, action, message, "")
 	return err
 }
 
@@ -1502,24 +1489,48 @@ func (s *Service) SetEngagementState(ctx context.Context, actor Actor, workspace
 	if len(ids) == 0 {
 		return nil
 	}
-	query := s.db.NewUpdate().Model((*models.EngagementItem)(nil)).
-		Where("workspace_id = ? AND id IN (?)", workspaceID, bun.List(ids))
-	if read != nil {
-		if *read {
-			query = query.Set("read_at = ?", s.now())
-		} else {
-			query = query.Set("read_at = NULL")
+	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if err := organizationguard.LockWorkspace(txCtx, tx, workspaceID); err != nil {
+			return err
 		}
-	}
-	if archived != nil {
-		if *archived {
-			query = query.Set("archived_at = ?", s.now())
-		} else {
-			query = query.Set("archived_at = NULL")
+		decision, err := workspaceaccess.NewAuthorizer(tx).Authorize(txCtx, workspaceID, actor, workspaceaccess.LevelEdit)
+		if err != nil {
+			return err
 		}
-	}
-	_, err := query.Exec(ctx)
-	return err
+		if !decision.Allowed {
+			return ErrAccessDenied
+		}
+		query := tx.NewUpdate().Model((*models.EngagementItem)(nil)).
+			Where("workspace_id = ? AND id IN (?)", workspaceID, bun.List(ids))
+		if read != nil {
+			if *read {
+				query = query.Set("read_at = ?", s.now())
+			} else {
+				query = query.Set("read_at = NULL")
+			}
+		}
+		if archived != nil {
+			if *archived {
+				query = query.Set("archived_at = ?", s.now())
+			} else {
+				query = query.Set("archived_at = NULL")
+			}
+		}
+		_, err = query.Exec(txCtx)
+		if err != nil {
+			return err
+		}
+		var items []models.EngagementItem
+		if err = tx.NewSelect().Model(&items).Where("workspace_id=? AND id IN (?)", workspaceID, bun.In(ids)).Scan(txCtx); err != nil {
+			return err
+		}
+		for _, item := range items {
+			if err = appendEngagementChange(txCtx, tx, item); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (s *Service) adapter(account models.SocialAccount) platform.EngagementAdapter {

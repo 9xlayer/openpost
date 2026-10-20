@@ -65,6 +65,8 @@ const (
 
 // BackgroundWorker polls the configured database for pending jobs.
 type BackgroundWorker struct {
+	jobTypes              []string
+	excludedJobTypes      []string
 	db                    *bun.DB
 	workerID              string
 	interval              time.Duration
@@ -447,9 +449,11 @@ func (w *BackgroundWorker) Start(ctx context.Context) {
 	if w.isQuiescing() {
 		return
 	}
-	w.ensureMediaLifecycleJobs(ctx)
-	w.ensureQueueReminderSweepJob(ctx)
-	w.enqueueDuePostImports(ctx)
+	if len(w.jobTypes) == 0 {
+		w.ensureMediaLifecycleJobs(ctx)
+		w.ensureQueueReminderSweepJob(ctx)
+		w.enqueueDuePostImports(ctx)
+	}
 	w.processDueJobs(ctx)
 
 	for {
@@ -513,10 +517,12 @@ func (w *BackgroundWorker) processDueJobs(ctx context.Context) {
 	if w.isQuiescing() {
 		return
 	}
-	requeuedPublicationJobIDs := w.requeueStaleProcessingJobs(ctx)
-	if err := databasemigrations.ReconcileActiveLegacyPublicationJobs(ctx, w.db, requeuedPublicationJobIDs); err != nil {
-		log.Printf("[Worker %s] failed to reconcile requeued publication jobs: %v\n", w.workerID, err)
-		return
+	if len(w.jobTypes) == 0 {
+		requeuedPublicationJobIDs := w.requeueStaleProcessingJobs(ctx)
+		if err := databasemigrations.ReconcileActiveLegacyPublicationJobs(ctx, w.db, requeuedPublicationJobIDs); err != nil {
+			log.Printf("[Worker %s] failed to reconcile requeued publication jobs: %v\n", w.workerID, err)
+			return
+		}
 	}
 	for {
 		if w.isQuiescing() {
@@ -642,7 +648,7 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 			WITH next_job AS (
 				SELECT id
 				FROM jobs
-				WHERE status = ? AND run_at <= CURRENT_TIMESTAMP
+				WHERE status = ? AND run_at <= CURRENT_TIMESTAMP AND (? OR type IN (?)) AND (? OR type NOT IN (?))
 				ORDER BY run_at ASC, id ASC
 				FOR UPDATE SKIP LOCKED
 				LIMIT 1
@@ -652,19 +658,19 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 			FROM next_job
 			WHERE jobs.id = next_job.id AND jobs.status = ?
 			RETURNING jobs.*
-		`, jobStatusPending, jobStatusProcessing, w.workerID, jobStatusPending).Scan(ctx, job)
+		`, jobStatusPending, len(w.jobTypes) == 0, bun.In(w.jobTypes), len(w.excludedJobTypes) == 0, bun.In(w.excludedJobTypes), jobStatusProcessing, w.workerID, jobStatusPending).Scan(ctx, job)
 	} else {
 		err = w.db.NewRaw(`
 		UPDATE jobs
 		SET status = ?, locked_at = CURRENT_TIMESTAMP, locked_by = ?
 		WHERE status = ? AND id = (
 			SELECT id FROM jobs
-			WHERE status = ? AND run_at <= CURRENT_TIMESTAMP
+			WHERE status = ? AND run_at <= CURRENT_TIMESTAMP AND (? OR type IN (?)) AND (? OR type NOT IN (?))
 			ORDER BY run_at ASC, id ASC
 			LIMIT 1
 		)
 		RETURNING *
-		`, jobStatusProcessing, w.workerID, jobStatusPending, jobStatusPending).Scan(ctx, job)
+		`, jobStatusProcessing, w.workerID, jobStatusPending, jobStatusPending, len(w.jobTypes) == 0, bun.In(w.jobTypes), len(w.excludedJobTypes) == 0, bun.In(w.excludedJobTypes)).Scan(ctx, job)
 	}
 
 	if err != nil {
@@ -1182,4 +1188,11 @@ func (w *BackgroundWorker) SetWorkflowService(service *workflows.Service) {
 		}
 		return service.HandleJob(ctx, job.Type, job.Payload)
 	}
+}
+
+// SetJobTypes dedicates this worker to a bounded latency-sensitive lane.
+// The ordinary worker excludes those types; claims remain database-atomic.
+func (w *BackgroundWorker) SetJobTypes(types ...string) { w.jobTypes = append([]string(nil), types...) }
+func (w *BackgroundWorker) ExcludeJobTypes(types ...string) {
+	w.excludedJobTypes = append([]string(nil), types...)
 }

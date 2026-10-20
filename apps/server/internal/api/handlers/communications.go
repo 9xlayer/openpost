@@ -70,9 +70,10 @@ type SetEngagementStateInput struct {
 type EngagementActionInput struct {
 	ItemID string `path:"item_id"`
 	Body   struct {
-		WorkspaceID string `json:"workspace_id" required:"true"`
-		Action      string `json:"action" enum:"reply,hide,delete,like,unlike" required:"true"`
-		Message     string `json:"message,omitempty"`
+		WorkspaceID       string `json:"workspace_id" required:"true"`
+		Action            string `json:"action" enum:"reply,hide,delete,like,unlike" required:"true"`
+		Message           string `json:"message,omitempty"`
+		ClientOperationID string `json:"client_operation_id,omitempty" maxLength:"128"`
 	}
 }
 
@@ -80,6 +81,8 @@ type ListConversationsInput struct {
 	WorkspaceID string `query:"workspace_id" required:"true"`
 	Platform    string `query:"platform"`
 	AccountID   string `query:"account_id"`
+	Search      string `query:"search" maxLength:"200"`
+	UnreadOnly  bool   `query:"unread_only"`
 	Archived    bool   `query:"archived"`
 	Limit       int    `query:"limit" default:"50" minimum:"1" maximum:"100"`
 	Offset      int    `query:"offset" default:"0" minimum:"0"`
@@ -131,8 +134,10 @@ type ListMessagesInput struct {
 }
 
 type MessagePage struct {
-	Items      []models.DirectMessage `json:"items"`
-	NextCursor string                 `json:"next_cursor,omitempty"`
+	Conversation     *models.Conversation   `json:"conversation,omitempty"`
+	HistoryAvailable bool                   `json:"history_available,omitempty"`
+	Items            []models.DirectMessage `json:"items"`
+	NextCursor       string                 `json:"next_cursor,omitempty"`
 }
 
 type ListMessagesOutput struct{ Body MessagePage }
@@ -140,8 +145,9 @@ type ListMessagesOutput struct{ Body MessagePage }
 type SendMessageInput struct {
 	ConversationID string `path:"conversation_id"`
 	Body           struct {
-		WorkspaceID string `json:"workspace_id" required:"true"`
-		Message     string `json:"message" required:"true" minLength:"1" maxLength:"10000"`
+		WorkspaceID       string `json:"workspace_id" required:"true"`
+		Message           string `json:"message" required:"true" minLength:"1" maxLength:"10000"`
+		ClientOperationID string `json:"client_operation_id,omitempty" maxLength:"128"`
 	}
 }
 
@@ -338,6 +344,7 @@ func (h *EngagementMessagingHandler) RegisterRoutes(api huma.API) {
 	h.registerEngagementRoutes(api)
 	h.registerConversationRoutes(api)
 	h.registerRefreshRoutes(api)
+	h.registerInboxFreshnessRoutes(api)
 }
 
 func (h *EngagementMessagingHandler) registerEngagementRoutes(api huma.API) {
@@ -453,20 +460,37 @@ func (h *EngagementMessagingHandler) setEngagementState(ctx context.Context, inp
 	return nil, nil
 }
 
-func (h *EngagementMessagingHandler) queueEngagementAction(ctx context.Context, input *EngagementActionInput) (*struct{}, error) {
+type EngagementActionOutput struct {
+	Body struct {
+		JobID string `json:"job_id"`
+	}
+}
+
+func (h *EngagementMessagingHandler) queueEngagementAction(ctx context.Context, input *EngagementActionInput) (*EngagementActionOutput, error) {
 	if h.engagement == nil {
 		return nil, huma.Error503ServiceUnavailable("engagement service is unavailable")
 	}
 	if input.Body.Action == "reply" && strings.TrimSpace(input.Body.Message) == "" {
 		return nil, huma.Error400BadRequest("message is required for a reply")
 	}
-	if err := h.engagement.QueueEngagementAction(ctx, engagementActor(ctx), input.ItemID, input.Body.Action, input.Body.Message); err != nil {
+	actor := engagementActor(ctx)
+	if actor.CredentialWorkspaceID != "" && actor.CredentialWorkspaceID != input.Body.WorkspaceID {
+		return nil, huma.Error403Forbidden("workspace access denied")
+	}
+	actor.CredentialWorkspaceID = input.Body.WorkspaceID
+	jobID, err := h.engagement.QueueEngagementActionReceipt(ctx, actor, input.ItemID, input.Body.Action, input.Body.Message, input.Body.ClientOperationID)
+	if err != nil {
+		if errors.Is(err, engagement.ErrOperationConflict) {
+			return nil, huma.Error409Conflict(err.Error())
+		}
 		if errors.Is(err, engagement.ErrAccessDenied) || errors.Is(err, engagement.ErrNotFound) {
 			return nil, engagementHTTPError(err, "failed to queue engagement action")
 		}
 		return nil, huma.Error400BadRequest(err.Error())
 	}
-	return nil, nil
+	out := &EngagementActionOutput{}
+	out.Body.JobID = jobID
+	return out, nil
 }
 
 func (h *EngagementMessagingHandler) listConversations(ctx context.Context, input *ListConversationsInput) (*ListConversationsOutput, error) {
@@ -479,7 +503,7 @@ func (h *EngagementMessagingHandler) listConversations(ctx context.Context, inpu
 	}
 	page, err := h.messaging.ListConversations(ctx, messagingActor(ctx), messaging.ConversationQuery{
 		WorkspaceID: input.WorkspaceID, Platform: input.Platform, AccountID: input.AccountID,
-		Archived: input.Archived, Limit: input.Limit, Offset: input.Offset, Cursor: cursor,
+		Archived: input.Archived, Search: input.Search, UnreadOnly: input.UnreadOnly, Limit: input.Limit, Offset: input.Offset, Cursor: cursor,
 	})
 	if err != nil {
 		return nil, messagingHTTPError(err, "failed to load messages")
@@ -522,7 +546,7 @@ func (h *EngagementMessagingHandler) listConversationMessages(ctx context.Contex
 		return nil, huma.Error500InternalServerError("failed to load conversation")
 	}
 	return &ListMessagesOutput{Body: MessagePage{
-		Items: page.Items, NextCursor: encodeMessageCursor(page.NextCursor),
+		Items: page.Items, NextCursor: encodeMessageCursor(page.NextCursor), HistoryAvailable: page.HistoryAvailable, Conversation: &page.Conversation,
 	}}, nil
 }
 
@@ -530,8 +554,16 @@ func (h *EngagementMessagingHandler) sendConversationMessage(ctx context.Context
 	if h.messaging == nil {
 		return nil, huma.Error503ServiceUnavailable("messaging service is unavailable")
 	}
-	message, err := h.messaging.QueueMessage(ctx, messagingActor(ctx), input.ConversationID, input.Body.Message)
+	actor := messagingActor(ctx)
+	if actor.CredentialWorkspaceID != "" && actor.CredentialWorkspaceID != input.Body.WorkspaceID {
+		return nil, huma.Error403Forbidden("workspace access denied")
+	}
+	actor.CredentialWorkspaceID = input.Body.WorkspaceID
+	message, err := h.messaging.QueueMessage(ctx, actor, input.ConversationID, input.Body.Message, input.Body.ClientOperationID)
 	if err != nil {
+		if errors.Is(err, messaging.ErrOperationConflict) {
+			return nil, huma.Error409Conflict(err.Error())
+		}
 		if errors.Is(err, messaging.ErrAccessDenied) || errors.Is(err, messaging.ErrNotFound) {
 			return nil, messagingHTTPError(err, "failed to queue message")
 		}

@@ -757,3 +757,19 @@ func firstNonEmpty(vals ...string) string {
 	}
 	return ""
 }
+
+// IsEffectiveEnabledWithDB evaluates admission inside the caller's transaction.
+// Opening a second connection here deadlocks SQLite's single-connection pool.
+func (s *Service) IsEffectiveEnabledWithDB(ctx context.Context, db bun.IDB, accountID, feature string) (bool, error) {
+	s.providersMu.RLock()
+	policy := s.planPolicy
+	if scoped, ok := policy.(interface{ WithDB(bun.IDB) PlanPolicy }); ok {
+		policy = scoped.WithDB(db)
+	}
+	scoped := NewService(db, s.providers, policy)
+	for name, source := range s.analyticsSources {
+		scoped.analyticsSources[name] = source
+	}
+	s.providersMu.RUnlock()
+	return scoped.IsEffectiveEnabled(ctx, accountID, feature)
+}

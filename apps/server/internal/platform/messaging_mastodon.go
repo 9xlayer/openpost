@@ -168,7 +168,7 @@ func (m *MastodonAdapter) hydrateMessageConversations(ctx context.Context, acces
 			CounterpartHandle: counterpartHandle, CounterpartName: counterpartName,
 			CounterpartAvatarURL: counterpartAvatar, LastMessageAt: lastAt,
 			LastMessagePreview:  mastodonPlainText(conversation.LastStatus.Content),
-			LastRemoteMessageID: conversation.LastStatus.ID, UnreadCount: boolToCount(conversation.Unread),
+			LastRemoteMessageID: conversation.LastStatus.ID, UnreadCount: boolToCount(conversation.Unread), UnreadCountKnown: true,
 			Messages: messages,
 		})
 	}
