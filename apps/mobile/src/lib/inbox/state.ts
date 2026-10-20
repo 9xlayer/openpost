@@ -4,8 +4,9 @@ export interface PendingSend {
   operationId: string;
   body: string;
   createdAt: string;
-  state: "sending" | "ambiguous" | "failed" | "queued";
+  state: "sending" | "ambiguous" | "failed" | "queued" | "confirmed";
   serverId?: string;
+  jobId?: string;
   error?: string;
 }
 export interface ConversationDraft {
@@ -75,23 +76,26 @@ export function parseDraft(value: string): ConversationDraft {
       typeof send.operationId !== "string" ||
       typeof send.body !== "string" ||
       typeof send.createdAt !== "string" ||
-      !["sending", "ambiguous", "failed", "queued"].includes(send.state)
+      !["sending", "ambiguous", "failed", "queued", "confirmed"].includes(send.state)
     )
       continue;
     // Construct validated values instead of treating arbitrary persisted JSON as a domain object.
     const state =
-      send.state === "queued"
-        ? "queued"
-        : send.state === "failed"
-          ? "failed"
-          : send.state === "sending"
-            ? "sending"
-            : "ambiguous";
+      send.state === "confirmed"
+        ? "confirmed"
+        : send.state === "queued"
+          ? "queued"
+          : send.state === "failed"
+            ? "failed"
+            : send.state === "sending"
+              ? "sending"
+              : "ambiguous";
     sends.push({
       operationId: send.operationId,
       body: send.body,
       createdAt: send.createdAt,
       state,
+      jobId: typeof send.jobId === "string" ? send.jobId : undefined,
       serverId: typeof send.serverId === "string" ? send.serverId : undefined,
       error: typeof send.error === "string" ? send.error : undefined,
     });

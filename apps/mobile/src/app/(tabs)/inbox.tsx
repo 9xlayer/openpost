@@ -15,13 +15,16 @@ import { WorkspaceHeader } from "@/components/workspace-header";
 import { AccountAvatar } from "@/components/account-avatar";
 import { InboxSegments, AccountFilter, InboxDivider } from "@/components/inbox/controls";
 import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
-import { useAccounts, useWorkspaceId } from "@/lib/queries";
+import { useAccounts, useWorkspaceCapabilities, useWorkspaceId } from "@/lib/queries";
 import {
   mobileInboxAPI,
   setConversationState,
+  setCommentState,
   type Conversation,
   type Comment,
 } from "@/lib/inbox/api";
+import { lastSuccessfulSync } from "@/lib/inbox/refresh";
+import { useInboxRefresh } from "@/lib/inbox/use-refresh";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
 import { relativeTime, platformLabel } from "@/lib/format";
 import { useNativeTheme } from "@/theme";
@@ -38,6 +41,7 @@ export default function InboxScreen() {
 function InboxContent({ workspaceId }: { workspaceId: string }) {
   const { colors, spacing } = useNativeTheme().manifest;
   const accounts = useAccounts();
+  const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
   const [view, setView] = useState<"chats" | "comments">("chats");
   const [filter, setFilter] = useState<"all" | "unread" | "archived">("all");
@@ -45,7 +49,11 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [undo, setUndo] = useState<Conversation | null>(null);
+  const [undo, setUndo] = useState<{
+    kind: "chat" | "comment";
+    id: string;
+    archived: boolean;
+  } | null>(null);
   const [archiving, setArchiving] = useState<string | null>(null);
   const [preferenceReady, setPreferenceReady] = useState(false);
   const preferenceKey = `inbox-view-${workspaceId}`;
@@ -101,21 +109,45 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
   const syncIssue = syncStates?.find(
     (state) => state.error_message || state.status === "failed" || state.status === "unavailable",
   );
-  async function archive(conversation: Conversation, archived: boolean) {
-    if (archiving) return;
+  const successfulAt = lastSuccessfulSync(syncStates, accountId);
+  const refresh = useInboxRefresh({
+    workspaceId,
+    view,
+    viewKey: `${view}:${filter}:${accountId}`,
+    canEdit,
+    previousSuccess: successfulAt,
+    reloadStored: async () => {
+      const loaded = await activeQuery.refetch();
+      return lastSuccessfulSync(loaded.data?.pages[0]?.sync_states, accountId);
+    },
+  });
+  async function updateArchive(
+    kind: "chat" | "comment",
+    id: string,
+    archived: boolean,
+    previous: boolean | null,
+  ) {
+    if (!canEdit || archiving) return;
     const identity = captureApiRequestIdentity();
-    setArchiving(conversation.id);
+    setArchiving(id);
     setError(null);
     try {
-      await setConversationState(workspaceId, conversation.id, { archived });
+      if (kind === "chat") await setConversationState(workspaceId, id, { archived }, canEdit);
+      else await setCommentState(workspaceId, id, { archived }, canEdit);
       if (!apiRequestIdentityIsCurrent(identity)) return;
-      setUndo(archived ? conversation : null);
-      await queryClient.invalidateQueries({
-        queryKey: inboxQueryKeys.conversationsRoot(workspaceId),
-      });
+      setUndo(previous === null ? null : { kind, id, archived: previous });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey:
+            kind === "chat"
+              ? inboxQueryKeys.conversationsRoot(workspaceId)
+              : inboxQueryKeys.engagementRoot(workspaceId),
+        }),
+        queryClient.invalidateQueries({ queryKey: inboxQueryKeys.summary(workspaceId) }),
+      ]);
     } catch (cause) {
       if (apiRequestIdentityIsCurrent(identity))
-        setError(cause instanceof Error ? cause.message : "Could not update chat");
+        setError(cause instanceof Error ? cause.message : "Could not update Inbox");
     } finally {
       if (apiRequestIdentityIsCurrent(identity)) setArchiving(null);
     }
@@ -171,19 +203,29 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
       {accounts.data?.some((account) => account.id === accountId && account.platform === "x") ? (
         <XMessagingRecovery accountId={accountId} workspaceId={workspaceId} />
       ) : null}
-      {undo ? (
+      {undo && canEdit ? (
         <View
           accessibilityLiveRegion="polite"
           style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
         >
-          <BodyText style={{ flex: 1 }}>Chat archived</BodyText>
+          <BodyText style={{ flex: 1 }}>
+            {undo.kind === "chat" ? "Chat" : "Comment"} {undo.archived ? "reopened" : "archived"}
+          </BodyText>
           <Button
             title="Undo"
             intent="ordinary"
-            onPress={() => void archive(undo, false)}
+            onPress={() => void updateArchive(undo.kind, undo.id, undo.archived, null)}
             disabled={!!archiving}
           />
         </View>
+      ) : null}
+      <BodyText>
+        {successfulAt
+          ? `Last successful collection: ${new Date(successfulAt).toLocaleString()}. Networks may deliver updates later.`
+          : "No successful collection recorded. Showing stored items."}
+      </BodyText>
+      {refresh.notice ? (
+        <BodyText accessibilityLiveRegion="polite">{refresh.notice}</BodyText>
       ) : null}
       {error ? <QueryNotice message={error} /> : null}
       {syncIssue ? (
@@ -225,8 +267,8 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
         contentContainerStyle={{ paddingBottom: 32 }}
         refreshControl={
           <RefreshControl
-            refreshing={activeQuery.isRefetching && !activeQuery.isFetchingNextPage}
-            onRefresh={() => void activeQuery.refetch()}
+            refreshing={refresh.refreshing}
+            onRefresh={() => void refresh.refresh()}
             tintColor={colors.onSurfaceVariant}
           />
         }
@@ -310,47 +352,64 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
                   </BodyText>
                 </View>
               </Pressable>
-              <Button
-                title={filter === "archived" ? "Reopen" : "Archive"}
-                intent="quiet"
-                disabled={!!archiving}
-                onPress={() => void archive(item, filter !== "archived")}
-              />
+              {canEdit ? (
+                <Button
+                  title={filter === "archived" ? "Reopen" : "Archive"}
+                  intent="quiet"
+                  disabled={!!archiving}
+                  onPress={() =>
+                    void updateArchive("chat", item.id, filter !== "archived", !!item.archived_at)
+                  }
+                />
+              ) : null}
             </View>
           ) : (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => openComment(item)}
-              style={({ pressed }) => ({
-                padding: spacing.large,
-                gap: 8,
-                opacity: pressed ? 0.6 : 1,
-              })}
-            >
-              <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-                <AccountAvatar
-                  name={item.author_name || item.author_handle}
-                  platform={item.platform}
-                  avatarUrl={item.author_avatar_url}
-                  size={36}
-                />
-                <View style={{ flex: 1 }}>
-                  <ContentTitle>
-                    {item.author_name || item.author_handle}
-                    {item.read_at ? "" : " · Unread"}
-                  </ContentTitle>
-                  <BodyText>
-                    {accountName(item.social_account_id)} · {platformLabel(item.platform)}
-                  </BodyText>
+            <View style={{ padding: spacing.large, gap: 8 }}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => openComment(item)}
+                style={({ pressed }) => ({
+                  gap: 8,
+                  minHeight: 48,
+                  opacity: pressed ? 0.6 : 1,
+                })}
+              >
+                <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+                  <AccountAvatar
+                    name={item.author_name || item.author_handle}
+                    platform={item.platform}
+                    avatarUrl={item.author_avatar_url}
+                    size={36}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <ContentTitle>
+                      {item.author_name || item.author_handle}
+                      {item.read_at ? "" : " · Unread"}
+                    </ContentTitle>
+                    <BodyText>
+                      {accountName(item.social_account_id)} · {platformLabel(item.platform)}
+                    </BodyText>
+                  </View>
                 </View>
-              </View>
-              <BodyText numberOfLines={3} style={{ color: colors.onSurface }}>
-                {item.body}
-              </BodyText>
-              <BodyText numberOfLines={2}>
-                On: {item.publication_title || item.publication_excerpt || "Public post"}
-              </BodyText>
-            </Pressable>
+                <BodyText numberOfLines={3} style={{ color: colors.onSurface }}>
+                  {item.body}
+                </BodyText>
+                <BodyText numberOfLines={2}>
+                  On: {item.publication_title || item.publication_excerpt || "Public post"}
+                </BodyText>
+              </Pressable>
+              {canEdit ? (
+                <Button
+                  title={item.archived_at ? "Reopen comment" : "Archive comment"}
+                  intent="ordinary"
+                  disabled={!!archiving}
+                  onPress={() =>
+                    void updateArchive("comment", item.id, !item.archived_at, !!item.archived_at)
+                  }
+                  style={{ alignSelf: "flex-start" }}
+                />
+              ) : null}
+            </View>
           )
         }
       />

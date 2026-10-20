@@ -5,6 +5,7 @@ import type {
   MediaQueryAPI,
   InboxSummaryQueryAPI,
   InboxView,
+  JobStatusQueryAPI,
 } from "@openpost/query-catalog";
 import { createOpenPostQueryError } from "@openpost/query-catalog";
 import {
@@ -38,7 +39,13 @@ async function result<T>(
   return response.data;
 }
 
-export const mobileInboxAPI: InboxQueryAPI & FeatureQueryAPI & InboxSummaryQueryAPI = {
+export const mobileInboxAPI: InboxQueryAPI &
+  FeatureQueryAPI &
+  InboxSummaryQueryAPI &
+  JobStatusQueryAPI = {
+  async getJob(_workspaceId, jobId, signal) {
+    return result(api().GET("/jobs/{id}", { signal, params: { path: { id: jobId } } }));
+  },
   async getEngagement(workspaceId, itemId, signal) {
     return result(
       api().GET("/engagement/{item_id}", {
@@ -200,7 +207,9 @@ export async function setConversationState(
   workspaceId: string,
   conversationId: string,
   state: { read?: boolean; archived?: boolean },
+  canEdit: boolean,
 ) {
+  if (!canEdit) return;
   const identity = captureApiRequestIdentity();
   const response = await api().POST("/messages/{conversation_id}/state", {
     params: { path: { conversation_id: conversationId } },
@@ -216,10 +225,16 @@ export async function setConversationState(
     );
 }
 
-export async function markCommentRead(workspaceId: string, id: string) {
+export async function setCommentState(
+  workspaceId: string,
+  id: string,
+  state: { read?: boolean; archived?: boolean },
+  canEdit: boolean,
+) {
+  if (!canEdit) return;
   const identity = captureApiRequestIdentity();
   const response = await api().POST("/engagement/state", {
-    body: { workspace_id: workspaceId, ids: [id], read: true },
+    body: { workspace_id: workspaceId, ids: [id], ...state },
   });
   await settleApiUnauthorized(identity, response.response);
   if (!apiRequestIdentityIsCurrent(identity)) throw new Error("The signed-in Workspace changed.");
@@ -227,8 +242,19 @@ export async function markCommentRead(workspaceId: string, id: string) {
     throw createOpenPostQueryError(
       response.response.status,
       response.error,
-      "Could not mark comment read",
+      "Could not update comment",
     );
+}
+
+export function queueInboxRefresh(
+  workspaceId: string,
+  view: "chats" | "comments",
+  signal: AbortSignal,
+) {
+  const body = { workspace_id: workspaceId };
+  return view === "chats"
+    ? result(api().POST("/messages/refresh", { signal, body }))
+    : result(api().POST("/engagement/refresh", { signal, body }));
 }
 export async function commentAction(
   workspaceId: string,

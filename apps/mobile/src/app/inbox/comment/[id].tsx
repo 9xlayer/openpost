@@ -1,5 +1,5 @@
 import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Linking, ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams, router } from "expo-router";
 import { useHeaderHeight, useIsFocused } from "expo-router/react-navigation";
@@ -12,15 +12,12 @@ import { BodyText, Button, ContentTitle, Screen, TextField } from "@/components/
 import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
 import { MediaImage } from "@/components/media-image";
 import { useComment } from "@/lib/inbox/queries";
-import { commentAction, markCommentRead } from "@/lib/inbox/api";
-import type { PendingSend } from "@/lib/inbox/state";
+import { commentAction, setCommentState } from "@/lib/inbox/api";
+import { usePublicReply } from "@/lib/inbox/use-public-reply";
+import { useInboxJob } from "@/lib/inbox/use-job";
+import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "@/lib/api/client";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
-import {
-  inboxStorageScope,
-  newInboxOperationId,
-  readConversationDraft,
-  saveConversationDraft,
-} from "@/lib/inbox/storage";
+import { newInboxOperationId } from "@/lib/inbox/storage";
 import { useAccounts, useWorkspaceCapabilities, useWorkspaceId } from "@/lib/queries";
 import { platformLabel } from "@/lib/format";
 import { useNativeTheme } from "@/theme";
@@ -45,10 +42,14 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const account = accounts.data?.find((row) => row.id === comment?.social_account_id);
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
-  const [text, setText] = useState("");
-  const [ready, setReady] = useState(false);
+  const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at;
+  const reply = usePublicReply(workspaceId, id, replyable);
   const [busy, setBusy] = useState(false);
-  const [replyOperation, setReplyOperation] = useState<PendingSend | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [undoArchive, setUndoArchive] = useState<boolean | null>(null);
+  const [moderationJobId, setModerationJobId] = useState<string>();
+  const moderation = useInboxJob(workspaceId, moderationJobId);
   const inFlight = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -57,98 +58,60 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
       mounted.current = false;
     };
   }, []);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const scope = useMemo(() => inboxStorageScope(workspaceId), [workspaceId]);
-  const draftId = `comment-${id}`;
   const liveError = useInboxUpdates("comments");
   const parent = item.data?.parents?.find((row) => row.remote_id === comment?.parent_remote_id);
-  useEffect(() => {
-    let active = true;
-    void readConversationDraft(scope, draftId)
-      .then((draft) => {
-        if (active && scope.current()) {
-          setText(draft.text);
-          setReplyOperation(draft.sends[0] ?? null);
-          setReady(true);
-        }
-      })
-      .catch(() => setError("Could not read the saved reply. Reopen this comment."));
-    return () => {
-      active = false;
-    };
-  }, [scope, draftId]);
   const commentRead = comment?.read_at;
   const commentId = comment?.id;
   useEffect(() => {
-    if (!focused || !commentId || commentRead) return;
-    void markCommentRead(workspaceId, id)
+    if (!canEdit || !focused || !commentId || commentRead) return;
+    void setCommentState(workspaceId, id, { read: true }, canEdit)
       .then(() =>
-        queryClient.invalidateQueries({
-          queryKey: inboxQueryKeys.engagementRoot(workspaceId),
-        }),
+        queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) }),
       )
-      .catch(() => setError("Could not mark this comment read. Try again."));
-  }, [commentId, commentRead, focused, workspaceId, id, queryClient]);
-  function changeText(value: string) {
-    setText(value);
-    void saveConversationDraft(scope, draftId, {
-      text: value,
-      sends: [],
-    }).catch(() => setError("Could not save your reply on this device."));
+      .catch(() => setError("Could not mark this comment read. Reopen it to retry."));
+  }, [canEdit, commentId, commentRead, focused, workspaceId, id, queryClient]);
+  useEffect(() => {
+    if (moderation.job?.status === "completed")
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
+  }, [moderation.job, queryClient, workspaceId]);
+  async function archive(archived: boolean, undo = false) {
+    if (!canEdit || !comment || inFlight.current) return;
+    const identity = captureApiRequestIdentity();
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await setCommentState(workspaceId, id, { archived }, canEdit);
+      if (!mounted.current || !apiRequestIdentityIsCurrent(identity)) return;
+      setUndoArchive(undo ? null : !!comment.archived_at);
+      setNotice(archived ? "Comment archived" : "Comment reopened");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) }),
+        queryClient.invalidateQueries({ queryKey: inboxQueryKeys.summary(workspaceId) }),
+      ]);
+    } catch (cause) {
+      if (mounted.current && apiRequestIdentityIsCurrent(identity))
+        setError(cause instanceof Error ? cause.message : "Could not update comment.");
+    } finally {
+      inFlight.current = false;
+      if (mounted.current && apiRequestIdentityIsCurrent(identity)) setBusy(false);
+    }
   }
-  async function action(kind: "reply" | "hide" | "delete" | "like" | "unlike") {
-    if (!comment || inFlight.current || !scope.current()) return;
+  async function action(kind: "hide" | "delete" | "like" | "unlike") {
+    if (!canEdit || !comment || inFlight.current) return;
+    const identity = captureApiRequestIdentity();
     inFlight.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
-    const submitted = replyOperation?.body ?? text.trim();
-    const operation =
-      kind === "reply"
-        ? (replyOperation ?? {
-            operationId: newInboxOperationId(),
-            body: submitted,
-            createdAt: new Date().toISOString(),
-            state: "sending" as const,
-          })
-        : null;
     try {
-      if (operation) {
-        setReplyOperation(operation);
-        await saveConversationDraft(scope, draftId, {
-          text: submitted,
-          sends: [operation],
-        });
-      }
-      const receipt = await commentAction(
-        workspaceId,
-        id,
-        kind,
-        kind === "reply" ? submitted : undefined,
-        operation?.operationId ?? newInboxOperationId(),
-      );
-      if (!scope.current() || !mounted.current) return;
+      const receipt = await commentAction(workspaceId, id, kind, undefined, newInboxOperationId());
+      if (!mounted.current || !apiRequestIdentityIsCurrent(identity)) return;
       if (!receipt.job_id) throw new Error("The server did not confirm a durable action receipt.");
-      setNotice(kind === "reply" ? "Public reply queued" : "Action queued");
-      if (kind === "reply") {
-        setReplyOperation(null);
-        setText((current) => (current.trim() === submitted ? "" : current));
-        await saveConversationDraft(scope, draftId, { text: "", sends: [] });
-      }
-      await queryClient.invalidateQueries({
-        queryKey: inboxQueryKeys.engagementRoot(workspaceId),
-      });
+      setModerationJobId(receipt.job_id);
+      setNotice("Action queued. Waiting for network confirmation.");
     } catch (cause) {
-      if (mounted.current && scope.current() && operation) {
-        const uncertain: PendingSend = { ...operation, state: "ambiguous" };
-        setReplyOperation(uncertain);
-        await saveConversationDraft(scope, draftId, {
-          text: submitted,
-          sends: [uncertain],
-        }).catch(() => undefined);
-      }
-      if (mounted.current && scope.current())
+      if (mounted.current && apiRequestIdentityIsCurrent(identity))
         setError(
           cause instanceof Error
             ? cause.message
@@ -156,10 +119,9 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
         );
     } finally {
       inFlight.current = false;
-      if (mounted.current && scope.current()) setBusy(false);
+      if (mounted.current && apiRequestIdentityIsCurrent(identity)) setBusy(false);
     }
   }
-  const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at;
   return (
     <Screen safeTop={false}>
       <Stack.Screen
@@ -279,13 +241,31 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   ) : null,
                 )}
               </View>
+              {canEdit ? (
+                <View style={{ gap: 8 }}>
+                  <Button
+                    title={comment.archived_at ? "Reopen comment" : "Archive comment"}
+                    intent="ordinary"
+                    disabled={busy || moderation.checking}
+                    onPress={() => void archive(!comment.archived_at)}
+                  />
+                  {undoArchive !== null ? (
+                    <Button
+                      title="Undo"
+                      intent="ordinary"
+                      disabled={busy || moderation.checking}
+                      onPress={() => void archive(undoArchive, true)}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
               {canEdit && !comment.deleted_at ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   {comment.can_like && !comment.liked ? (
                     <Button
                       title="Like"
                       intent="ordinary"
-                      disabled={busy}
+                      disabled={busy || moderation.checking}
                       onPress={() => void action("like")}
                     />
                   ) : null}
@@ -293,7 +273,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     <Button
                       title="Unlike"
                       intent="ordinary"
-                      disabled={busy}
+                      disabled={busy || moderation.checking}
                       onPress={() => void action("unlike")}
                     />
                   ) : null}
@@ -301,7 +281,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     <Button
                       title="Hide"
                       intent="ordinary"
-                      disabled={busy}
+                      disabled={busy || moderation.checking}
                       onPress={() => void action("hide")}
                     />
                   ) : null}
@@ -309,7 +289,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     <Button
                       title="Delete"
                       intent="destructive"
-                      disabled={busy}
+                      disabled={busy || moderation.checking}
                       onPress={() =>
                         Alert.alert(
                           "Delete comment?",
@@ -332,7 +312,20 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
           ) : null}
           {liveError ? <BodyText>Reconnecting to Inbox…</BodyText> : null}
           {error ? <QueryNotice message={error} /> : null}
-          {notice ? <BodyText accessibilityLiveRegion="polite">{notice}</BodyText> : null}
+          {moderation.job?.status === "completed" ? (
+            <BodyText accessibilityLiveRegion="polite">Action confirmed by the network.</BodyText>
+          ) : moderation.job?.status === "failed" ? (
+            <QueryNotice
+              message={`Action failed: ${moderation.job.last_error || "Check the original thread."}`}
+            />
+          ) : moderation.needsCheck ? (
+            <QueryNotice
+              message="Action outcome needs checking. Open the original thread before trying again."
+              retry={moderation.check}
+            />
+          ) : notice ? (
+            <BodyText accessibilityLiveRegion="polite">{notice}</BodyText>
+          ) : null}
         </ScrollView>
         {comment ? (
           <View
@@ -357,26 +350,82 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               <BodyText>
                 {comment.deleted_at
                   ? "This comment has been deleted."
-                  : !canEdit
-                    ? "Your Workspace role cannot reply."
-                    : "This network or account does not support replies here."}
+                  : comment.archived_at
+                    ? "Reopen this comment to reply."
+                    : !canEdit
+                      ? "Your Workspace role cannot reply."
+                      : "This network or account does not support replies here."}
               </BodyText>
+            ) : null}
+            {reply.operation?.state === "confirmed" ? (
+              <BodyText accessibilityLiveRegion="polite">
+                Public reply confirmed by the network.
+              </BodyText>
+            ) : reply.operation?.state === "failed" ? (
+              <QueryNotice
+                message={`Public reply failed: ${reply.operation.error || "The network did not confirm delivery."} Your reply is retained. Check the original thread before writing another.`}
+              />
+            ) : reply.receipt.needsCheck ? (
+              <QueryNotice message="Reply delivery needs checking. Your reply and receipt are retained." />
+            ) : reply.operation?.jobId ? (
+              <BodyText accessibilityLiveRegion="polite">
+                Public reply queued. Waiting for network confirmation.
+              </BodyText>
+            ) : reply.operation?.state === "ambiguous" ? (
+              <BodyText>Admission is unconfirmed. Retry safely with the same reply.</BodyText>
+            ) : null}
+            {reply.error || reply.receipt.error ? (
+              <QueryNotice
+                message={reply.error || reply.receipt.error || "Could not check reply."}
+              />
+            ) : null}
+            {reply.operation?.jobId && reply.operation.state !== "confirmed" ? (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <Button
+                  title="Check delivery status"
+                  intent="ordinary"
+                  disabled={reply.receipt.checking}
+                  onPress={reply.receipt.check}
+                />
+                {comment.provider_post_url && /^https?:\/\//.test(comment.provider_post_url) ? (
+                  <Button
+                    title="Check original thread"
+                    intent="link"
+                    onPress={() => void Linking.openURL(comment.provider_post_url!)}
+                  />
+                ) : null}
+              </View>
             ) : null}
             <TextField
               accessibilityLabel="Public reply"
               placeholder="Write a public reply"
               multiline
-              editable={replyable && ready && !busy && !replyOperation}
-              value={text}
-              onChangeText={changeText}
+              editable={
+                replyable &&
+                reply.ready &&
+                !busy &&
+                (!reply.operation || reply.operation.state === "confirmed")
+              }
+              value={reply.text}
+              onChangeText={reply.setText}
               style={{ minHeight: 64, maxHeight: 144, paddingVertical: 12 }}
             />
             <Button
-              title={replyOperation ? "Retry public reply safely" : "Reply publicly"}
+              title={
+                reply.operation?.state === "ambiguous" && !reply.operation.jobId
+                  ? "Retry public reply safely"
+                  : "Reply publicly"
+              }
               intent="focal"
-              loading={busy}
-              disabled={!replyable || !ready || !text.trim()}
-              onPress={() => void action("reply")}
+              loading={reply.operation?.state === "sending"}
+              disabled={
+                !replyable ||
+                !reply.ready ||
+                !reply.text.trim() ||
+                !!reply.operation?.jobId ||
+                reply.operation?.state === "failed"
+              }
+              onPress={reply.submit}
             />
           </View>
         ) : null}

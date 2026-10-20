@@ -90,17 +90,25 @@ function ChatContent({
   const liveError = useInboxUpdates("conversation", conversationId);
   const readInFlight = useRef(false);
   useEffect(() => {
-    if (!focused || !atLatest || !chat || chat.unread_count === 0 || readInFlight.current) return;
+    if (
+      !canEdit ||
+      !focused ||
+      !atLatest ||
+      !chat ||
+      chat.unread_count === 0 ||
+      readInFlight.current
+    )
+      return;
     readInFlight.current = true;
-    void setConversationState(workspaceId, conversationId, { read: true })
+    void setConversationState(workspaceId, conversationId, { read: true }, canEdit)
       .then(() =>
         queryClient.invalidateQueries({ queryKey: inboxQueryKeys.conversationsRoot(workspaceId) }),
       )
-      .catch(() => setActionError("Could not mark this chat read. Pull to refresh to retry."))
+      .catch(() => setActionError("Could not mark this chat read. Reopen it to retry."))
       .finally(() => {
         readInFlight.current = false;
       });
-  }, [chat, focused, atLatest, workspaceId, conversationId, queryClient]);
+  }, [canEdit, chat, focused, atLatest, workspaceId, conversationId, queryClient]);
   useEffect(() => {
     const latest = messages[0]?.id;
     if (latest && newest.current && latest !== newest.current && !nearLatest.current)
@@ -108,11 +116,16 @@ function ChatContent({
     newest.current = latest;
   }, [messages]);
   async function archive() {
-    if (!chat || stateBusy) return;
+    if (!canEdit || !chat || stateBusy) return;
     setStateBusy(true);
     setActionError(null);
     try {
-      await setConversationState(workspaceId, conversationId, { archived: !chat.archived_at });
+      await setConversationState(
+        workspaceId,
+        conversationId,
+        { archived: !chat.archived_at },
+        canEdit,
+      );
       await Promise.all([
         history.refetch(),
         queryClient.invalidateQueries({ queryKey: inboxQueryKeys.conversationsRoot(workspaceId) }),
@@ -124,7 +137,7 @@ function ChatContent({
     }
   }
   async function olderHistory() {
-    if (historyBusy) return;
+    if (!canEdit || historyBusy) return;
     setHistoryBusy(true);
     setHistoryNotice(null);
     try {
@@ -137,6 +150,7 @@ function ChatContent({
     }
   }
   async function retryServer(messageId: string) {
+    if (!canSend) return;
     try {
       await retryMessage(workspaceId, conversationId, messageId);
       await history.refetch();
@@ -205,12 +219,14 @@ function ChatContent({
                 {account?.alias || account?.account_username || "Receiving account"}
               </BodyText>
             </View>
-            <Button
-              title={chat.archived_at ? "Reopen" : "Archive"}
-              intent="quiet"
-              loading={stateBusy}
-              onPress={() => void archive()}
-            />
+            {canEdit ? (
+              <Button
+                title={chat.archived_at ? "Reopen" : "Archive"}
+                intent="quiet"
+                loading={stateBusy}
+                onPress={() => void archive()}
+              />
+            ) : null}
           </View>
         ) : null}
         <DelayedQueryPlaceholder pending={history.isPending} shape="detail" />
@@ -269,7 +285,7 @@ function ChatContent({
                   loading={history.isFetchingNextPage}
                   onPress={() => void history.fetchNextPage()}
                 />
-              ) : history.data?.pages.some((page) => page.history_available) ? (
+              ) : canEdit && history.data?.pages.some((page) => page.history_available) ? (
                 <Button
                   title="Load older history from network"
                   intent="ordinary"

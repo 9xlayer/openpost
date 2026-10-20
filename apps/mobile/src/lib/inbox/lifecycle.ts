@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { AppState } from "react-native";
+import { useIsFocused } from "expo-router/react-navigation";
 import { useFocusEffect } from "expo-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { startInboxUpdates } from "@openpost/query-catalog";
@@ -60,4 +61,23 @@ export function useInboxUpdates(view: InboxView, conversationId?: string) {
     };
   }, [workspaceId, focused, view, conversationId, queryClient]);
   return error;
+}
+
+function subscribeActive(listener: () => void) {
+  const subscription = AppState.addEventListener("change", listener);
+  const offline = subscribeQueryOnline(listener);
+  return () => {
+    subscription.remove();
+    offline();
+  };
+}
+export function useInboxActive() {
+  const focused = useIsFocused();
+  return (
+    useSyncExternalStore(
+      subscribeActive,
+      () => AppState.currentState === "active" && getQueryOnline(),
+      () => false,
+    ) && focused
+  );
 }
