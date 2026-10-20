@@ -103,32 +103,11 @@ func (m metaMessagingAdapter) fetch(ctx context.Context, token string, input Fet
 				} `json:"data"`
 			} `json:"participants"`
 			Messages struct {
-				Data []struct {
-					ID          string `json:"id"`
-					Message     string `json:"message"`
-					CreatedTime string `json:"created_time"`
-					From        struct {
-						ID       string `json:"id"`
-						Name     string `json:"name"`
-						Username string `json:"username"`
-					} `json:"from"`
-					Attachments struct {
-						Data []struct {
-							MimeType string `json:"mime_type"`
-							Name     string `json:"name"`
-							Image    struct {
-								Src string `json:"src"`
-							} `json:"image_data"`
-							Video struct {
-								URL string `json:"url"`
-							} `json:"video_data"`
-							FileURL string `json:"file_url"`
-						} `json:"data"`
-					} `json:"attachments"`
-				} `json:"data"`
+				Data []metaMessageView `json:"data"`
 			} `json:"messages"`
 		} `json:"data"`
 		Paging struct {
+			Next    string `json:"next"`
 			Cursors struct {
 				After string `json:"after"`
 			} `json:"cursors"`
@@ -143,7 +122,10 @@ func (m metaMessagingAdapter) fetch(ctx context.Context, token string, input Fet
 	if response.Error.Message != "" {
 		return FetchMessagesResult{}, fmt.Errorf("meta messages: %s", response.Error.Message)
 	}
-	result := FetchMessagesResult{NextCursor: response.Paging.Cursors.After}
+	result := FetchMessagesResult{}
+	if response.Paging.Next != "" {
+		result.NextCursor = response.Paging.Cursors.After
+	}
 	for _, remote := range response.Data {
 		var counterpart struct{ ID, Name, Username string }
 		for _, participant := range remote.Participants.Data {
@@ -156,26 +138,10 @@ func (m metaMessagingAdapter) fetch(ctx context.Context, token string, input Fet
 		var latestInbound time.Time
 		for _, item := range remote.Messages.Data {
 			createdAt, _ := time.Parse(time.RFC3339, item.CreatedTime)
-			direction := "inbound"
-			if item.From.ID == input.AccountID {
-				direction = "outbound"
-			} else if createdAt.After(latestInbound) {
+			if item.From.ID != input.AccountID && createdAt.After(latestInbound) {
 				latestInbound = createdAt
 			}
-			attachments := make([]MessageAttachment, 0, len(item.Attachments.Data))
-			for _, attachment := range item.Attachments.Data {
-				attachmentURL := firstNonEmptyString(attachment.Image.Src, attachment.Video.URL, attachment.FileURL)
-				if attachmentURL != "" {
-					attachments = append(attachments, MessageAttachment{
-						Type: metaAttachmentType(attachment.MimeType), URL: attachmentURL,
-						Name: attachment.Name, MimeType: attachment.MimeType,
-					})
-				}
-			}
-			messages = append(messages, ProviderMessage{
-				ID: item.ID, Direction: direction, AuthorRemoteID: item.From.ID,
-				Body: item.Message, Attachments: attachments, RemoteCreatedAt: createdAt,
-			})
+			messages = append(messages, item.provider(input.AccountID))
 		}
 		sort.Slice(messages, func(a, b int) bool { return messages[a].RemoteCreatedAt.Before(messages[b].RemoteCreatedAt) })
 		updatedAt, _ := time.Parse(time.RFC3339, remote.UpdatedTime)
