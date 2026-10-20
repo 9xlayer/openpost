@@ -18,7 +18,7 @@ func TestXMessagingWebhookUsesRawOAuth2SignatureAndBoundsBody(t *testing.T) {
 	e := echo.New()
 	NewXMessagingHandler(nil, service).RegisterWebhook(e)
 	crc := httptest.NewRecorder()
-	e.ServeHTTP(crc, httptest.NewRequest(http.MethodGet, "/api/v1/webhooks/x/messaging?crc_token=challenge-token", nil))
+	e.ServeHTTP(crc, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/webhooks/x/messaging?crc_token=challenge-token", nil))
 	require.Equal(t, 200, crc.Code)
 	var body map[string]string
 	require.NoError(t, json.Unmarshal(crc.Body.Bytes(), &body))
@@ -36,7 +36,7 @@ func TestXMessagingWebhookUsesRawOAuth2SignatureAndBoundsBody(t *testing.T) {
 		{"oversized body rejected before JSON", "sha256=invalid", "", strings.Repeat("a", (1<<20)+1), 413},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/webhooks/x/messaging", strings.NewReader(test.payload))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/webhooks/x/messaging", strings.NewReader(test.payload))
 			req.Header.Set("X-Twitter-Webhooks-Signature-OAuth2", test.oauth2)
 			req.Header.Set("X-Twitter-Webhooks-Signature", test.legacy)
 			out := httptest.NewRecorder()

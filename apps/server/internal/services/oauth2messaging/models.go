@@ -31,6 +31,7 @@ type authRequest struct {
 	ExpiresAt         time.Time
 }
 type subscription struct {
+	LastStopAttemptAt    time.Time `bun:",nullzero"`
 	bun.BaseModel        `bun:"table:x_messaging_subscriptions"`
 	ID                   string `bun:",pk"`
 	SocialAccountID      string
@@ -45,6 +46,8 @@ type subscription struct {
 	CreatedAt            time.Time
 }
 type receipt struct {
+	Attempts         int
+	NextAttemptAt    time.Time `bun:",nullzero"`
 	bun.BaseModel    `bun:"table:x_messaging_receipts"`
 	EventUUID        string `bun:",pk"`
 	SubscriptionID   string

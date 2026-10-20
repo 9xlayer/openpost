@@ -213,6 +213,10 @@ func TestXQuotaSurvivesRestartAndHonorsProviderReset(t *testing.T) {
 	now = now.Add(16 * time.Minute)
 	require.ErrorAs(t, restarted.ReserveXMessagingRequest(t.Context(), "111", platform.XMessagingSend), &quota)
 	require.Greater(t, quota.RetryAfter, time.Minute)
+	var httpError *platform.HTTPError
+	require.ErrorAs(t, quota, &httpError)
+	require.Equal(t, http.StatusTooManyRequests, httpError.StatusCode)
+	require.Equal(t, quota.RetryAfter, httpError.RetryAfter)
 }
 
 func TestXActivityBudgetAdmissionAndDurableReceipts(t *testing.T) {
@@ -291,6 +295,8 @@ func TestXActivityBudgetAdmissionAndDurableReceipts(t *testing.T) {
 	}
 	_, err = s.Drain(t.Context(), apply, 100)
 	require.Error(t, err)
+	retryAt := s.now().Add(31 * time.Second)
+	s.now = func() time.Time { return retryAt }
 	processed, err := s.Drain(t.Context(), apply, 100)
 	require.NoError(t, err)
 	require.Equal(t, 1, processed)
@@ -319,4 +325,113 @@ func TestXQuotaCannotBurstAcrossLocalWindowBoundary(t *testing.T) {
 	now = now.Add(2 * time.Second)
 	var quota *QuotaError
 	require.ErrorAs(t, s.ReserveXMessagingRequest(t.Context(), "111", platform.XMessagingRead), &quota, "a UTC boundary is not proof that X reset its quota")
+}
+
+func TestReceiptFailureDoesNotBlockOtherAccountsOrSubscriptionShutdown(t *testing.T) {
+	s := testService(t)
+	seedGrant(t, s, s.now().Add(time.Hour))
+	ctx := t.Context()
+	_, err := s.db.NewInsert().Model(&models.SocialAccount{ID: "other", WorkspaceID: "workspace", Platform: "x", AccountID: "333", Slug: "other", AccessTokenEnc: []byte("oauth1"), IsActive: true}).Exec(ctx)
+	require.NoError(t, err)
+	otherGrant := grant{SocialAccountID: "other", WorkspaceID: "workspace", RemoteUserID: "333", ClientID: s.config.ClientID}
+	require.NoError(t, s.protect(&otherGrant, tokenResponse{AccessToken: "other-token", RefreshToken: "refresh", Scope: messagingScopes, ExpiresIn: 7200}))
+	_, err = s.db.NewInsert().Model(&otherGrant).Exec(ctx)
+	require.NoError(t, err)
+	for i, account := range []string{"account", "other"} {
+		remote := []string{"111", "333"}[i]
+		sub := subscription{ID: fmt.Sprint(i), SocialAccountID: account, WorkspaceID: "workspace", RemoteUserID: remote, RemoteSubscriptionID: fmt.Sprint(101 + i), EventType: "dm.sent", EventLimit: 1, Received: 1, State: "active", ExpiresAt: s.now().Add(time.Hour), CreatedAt: s.now()}
+		_, err = s.db.NewInsert().Model(&sub).Exec(ctx)
+		require.NoError(t, err)
+		raw := fmt.Sprintf(`{"data":{"event_type":"dm.sent","payload":{"direct_message_events":[{"type":"message_create","id":"message-%d","created_timestamp":"1784928224372","message_create":{"target":{"recipient_id":"222"},"sender_id":%q,"message_data":{"text":"hello"}}}]}}}`, i, remote)
+		encrypted, encryptErr := s.encryptor.Encrypt(raw)
+		require.NoError(t, encryptErr)
+		_, err = s.db.NewInsert().Model(&receipt{EventUUID: fmt.Sprint(i), SubscriptionID: sub.ID, SocialAccountID: account, PayloadEncrypted: encrypted, CreatedAt: s.now().Add(time.Duration(i) * time.Second)}).Exec(ctx)
+		require.NoError(t, err)
+	}
+
+	var failedReceipt receipt
+	require.NoError(t, s.db.NewSelect().Model(&failedReceipt).Where("event_uuid = ?", "0").Scan(ctx))
+	for i := 0; i < 2; i++ {
+		copy := failedReceipt
+		copy.EventUUID = fmt.Sprintf("poison-%d", i)
+		copy.CreatedAt = failedReceipt.CreatedAt.Add(time.Duration(i+1) * time.Millisecond)
+		_, err = s.db.NewInsert().Model(&copy).Exec(ctx)
+		require.NoError(t, err)
+	}
+	attempted := map[string]int{}
+	providerServer(t, s, func(w http.ResponseWriter, r *http.Request) {
+		attempted[r.URL.Path]++
+		if strings.HasSuffix(r.URL.Path, "101") {
+			w.WriteHeader(403)
+			_, _ = fmt.Fprint(w, `{"errors":[{"title":"revoked"}]}`)
+			return
+		}
+		_, _ = fmt.Fprint(w, `{"data":{"deleted":true}}`)
+	})
+	apply := func(_ context.Context, account string, _ platform.FetchMessagesResult) error {
+		if account == "account" {
+			return errors.New("account apply denied")
+		}
+		return nil
+	}
+	processed, err := s.Drain(ctx, apply, 2)
+	require.Error(t, err)
+	require.Zero(t, processed)
+	// Even after retries become due again, the next batch must prioritize work
+	// that has not yet been attempted instead of repeating the same poison rows.
+	retryTime := s.now().Add(5 * time.Minute)
+	s.now = func() time.Time { return retryTime }
+	processed, err = s.Drain(ctx, apply, 2)
+	require.Error(t, err)
+	require.Equal(t, 1, processed)
+	require.Equal(t, 2, attempted["/2/activity/subscriptions/101"])
+	require.Equal(t, 1, attempted["/2/activity/subscriptions/102"])
+	var stopped subscription
+	require.NoError(t, s.db.NewSelect().Model(&stopped).Where("id = ?", "1").Scan(ctx))
+	require.Equal(t, "stopped", stopped.State)
+}
+
+func TestSubscriptionDeletionRequiresProviderConfirmation(t *testing.T) {
+	s := testService(t)
+	seedGrant(t, s, s.now().Add(time.Hour))
+	ctx := t.Context()
+	sub := subscription{ID: "subscription", SocialAccountID: "account", WorkspaceID: "workspace", RemoteUserID: "111", RemoteSubscriptionID: "101", EventType: "dm.sent", EventLimit: 1, State: "active", ExpiresAt: s.now().Add(time.Hour), CreatedAt: s.now()}
+	_, err := s.db.NewInsert().Model(&sub).Exec(ctx)
+	require.NoError(t, err)
+	confirmed := false
+	providerServer(t, s, func(w http.ResponseWriter, _ *http.Request) {
+		if confirmed {
+			_, _ = fmt.Fprint(w, `{"data":{"deleted":true}}`)
+		} else {
+			_, _ = fmt.Fprint(w, `{"data":{"deleted":false},"errors":[{"title":"still active"}]}`)
+		}
+	})
+	require.Error(t, s.StopSubscription(ctx, "workspace", sub.ID))
+	require.NoError(t, s.db.NewSelect().Model(&sub).WherePK().Scan(ctx))
+	require.Equal(t, "active", sub.State)
+	confirmed = true
+	require.NoError(t, s.StopSubscription(ctx, "workspace", sub.ID))
+	require.NoError(t, s.db.NewSelect().Model(&sub).WherePK().Scan(ctx))
+	require.Equal(t, "stopped", sub.State)
+}
+
+func TestDefinitiveSubscriptionRejectionReleasesUnspentExposure(t *testing.T) {
+	s := testService(t)
+	seedGrant(t, s, s.now().Add(time.Hour))
+	s.config.MonthlyBudgetMicrousd = 10_000
+	s.config.ProviderSpendingLimitConfirmed = true
+	s.config.WebhookID = "12345"
+	require.NoError(t, s.costs.SetProviderCostPolicy(AddPricing(usage.ProviderCostPolicy{}, 10_000)))
+	providerServer(t, s, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(403)
+		_, _ = fmt.Fprint(w, `{"errors":[{"title":"permission denied"}]}`)
+	})
+	_, err := s.StartSubscription(t.Context(), "workspace", "account", "dm.received", 1)
+	require.Error(t, err)
+	var sub subscription
+	require.NoError(t, s.db.NewSelect().Model(&sub).Scan(t.Context()))
+	require.Equal(t, "stopped", sub.State)
+	count, err := s.db.NewSelect().Model((*models.ProviderUsageReservation)(nil)).Count(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, count)
 }

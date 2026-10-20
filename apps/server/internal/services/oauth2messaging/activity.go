@@ -75,7 +75,7 @@ func (s *Service) StartSubscription(ctx context.Context, workspaceID, accountID,
 	if err != nil {
 		// Transport failures may have activated the subscription. Retain all
 		// exposure and block recreation until operator reconciliation.
-		_, _ = s.db.NewUpdate().Model(&sub).Set("state = ?", "unknown").WherePK().Exec(ctx)
+		s.activationFailure(ctx, sub, err)
 		return SubscriptionResult{}, err
 	}
 	var response struct {
@@ -126,13 +126,25 @@ func (s *Service) StopSubscription(ctx context.Context, workspaceID, id string) 
 	if sub.RemoteSubscriptionID == "" {
 		return errors.New("x subscription identity is unknown; reconcile in the X console")
 	}
+	if _, err := s.db.NewUpdate().Model(&sub).Set("last_stop_attempt_at = ?", s.now()).WherePK().Exec(ctx); err != nil {
+		return err
+	}
 	tagged, err := s.AccessToken(ctx, workspaceID, sub.SocialAccountID)
 	if err != nil {
 		return err
 	}
-	_, err = s.request(ctx, http.MethodDelete, s.apiBase+"/2/activity/subscriptions/"+url.PathEscape(sub.RemoteSubscriptionID), nil, map[string]string{"Authorization": "Bearer " + messagingBearer(tagged)})
+	body, err := s.request(ctx, http.MethodDelete, s.apiBase+"/2/activity/subscriptions/"+url.PathEscape(sub.RemoteSubscriptionID), nil, map[string]string{"Authorization": "Bearer " + messagingBearer(tagged)})
 	if err != nil {
 		return err
+	}
+	var confirmation struct {
+		Data struct {
+			Deleted bool `json:"deleted"`
+		} `json:"data"`
+		Errors []json.RawMessage `json:"errors"`
+	}
+	if json.Unmarshal(body, &confirmation) != nil || !confirmation.Data.Deleted || len(confirmation.Errors) > 0 {
+		return errors.New("x subscription deletion was not confirmed")
 	}
 	_, err = s.db.NewUpdate().Model(&sub).Set("state = ?", "stopped").WherePK().Exec(ctx)
 	// Keep unused exposure reserved. Queued deliveries and provider invoices can
@@ -244,17 +256,19 @@ func (s *Service) Drain(ctx context.Context, apply ApplyMessages, limit int) (in
 		limit = 100
 	}
 	var receipts []receipt
-	if err := s.db.NewSelect().Model(&receipts).Where("processed = ?", false).Order("created_at ASC", "event_uuid ASC").Limit(limit).Scan(ctx); err != nil {
-		return 0, err
+	if err := s.db.NewSelect().Model(&receipts).Where("processed = ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?)", false, s.now()).Order("attempts ASC").OrderExpr("COALESCE(next_attempt_at, created_at) ASC").Order("event_uuid ASC").Limit(limit).Scan(ctx); err != nil {
+		return 0, errors.Join(err, s.Maintain(ctx))
 	}
 	processed := 0
+	var failures error
 	for _, row := range receipts {
 		if err := s.applyReceipt(ctx, apply, row); err != nil {
-			return processed, err
+			failures = errors.Join(failures, err, s.deferReceipt(ctx, row))
+			continue
 		}
 		processed++
 	}
-	return processed, s.Maintain(ctx)
+	return processed, errors.Join(failures, s.Maintain(ctx))
 }
 
 func (s *Service) applyReceipt(ctx context.Context, apply ApplyMessages, row receipt) error {
@@ -375,17 +389,45 @@ func (s *Service) Maintain(ctx context.Context) error {
 		return err
 	}
 	var subscriptions []subscription
-	if err = s.db.NewSelect().Model(&subscriptions).Where("state = ? AND (received >= event_limit OR expires_at <= ?)", "active", s.now()).Limit(100).Scan(ctx); err != nil {
+	if err = s.db.NewSelect().Model(&subscriptions).Where("state = ? AND (received >= event_limit OR expires_at <= ?) AND (last_stop_attempt_at IS NULL OR last_stop_attempt_at <= ?)", "active", s.now(), s.now().Add(-30*time.Second)).OrderExpr("COALESCE(last_stop_attempt_at, created_at) ASC").Limit(100).Scan(ctx); err != nil {
 		return err
 	}
+	var failures error
 	for _, sub := range subscriptions {
 		if err = s.StopSubscription(ctx, sub.WorkspaceID, sub.ID); err != nil {
-			return err
+			failures = errors.Join(failures, err)
 		}
 	}
-	return nil
+	return failures
 }
 
 func validLegacyIdentity(kind, id, sender, recipient, ourID string) bool {
 	return kind == "message_create" && id != "" && sender != "" && recipient != "" && (sender == ourID || recipient == ourID)
+}
+
+func (s *Service) deferReceipt(ctx context.Context, row receipt) error {
+	delay := 30 * time.Second
+	for attempt := 0; attempt < row.Attempts && delay < 10*time.Minute; attempt++ {
+		delay *= 2
+	}
+	if delay > 10*time.Minute {
+		delay = 10 * time.Minute
+	}
+	_, err := s.db.NewUpdate().Model(&row).Set("attempts = attempts + 1").Set("next_attempt_at = ?", s.now().Add(delay)).WherePK().Where("processed = ?", false).Exec(ctx)
+	return err
+}
+func (s *Service) activationFailure(ctx context.Context, sub subscription, activationErr error) {
+	var httpErr *platform.HTTPError
+	// Only explicit request/auth/validation rejection proves no subscription was
+	// created. Duplicate/conflict and server errors retain uncertain exposure.
+	if errors.As(activationErr, &httpErr) && (httpErr.StatusCode == 401 || httpErr.StatusCode == 403 || httpErr.StatusCode == 422) {
+		if sub.EventType == "dm.received" {
+			for slot := 1; slot <= sub.EventLimit; slot++ {
+				_ = s.costs.ReleaseProviderCost(ctx, slotKey(sub.ID, slot))
+			}
+		}
+		_, _ = s.db.NewUpdate().Model(&sub).Set("state = ?", "stopped").WherePK().Exec(ctx)
+		return
+	}
+	_, _ = s.db.NewUpdate().Model(&sub).Set("state = ?", "unknown").WherePK().Exec(ctx)
 }

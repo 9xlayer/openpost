@@ -21,15 +21,16 @@ import (
 )
 
 type XAdapter struct {
-	consumerKey    string
-	consumerSecret string
-	redirectURI    string
-	apiBaseURL     string
-	uploadBaseURL  string
-	requestStore   XRequestStore
-	messagingQuota XMessagingQuotaGate
-	requestMeta    sync.Map
-	cleanupDone    chan struct{}
+	consumerKey           string
+	consumerSecret        string
+	redirectURI           string
+	apiBaseURL            string
+	uploadBaseURL         string
+	requestStore          XRequestStore
+	messagingQuota        XMessagingQuotaGate
+	messagingQuotaPending sync.Map
+	requestMeta           sync.Map
+	cleanupDone           chan struct{}
 }
 
 const (

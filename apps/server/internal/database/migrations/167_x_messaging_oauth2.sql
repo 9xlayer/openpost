@@ -44,6 +44,7 @@ CREATE TABLE x_messaging_subscriptions (
   event_type TEXT NOT NULL CHECK (event_type IN ('dm.received', 'dm.sent')),
   event_limit INTEGER NOT NULL CHECK (event_limit BETWEEN 1 AND 100),
   received INTEGER NOT NULL DEFAULT 0,
+  last_stop_attempt_at TIMESTAMP,
   state TEXT NOT NULL CHECK (state IN ('pending', 'active', 'unknown', 'stopped')),
   expires_at TIMESTAMP NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -58,8 +59,10 @@ CREATE TABLE x_messaging_receipts (
   payload_encrypted BYTEA NOT NULL,
   cost_operation_key TEXT NOT NULL DEFAULT '',
   processed BOOLEAN NOT NULL DEFAULT FALSE,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX x_messaging_receipts_pending_idx ON x_messaging_receipts(processed, created_at);
+CREATE INDEX x_messaging_receipts_pending_idx ON x_messaging_receipts(processed, attempts, next_attempt_at, created_at);
 CREATE INDEX x_messaging_receipts_subscription_idx ON x_messaging_receipts(subscription_id);
 CREATE INDEX x_messaging_receipts_account_idx ON x_messaging_receipts(social_account_id);

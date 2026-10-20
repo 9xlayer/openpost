@@ -19,6 +19,11 @@ type QuotaError struct{ RetryAfter time.Duration }
 
 func (e *QuotaError) Error() string { return "X messaging request quota is exhausted" }
 
+// Unwrap lets existing provider failure classifiers retain the retry delay.
+func (e *QuotaError) Unwrap() error {
+	return &platform.HTTPError{StatusCode: http.StatusTooManyRequests, Code: "x:messaging_quota", RetryAfter: e.RetryAfter}
+}
+
 func (s *Service) ReserveXMessagingRequest(ctx context.Context, remoteUserID, operation string) error {
 	if remoteUserID == "" {
 		return errors.New("x messaging requires an account identity")
