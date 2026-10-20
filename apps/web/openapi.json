@@ -17698,6 +17698,13 @@
 					"error_code": {
 						"type": "string"
 					},
+					"job_ids": {
+						"description": "Durable collection jobs to observe before presenting upstream refresh completion",
+						"items": {
+							"type": "string"
+						},
+						"type": ["array", "null"]
+					},
 					"queued": {
 						"format": "int64",
 						"type": "integer"

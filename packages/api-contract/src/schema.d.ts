@@ -14102,6 +14102,8 @@ export interface components {
              */
             readonly $schema?: string;
             error_code?: string;
+            /** @description Durable collection jobs to observe before presenting upstream refresh completion */
+            job_ids?: string[] | null;
             /** Format: int64 */
             queued: number;
             /** @enum {string} */
