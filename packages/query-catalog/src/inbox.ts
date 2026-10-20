@@ -7,6 +7,8 @@ import { liveQueryStaleTime, openPostQueryPolicy, queryStaleTime } from "./polic
 
 export type EngagementPage = components["schemas"]["EngagementPage"];
 export type ConversationPage = components["schemas"]["ConversationPage"];
+export type EngagementDetail = components["schemas"]["EngagementDetail"];
+export type InboxSummary = components["schemas"]["InboxSummary"];
 export type MessagePage = components["schemas"]["MessagePage"];
 export type InboxPublication = components["schemas"]["PublicationResponse"];
 
@@ -43,6 +45,11 @@ export interface InboxPublicationPage {
 }
 
 export interface InboxQueryAPI {
+  getEngagement(
+    workspaceId: string,
+    itemId: string,
+    signal: AbortSignal,
+  ): Promise<EngagementDetail>;
   listEngagement(
     workspaceId: string,
     filters: NormalizedEngagementFilters,
@@ -71,6 +78,9 @@ export interface InboxQueryAPI {
 }
 
 export const inboxQueryKeys = {
+  summary: (workspaceId: string) => openPostWorkspaceKey(workspaceId, "inbox", "summary"),
+  engagementDetail: (workspaceId: string, itemId: string) =>
+    openPostWorkspaceKey(workspaceId, "engagement", "detail", itemId),
   engagementRoot: (workspaceId: string) => openPostWorkspaceKey(workspaceId, "engagement"),
   engagement: (workspaceId: string, filters: EngagementFilters) =>
     openPostWorkspaceKey(workspaceId, "engagement", normalizeEngagementFilters(filters)),
@@ -223,4 +233,33 @@ export function normalizeMessageFilters(filters: MessageFilters) {
 
 export function normalizeInboxPublicationSearch(filters: InboxPublicationSearch) {
   return { search: filters.search?.trim() ?? "", limit: filters.limit ?? 50 } as const;
+}
+
+export function engagementDetailQueryOptions(
+  api: Pick<InboxQueryAPI, "getEngagement">,
+  workspaceId: string,
+  itemId: string,
+) {
+  const queryKey = inboxQueryKeys.engagementDetail(workspaceId, itemId);
+  return {
+    ...openPostQueryPolicy(liveQueryStaleTime),
+    queryKey,
+    enabled: Boolean(workspaceId && itemId),
+    queryFn: ({ signal }: QueryFunctionContext<typeof queryKey>) =>
+      api.getEngagement(workspaceId, itemId, signal),
+  };
+}
+export interface InboxSummaryQueryAPI {
+  getInboxSummary(workspaceId: string, signal: AbortSignal): Promise<InboxSummary>;
+}
+export function inboxSummaryQueryOptions(api: InboxSummaryQueryAPI, workspaceId: string) {
+  const queryKey = inboxQueryKeys.summary(workspaceId);
+  return {
+    ...openPostQueryPolicy(liveQueryStaleTime),
+    queryKey,
+    enabled: Boolean(workspaceId),
+    refetchOnWindowFocus: true,
+    queryFn: ({ signal }: QueryFunctionContext<typeof queryKey>) =>
+      api.getInboxSummary(workspaceId, signal),
+  };
 }

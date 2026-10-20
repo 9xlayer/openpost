@@ -297,6 +297,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/x/messaging/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete X messaging authorization as the initiating user */
+        post: operations["complete-x-messaging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/x/messaging/subscriptions/{subscription_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop a known X messaging subscription */
+        delete: operations["stop-x-messaging-subscription"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{account_id}": {
         parameters: {
             query?: never;
@@ -344,6 +378,57 @@ export interface paths {
         post?: never;
         /** Revoke a provider grant and disconnect every destination that uses it */
         delete: operations["revoke-account-grant"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{account_id}/messaging/x": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Inspect supplemental X legacy messaging authorization */
+        get: operations["get-x-messaging-readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{account_id}/messaging/x/authorize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Authorize supplemental X messaging without changing publishing */
+        post: operations["authorize-x-messaging"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/accounts/{account_id}/messaging/x/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explicitly activate an expiring X legacy DM subscription */
+        post: operations["subscribe-x-messaging"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2497,6 +2582,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagement/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a stored comment and its known parent chain */
+        get: operations["get-engagement-item"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagement/{item_id}/actions": {
         parameters: {
             query?: never;
@@ -3175,6 +3277,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/inbox/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Keep an inbox view fresh while it is open */
+        post: operations["inbox-activity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wait for stored inbox changes */
+        get: operations["inbox-changes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inbox/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read Workspace unread conversation and comment counts */
+        get: operations["inbox-summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs": {
         parameters: {
             query?: never;
@@ -3637,6 +3790,40 @@ export interface paths {
         get: operations["list-conversation-messages"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{conversation_id}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Collect an older page of conversation history */
+        post: operations["collect-conversation-history"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/messages/{conversation_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry a definitely rejected message */
+        post: operations["retry-conversation-message"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7755,6 +7942,16 @@ export interface components {
             unavailable_reason?: string;
             validation_categories?: string[] | null;
         };
+        Change: {
+            conversation_id?: string;
+            deleted?: boolean;
+            engagement_id?: string;
+            /** @enum {string} */
+            kind: "conversation" | "message" | "engagement";
+            message_id?: string;
+            /** Format: int64 */
+            revision: number;
+        };
         ChangeNotificationsInputBody: {
             /**
              * Format: uri
@@ -9274,12 +9471,17 @@ export interface components {
             attachments_json: string;
             author_remote_id: string;
             body: string;
+            client_operation_id?: string;
             conversation_id: string;
             /** Format: date-time */
             created_at: string;
+            /** Format: date-time */
+            deleted_at?: string;
             direction: string;
             error_message: string;
             id: string;
+            /** Format: date-time */
+            provider_read_at?: string;
             /** Format: date-time */
             remote_created_at: string;
             remote_message_id: string;
@@ -9662,8 +9864,18 @@ export interface components {
             readonly $schema?: string;
             /** @enum {string} */
             action: "reply" | "hide" | "delete" | "like" | "unlike";
+            client_operation_id?: string;
             message?: string;
             workspace_id: string;
+        };
+        EngagementActionOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/EngagementActionOutputBody.json
+             */
+            readonly $schema?: string;
+            job_id: string;
         };
         EngagementAttachment: {
             alt_text?: string;
@@ -9672,6 +9884,16 @@ export interface components {
             thumbnail?: string;
             type: string;
             url: string;
+        };
+        EngagementDetail: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/EngagementDetail.json
+             */
+            readonly $schema?: string;
+            item: components["schemas"]["EngagementItem"];
+            parents: components["schemas"]["EngagementItem"][] | null;
         };
         EngagementItem: {
             account_username?: string;
@@ -10978,6 +11200,44 @@ export interface components {
             text: string;
             title: string;
         };
+        InboxActivityInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/InboxActivityInputBody.json
+             */
+            readonly $schema?: string;
+            client_id: string;
+            conversation_id?: string;
+            /** @enum {string} */
+            view: "chats" | "comments" | "conversation" | "away";
+            workspace_id: string;
+        };
+        InboxChangePage: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/InboxChangePage.json
+             */
+            readonly $schema?: string;
+            changes: components["schemas"]["Change"][] | null;
+            conversations: components["schemas"]["Conversation"][] | null;
+            cursor: string;
+            messages: components["schemas"]["DirectMessage"][] | null;
+            reset: boolean;
+        };
+        InboxSummary: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/InboxSummary.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            unread_comments: number;
+            /** Format: int64 */
+            unread_conversations: number;
+        };
         IngestDiagnosticsInputBody: {
             /**
              * Format: uri
@@ -11980,6 +12240,15 @@ export interface components {
             template: components["schemas"]["Template"];
             template_id: string;
         };
+        MessageHistoryInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/MessageHistoryInputBody.json
+             */
+            readonly $schema?: string;
+            workspace_id: string;
+        };
         MessageOutputBody: {
             /**
              * Format: uri
@@ -11996,6 +12265,8 @@ export interface components {
              * @example https://example.com/api/v1/schemas/MessagePage.json
              */
             readonly $schema?: string;
+            conversation?: components["schemas"]["Conversation"];
+            history_available?: boolean;
             items: components["schemas"]["DirectMessage"][] | null;
             next_cursor?: string;
         };
@@ -13660,6 +13931,19 @@ export interface components {
             /** Format: int64 */
             runway_days: number;
         };
+        Readiness: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/Readiness.json
+             */
+            readonly $schema?: string;
+            authorized: boolean;
+            can_send: boolean;
+            can_subscribe: boolean;
+            encrypted_chat: boolean;
+            reason?: string;
+        };
         "Readiness-checkResponse": {
             /**
              * Format: uri
@@ -14610,6 +14894,16 @@ export interface components {
             /** @description Current processing status */
             processing_status: string;
         };
+        RetryMessageInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/RetryMessageInputBody.json
+             */
+            readonly $schema?: string;
+            message_id: string;
+            workspace_id: string;
+        };
         ReviewFlag: {
             account_id?: string;
             field: string;
@@ -15061,6 +15355,7 @@ export interface components {
              * @example https://example.com/api/v1/schemas/SendMessageInputBody.json
              */
             readonly $schema?: string;
+            client_operation_id?: string;
             message: string;
             workspace_id: string;
         };
@@ -15548,6 +15843,19 @@ export interface components {
             job_id: string;
             queued: boolean;
             recipient: string;
+        };
+        SubscriptionResult: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/SubscriptionResult.json
+             */
+            readonly $schema?: string;
+            /** Format: date-time */
+            expires_at: string;
+            id: string;
+            /** Format: int64 */
+            reserved_events: number;
         };
         SuggestScheduleInputBody: {
             /**
@@ -17337,6 +17645,65 @@ export interface components {
             invitations: components["schemas"]["WorkspaceInvitationResponse"][] | null;
             members: components["schemas"]["WorkspaceMemberResponse"][] | null;
         };
+        XMessagingAuthorizeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/XMessagingAuthorizeInputBody.json
+             */
+            readonly $schema?: string;
+            workspace_id: string;
+        };
+        XMessagingAuthorizeOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/XMessagingAuthorizeOutputBody.json
+             */
+            readonly $schema?: string;
+            url: string;
+        };
+        XMessagingCompleteInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/XMessagingCompleteInputBody.json
+             */
+            readonly $schema?: string;
+            code: string;
+            state: string;
+        };
+        XMessagingCompleteOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/XMessagingCompleteOutputBody.json
+             */
+            readonly $schema?: string;
+            workspace_id: string;
+        };
+        XMessagingStopInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/XMessagingStopInputBody.json
+             */
+            readonly $schema?: string;
+            workspace_id: string;
+        };
+        XMessagingSubscribeInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/XMessagingSubscribeInputBody.json
+             */
+            readonly $schema?: string;
+            /** Format: int64 */
+            event_limit: number;
+            /** @enum {string} */
+            event_type: "dm.received" | "dm.sent";
+            workspace_id: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -18386,6 +18753,72 @@ export interface operations {
             };
         };
     };
+    "complete-x-messaging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XMessagingCompleteInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["XMessagingCompleteOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "stop-x-messaging-subscription": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscription_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XMessagingStopInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "disconnect-account": {
         parameters: {
             query?: never;
@@ -18660,6 +19093,109 @@ export interface operations {
             };
             /** @description Bad Gateway */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-x-messaging-readiness": {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Readiness"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "authorize-x-messaging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XMessagingAuthorizeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["XMessagingAuthorizeOutputBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "subscribe-x-messaging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["XMessagingSubscribeInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionResult"];
+                };
+            };
+            /** @description Error */
+            default: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -26573,6 +27109,39 @@ export interface operations {
             };
         };
     };
+    "get-engagement-item": {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EngagementDetail"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "queue-engagement-action": {
         parameters: {
             query?: never;
@@ -26588,12 +27157,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["EngagementActionOutputBody"];
+                };
             };
             /** @description Error */
             default: {
@@ -29511,6 +30082,101 @@ export interface operations {
             };
         };
     };
+    "inbox-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InboxActivityInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "inbox-changes": {
+        parameters: {
+            query: {
+                workspace_id: string;
+                cursor?: string;
+                wait_seconds?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxChangePage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "inbox-summary": {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxSummary"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "list-jobs": {
         parameters: {
             query?: {
@@ -31304,6 +31970,8 @@ export interface operations {
                 workspace_id: string;
                 platform?: string;
                 account_id?: string;
+                search?: string;
+                unread_only?: boolean;
                 archived?: boolean;
                 limit?: number;
                 offset?: number;
@@ -31393,6 +32061,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessagePage"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "collect-conversation-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessageHistoryInputBody"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "retry-conversation-message": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetryMessageInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DirectMessage"];
                 };
             };
             /** @description Error */

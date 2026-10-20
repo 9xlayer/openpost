@@ -137,12 +137,21 @@ export function reconcileInboxChanges(
         )
         .map((c) => c.message_id),
     );
-    if (!page.messages) {
+    if (
+      !page.messages ||
+      page.changes.some(
+        (change) =>
+          change.kind === "message" &&
+          change.conversation_id === conversationId &&
+          !change.message_id,
+      )
+    ) {
       void client.invalidateQueries({
         queryKey: inboxQueryKeys.messagesRoot(workspaceId, conversationId),
       });
       continue;
     }
+    const conversation = page.conversations?.find((c) => c.id === conversationId);
     client.setQueriesData<InfiniteData<MessagePage>>(
       { queryKey: inboxQueryKeys.messagesRoot(workspaceId, conversationId) },
       (old) => {
@@ -151,6 +160,7 @@ export function reconcileInboxChanges(
         const seen = new Set<string>();
         const pages = old.pages.map((p) => ({
           ...p,
+          ...(conversation ? { conversation } : {}),
           items: (p.items ?? [])
             .filter((m) => !removed.has(m.id))
             .map((m) => {
@@ -184,6 +194,8 @@ export function reconcileInboxChanges(
   }
   // List filters can depend on server-side message search, account permission,
   // and unread state. The server remains authoritative for their membership.
+  if (page.reset || conversationsChanged || engagementChanged)
+    void client.invalidateQueries({ queryKey: inboxQueryKeys.summary(workspaceId) });
   if (conversationsChanged && !page.reset)
     void client.invalidateQueries({ queryKey: inboxQueryKeys.conversationsRoot(workspaceId) });
   if (engagementChanged)

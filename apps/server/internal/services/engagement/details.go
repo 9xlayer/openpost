@@ -8,13 +8,13 @@ import (
 	"github.com/openpost/backend/internal/services/workspaceaccess"
 )
 
-type Detail struct {
+type EngagementDetail struct {
 	Item    models.EngagementItem   `json:"item"`
 	Parents []models.EngagementItem `json:"parents"`
 }
 
-func (s *Service) GetEngagement(ctx context.Context, actor Actor, workspaceID, itemID string) (Detail, error) {
-	result := Detail{Parents: []models.EngagementItem{}}
+func (s *Service) GetEngagement(ctx context.Context, actor Actor, workspaceID, itemID string) (EngagementDetail, error) {
+	result := EngagementDetail{Parents: []models.EngagementItem{}}
 	if err := s.authorize(ctx, workspaceID, actor, workspaceaccess.LevelRead); err != nil {
 		return result, err
 	}

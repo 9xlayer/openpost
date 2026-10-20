@@ -117,7 +117,7 @@ type EngagementDetailInput struct {
 	ItemID      string `path:"item_id"`
 	WorkspaceID string `query:"workspace_id" required:"true"`
 }
-type EngagementDetailOutput struct{ Body engagement.Detail }
+type EngagementDetailOutput struct{ Body engagement.EngagementDetail }
 
 func (h *EngagementMessagingHandler) engagementDetail(ctx context.Context, input *EngagementDetailInput) (*EngagementDetailOutput, error) {
 	if h.engagement == nil {
