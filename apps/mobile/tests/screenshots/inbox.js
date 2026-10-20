@@ -217,6 +217,40 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
       });
     if (path.startsWith("/engagement/") && method === "GET") {
       const id = path.split("/")[2];
+      if (id === "comment-nested") {
+        const root = {
+          ...comments[0],
+          id: "nested-root",
+          remote_id: "nested-root",
+          parent_remote_id: "",
+          author_name: "Lee Chen",
+          author_handle: "lee.bsky.social",
+          body: "The demo is ready.",
+        };
+        const parent = {
+          ...comments[0],
+          id: "nested-parent",
+          remote_id: "nested-parent",
+          parent_remote_id: "nested-root",
+          author_name: "Jo Silva",
+          author_handle: "jo.bsky.social",
+          body: "Can we share it today?",
+        };
+        let selected = comments.find((item) => item.id === id);
+        if (!selected) {
+          selected = {
+            ...comments[0],
+            id,
+            remote_id: id,
+            archived_at: undefined,
+            read_at: undefined,
+            parent_remote_id: "nested-parent",
+            body: "Yes. Please include the release notes.",
+          };
+          comments.push(selected);
+        }
+        return json({ item: selected, parents: [parent, root] });
+      }
       if (
         !comments.some((item) => item.id === id) &&
         ["comment-provider-failure", "comment-lost-response"].some((prefix) =>

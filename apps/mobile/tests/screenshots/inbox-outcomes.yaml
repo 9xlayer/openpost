@@ -28,3 +28,15 @@ appId: com.openpost.app
 - assertVisible: I will share the demo video today.
 - assertVisible: Check original thread
 - takeScreenshot: reply-job-failed-${SCHEME}
+- tapOn: Start a new reply
+- assertVisible: I will share the demo video today.
+- assertVisible: Previous reply receipts.*
+- takeScreenshot: reply-explicit-recovery-${SCHEME}
+- openLink: openpost:///inbox/comment/comment-nested
+- extendedWaitUntil:
+    visible: Earlier in this thread
+    timeout: 20000
+- assertVisible: Lee Chen
+- assertVisible: Jo Silva
+- assertVisible: Yes. Please include the release notes.
+- takeScreenshot: comment-ancestor-chain-${SCHEME}
