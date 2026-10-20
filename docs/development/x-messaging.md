@@ -65,7 +65,7 @@ The durable quota owner reserves before each X messaging request and retains amb
 
 Run the focused service, adapter, configuration and encryption-rotation tests. They use isolated SQLite databases and local HTTP fixtures. The tests cover real PKCE exchange, wrong provider identity, unchanged OAuth1 storage, encrypted supplemental credentials, one refresh owner, missing-grant fallback, invalid-refresh handling, quota persistence and boundaries, pre-activation budget admission, signed receipts, queue failure/replay and encrypted-XChat rejection. They never activate an external subscription.
 
-PostgreSQL migration execution remains part of the parent integration's database gate. Live provider entitlement, consent, registered webhook delivery and actual billing require an authorized installation and explicit operator budget; local fixtures do not establish them.
+Set `OPENPOST_TEST_POSTGRES_URL` to a disposable local PostgreSQL database to run the service suite against isolated temporary schemas and the full production migrations. Integration verified these service behaviors on PostgreSQL as well as SQLite. Live provider entitlement, consent, registered webhook delivery and actual billing require an authorized installation and explicit operator budget; local fixtures do not establish them.
 
 ## Official sources
 

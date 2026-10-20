@@ -17,6 +17,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/crypto"
@@ -30,6 +32,42 @@ import (
 
 func testService(t *testing.T) *Service {
 	t.Helper()
+	db := messagingTestDB(t)
+	var err error
+	encryptor := crypto.NewTokenEncryptor("0123456789abcdef0123456789abcdef")
+	s := NewService(db, encryptor, Config{ClientID: "messaging-client", ClientSecret: "messaging-secret", RedirectURI: "https://app.example/x-complete"}, usage.NewService(db))
+	_, err = db.NewInsert().Model(&models.SocialAccount{ID: "account", WorkspaceID: "workspace", Platform: "x", AccountID: "111", Slug: "x", AccessTokenEnc: []byte("unchanged-oauth1"), IsActive: true}).Exec(t.Context())
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.WorkspaceMember{WorkspaceID: "workspace", UserID: "owner", Role: models.WorkspaceRoleAdmin, Status: models.WorkspaceMemberStatusActive}).Exec(t.Context())
+	require.NoError(t, err)
+	return s
+}
+
+// The optional PostgreSQL run uses the complete production schema so quota,
+// receipt, and authorization queries exercise Hosted's types and constraints.
+func messagingTestDB(t *testing.T) *bun.DB {
+	t.Helper()
+	if dsn := os.Getenv("OPENPOST_TEST_POSTGRES_URL"); dsn != "" {
+		db, err := database.InitDBWithDriver("postgres", dsn)
+		require.NoError(t, err)
+		db.SetMaxOpenConns(1)
+		schema := "x_messaging_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+		_, err = db.ExecContext(t.Context(), "CREATE SCHEMA "+schema)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			_, dropErr := db.ExecContext(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
+			require.NoError(t, dropErr)
+			require.NoError(t, db.Close())
+		})
+		_, err = db.ExecContext(t.Context(), "SET search_path TO "+schema)
+		require.NoError(t, err)
+		require.NoError(t, database.CreateSchema(db))
+		_, err = db.NewInsert().Model(&models.Workspace{ID: "workspace", Name: "Messaging"}).Exec(t.Context())
+		require.NoError(t, err)
+		_, err = db.NewInsert().Model(&models.User{ID: "owner", Email: "owner@example.test"}).Exec(t.Context())
+		require.NoError(t, err)
+		return db
+	}
 	dbSQL, err := sql.Open(sqliteshim.ShimName, "file:"+url.QueryEscape(t.Name())+"?mode=memory&cache=shared")
 	require.NoError(t, err)
 	dbSQL.SetMaxOpenConns(1)
@@ -43,13 +81,7 @@ func testService(t *testing.T) *Service {
 	require.NoError(t, err)
 	_, err = db.ExecContext(t.Context(), string(migration))
 	require.NoError(t, err)
-	encryptor := crypto.NewTokenEncryptor("0123456789abcdef0123456789abcdef")
-	s := NewService(db, encryptor, Config{ClientID: "messaging-client", ClientSecret: "messaging-secret", RedirectURI: "https://app.example/x-complete"}, usage.NewService(db))
-	_, err = db.NewInsert().Model(&models.SocialAccount{ID: "account", WorkspaceID: "workspace", Platform: "x", AccountID: "111", Slug: "x", AccessTokenEnc: []byte("unchanged-oauth1"), IsActive: true}).Exec(t.Context())
-	require.NoError(t, err)
-	_, err = db.NewInsert().Model(&models.WorkspaceMember{WorkspaceID: "workspace", UserID: "owner", Role: models.WorkspaceRoleAdmin, Status: models.WorkspaceMemberStatusActive}).Exec(t.Context())
-	require.NoError(t, err)
-	return s
+	return db
 }
 func seedGrant(t *testing.T, s *Service, expires time.Time) {
 	t.Helper()

@@ -8,7 +8,7 @@ Web and native consume stored data through `@openpost/query-catalog`. Opening a 
 
 `startInboxUpdates` runs only while its caller is foreground, online, and displaying Inbox. It sends activity heartbeats every 20 seconds and reads `/inbox/changes` with a maximum 25-second wait. The caller cancels it on identity, Workspace, view, connectivity, or visibility changes. Native also follows app state and screen focus. Responses from a prior identity cannot update the new identity's cache.
 
-The runner patches known message IDs across cached pages, removes merged echo IDs, and updates open-chat conversation metadata. Server-filtered list membership is invalidated through the same query keys. Unseen historical messages do not append to the newest page. A history completion marker refreshes pagination while preserving cached rows. Incoming content must not steal scroll position from someone reading older messages.
+The runner cancels older in-flight message reads before applying committed events, so a late snapshot cannot overwrite a newer update. Cold reads restart after the observed commit. The runner patches known message IDs across cached pages, removes merged echo IDs, and updates open-chat conversation metadata. Server-filtered list membership is invalidated through the same query keys. Unseen historical messages do not append to the newest page. A history completion marker refreshes pagination while preserving cached rows. Incoming content must not steal scroll position from someone reading older messages.
 
 ## Commit data and feed records together
 
