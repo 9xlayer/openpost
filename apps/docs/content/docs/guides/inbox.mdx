@@ -16,9 +16,9 @@ Turning a feature off stops its future activity. Saved history stays available a
 
 On mobile, open **Inbox → Comments**. On web, choose **Inbox → Engagement**. Filter by account, unread state, or archived activity, then select a comment. Its detail shows the original post and the known parent replies. Check both the selected person and the receiving account above the public reply field before sending. A public reply is visible on the social network.
 
-OpenPost queues the action and keeps a receipt so retrying an interrupted request does not create another reply. If the provider rejects it, inspect the reported failure before retrying. Marking a comment read does not mean you have replied or resolved it.
+OpenPost queues the action and keeps a receipt so retrying an interrupted request does not create another reply. If the provider rejects it, the app keeps the failed reply and receipt after a restart. Check the original thread before choosing **Start a new reply**. That explicit action preserves the failed receipt and prepares an editable draft; sending it creates a separate intentional reply. Unconfirmed delivery keeps the original request identity. Marking a comment read does not mean you have replied or resolved it.
 
-Moderation actions depend on the provider. Use the actions shown for that comment to hide, delete, or respond. Use **Load older** to reach saved history beyond the first page.
+**Archive comment** has an Undo action. Reopen it from **Archived** to reply again. Moderation actions depend on the provider. Use the actions shown for that comment to hide, delete, or respond. Use **Load older** to reach saved history beyond the first page.
 
 ## Work with direct messages
 
@@ -28,7 +28,7 @@ Select a conversation for its full-screen chat. OpenPost keeps your draft for th
 
 **Archive** removes a chat from the main list. Use **Undo** immediately or find it under **Archived**. A new incoming message returns the chat to the main list.
 
-While Inbox is open, OpenPost collects and displays updates according to the provider's supported transport and limits. Leaving the app stops its foreground connection. Reopening Inbox refreshes stored history; mobile push alerts are not part of this release.
+While Inbox is open, OpenPost collects and displays updates according to the provider's supported transport and limits. Leaving the app stops its foreground connection. Reopening Inbox refreshes stored history. Pull to refresh to request upstream collection, then check the stored last successful collection time. The app waits for the collection jobs and reports when completion remains unconfirmed. Read-only roles can refresh stored items. Mobile push alerts are not part of this release.
 
 Check the conversation's provider restrictions before replying:
 
