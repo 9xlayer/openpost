@@ -145,6 +145,27 @@ try {
       );
     await collectScreenshots(output, scheme, startedAt);
   }
+  command("xcrun", ["simctl", "ui", simulator, "appearance", "light"]);
+  command("xcrun", ["simctl", "ui", simulator, "content_size", "accessibility-large"]);
+  const largeStartedAt = Date.now();
+  await run(
+    maestro,
+    [
+      "--udid",
+      simulator,
+      "test",
+      "--test-output-dir",
+      output,
+      "-e",
+      "SCHEME=light",
+      "-e",
+      `CASE_ID=${largeStartedAt}`,
+      "apps/mobile/tests/screenshots/inbox-large-recovery.yaml",
+    ],
+    { env },
+  );
+  await collectScreenshots(output, "light", largeStartedAt);
+  command("xcrun", ["simctl", "ui", simulator, "content_size", "large"]);
   await run("bun", ["scripts/render-mobile-gallery.mjs", output]);
   await run("bun", ["scripts/render-mobile-gallery.mjs", output, "--inbox"]);
 } finally {

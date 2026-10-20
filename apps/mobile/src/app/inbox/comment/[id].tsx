@@ -53,6 +53,13 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const moderation = useInboxJob(workspaceId, moderationJobId);
   const inFlight = useRef(false);
   const mounted = useRef(true);
+  const composerScroll = useRef<ScrollView>(null);
+  const composerFocused = useRef(false);
+  function revealComposer() {
+    requestAnimationFrame(() => {
+      if (composerFocused.current) composerScroll.current?.scrollToEnd({ animated: false });
+    });
+  }
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -148,6 +155,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
         style={{ flex: 1 }}
       >
         <ScrollView
+          style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={{ padding: spacing.large, gap: 20 }}
         >
@@ -365,111 +373,133 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
         {comment ? (
           <View
             style={{
-              paddingHorizontal: spacing.large,
-              paddingTop: 12,
-              paddingBottom: Math.max(insets.bottom, 12),
+              flexShrink: 1,
+              maxHeight: "65%",
               borderTopWidth: 1,
               borderTopColor: colors.outlineVariant,
-              gap: 8,
             }}
           >
-            <BodyText>
-              Public reply to {comment.author_name || comment.author_handle || "this person"}, as{" "}
-              {account?.alias ||
-                comment.account_username ||
-                account?.account_username ||
-                "receiving account"}{" "}
-              · {platformLabel(comment.platform)}
-            </BodyText>
-            {!replyable ? (
+            <ScrollView
+              ref={composerScroll}
+              style={{ flexGrow: 0 }}
+              keyboardShouldPersistTaps="handled"
+              onLayout={revealComposer}
+              onContentSizeChange={revealComposer}
+              contentContainerStyle={{ paddingHorizontal: spacing.large, paddingTop: 12, gap: 8 }}
+            >
               <BodyText>
-                {comment.deleted_at
-                  ? "This comment has been deleted."
-                  : comment.archived_at
-                    ? "Reopen this comment to reply."
-                    : !canEdit
-                      ? "Your Workspace role cannot reply."
-                      : "This network or account does not support replies here."}
+                Public reply to {comment.author_name || comment.author_handle || "this person"}, as{" "}
+                {account?.alias ||
+                  comment.account_username ||
+                  account?.account_username ||
+                  "receiving account"}{" "}
+                · {platformLabel(comment.platform)}
               </BodyText>
-            ) : null}
-            {reply.operation?.state === "confirmed" ? (
-              <BodyText accessibilityLiveRegion="polite">
-                Public reply confirmed by the network.
-              </BodyText>
-            ) : reply.operation?.state === "failed" ? (
-              <QueryNotice
-                message={`Public reply failed: ${reply.operation.error || "The network did not confirm delivery."} Your reply is retained. Check the original thread before writing another.`}
-              />
-            ) : reply.receipt.needsCheck ? (
-              <QueryNotice message="Reply delivery needs checking. Your reply and receipt are retained." />
-            ) : reply.operation?.jobId ? (
-              <BodyText accessibilityLiveRegion="polite">
-                Public reply queued. Waiting for network confirmation.
-              </BodyText>
-            ) : reply.operation?.state === "ambiguous" ? (
-              <BodyText>Admission is unconfirmed. Retry safely with the same reply.</BodyText>
-            ) : null}
-            {reply.error || reply.receipt.error ? (
-              <QueryNotice
-                message={reply.error || reply.receipt.error || "Could not check reply."}
-              />
-            ) : null}
-            {reply.operation?.jobId && reply.operation.state !== "confirmed" ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                <Button
-                  title="Check delivery status"
-                  intent="ordinary"
-                  disabled={reply.receipt.checking}
-                  onPress={reply.receipt.check}
+              {!replyable ? (
+                <BodyText>
+                  {comment.deleted_at
+                    ? "This comment has been deleted."
+                    : comment.archived_at
+                      ? "Reopen this comment to reply."
+                      : !canEdit
+                        ? "Your Workspace role cannot reply."
+                        : "This network or account does not support replies here."}
+                </BodyText>
+              ) : null}
+              {reply.operation?.state === "confirmed" ? (
+                <BodyText accessibilityLiveRegion="polite">
+                  Public reply confirmed by the network.
+                </BodyText>
+              ) : reply.operation?.state === "failed" ? (
+                <QueryNotice
+                  message={`Public reply failed: ${reply.operation.error || "The network did not confirm delivery."} Your reply is retained. Check the original thread before writing another.`}
                 />
-                {comment.provider_post_url && /^https?:\/\//.test(comment.provider_post_url) ? (
+              ) : reply.receipt.needsCheck ? (
+                <QueryNotice message="Reply delivery needs checking. Your reply and receipt are retained." />
+              ) : reply.operation?.jobId ? (
+                <BodyText accessibilityLiveRegion="polite">
+                  Public reply queued. Waiting for network confirmation.
+                </BodyText>
+              ) : reply.operation?.state === "ambiguous" ? (
+                <BodyText>Admission is unconfirmed. Retry safely with the same reply.</BodyText>
+              ) : null}
+              {reply.error || reply.receipt.error ? (
+                <QueryNotice
+                  message={reply.error || reply.receipt.error || "Could not check reply."}
+                />
+              ) : null}
+              {reply.operation?.jobId && reply.operation.state !== "confirmed" ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   <Button
-                    title="Check original thread"
-                    intent="link"
-                    onPress={() => void Linking.openURL(comment.provider_post_url!)}
-                  />
-                ) : null}
-                {reply.operation.state === "failed" && replyable ? (
-                  <Button
-                    title="Start a new reply"
+                    title="Check delivery status"
                     intent="ordinary"
-                    accessibilityHint="Check the original thread first, then edit the retained text and send another reply explicitly."
-                    onPress={reply.startNewReply}
+                    disabled={reply.receipt.checking}
+                    onPress={reply.receipt.check}
                   />
-                ) : null}
-              </View>
-            ) : null}
-            <TextField
-              accessibilityLabel="Public reply"
-              placeholder="Write a public reply"
-              multiline
-              editable={
-                replyable &&
-                reply.ready &&
-                !busy &&
-                (!reply.operation || reply.operation.state === "confirmed")
-              }
-              value={reply.text}
-              onChangeText={reply.setText}
-              style={{ minHeight: 64, maxHeight: 144, paddingVertical: 12 }}
-            />
-            <Button
-              title={
-                reply.operation?.state === "ambiguous" && !reply.operation.jobId
-                  ? "Retry public reply safely"
-                  : "Reply publicly"
-              }
-              intent="focal"
-              loading={reply.operation?.state === "sending"}
-              disabled={
-                !replyable ||
-                !reply.ready ||
-                !reply.text.trim() ||
-                !!reply.operation?.jobId ||
-                reply.operation?.state === "failed"
-              }
-              onPress={reply.submit}
-            />
+                  {comment.provider_post_url && /^https?:\/\//.test(comment.provider_post_url) ? (
+                    <Button
+                      title="Check original thread"
+                      intent="link"
+                      onPress={() => void Linking.openURL(comment.provider_post_url!)}
+                    />
+                  ) : null}
+                  {reply.operation.state === "failed" && replyable ? (
+                    <Button
+                      title="Start a new reply"
+                      intent="ordinary"
+                      accessibilityHint="Check the original thread first, then edit the retained text and send another reply explicitly."
+                      onPress={reply.startNewReply}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+              <TextField
+                accessibilityLabel="Public reply"
+                placeholder="Write a public reply"
+                multiline
+                editable={
+                  replyable &&
+                  reply.ready &&
+                  !busy &&
+                  (!reply.operation || reply.operation.state === "confirmed")
+                }
+                value={reply.text}
+                onChangeText={reply.setText}
+                onFocus={() => {
+                  composerFocused.current = true;
+                  revealComposer();
+                }}
+                onBlur={() => {
+                  composerFocused.current = false;
+                }}
+                style={{ minHeight: 64, maxHeight: 144, paddingVertical: 12 }}
+              />
+            </ScrollView>
+            <View
+              style={{
+                paddingHorizontal: spacing.large,
+                paddingTop: 8,
+                paddingBottom: Math.max(insets.bottom, 12),
+              }}
+            >
+              <Button
+                title={
+                  reply.operation?.state === "ambiguous" && !reply.operation.jobId
+                    ? "Retry public reply safely"
+                    : "Reply publicly"
+                }
+                intent="focal"
+                loading={reply.operation?.state === "sending"}
+                disabled={
+                  !replyable ||
+                  !reply.ready ||
+                  !reply.text.trim() ||
+                  !!reply.operation?.jobId ||
+                  reply.operation?.state === "failed"
+                }
+                onPress={reply.submit}
+              />
+            </View>
           </View>
         ) : null}
       </KeyboardAvoidingView>
