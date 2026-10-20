@@ -8,6 +8,7 @@ appId: com.openpost.app
 - assertVisible: Comments
 - tapOn: Chats
 - assertVisible: Alex Morgan.*
+- waitForAnimationToEnd
 - takeScreenshot: inbox-${SCHEME}
 - tapOn: Alex Morgan.*
 - extendedWaitUntil:
@@ -20,18 +21,23 @@ appId: com.openpost.app
 - tapOn: Send
 - assertVisible: The launch update is ready.
 - assertVisible: ".*Queued.*"
+- waitForAnimationToEnd
 - takeScreenshot: chat-${SCHEME}
 - openLink: openpost:///inbox
 - tapOn: Comments
 - extendedWaitUntil:
     visible: ".*The new workspace looks great.*"
     timeout: 20000
+- waitForAnimationToEnd
 - takeScreenshot: comments-${SCHEME}
 - tapOn: ".*The new workspace looks great.*"
 - assertVisible: Original post
 - assertVisible: Reply publicly
+- assertVisible: "Public reply to Alex Morgan, as.*"
+- waitForAnimationToEnd
 - takeScreenshot: comment-${SCHEME}
 - openLink: openpost:///media
 - assertVisible: Images
 - assertVisible: lisbon-tram.png
+- waitForAnimationToEnd
 - takeScreenshot: media-${SCHEME}

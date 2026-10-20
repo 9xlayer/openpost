@@ -84,15 +84,18 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
     if (!focused || !commentId || commentRead) return;
     void markCommentRead(workspaceId, id)
       .then(() =>
-        queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) }),
+        queryClient.invalidateQueries({
+          queryKey: inboxQueryKeys.engagementRoot(workspaceId),
+        }),
       )
       .catch(() => setError("Could not mark this comment read. Try again."));
   }, [commentId, commentRead, focused, workspaceId, id, queryClient]);
   function changeText(value: string) {
     setText(value);
-    void saveConversationDraft(scope, draftId, { text: value, sends: [] }).catch(() =>
-      setError("Could not save your reply on this device."),
-    );
+    void saveConversationDraft(scope, draftId, {
+      text: value,
+      sends: [],
+    }).catch(() => setError("Could not save your reply on this device."));
   }
   async function action(kind: "reply" | "hide" | "delete" | "like" | "unlike") {
     if (!comment || inFlight.current || !scope.current()) return;
@@ -113,7 +116,10 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
     try {
       if (operation) {
         setReplyOperation(operation);
-        await saveConversationDraft(scope, draftId, { text: submitted, sends: [operation] });
+        await saveConversationDraft(scope, draftId, {
+          text: submitted,
+          sends: [operation],
+        });
       }
       const receipt = await commentAction(
         workspaceId,
@@ -130,14 +136,17 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
         setText((current) => (current.trim() === submitted ? "" : current));
         await saveConversationDraft(scope, draftId, { text: "", sends: [] });
       }
-      await queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
+      await queryClient.invalidateQueries({
+        queryKey: inboxQueryKeys.engagementRoot(workspaceId),
+      });
     } catch (cause) {
       if (mounted.current && scope.current() && operation) {
         const uncertain: PendingSend = { ...operation, state: "ambiguous" };
         setReplyOperation(uncertain);
-        await saveConversationDraft(scope, draftId, { text: submitted, sends: [uncertain] }).catch(
-          () => undefined,
-        );
+        await saveConversationDraft(scope, draftId, {
+          text: submitted,
+          sends: [uncertain],
+        }).catch(() => undefined);
       }
       if (mounted.current && scope.current())
         setError(
@@ -230,7 +239,13 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 </View>
               ) : null}
               <View style={{ gap: 12 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
                   <AccountAvatar
                     name={comment.author_name || comment.author_handle}
                     platform={comment.platform}
@@ -255,7 +270,11 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                       uri={attachment.url}
                       accessibilityLabel={attachment.name || "Comment attachment"}
                       contentFit="contain"
-                      style={{ height: 180, width: "100%", borderRadius: shape.medium }}
+                      style={{
+                        height: 180,
+                        width: "100%",
+                        borderRadius: shape.medium,
+                      }}
                     />
                   ) : null,
                 )}
@@ -327,7 +346,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
             }}
           >
             <BodyText>
-              Public reply as{" "}
+              Public reply to {comment.author_name || comment.author_handle || "this person"}, as{" "}
               {account?.alias ||
                 comment.account_username ||
                 account?.account_username ||
