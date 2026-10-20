@@ -72,9 +72,11 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="inbox">
         <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Badge hidden={unread === 0}>
-          {unread > 99 ? "99+" : String(unread)}
-        </NativeTabs.Trigger.Badge>
+        {unread > 0 ? (
+          <NativeTabs.Trigger.Badge>
+            {unread > 99 ? "99+" : String(unread)}
+          </NativeTabs.Trigger.Badge>
+        ) : null}
         <NativeTabs.Trigger.Icon renderingMode="template" src={inbox} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="analytics">
