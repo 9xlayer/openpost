@@ -96,12 +96,35 @@ describe('web query transport', () => {
 			fallback: 'Unable to load security settings',
 			request: async () => ({
 				error: { detail: 'Session expired' },
-				response: new Response(null, { status: 401 })
+				response: new Response(null, {
+					status: 401,
+					headers: { 'WWW-Authenticate': 'Bearer error="invalid_token"' }
+				})
 			})
 		});
 
 		await expect(request).rejects.toMatchObject({ status: 401 });
 		expect(settleUnauthorized).toHaveBeenCalledWith(capturedIdentity);
+	});
+
+	it('does not settle a 401 that lacks the rejected-session challenge', async () => {
+		const settleUnauthorized = vi.fn();
+		registerQueryAuthorizationBoundary({
+			captureIdentity: () => ({ userID: 'user-a', epoch: 4 }),
+			settleUnauthorized
+		});
+
+		const request = queryGET({
+			signal: new AbortController().signal,
+			fallback: 'Unable to load security settings',
+			request: async () => ({
+				error: { detail: 'recent reauthentication is required' },
+				response: new Response(null, { status: 401 })
+			})
+		});
+
+		await expect(request).rejects.toMatchObject({ status: 401 });
+		expect(settleUnauthorized).not.toHaveBeenCalled();
 	});
 
 	it('keeps a forbidden query scoped to its resource', async () => {
