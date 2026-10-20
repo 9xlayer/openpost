@@ -62,6 +62,60 @@ describe("foreground inbox updates", () => {
     expect(client.getQueryState(key)?.isInvalidated).toBe(false);
     client.clear();
   });
+  it("updates open-chat metadata without a new message and refreshes completed history", () => {
+    const client = new QueryClient();
+    const key = inboxQueryKeys.messages("ws", "chat", {});
+    const conversation: NonNullable<MessagePage["conversation"]> = {
+      id: "chat",
+      workspace_id: "ws",
+      social_account_id: "account",
+      platform: "bluesky",
+      remote_conversation_id: "remote-chat",
+      counterpart_remote_id: "person",
+      counterpart_name: "Alex",
+      counterpart_handle: "alex.bsky.social",
+      counterpart_avatar_url: "",
+      last_message_at: "2026-10-20T12:00:00Z",
+      last_message_preview: "Hello",
+      last_remote_message_id: "new",
+      unread_count: 3,
+      created_at: "2026-10-19T12:00:00Z",
+      updated_at: "2026-10-20T12:00:00Z",
+    };
+    const rows = [message("new", "Hello", "2026-10-20T12:00:00Z")];
+    client.setQueryData(key, {
+      pages: [{ items: rows, conversation, history_available: true }],
+      pageParams: [""],
+    });
+    reconcileInboxChanges(client, "ws", {
+      cursor: "read",
+      reset: false,
+      messages: [],
+      conversations: [{ ...conversation, unread_count: 0 }],
+      changes: [{ revision: 1, kind: "conversation", conversation_id: "chat" }],
+    });
+    expect(client.getQueryData(key)).toEqual({
+      pages: [
+        {
+          items: rows,
+          conversation: { ...conversation, unread_count: 0 },
+          history_available: true,
+        },
+      ],
+      pageParams: [""],
+    });
+    expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+    reconcileInboxChanges(client, "ws", {
+      cursor: "history",
+      reset: false,
+      messages: [],
+      changes: [{ revision: 2, kind: "message", conversation_id: "chat" }],
+    });
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    // Keep the visible rows while the canonical history query refreshes its cursor.
+    expect(client.getQueryData(key)).toMatchObject({ pages: [{ items: rows }] });
+    client.clear();
+  });
   it("discards a response that arrives after its identity owner is cancelled", async () => {
     const client = new QueryClient();
     const controller = new AbortController();
