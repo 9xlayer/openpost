@@ -64,6 +64,6 @@ CREATE TABLE IF NOT EXISTS engagement_operations (
   item_id TEXT NOT NULL REFERENCES engagement_items(id) ON DELETE CASCADE,
   operation_id TEXT NOT NULL,
   body_hash TEXT NOT NULL,
-  job_id TEXT NOT NULL REFERENCES jobs(id),
+  job_id TEXT NOT NULL, -- Keep the replay receipt if job history is pruned.
   PRIMARY KEY(workspace_id,user_id,item_id,operation_id)
 );

@@ -86,6 +86,12 @@ func (s *Service) collectionCadence(ctx context.Context, account models.SocialAc
 		}
 		return 30 * time.Second
 	}
+	if account.Platform == "mastodon" {
+		var streaming bool
+		if err := s.db.NewRaw(`SELECT EXISTS(SELECT 1 FROM provider_inbox_transport_leases WHERE account_id=? AND expires_at>?)`, account.ID, s.now().UnixMilli()).Scan(ctx, &streaming); err == nil && streaming {
+			return fallback
+		}
+	}
 	// X's durable adapter quota is authoritative. Never speed up beyond its
 	// published per-user read allowance. Webhook/stream providers use REST repair.
 	if account.Platform == "x" {

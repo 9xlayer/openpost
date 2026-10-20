@@ -28,6 +28,9 @@ func (s *Service) ApplyProviderEvents(ctx context.Context, accountID string, bat
 		if err := organizationguard.LockWorkspace(txCtx, tx, account.WorkspaceID); err != nil {
 			return err
 		}
+		if !s.isMessagingEnabledWithDB(txCtx, tx, account.ID) {
+			return nil
+		}
 		// The account can be disconnected while a transport callback is waiting.
 		active, err := tx.NewSelect().Model((*models.SocialAccount)(nil)).Where("id=? AND workspace_id=? AND is_active=?", account.ID, account.WorkspaceID, true).Exists(txCtx)
 		if err != nil {

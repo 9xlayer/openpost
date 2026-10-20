@@ -30,6 +30,7 @@ type columnTarget struct {
 }
 
 var columnTargets = []columnTarget{
+	{table: "provider_inbox_receipts", primaryKeys: []string{"id"}, columns: []string{"payload_encrypted"}},
 	{table: "x_messaging_grants", primaryKeys: []string{"social_account_id"}, columns: []string{"access_token_encrypted", "refresh_token_encrypted"}},
 	{table: "x_messaging_auth_requests", primaryKeys: []string{"state"}, columns: []string{"verifier_encrypted"}},
 	{table: "x_messaging_receipts", primaryKeys: []string{"event_uuid"}, columns: []string{"payload_encrypted"}},

@@ -93,7 +93,7 @@ func (s *Service) RunTransports(ctx context.Context, ingress *providerinbox.Serv
 				defer group.Done()
 				defer close(done)
 				eligible := func(checkCtx context.Context) (bool, error) {
-					active, err := s.db.NewSelect().Model((*models.SocialAccount)(nil)).Where("id=? AND is_active=?", account.ID, true).Exists(checkCtx)
+					active, err := s.db.NewSelect().Model((*models.SocialAccount)(nil)).Where("id=? AND is_active=? AND oauth_grant_id=?", account.ID, true, account.OAuthGrantID).Exists(checkCtx)
 					return active && s.isMessagingEnabled(checkCtx, account.ID), err
 				}
 				err := ingress.RunLeasedStream(streamCtx, account.ID, eligible, func(connectionCtx context.Context) error {

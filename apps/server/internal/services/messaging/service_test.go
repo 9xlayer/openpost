@@ -9,6 +9,7 @@ import (
 	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/accountfeatures"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 )
@@ -209,4 +210,34 @@ func TestUnreadSummaryCountsConversationsBeyondPageOne(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page.Items, 100)
 	require.NotNil(t, page.NextCursor)
+}
+
+func TestAdmissionUsesTransactionBoundFeatureGate(t *testing.T) {
+	s, db, _, actor := messagingFixture(t)
+	_, err := db.NewInsert().Model(&models.AccountFeature{SocialAccountID: "account", WorkspaceID: "workspace", Feature: "messaging", Enabled: true, DecidedAt: s.now()}).Exec(t.Context())
+	require.NoError(t, err)
+	s.SetFeatureGate(accountfeatures.NewService(db, map[string]platform.Adapter{"bluesky": &platform.BlueskyAdapter{}}, nil))
+	s.SetProvider("bluesky", testProvider{})
+	ctx, cancel := context.WithTimeout(t.Context(), 300*time.Millisecond)
+	defer cancel()
+	_, err = s.QueueMessage(ctx, actor, "conversation", "one connection", "single-pool")
+	require.NoError(t, err, "the feature gate must reuse the admission transaction's SQLite connection")
+}
+
+func TestForegroundEntryWakesColdAccountAndCoalescesDevices(t *testing.T) {
+	s, db, account, actor := messagingFixture(t)
+	s.SetProvider("bluesky", testProvider{})
+	_, err := db.NewRaw(`INSERT INTO message_event_checkpoints(social_account_id,next_poll_at) VALUES(?,?)`, account.ID, s.now().Add(time.Hour)).Exec(t.Context())
+	require.NoError(t, err)
+	for _, clientID := range []string{"phone", "browser"} {
+		require.NoError(t, s.Heartbeat(t.Context(), actor, Activity{WorkspaceID: "workspace", ClientID: clientID, View: "conversation", ConversationID: "conversation"}))
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() { defer close(done); s.RunCollector(ctx) }()
+	defer func() { cancel(); <-done }()
+	require.Eventually(t, func() bool {
+		count, err := db.NewSelect().Model((*models.Job)(nil)).Where("type=?", JobTypeMessagesSync).Count(t.Context())
+		return err == nil && count == 1
+	}, 2*time.Second, 10*time.Millisecond)
 }

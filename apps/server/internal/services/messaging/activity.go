@@ -47,8 +47,31 @@ func (s *Service) Heartbeat(ctx context.Context, actor Actor, input Activity) er
 	} else {
 		input.ConversationID = ""
 	}
-	_, err := s.db.NewRaw(`INSERT INTO inbox_activity(workspace_id,user_id,client_id,view,conversation_id,social_account_id,expires_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(workspace_id,user_id,client_id) DO UPDATE SET view=EXCLUDED.view, conversation_id=EXCLUDED.conversation_id,social_account_id=EXCLUDED.social_account_id,expires_at=EXCLUDED.expires_at`, input.WorkspaceID, actor.UserID, input.ClientID, input.View, input.ConversationID, accountID, s.now().Add(time.Minute)).Exec(ctx)
-	return err
+	return s.db.RunInTx(ctx, nil, func(txCtx context.Context, tx bun.Tx) error {
+		var previous struct {
+			View            string
+			SocialAccountID string
+			ExpiresAt       time.Time
+		}
+		priorErr := tx.NewRaw(`SELECT view,social_account_id,expires_at FROM inbox_activity WHERE workspace_id=? AND user_id=? AND client_id=?`, input.WorkspaceID, actor.UserID, input.ClientID).Scan(txCtx, &previous)
+		if priorErr != nil && !errors.Is(priorErr, sql.ErrNoRows) {
+			return priorErr
+		}
+		_, err := tx.NewRaw(`INSERT INTO inbox_activity(workspace_id,user_id,client_id,view,conversation_id,social_account_id,expires_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(workspace_id,user_id,client_id) DO UPDATE SET view=EXCLUDED.view, conversation_id=EXCLUDED.conversation_id,social_account_id=EXCLUDED.social_account_id,expires_at=EXCLUDED.expires_at`, input.WorkspaceID, actor.UserID, input.ClientID, input.View, input.ConversationID, accountID, s.now().Add(time.Minute)).Exec(txCtx)
+		if err != nil {
+			return err
+		}
+		activated := errors.Is(priorErr, sql.ErrNoRows) || !previous.ExpiresAt.After(s.now()) || previous.View != input.View || previous.SocialAccountID != accountID
+		if activated && input.View != "comments" {
+			// Foreground entry wakes a cold account immediately, but never
+			// bypasses a recorded provider/authentication backoff.
+			query := tx.NewRaw(`UPDATE message_event_checkpoints SET next_poll_at=? WHERE social_account_id IN (SELECT id FROM social_accounts WHERE workspace_id=? AND (?='' OR id=?)) AND NOT EXISTS (SELECT 1 FROM messaging_sync_states AS state WHERE state.social_account_id=message_event_checkpoints.social_account_id AND state.status NOT IN ('ok','pending') AND state.next_sync_at>?)`, s.now(), input.WorkspaceID, accountID, accountID, s.now())
+			if _, err = query.Exec(txCtx); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 type InboxChangePage struct {
