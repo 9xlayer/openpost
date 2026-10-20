@@ -51,6 +51,7 @@ func (s *Service) enqueueActiveAccounts(ctx context.Context) error {
 		Join("LEFT JOIN message_event_checkpoints AS checkpoint ON checkpoint.social_account_id=social_account.id").
 		Where("social_account.is_active=?", true).
 		Where("(checkpoint.next_poll_at IS NULL OR checkpoint.next_poll_at<=?)", now).
+		Where(`NOT EXISTS (SELECT 1 FROM messaging_sync_states AS state WHERE state.social_account_id=social_account.id AND state.status NOT IN ('ok','pending') AND state.next_sync_at>?)`, now).
 		Where(`EXISTS (SELECT 1 FROM inbox_activity AS activity JOIN workspace_members AS member ON member.workspace_id=activity.workspace_id AND member.user_id=activity.user_id AND member.status='active' WHERE activity.workspace_id=social_account.workspace_id AND activity.expires_at>? AND activity.view IN ('chats','conversation') AND (activity.social_account_id='' OR activity.social_account_id=social_account.id))`, now).
 		Limit(100).Scan(ctx)
 	if err != nil {
@@ -105,7 +106,7 @@ func (s *Service) acquireCollection(ctx context.Context, accountID string) (stri
 	if _, err := s.db.NewRaw(`INSERT INTO message_event_checkpoints(social_account_id) VALUES(?) ON CONFLICT DO NOTHING`, accountID).Exec(ctx); err != nil {
 		return "", false, err
 	}
-	result, err := s.db.NewRaw(`UPDATE message_event_checkpoints SET lease_owner=?,lease_until=? WHERE social_account_id=? AND (lease_until IS NULL OR lease_until<=?)`, owner, s.now().Add(2*time.Minute), accountID, s.now()).Exec(ctx)
+	result, err := s.db.NewRaw(`UPDATE message_event_checkpoints SET lease_owner=?,lease_until=? WHERE social_account_id=? AND (lease_until IS NULL OR lease_until<=?) AND NOT EXISTS (SELECT 1 FROM messaging_sync_states AS state WHERE state.social_account_id=message_event_checkpoints.social_account_id AND state.status NOT IN ('ok','pending') AND state.next_sync_at>?)`, owner, s.now().Add(2*time.Minute), accountID, s.now(), s.now()).Exec(ctx)
 	if err != nil {
 		return "", false, err
 	}
@@ -117,10 +118,21 @@ func (s *Service) finishCollection(ctx context.Context, accountID, owner string,
 	if failed {
 		failures = "failure_count+1"
 	}
-	_, err := s.db.NewRaw(`UPDATE message_event_checkpoints SET lease_owner='',lease_until=NULL,next_poll_at=?,failure_count=`+failures+` WHERE social_account_id=? AND lease_owner=?`, s.now().Add(delay), accountID, owner).Exec(ctx)
+	proposed := s.now().Add(delay)
+	// Foreground cadence may shorten healthy polling, never a stored failure or
+	// permission deadline. Select its later value in the same atomic lease release.
+	_, err := s.db.NewRaw(`UPDATE message_event_checkpoints SET lease_owner='',lease_until=NULL,next_poll_at=COALESCE((SELECT next_sync_at FROM messaging_sync_states WHERE social_account_id=? AND status NOT IN ('ok','pending') AND next_sync_at>? ORDER BY next_sync_at DESC LIMIT 1),?),failure_count=`+failures+` WHERE social_account_id=? AND lease_owner=?`, accountID, proposed, proposed, accountID, owner).Exec(ctx)
 	if err != nil {
 		log.Printf("save inbox collection schedule: %v", err)
 	}
+}
+
+func providerRetryDelay(failure error, fallback time.Duration) time.Duration {
+	var providerError *platform.HTTPError
+	if errors.As(failure, &providerError) && providerError.RetryAfter > fallback {
+		return providerError.RetryAfter
+	}
+	return fallback
 }
 
 func (s *Service) syncIncremental(ctx context.Context, account models.SocialAccount, provider Provider, incremental platform.IncrementalMessagingAdapter, token string) error {
