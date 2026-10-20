@@ -17,6 +17,7 @@ var mastodonHTMLTags = regexp.MustCompile(`<[^>]+>`)
 
 type mastodonMessageStatus struct {
 	ID          string `json:"id"`
+	Visibility  string `json:"visibility"`
 	InReplyToID string `json:"in_reply_to_id"`
 	Content     string `json:"content"`
 	CreatedAt   string `json:"created_at"`
@@ -48,31 +49,66 @@ func (m *MastodonAdapter) MessagingSupport() MessagingSupport {
 	}
 }
 
+type mastodonMessageConversation struct {
+	ID         string                `json:"id"`
+	Unread     bool                  `json:"unread"`
+	LastStatus mastodonMessageStatus `json:"last_status"`
+	Accounts   []struct {
+		ID          string `json:"id"`
+		Acct        string `json:"acct"`
+		DisplayName string `json:"display_name"`
+		Avatar      string `json:"avatar"`
+	} `json:"accounts"`
+}
+
 func (m *MastodonAdapter) FetchMessages(ctx context.Context, accessToken string, input FetchMessagesRequest) (FetchMessagesResult, error) {
-	query := url.Values{"limit": {"40"}}
+	limit := input.Limit
+	if limit <= 0 || limit > 40 {
+		limit = 40
+	}
+	query := url.Values{"limit": {fmt.Sprint(limit)}}
 	if input.Cursor != "" {
 		query.Set("max_id", input.Cursor)
 	}
-	body, err := DoRequest(ctx, http.MethodGet, m.compat.instanceURL+"/api/v1/conversations?"+query.Encode(), nil, map[string]string{
-		headerAuthorization: bearerPrefix + accessToken,
-	})
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, m.compat.instanceURL+"/api/v1/conversations?"+query.Encode(), nil)
 	if err != nil {
-		return FetchMessagesResult{}, fmt.Errorf("fetching Mastodon conversations: %w", err)
+		return FetchMessagesResult{}, err
 	}
-	var list []struct {
-		ID         string                `json:"id"`
-		Unread     bool                  `json:"unread"`
-		LastStatus mastodonMessageStatus `json:"last_status"`
-		Accounts   []struct {
-			ID          string `json:"id"`
-			Acct        string `json:"acct"`
-			DisplayName string `json:"display_name"`
-			Avatar      string `json:"avatar"`
-		} `json:"accounts"`
+	request.Header.Set(headerAuthorization, bearerPrefix+accessToken)
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return FetchMessagesResult{}, sanitizeTransportError(err)
 	}
+	defer response.Body.Close()
+	body, err := readProviderBody(response)
+	if err != nil {
+		return FetchMessagesResult{}, err
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return FetchMessagesResult{}, NewHTTPError(response.StatusCode, response.Header, body)
+	}
+	next := ""
+	for _, link := range strings.Split(response.Header.Get("Link"), ",") {
+		target, params, ok := strings.Cut(link, ";")
+		if !ok || !strings.Contains(params, `rel="next"`) {
+			continue
+		}
+		remote, parseErr := url.Parse(strings.Trim(strings.TrimSpace(target), "<>"))
+		if parseErr == nil {
+			next = remote.Query().Get("max_id")
+		}
+	}
+
+	var list []mastodonMessageConversation
 	if err := json.Unmarshal(body, &list); err != nil {
 		return FetchMessagesResult{}, fmt.Errorf("decoding Mastodon conversations: %w", err)
 	}
+	result, err := m.hydrateMessageConversations(ctx, accessToken, input.AccountID, list)
+	result.NextCursor = next
+	return result, err
+}
+
+func (m *MastodonAdapter) hydrateMessageConversations(ctx context.Context, accessToken, accountID string, list []mastodonMessageConversation) (FetchMessagesResult, error) {
 	result := FetchMessagesResult{}
 	for _, conversation := range list {
 		statuses := []mastodonMessageStatus{conversation.LastStatus}
@@ -80,22 +116,24 @@ func (m *MastodonAdapter) FetchMessages(ctx context.Context, accessToken string,
 			contextBody, contextErr := DoRequest(ctx, http.MethodGet, m.compat.instanceURL+"/api/v1/statuses/"+url.PathEscape(conversation.LastStatus.ID)+"/context", nil, map[string]string{
 				headerAuthorization: bearerPrefix + accessToken,
 			})
-			if contextErr == nil {
-				var statusContext struct {
-					Ancestors   []mastodonMessageStatus `json:"ancestors"`
-					Descendants []mastodonMessageStatus `json:"descendants"`
-				}
-				if json.Unmarshal(contextBody, &statusContext) == nil {
-					statuses = make([]mastodonMessageStatus, 0, len(statusContext.Ancestors)+1+len(statusContext.Descendants))
-					statuses = append(statuses, statusContext.Ancestors...)
-					statuses = append(statuses, conversation.LastStatus)
-					statuses = append(statuses, statusContext.Descendants...)
-				}
+			if contextErr != nil {
+				return FetchMessagesResult{}, contextErr
 			}
+			var statusContext struct {
+				Ancestors   []mastodonMessageStatus `json:"ancestors"`
+				Descendants []mastodonMessageStatus `json:"descendants"`
+			}
+			if err := json.Unmarshal(contextBody, &statusContext); err != nil {
+				return FetchMessagesResult{}, fmt.Errorf("decoding Mastodon message context: %w", err)
+			}
+			statuses = make([]mastodonMessageStatus, 0, len(statusContext.Ancestors)+1+len(statusContext.Descendants))
+			statuses = append(statuses, statusContext.Ancestors...)
+			statuses = append(statuses, conversation.LastStatus)
+			statuses = append(statuses, statusContext.Descendants...)
 		}
 		counterpartID, counterpartHandle, counterpartName, counterpartAvatar := "", "", "", ""
 		for _, account := range conversation.Accounts {
-			if account.ID != input.AccountID {
+			if account.ID != accountID {
 				counterpartID, counterpartHandle = account.ID, prefixHandle(account.Acct)
 				counterpartName, counterpartAvatar = account.DisplayName, account.Avatar
 				break
@@ -103,12 +141,12 @@ func (m *MastodonAdapter) FetchMessages(ctx context.Context, accessToken string,
 		}
 		messages := make([]ProviderMessage, 0, len(statuses))
 		for _, status := range statuses {
-			if status.ID == "" {
+			if status.ID == "" || status.Visibility != "direct" {
 				continue
 			}
 			createdAt, _ := time.Parse(time.RFC3339, status.CreatedAt)
 			direction := "inbound"
-			if status.Account.ID == input.AccountID {
+			if status.Account.ID == accountID {
 				direction = "outbound"
 			}
 			attachments := make([]MessageAttachment, 0, len(status.MediaAttachments))
