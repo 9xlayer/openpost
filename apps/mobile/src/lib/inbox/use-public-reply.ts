@@ -16,7 +16,7 @@ export function usePublicReply(workspaceId: string, itemId: string, canEdit: boo
     const draftId = `comment-${itemId}`;
     return new PublicReplySession({
       read: () => readConversationDraft(scope, draftId),
-      write: (draft) => saveConversationDraft(scope, draftId, draft),
+      write: (draft, admission) => saveConversationDraft(scope, draftId, draft, admission),
       admit: (body, operationId) => commentAction(workspaceId, itemId, "reply", body, operationId),
       newOperationId: newInboxOperationId,
       current: scope.current,

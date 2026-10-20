@@ -8,6 +8,8 @@ import {
   newInboxOperationId,
   readConversationDraft,
   saveConversationDraft,
+  restoreUnsentConversationSend,
+  type DraftAdmission,
 } from "./storage";
 import { reconcileSends, type ConversationDraft, type PendingSend } from "./state";
 
@@ -22,13 +24,15 @@ export function useChatComposer(
   const current = useRef(draft);
   const mounted = useRef(true);
   const inFlight = useRef(new Set<string>());
+  const admitting = useRef(false);
+  const [admissionBusy, setAdmissionBusy] = useState(false);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const update = useCallback(
-    (next: ConversationDraft) => {
+    (next: ConversationDraft, admission?: DraftAdmission) => {
       current.current = next;
       if (mounted.current && scope.current()) setDraft(next);
-      return saveConversationDraft(scope, conversationId, next);
+      return saveConversationDraft(scope, conversationId, next, admission);
     },
     [scope, conversationId],
   );
@@ -61,7 +65,7 @@ export function useChatComposer(
   }, [messages, ready, update]); // update reads the latest draft to preserve text typed during refresh.
 
   async function submit(existing?: PendingSend) {
-    if (!ready || !scope.current() || !getInboxOnline()) return;
+    if (!ready || admitting.current || !scope.current() || !getInboxOnline()) return;
     const body = existing?.body ?? current.current.text.trim();
     if (!body) return;
     const send: PendingSend = {
@@ -78,10 +82,22 @@ export function useChatComposer(
     const before = current.current;
     try {
       // A crash before dispatch leaves an unconfirmed operation, with the same UUID on retry.
-      await update({
-        text: existing ? before.text : "",
-        sends: [...before.sends.filter((row) => row.operationId !== send.operationId), send],
-      });
+      admitting.current = true;
+      setAdmissionBusy(true);
+      const saved = await update(
+        {
+          text: existing ? before.text : "",
+          sends: [...before.sends.filter((row) => row.operationId !== send.operationId), send],
+        },
+        { eligible: () => mounted.current && getInboxOnline(), rollback: before },
+      );
+      admitting.current = false;
+      if (mounted.current) setAdmissionBusy(false);
+      if (!saved) {
+        current.current = before;
+        if (mounted.current && scope.current()) setDraft(before);
+        return;
+      }
       if (!scope.current()) return;
       const response = await sendMessage(workspaceId, conversationId, body, send.operationId);
       if (!scope.current()) return;
@@ -108,19 +124,27 @@ export function useChatComposer(
         ),
       });
     } catch (cause) {
-      if (mounted.current && scope.current()) {
-        if (cause instanceof InboxOfflineError) {
-          await update({
-            text: existing
-              ? current.current.text
-              : [body, current.current.text].filter(Boolean).join("\n"),
-            sends: current.current.sends.flatMap((row) =>
-              row.operationId !== send.operationId ? [row] : existing ? [existing] : [],
-            ),
-          });
+      if (cause instanceof InboxOfflineError && scope.current()) {
+        const restored = await restoreUnsentConversationSend(
+          scope,
+          conversationId,
+          send,
+          existing,
+        ).catch(() => {
+          if (mounted.current && scope.current())
+            setError("Could not restore the unsent draft. Reopen this chat before retrying.");
+          return undefined;
+        });
+        if (mounted.current && scope.current()) {
+          if (restored) {
+            current.current = restored;
+            setDraft(restored);
+          }
           setError(cause.message);
-          return;
         }
+        return;
+      }
+      if (mounted.current && scope.current()) {
         const message = cause instanceof Error ? cause.message : "Delivery could not be confirmed.";
         const state =
           cause instanceof OpenPostQueryError &&
@@ -141,14 +165,18 @@ export function useChatComposer(
         });
       }
     } finally {
+      admitting.current = false;
+      if (mounted.current) setAdmissionBusy(false);
       inFlight.current.delete(send.operationId);
     }
   }
   return {
     draft,
     ready,
+    admissionBusy,
     error,
     setText: (text: string) => {
+      if (admitting.current) return;
       void update({ ...current.current, text }).catch(() =>
         setError("Could not save this draft on your device."),
       );

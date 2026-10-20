@@ -1,3 +1,4 @@
+import type { DraftAdmission } from "./storage";
 import type { ConversationDraft, PendingSend } from "./state";
 
 type ReplyJob = { id: string; status: string; last_error?: string };
@@ -10,7 +11,7 @@ interface ReplySnapshot {
 }
 interface ReplyDependencies {
   read(): Promise<ConversationDraft>;
-  write(draft: ConversationDraft): Promise<void>;
+  write(draft: ConversationDraft, admission?: DraftAdmission): Promise<boolean | void>;
   admit(body: string, operationId: string): Promise<{ job_id?: string }>;
   newOperationId(): string;
   canEdit(): boolean;
@@ -44,15 +45,23 @@ export class PublicReplySession {
     this.value = value;
     for (const listener of this.listeners) listener();
   }
-  private async persist(update: Omit<ReplySnapshot, "history"> & { history?: PendingSend[] }) {
+  private async persist(
+    update: Omit<ReplySnapshot, "history"> & { history?: PendingSend[] },
+    admission?: DraftAdmission,
+  ) {
     const value: ReplySnapshot = { ...update, history: update.history ?? this.value.history };
     if (!this.current()) return;
-    await this.dependencies.write({
-      text: value.text,
-      sends: value.operation ? [value.operation] : [],
-      ...(value.history.length ? { replyHistory: value.history } : {}),
-    });
+    const saved = await this.dependencies.write(
+      {
+        text: value.text,
+        sends: value.operation ? [value.operation] : [],
+        ...(value.history.length ? { replyHistory: value.history } : {}),
+      },
+      admission,
+    );
+    if (saved === false) return false;
     this.emit(value);
+    return true;
   }
   async restore() {
     try {
@@ -135,7 +144,21 @@ export class PublicReplySession {
     const before = this.value;
     this.inFlight = true;
     try {
-      await this.persist({ ready: true, text: body, operation });
+      const saved = await this.persist(
+        { ready: true, text: body, operation },
+        {
+          eligible: () => this.current() && this.dependencies.online(),
+          rollback: {
+            text: before.text,
+            sends: before.operation ? [before.operation] : [],
+            ...(before.history.length ? { replyHistory: before.history } : {}),
+          },
+        },
+      );
+      if (saved === false) {
+        this.emit(before);
+        return;
+      }
       if (!this.current()) return;
       if (!this.dependencies.online()) {
         await this.persist(before);

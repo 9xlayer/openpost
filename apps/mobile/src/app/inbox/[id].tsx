@@ -358,7 +358,7 @@ function ChatContent({
               placeholder={canCompose ? "Message" : "Reply unavailable"}
               value={composer.draft.text}
               onChangeText={composer.setText}
-              editable={canCompose && composer.ready}
+              editable={canCompose && composer.ready && !composer.admissionBusy}
               multiline
               maxLength={10000}
               style={{
@@ -372,7 +372,9 @@ function ChatContent({
             <Button
               title="Send"
               intent="focal"
-              disabled={!canSend || !composer.ready || !composer.draft.text.trim()}
+              disabled={
+                !canSend || !composer.ready || composer.admissionBusy || !composer.draft.text.trim()
+              }
               onPress={() => {
                 nearLatest.current = true;
                 list.current?.scrollToOffset({ offset: 0, animated: false });

@@ -3,7 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { uuid } from "expo-modules-core";
 import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "../api/client";
-import { parseDraft, type ConversationDraft } from "./state";
+import { parseDraft, type ConversationDraft, type PendingSend } from "./state";
 
 const directory = `${FileSystem.documentDirectory}inbox/`;
 let pending: Promise<unknown> = Promise.resolve();
@@ -33,15 +33,57 @@ export function readConversationDraft(scope: InboxStorageScope, conversationId: 
     return parseDraft(await FileSystem.readAsStringAsync(file));
   });
 }
+export interface DraftAdmission {
+  eligible(): boolean;
+  rollback: ConversationDraft;
+}
 export function saveConversationDraft(
   scope: InboxStorageScope,
   conversationId: string,
   draft: ConversationDraft,
+  admission?: DraftAdmission,
+) {
+  return enqueue(async () => {
+    if (!scope.current() || scope.generation !== generation) return false;
+    if (admission && !admission.eligible()) return false;
+    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
+    await FileSystem.writeAsStringAsync(path(scope, conversationId), JSON.stringify(draft));
+    // Roll back before a queued remount can read an operation that never reached HTTP.
+    if (admission && !admission.eligible()) {
+      if (scope.current() && scope.generation === generation)
+        await FileSystem.writeAsStringAsync(
+          path(scope, conversationId),
+          JSON.stringify(admission.rollback),
+        );
+      return false;
+    }
+    return true;
+  });
+}
+/** Restore only the definitely-undispatched operation, retaining any newer saved text or receipt. */
+export function restoreUnsentConversationSend(
+  scope: InboxStorageScope,
+  conversationId: string,
+  send: PendingSend,
+  previous?: PendingSend,
 ) {
   return enqueue(async () => {
     if (!scope.current() || scope.generation !== generation) return;
-    await FileSystem.makeDirectoryAsync(directory, { intermediates: true });
-    await FileSystem.writeAsStringAsync(path(scope, conversationId), JSON.stringify(draft));
+    const file = path(scope, conversationId);
+    if (!(await FileSystem.getInfoAsync(file)).exists) return;
+    const draft = parseDraft(await FileSystem.readAsStringAsync(file));
+    const operation = draft.sends.find((row) => row.operationId === send.operationId);
+    if (!operation || operation.serverId || !["sending", "ambiguous"].includes(operation.state))
+      return draft;
+    const restored: ConversationDraft = {
+      ...draft,
+      text: previous ? draft.text : [send.body, draft.text].filter(Boolean).join("\n"),
+      sends: draft.sends.flatMap((row) =>
+        row.operationId !== send.operationId ? [row] : previous ? [previous] : [],
+      ),
+    };
+    await FileSystem.writeAsStringAsync(file, JSON.stringify(restored));
+    return restored;
   });
 }
 export async function purgeInboxDeviceData() {
