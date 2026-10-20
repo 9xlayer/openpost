@@ -43,6 +43,7 @@
 			<figure class="overflow-hidden rounded-md border">
 				{#if media.mime_type.startsWith('image/')}<MediaPreviewImage
 						mediaId={media.id}
+						thumbnailSize="original"
 						alt={media.alt_text || media.original_filename}
 						class="max-h-64 w-full object-contain"
 					/>

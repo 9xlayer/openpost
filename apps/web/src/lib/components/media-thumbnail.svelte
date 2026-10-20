@@ -14,6 +14,7 @@
 		fallbackAlt = '',
 		class: className = '',
 		loading = 'lazy',
+		still,
 		onMissing,
 		noStill
 	}: {
@@ -21,6 +22,11 @@
 		fallbackAlt?: string;
 		class?: string;
 		loading?: 'lazy' | 'eager';
+		/**
+		 * Override the still image. Use a larger tier or the original where the
+		 * tile is bigger than the item's default thumbnail tier.
+		 */
+		still?: string | null;
 		onMissing?: () => void;
 		noStill?: Snippet;
 	} = $props();
@@ -28,7 +34,7 @@
 	const kind = $derived(mediaThumbKind(item.mime_type));
 	const stillURL = $derived.by(() => {
 		if (kind !== 'image' && kind !== 'video') return '';
-		const selected = mediaThumbnailURL(item);
+		const selected = still || mediaThumbnailURL(item);
 		return selected ? getAuthenticatedMediaURL(selected) : '';
 	});
 	const originalURL = $derived(getAuthenticatedMediaURL(item.url));
