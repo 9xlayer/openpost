@@ -3,7 +3,7 @@ import {
 	MEDIA_MAX_BYTES,
 	OUTPUT_MAX_BYTES,
 	mediaLimitLabel
-} from '../_components/tools/local-media';
+} from '../_components/tools/local-media-limits';
 
 const privacy = `Your files stay on your device. Conversion runs in your browser, using its available decoders and encoders. MP3 and AAC encoders load when needed. Keep the tab open and download your result before leaving. Input files are limited to ${mediaLimitLabel(MEDIA_MAX_BYTES)} and output files to ${mediaLimitLabel(OUTPUT_MAX_BYTES)}.`;
 const outputAdvice = {
