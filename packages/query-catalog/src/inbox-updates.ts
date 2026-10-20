@@ -114,6 +114,7 @@ export function reconcileInboxChanges(
   page: InboxChangePage,
 ): void {
   if (page.reset) {
+    void client.cancelQueries({ queryKey: openPostWorkspaceKey(workspaceId, "messages") });
     void client.invalidateQueries({ queryKey: openPostWorkspaceKey(workspaceId, "messages") });
   }
   const conversationIds = new Set<string>();
@@ -125,6 +126,13 @@ export function reconcileInboxChanges(
     if (change.conversation_id) conversationIds.add(change.conversation_id);
   }
   for (const conversationId of conversationIds) {
+    const messageKey = inboxQueryKeys.messagesRoot(workspaceId, conversationId);
+    const hasColdRead = client
+      .getQueriesData<InfiniteData<MessagePage>>({ queryKey: messageKey })
+      .some(([, data]) => !data?.pages.length);
+    // Stop an older in-flight snapshot before patching committed events. A cold
+    // read has no rows to patch, so restart it after the observed commit.
+    void client.cancelQueries({ queryKey: messageKey });
     const records = (page.messages ?? []).filter((item) => item.conversation_id === conversationId);
     const removed = new Set(
       page.changes
@@ -138,6 +146,7 @@ export function reconcileInboxChanges(
         .map((c) => c.message_id),
     );
     if (
+      hasColdRead ||
       !page.messages ||
       page.changes.some(
         (change) =>

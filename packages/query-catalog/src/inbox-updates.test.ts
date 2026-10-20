@@ -1,4 +1,4 @@
-import { QueryClient } from "@tanstack/query-core";
+import { QueryClient, QueryObserver, type InfiniteData } from "@tanstack/query-core";
 import { describe, expect, it } from "vitest";
 import { reconcileInboxChanges, startInboxUpdates } from "./inbox-updates";
 import { inboxQueryKeys, type MessagePage } from "./inbox";
@@ -116,6 +116,52 @@ describe("foreground inbox updates", () => {
     expect(client.getQueryData(key)).toMatchObject({ pages: [{ items: rows }] });
     client.clear();
   });
+  it.each([false, true])(
+    "keeps committed updates when a %s cached read returns late",
+    async (warm) => {
+      const client = new QueryClient();
+      const key = inboxQueryKeys.messages("ws", "chat", {});
+      const before: InfiniteData<MessagePage> = {
+        pages: [{ items: [message("new", "before", "2026-10-20")] }],
+        pageParams: [""],
+      };
+      const after: InfiniteData<MessagePage> = {
+        pages: [{ items: [message("new", "after", "2026-10-20")] }],
+        pageParams: [""],
+      };
+      if (warm) client.setQueryData(key, before);
+      let release: (data: InfiniteData<MessagePage>) => void = () => {};
+      const late = new Promise<InfiniteData<MessagePage>>((resolve) => {
+        release = resolve;
+      });
+      let calls = 0;
+      const observer = new QueryObserver(client, {
+        queryKey: key,
+        retry: false,
+        queryFn: () => {
+          calls += 1;
+          return calls === 1 ? late : Promise.resolve(after);
+        },
+      });
+      const unsubscribe = observer.subscribe(() => {});
+      try {
+        reconcileInboxChanges(client, "ws", {
+          cursor: "commit",
+          reset: false,
+          changes: [{ revision: 1, kind: "message", conversation_id: "chat", message_id: "new" }],
+          messages: [message("new", "after", "2026-10-20")],
+        });
+        release(before);
+        await late;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(observer.getCurrentResult().data).toEqual(after);
+        expect(observer.getCurrentResult().fetchStatus).toBe("idle");
+      } finally {
+        unsubscribe();
+        client.clear();
+      }
+    },
+  );
   it("discards a response that arrives after its identity owner is cancelled", async () => {
     const client = new QueryClient();
     const controller = new AbortController();
