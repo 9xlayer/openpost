@@ -416,8 +416,9 @@ function Composer({
     if (accountIds.length === 0) {
       readinessAbort.current?.abort();
       lastReadinessSignature.current = signature;
-      setReadinessByAccount({});
-      setReadinessError(null);
+      // Readiness only applies to selectable destinations; consumers read the
+      // effective values below, so no results are shown while none are
+      // selected.
       return;
     }
     if (signature === lastReadinessSignature.current) return;
@@ -435,9 +436,17 @@ function Composer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [body, readinessAccountsKey, readinessAttachmentsKey, readinessNonce, pub]);
 
+  // Readiness describes the destinations selected now. Clearing the last one
+  // leaves earlier results in state, so consumers read these derived values and
+  // never show a capability or error for a destination that is no longer
+  // selectable.
+  const hasSelectableDestinations = selectableAccountIds.length > 0;
+  const effectiveReadinessByAccount: Record<string, ResolvedDestinationCapability> =
+    hasSelectableDestinations ? readinessByAccount : {};
+  const effectiveReadinessError = hasSelectableDestinations ? readinessError : null;
   const attentionCount = selectableAccountIds.filter((accountId) =>
-    readinessByAccount[accountId]
-      ? destinationNeedsAttention(readinessByAccount[accountId])
+    effectiveReadinessByAccount[accountId]
+      ? destinationNeedsAttention(effectiveReadinessByAccount[accountId])
       : false,
   ).length;
 
@@ -1075,7 +1084,7 @@ function Composer({
   }
 
   function renderAccountNote(accountId: string) {
-    const capability = readinessByAccount[accountId];
+    const capability = effectiveReadinessByAccount[accountId];
     if (!capability || !destinationNeedsAttention(capability)) return null;
     return (
       <BodyText accessibilityRole="alert" numberOfLines={2} style={{ color: colors.error }}>
@@ -1501,7 +1510,7 @@ function Composer({
             activeSetId={activeSocialSetId}
             renditions={pub.renditions}
             notice={
-              readinessError ? (
+              effectiveReadinessError ? (
                 <QueryNotice
                   message="Could not check destination readiness. You can keep editing."
                   retry={retryReadiness}

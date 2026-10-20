@@ -161,11 +161,11 @@ describe("calendarOccurrence", () => {
   // Same status-to-field rule as the web owner `publicationCalendarOccurrence`:
   // scheduled/publishing use the authored schedule, published prefers the
   // recorded run, every other status has no occurrence.
-  const cases: Array<{
+  const cases: {
     status: string;
     pub: Parameters<typeof calendarOccurrence>[0];
     expected: string | null;
-  }> = [
+  }[] = [
     {
       status: "draft",
       pub: { status: "draft", scheduled_at: "2026-10-18T10:00:00Z" },

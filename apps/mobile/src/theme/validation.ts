@@ -8,7 +8,6 @@ import {
   compositeValidationColor,
   contrastRatio as sharedContrastRatio,
   oklabDistance,
-  toValidationOklab,
   type ThemeValidationRgba,
 } from "@openpost/dither/theme-validation";
 import {
@@ -385,10 +384,6 @@ function compositeColor(foreground: Rgba, background: Rgba): Rgba {
   return fromSharedColor(
     compositeValidationColor(toSharedColor(foreground), toSharedColor(background)),
   );
-}
-
-function toOklab(color: Rgba): readonly [number, number, number] {
-  return toValidationOklab(toSharedColor(color));
 }
 
 function validTextRole(value: NativeTextRole | null | undefined): boolean {

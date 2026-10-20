@@ -7,7 +7,7 @@ import {
 } from "@openpost/query-catalog";
 import { gradientSvg } from "@openpost/dither/paint";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SvgXml } from "react-native-svg";
 
@@ -57,21 +57,20 @@ function AnalyticsDashboard() {
     accountId,
   );
   const selectedAccount = overviewAccounts.find((account) => account.id === effectiveAccountId);
-  useEffect(() => {
-    // Reconcile a selection that a successful fresh overview no longer
-    // contains. A transient empty (loading), error, or offline/paused
-    // response never clears the filter.
-    if (
-      accountId &&
-      !effectiveAccountId &&
-      overview &&
-      !query.isPending &&
-      !query.isError &&
-      query.fetchStatus !== "paused"
-    ) {
-      setAccountId("");
-    }
-  }, [accountId, effectiveAccountId, overview, query.fetchStatus, query.isError, query.isPending]);
+  // A settled fresh overview that no longer describes the selected account
+  // (it was revoked or removed) clears the filter. Adjusting state here is the
+  // supported React pattern; a transient empty (loading), error, or
+  // offline/paused response never clears the filter.
+  if (
+    accountId &&
+    !effectiveAccountId &&
+    overview &&
+    !query.isPending &&
+    !query.isError &&
+    query.fetchStatus !== "paused"
+  ) {
+    setAccountId("");
+  }
   const error = query.error instanceof Error ? query.error.message : "Try again.";
   return (
     <Screen>
