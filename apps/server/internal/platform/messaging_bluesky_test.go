@@ -28,7 +28,7 @@ func TestBlueskyMessageHistorySkipsDeletedAndSystemMessages(t *testing.T) {
 				{"$type":"chat.bsky.convo.defs#messageView","id":"m4","rev":"4","text":"hi back","sender":{"did":"did:plc:me"},"sentAt":"2026-09-01T10:04:00Z"},
 				{"$type":"chat.bsky.convo.defs#systemMessageView","id":"m3","rev":"3","sentAt":"2026-09-01T10:03:00Z","data":{"$type":"chat.bsky.convo.defs#systemMessageDataMemberJoin","member":{"did":"did:plc:bob"}}},
 				{"$type":"chat.bsky.convo.defs#deletedMessageView","id":"m2","rev":"2","sender":{"did":"did:plc:alice"},"sentAt":"2026-09-01T10:02:00Z"},
-				{"$type":"chat.bsky.convo.defs#messageView","id":"m1","rev":"1","text":"hello","sender":{"did":"did:plc:alice"},"sentAt":"2026-09-01T10:01:00Z"}
+				{"$type":"chat.bsky.convo.defs#messageView","id":"m1","rev":"1","text":"hello","sender":{"did":"did:plc:alice"},"sentAt":"2026-09-01T10:01:00Z","reactions":[{"value":"❤","sender":{"did":"did:plc:me"},"createdAt":"2026-09-01T10:05:00Z"}]}
 			]}`), nil
 		default:
 			t.Fatalf("unexpected request %s %s", req.Method, req.URL.String())
@@ -43,6 +43,10 @@ func TestBlueskyMessageHistorySkipsDeletedAndSystemMessages(t *testing.T) {
 	require.Equal(t, "m1", messages[0].ID)
 	require.Equal(t, "inbound", messages[0].Direction)
 	require.Equal(t, "hello", messages[0].Body)
+	require.True(t, messages[0].ReactionsKnown)
+	require.Len(t, messages[0].Reactions, 1)
+	require.Equal(t, "did:plc:me", messages[0].Reactions[0].ActorRemoteID)
+	require.Equal(t, "❤", messages[0].Reactions[0].Value)
 	require.Equal(t, "m4", messages[1].ID)
 	require.Equal(t, "outbound", messages[1].Direction)
 	require.Equal(t, "hi back", messages[1].Body)

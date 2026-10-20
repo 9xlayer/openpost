@@ -7,18 +7,27 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
 
 var ErrMessageBootstrapCursorRequired = errors.New("provider log did not supply a bootstrap cursor")
 
-type blueskyChatMessage struct {
-	Type   string `json:"$type"`
-	ID     string `json:"id"`
-	Text   string `json:"text"`
-	SentAt string `json:"sentAt"`
+type blueskyChatReaction struct {
+	Value  string `json:"value"`
 	Sender struct {
+		DID string `json:"did"`
+	} `json:"sender"`
+}
+
+type blueskyChatMessage struct {
+	Reactions []blueskyChatReaction `json:"reactions"`
+	Type      string                `json:"$type"`
+	ID        string                `json:"id"`
+	Text      string                `json:"text"`
+	SentAt    string                `json:"sentAt"`
+	Sender    struct {
 		DID string `json:"did"`
 	} `json:"sender"`
 }
@@ -59,12 +68,29 @@ func (m blueskyChatMessage) provider(accountID string) ProviderMessage {
 	if m.Sender.DID == accountID {
 		direction = "outbound"
 	}
-	return ProviderMessage{ID: m.ID, Direction: direction, AuthorRemoteID: m.Sender.DID, Body: m.Text, RemoteCreatedAt: at}
+	result := ProviderMessage{ID: m.ID, Direction: direction, AuthorRemoteID: m.Sender.DID, Body: m.Text, RemoteCreatedAt: at, ReactionsKnown: true}
+	for _, reaction := range m.Reactions {
+		result.Reactions = append(result.Reactions, ProviderMessageReaction{MessageID: m.ID, ActorRemoteID: reaction.Sender.DID, Value: reaction.Value})
+	}
+	return result
 }
 
 // FetchMessageEvents consumes one bounded prefix of the official account log.
 // getLog has no limit argument. A local prefix checkpoints its final revision,
 // so unprocessed events on the server page are replayed on the next request.
+type blueskyChatLog struct {
+	Type           string             `json:"$type"`
+	Rev            string             `json:"rev"`
+	ConversationID string             `json:"convoId"`
+	Message        blueskyChatMessage `json:"message"`
+	Reaction       struct {
+		Value  string `json:"value"`
+		Sender struct {
+			DID string `json:"did"`
+		} `json:"sender"`
+	} `json:"reaction"`
+}
+
 func (b *BlueskyAdapter) FetchMessageEvents(ctx context.Context, token string, input FetchMessageEventsRequest) (FetchMessageEventsResult, error) {
 	path := "/xrpc/chat.bsky.convo.getLog"
 	if input.Cursor != "" {
@@ -75,32 +101,17 @@ func (b *BlueskyAdapter) FetchMessageEvents(ctx context.Context, token string, i
 		return FetchMessageEventsResult{}, err
 	}
 	var response struct {
-		Cursor string `json:"cursor"`
-		Logs   []struct {
-			Type           string             `json:"$type"`
-			Rev            string             `json:"rev"`
-			ConversationID string             `json:"convoId"`
-			Message        blueskyChatMessage `json:"message"`
-			Reaction       struct {
-				Value  string `json:"value"`
-				Sender struct {
-					DID string `json:"did"`
-				} `json:"sender"`
-			} `json:"reaction"`
-		} `json:"logs"`
+		Cursor string           `json:"cursor"`
+		Logs   []blueskyChatLog `json:"logs"`
 	}
 	if err = json.Unmarshal(body, &response); err != nil {
 		return FetchMessageEventsResult{}, fmt.Errorf("decoding Bluesky log: %w", err)
 	}
-	result := FetchMessageEventsResult{NextCursor: response.Cursor, Bootstrap: input.Cursor == ""}
-	if result.NextCursor == "" {
-		result.NextCursor = input.Cursor
-	}
-	if result.Bootstrap {
-		if result.NextCursor == "" {
+	if input.Cursor == "" {
+		if response.Cursor == "" {
 			return FetchMessageEventsResult{}, ErrMessageBootstrapCursorRequired
 		}
-		return result, nil
+		return FetchMessageEventsResult{NextCursor: response.Cursor, Bootstrap: true}, nil
 	}
 	limit := input.Limit
 	if limit <= 0 || limit > 100 {
@@ -110,60 +121,86 @@ func (b *BlueskyAdapter) FetchMessageEvents(ctx context.Context, token string, i
 	if len(logs) > limit {
 		logs = logs[:limit]
 	}
+	result := FetchMessageEventsResult{NextCursor: input.Cursor, HasMore: len(logs) > 0}
 	if len(logs) > 0 {
 		result.NextCursor = logs[len(logs)-1].Rev
+		if result.NextCursor == "" || result.NextCursor == input.Cursor {
+			return FetchMessageEventsResult{}, errors.New("bluesky log cursor did not advance")
+		}
 	}
-	result.HasMore = len(logs) > 0
-	if len(logs) > 0 && (result.NextCursor == "" || result.NextCursor == input.Cursor) {
-		return FetchMessageEventsResult{}, errors.New("Bluesky log cursor did not advance")
+	return b.hydrateMessageLog(ctx, token, input.AccountID, logs, result)
+}
+
+type blueskyMessageLogBatch struct {
+	result   FetchMessageEventsResult
+	touched  map[string]bool
+	removed  map[string]bool
+	messages map[string][]ProviderMessage
+}
+
+func (batch *blueskyMessageLogBatch) apply(event blueskyChatLog, accountID string) {
+	cid := event.ConversationID
+	if cid == "" {
+		return
 	}
-	touched := make(map[string]bool)
-	removed := make(map[string]bool)
-	messages := make(map[string][]ProviderMessage)
+	kind := strings.TrimPrefix(event.Type, "chat.bsky.convo.defs#")
+	switch kind {
+	case "logLeaveConvo":
+		batch.removed[cid] = true
+		delete(batch.touched, cid)
+		delete(batch.messages, cid)
+	case "logBeginConvo", "logAcceptConvo":
+		delete(batch.removed, cid)
+		batch.touched[cid] = true
+	case "logCreateMessage":
+		batch.touched[cid] = true
+		batch.createMessage(cid, event.Message, accountID)
+	case "logDeleteMessage":
+		batch.touched[cid] = true
+		batch.result.DeletedMessages = append(batch.result.DeletedMessages, DeletedProviderMessage{ConversationID: cid, MessageID: event.Message.ID})
+	case "logReadMessage", "logReadConvo":
+		batch.touched[cid] = true
+		batch.result.ReadStates = append(batch.result.ReadStates, ProviderReadState{ConversationID: cid, MessageID: event.Message.ID, ActorRemoteID: accountID})
+	case "logAddReaction", "logRemoveReaction":
+		batch.result.Reactions = append(batch.result.Reactions, ProviderMessageReaction{ConversationID: cid, MessageID: event.Message.ID, ActorRemoteID: event.Reaction.Sender.DID, Value: event.Reaction.Value, Deleted: kind == "logRemoveReaction"})
+	default:
+		// Refresh metadata for unknown kinds without materializing blank messages.
+		batch.touched[cid] = true
+	}
+}
+
+func (batch *blueskyMessageLogBatch) createMessage(cid string, message blueskyChatMessage, accountID string) {
+	if message.ID == "" {
+		return
+	}
+	switch message.Type {
+	case "chat.bsky.convo.defs#deletedMessageView":
+		batch.result.DeletedMessages = append(batch.result.DeletedMessages, DeletedProviderMessage{ConversationID: cid, MessageID: message.ID})
+	case "", blueskyChatMessageView:
+		batch.messages[cid] = append(batch.messages[cid], message.provider(accountID))
+	}
+}
+
+func (b *BlueskyAdapter) hydrateMessageLog(ctx context.Context, token, accountID string, logs []blueskyChatLog, result FetchMessageEventsResult) (FetchMessageEventsResult, error) {
+	batch := blueskyMessageLogBatch{result: result, touched: map[string]bool{}, removed: map[string]bool{}, messages: map[string][]ProviderMessage{}}
 	for _, event := range logs {
-		cid := event.ConversationID
-		if cid == "" {
+		batch.apply(event, accountID)
+	}
+	for cid := range batch.removed {
+		batch.result.DeletedConversations = append(batch.result.DeletedConversations, cid)
+	}
+	for cid := range batch.touched {
+		if batch.removed[cid] {
 			continue
 		}
-		kind := strings.TrimPrefix(event.Type, "chat.bsky.convo.defs#")
-		switch kind {
-		case "logLeaveConvo":
-			removed[cid] = true
-			delete(touched, cid)
-			delete(messages, cid)
-		case "logBeginConvo", "logAcceptConvo":
-			delete(removed, cid)
-			touched[cid] = true
-		case "logCreateMessage":
-			touched[cid] = true
-			if event.Message.Type == "chat.bsky.convo.defs#deletedMessageView" {
-				result.DeletedMessages = append(result.DeletedMessages, DeletedProviderMessage{ConversationID: cid, MessageID: event.Message.ID})
-			} else if event.Message.ID != "" && (event.Message.Type == "" || event.Message.Type == blueskyChatMessageView) {
-				messages[cid] = append(messages[cid], event.Message.provider(input.AccountID))
+		data, err := b.chatRequest(ctx, token, http.MethodGet, "/xrpc/chat.bsky.convo.getConvo?"+url.Values{"convoId": {cid}}.Encode(), nil)
+		if err != nil {
+			var status *HTTPError
+			if errors.As(err, &status) && status.Code == "InvalidConvo" && (status.StatusCode == http.StatusBadRequest || status.StatusCode == http.StatusNotFound) {
+				batch.forgetConversation(cid)
+				continue
 			}
-		case "logDeleteMessage":
-			touched[cid] = true
-			result.DeletedMessages = append(result.DeletedMessages, DeletedProviderMessage{ConversationID: cid, MessageID: event.Message.ID})
-		case "logReadMessage", "logReadConvo":
-			touched[cid] = true
-			result.ReadStates = append(result.ReadStates, ProviderReadState{ConversationID: cid, MessageID: event.Message.ID, ActorRemoteID: input.AccountID})
-		case "logAddReaction", "logRemoveReaction":
-			result.Reactions = append(result.Reactions, ProviderMessageReaction{ConversationID: cid, MessageID: event.Message.ID, ActorRemoteID: event.Reaction.Sender.DID, Value: event.Reaction.Value, Deleted: kind == "logRemoveReaction"})
-		default:
-			// New log kinds can refresh metadata without materializing blank messages.
-			touched[cid] = true
-		}
-	}
-	for cid := range removed {
-		result.DeletedConversations = append(result.DeletedConversations, cid)
-	}
-	for cid := range touched {
-		if removed[cid] {
-			continue
-		}
-		data, fetchErr := b.chatRequest(ctx, token, http.MethodGet, "/xrpc/chat.bsky.convo.getConvo?"+url.Values{"convoId": {cid}}.Encode(), nil)
-		if fetchErr != nil {
-			return FetchMessageEventsResult{}, fetchErr
+			return FetchMessageEventsResult{}, err
 		}
 		var response struct {
 			Conversation blueskyChatConversation `json:"convo"`
@@ -172,13 +209,20 @@ func (b *BlueskyAdapter) FetchMessageEvents(ctx context.Context, token string, i
 			return FetchMessageEventsResult{}, fmt.Errorf("decoding Bluesky conversation: %w", err)
 		}
 		if response.Conversation.ID != cid {
-			return FetchMessageEventsResult{}, errors.New("Bluesky conversation identity mismatch")
+			return FetchMessageEventsResult{}, errors.New("bluesky conversation identity mismatch")
 		}
-		convo := response.Conversation.provider(input.AccountID)
-		convo.Messages = messages[cid]
-		result.Conversations = append(result.Conversations, convo)
+		convo := response.Conversation.provider(accountID)
+		convo.Messages = batch.messages[cid]
+		batch.result.Conversations = append(batch.result.Conversations, convo)
 	}
-	return result, nil
+	return batch.result, nil
+}
+
+func (batch *blueskyMessageLogBatch) forgetConversation(cid string) {
+	batch.result.DeletedConversations = append(batch.result.DeletedConversations, cid)
+	batch.result.ReadStates = slices.DeleteFunc(batch.result.ReadStates, func(state ProviderReadState) bool { return state.ConversationID == cid })
+	batch.result.Reactions = slices.DeleteFunc(batch.result.Reactions, func(reaction ProviderMessageReaction) bool { return reaction.ConversationID == cid })
+	batch.result.DeletedMessages = slices.DeleteFunc(batch.result.DeletedMessages, func(message DeletedProviderMessage) bool { return message.ConversationID == cid })
 }
 
 func (b *BlueskyAdapter) FetchMessageHistory(ctx context.Context, token string, input FetchMessageHistoryRequest) (FetchMessageHistoryResult, error) {

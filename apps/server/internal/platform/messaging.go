@@ -24,6 +24,9 @@ type MessageAttachment struct {
 }
 
 type ProviderMessage struct {
+	// ReactionsKnown distinguishes a complete provider snapshot from omitted data.
+	ReactionsKnown  bool
+	Reactions       []ProviderMessageReaction
 	ID              string
 	Direction       string
 	AuthorRemoteID  string
