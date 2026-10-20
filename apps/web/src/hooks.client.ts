@@ -1,4 +1,5 @@
 /* oxlint-disable anti-slop/no-unknown-parameters, anti-slop/no-runtime-typeof -- SvelteKit delivers untyped errors to this boundary; the helpers below narrow them before use. */
+import { captureXMessagingCallback } from '$lib/auth/x-messaging';
 import type { HandleClientError } from '@sveltejs/kit';
 import { installMaintainerDiagnosticsCapture } from '$lib/diagnostics-report';
 import { installCryptoRandomUUID } from '$lib/crypto-random-uuid';
@@ -104,6 +105,7 @@ function diagnosticsFor(error: unknown): ChunkFailureDiagnostics {
 }
 
 async function init() {
+	captureXMessagingCallback();
 	configureProfiling({ enabled: new URLSearchParams(location.search).get('profile') === '1' });
 	installCryptoRandomUUID();
 	initializeClientErrors(installGlobalErrorCapture);

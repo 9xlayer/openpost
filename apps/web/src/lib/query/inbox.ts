@@ -2,6 +2,7 @@ import type { components } from '@openpost/api-contract';
 import {
 	OpenPostQueryError,
 	type InboxQueryAPI,
+	type InboxUpdateAPI,
 	type NormalizedConversationFilters,
 	type NormalizedEngagementFilters
 } from '@openpost/query-catalog';
@@ -24,6 +25,18 @@ export class InboxMessageQueryError extends OpenPostQueryError {
 
 export function createInboxQueryAPI(transport: QueryTransport): InboxQueryAPI {
 	return {
+		async getEngagement(workspaceId, itemId, signal) {
+			const { data } = await queryGET({
+				signal,
+				fallback: 'Could not load comment.',
+				request: (signal) =>
+					transport.GET('/engagement/{item_id}', {
+						params: { path: { item_id: itemId }, query: { workspace_id: workspaceId } },
+						signal
+					})
+			});
+			return data;
+		},
 		async listEngagement(workspaceId, filters, cursor, signal) {
 			const { data } = await queryGET({
 				signal,
@@ -116,9 +129,41 @@ function conversationQuery(
 		platform: filters.platform || undefined,
 		account_id: filters.accountId || undefined,
 		archived: filters.archived,
+		search: filters.search || undefined,
+		unread_only: filters.unreadOnly,
 		limit: filters.limit,
 		cursor: cursor || undefined
 	};
 }
 
 export const inboxQueryAPI = createInboxQueryAPI(client);
+
+export const inboxUpdateAPI: InboxUpdateAPI = {
+	async inboxChanges(workspaceId, cursor, signal) {
+		const { data } = await queryGET({
+			signal,
+			fallback: 'Could not load inbox updates.',
+			request: (signal) =>
+				client.GET('/inbox/changes', {
+					params: { query: { workspace_id: workspaceId, cursor, wait_seconds: 25 } },
+					signal
+				})
+		});
+		return data;
+	},
+	async inboxActivity(workspaceId, activity, signal) {
+		const { error, response } = await queryTransportRequest(signal, (signal) =>
+			client.POST('/inbox/activity', {
+				body: {
+					workspace_id: workspaceId,
+					client_id: activity.clientId,
+					view: activity.view,
+					conversation_id: activity.conversationId
+				},
+				signal
+			})
+		);
+		if (error)
+			throw new OpenPostQueryError('Could not update inbox activity.', { status: response.status });
+	}
+};

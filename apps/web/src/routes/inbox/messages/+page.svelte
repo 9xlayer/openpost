@@ -14,6 +14,9 @@
 	import type { Attachment as SvelteAttachment } from 'svelte/attachments';
 	import { resolve } from '$app/paths';
 	import { accountFilterLabel, accountName } from '$lib/account-filter-label';
+	import { inboxSendOperation } from '$lib/inbox-send-operation';
+	import { auth } from '$lib/stores/auth';
+	import { Input } from '$lib/components/ui/input';
 	import { client } from '$lib/api/client';
 	import type { components } from '$lib/api/types';
 	import { queryAPI } from '$lib/query/api';
@@ -32,6 +35,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { getLocaleTag } from '$lib/i18n';
 	import { getPlatformName } from '$lib/utils';
+	import InboxUpdates from '$lib/components/inbox-updates.svelte';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import CommunicationsNavigation from '$lib/components/communications-navigation.svelte';
 	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
@@ -42,6 +46,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import * as Popover from '$lib/components/ui/popover';
 	import * as Select from '$lib/components/ui/select';
 	import { allFeatureEffectiveDisabled, collectiveDisabledReason } from '$lib/feature-disabled';
 
@@ -71,12 +76,21 @@
 	let appliedMessageScope = '';
 	let appliedMessageData: InfiniteData<MessagePage> | undefined;
 	let messageViewport = $state<HTMLElement>();
+	let atLatestMessage = $state(true);
+	let hasNewMessages = $state(false);
+	let appliedLatestMessageId = '';
+	let updateAnchor: { id: string; top: number } | null = null;
 	let refreshing = $state(false);
 	let sending = $state(false);
 	let refreshSequence = 0;
 	let sendSequence = 0;
 	let replyBody = $state('');
 	let archived = $state(false);
+	let search = $state('');
+	let unreadOnly = $state(false);
+	let sendUncertain = $state(false);
+	let retryingMessageId = $state('');
+	let collectingHistory = $state(false);
 	let platformFilter = $state('');
 	let accountFilter = $state('');
 	let toast = $state('');
@@ -86,6 +100,8 @@
 	const workspaceId = $derived(workspaceCtx.currentWorkspace?.id ?? '');
 	const querySelectedID = $derived(loadedWorkspace === workspaceId ? selectedId : '');
 	const conversationFilters = $derived({
+		search: loadedWorkspace === workspaceId ? search : '',
+		unreadOnly: loadedWorkspace === workspaceId && unreadOnly,
 		platform: loadedWorkspace === workspaceId ? platformFilter : '',
 		accountId: loadedWorkspace === workspaceId ? accountFilter : '',
 		archived: loadedWorkspace === workspaceId ? archived : false,
@@ -177,7 +193,8 @@
 	);
 	const messageNextCursor = $derived(messageQuery.data?.pages.at(-1)?.next_cursor ?? '');
 	const selected = $derived(
-		conversations.find((conversation) => conversation.id === querySelectedID) ??
+		messageQuery.data?.pages[0]?.conversation ??
+			conversations.find((conversation) => conversation.id === querySelectedID) ??
 			(selectedFallback?.id === querySelectedID ? selectedFallback : undefined)
 	);
 	const replyWindowClosed = $derived(
@@ -201,7 +218,9 @@
 	const messagingAllDisabled = $derived(
 		accounts.length > 0 && allFeatureEffectiveDisabled(messagingFeatures, 'messaging')
 	);
-	const hasConversationFilters = $derived(Boolean(platformFilter || accountFilter || archived));
+	const hasConversationFilters = $derived(
+		Boolean(platformFilter || accountFilter || archived || search || unreadOnly)
+	);
 	const messagingReason = $derived(collectiveDisabledReason(messagingFeatures, 'messaging'));
 	const messagingEmptyIsFeatureDisabled = $derived(
 		messagingAllDisabled && conversations.length === 0 && !loading && !error
@@ -228,21 +247,47 @@
 			archived = false;
 			platformFilter = '';
 			accountFilter = '';
+			search = '';
+			unreadOnly = false;
+			replyBody = '';
+			sendUncertain = false;
 		}
+	});
+
+	$effect.pre(() => {
+		void messageQuery.data;
+		updateAnchor = messageVisibleAnchor();
 	});
 
 	$effect(() => {
 		const data = messageQuery.data;
 		const scope = `${workspaceId}:${selectedId}`;
-		if (!data || !selectedId || (data === appliedMessageData && scope === appliedMessageScope)) {
+		if (!data || !selectedId || (data === appliedMessageData && scope === appliedMessageScope))
 			return;
-		}
+		const opening = scope !== appliedMessageScope;
+		const latestId = messages.at(-1)?.id ?? '';
+		const latestChanged = latestId !== appliedLatestMessageId;
 		appliedMessageData = data;
 		appliedMessageScope = scope;
-		if (data.pages.length === 1) {
+		appliedLatestMessageId = latestId;
+		if (opening || (latestChanged && atLatestMessage)) {
 			void scrollToLatestMessage(scope);
+		} else {
+			if (latestChanged) hasNewMessages = true;
+			const anchor = updateAnchor;
+			if (anchor)
+				void tick().then(() => {
+					if (`${workspaceId}:${selectedId}` === scope) restoreMessageVisibleAnchor(anchor);
+				});
 		}
 	});
+
+	function trackMessageScroll() {
+		if (!messageViewport) return;
+		atLatestMessage =
+			messageViewport.scrollHeight - messageViewport.scrollTop - messageViewport.clientHeight < 48;
+		if (atLatestMessage) hasNewMessages = false;
+	}
 
 	function appendConversations(current: Conversation[], incoming: Conversation[]) {
 		const byID = new Map(current.map((conversation) => [conversation.id, conversation]));
@@ -270,6 +315,7 @@
 		selectedId = conversation.id;
 		selectedFallback = conversation;
 		replyBody = '';
+		sendUncertain = false;
 		await markConversationRead(conversation);
 	}
 
@@ -282,6 +328,8 @@
 		platformFilter = '';
 		accountFilter = '';
 		archived = false;
+		search = '';
+		unreadOnly = false;
 		clearSelectedConversation();
 	}
 
@@ -298,6 +346,8 @@
 		await tick();
 		if (`${workspaceId}:${selectedId}` !== scope) return;
 		messageViewport?.scrollTo({ top: messageViewport.scrollHeight });
+		atLatestMessage = true;
+		hasNewMessages = false;
 	}
 
 	function combineMessagePages(pages: MessagePage[]) {
@@ -408,51 +458,143 @@
 	}
 
 	async function sendMessage() {
-		if (!workspaceId || !selected || !replyBody.trim() || replyWindowClosed || messagingAllDisabled)
+		if (
+			sending ||
+			!workspaceId ||
+			!selected ||
+			!replyBody.trim() ||
+			replyWindowClosed ||
+			messagingAllDisabled
+		)
 			return;
+		const identity = auth.captureIdentity();
+		if (!identity) return;
 		const view = captureConversationMutationView(selected.id);
 		const sequence = ++sendSequence;
 		sending = true;
+		sendUncertain = false;
 		const submittedDraft = replyBody;
 		const body = submittedDraft.trim();
-		const pendingOlderPage = messageQuery.isFetchingNextPage
-			? messageQuery.fetchNextPage({ cancelRefetch: false })
-			: null;
-		const {
-			data,
-			error: apiError,
-			response
-		} = await client.POST('/messages/{conversation_id}/send', {
-			params: { path: { conversation_id: view.conversationID } },
-			body: { workspace_id: view.workspaceID, message: body }
-		});
-		const sessionIsCurrent = settleQueryMutationSession(view.session, response);
-		if (sequence === sendSequence) sending = false;
-		if (!sessionIsCurrent) return;
-		if (apiError) {
-			if (conversationMutationTargetIsCurrent(view)) {
-				showToast(apiError.detail || m.messages_send_failed(), 'error');
+		try {
+			const operation = await inboxSendOperation(
+				identity.userID,
+				view.workspaceID,
+				view.conversationID,
+				body
+			);
+			if (!conversationMutationTargetIsCurrent(view)) return;
+			const pendingOlderPage = messageQuery.isFetchingNextPage
+				? messageQuery.fetchNextPage({ cancelRefetch: false })
+				: null;
+			const {
+				data,
+				error: problem,
+				response
+			} = await client.POST('/messages/{conversation_id}/send', {
+				params: { path: { conversation_id: view.conversationID } },
+				body: { workspace_id: view.workspaceID, message: body, client_operation_id: operation.id }
+			});
+			if (!settleQueryMutationSession(view.session, response)) return;
+			if (problem || !data) {
+				if (conversationMutationTargetIsCurrent(view)) {
+					sendUncertain = response.status >= 500 || response.status === 408;
+					showToast(
+						sendUncertain
+							? m.messages_send_uncertain()
+							: problem?.detail || m.messages_send_failed(),
+						'error'
+					);
+				}
+				return;
 			}
-			return;
-		}
-		if (data) {
+			operation.complete();
 			const queryKey = inboxQueryKeys.messages(view.workspaceID, view.conversationID, {
 				limit: 200
 			});
-			const reconciled = await reconcileSentMessage(view, queryKey, data, pendingOlderPage);
-			if (!reconciled) return;
+			if (!(await reconcileSentMessage(view, queryKey, data, pendingOlderPage))) return;
 			await reconcileQueryMutation(queryClient, view.session, {
 				invalidate: [
-					{
-						queryKey: inboxQueryKeys.conversationsRoot(view.workspaceID),
-						refetchType: 'none'
-					}
+					{ queryKey: inboxQueryKeys.conversationsRoot(view.workspaceID), refetchType: 'none' }
 				]
 			});
+			if (conversationMutationTargetIsCurrent(view)) {
+				if (replyBody === submittedDraft) replyBody = '';
+				showToast(
+					data.send_status === 'sent' ? m.messages_sent_status() : m.messages_queued(),
+					'success'
+				);
+			}
+		} catch {
+			if (conversationMutationTargetIsCurrent(view)) {
+				sendUncertain = true;
+				showToast(m.messages_send_uncertain(), 'error');
+			}
+		} finally {
+			if (sequence === sendSequence) sending = false;
 		}
-		if (conversationMutationTargetIsCurrent(view)) {
-			if (replyBody === submittedDraft) replyBody = '';
-			showToast(m.messages_queued(), 'success');
+	}
+
+	async function retryMessage(message: DirectMessage) {
+		if (retryingMessageId || !selected) return;
+		const view = captureConversationMutationView(selected.id);
+		retryingMessageId = message.id;
+		try {
+			const {
+				data,
+				error: problem,
+				response
+			} = await client.POST('/messages/{conversation_id}/retry', {
+				params: { path: { conversation_id: view.conversationID } },
+				body: { workspace_id: view.workspaceID, message_id: message.id }
+			});
+			if (!settleQueryMutationSession(view.session, response)) return;
+			if (problem || !data) {
+				if (conversationMutationTargetIsCurrent(view))
+					showToast(
+						response.status === 409 ? m.messages_retry_unsafe() : m.messages_send_failed(),
+						'error'
+					);
+				return;
+			}
+			await reconcileSentMessage(
+				view,
+				inboxQueryKeys.messages(view.workspaceID, view.conversationID, { limit: 200 }),
+				data,
+				null
+			);
+		} catch {
+			if (conversationMutationTargetIsCurrent(view)) showToast(m.messages_send_failed(), 'error');
+		} finally {
+			retryingMessageId = '';
+		}
+	}
+
+	async function collectHistory() {
+		if (collectingHistory || !selected) return;
+		const view = captureConversationMutationView(selected.id);
+		collectingHistory = true;
+		try {
+			const { error: problem, response } = await client.POST(
+				'/messages/{conversation_id}/history',
+				{
+					params: { path: { conversation_id: view.conversationID } },
+					body: { workspace_id: view.workspaceID }
+				}
+			);
+			if (
+				!settleQueryMutationSession(view.session, response) ||
+				!conversationMutationTargetIsCurrent(view)
+			)
+				return;
+			if (problem) showToast(m.messages_older_page_failed(), 'error');
+			else {
+				showToast(m.messages_history_queued(), 'success');
+			}
+		} catch {
+			if (conversationMutationTargetIsCurrent(view))
+				showToast(m.messages_older_page_failed(), 'error');
+		} finally {
+			collectingHistory = false;
 		}
 	}
 
@@ -514,7 +656,14 @@
 	}
 
 	function conversationViewKey() {
-		return JSON.stringify([workspaceId, platformFilter, accountFilter, archived]);
+		return JSON.stringify([
+			workspaceId,
+			platformFilter,
+			accountFilter,
+			archived,
+			search,
+			unreadOnly
+		]);
 	}
 
 	function captureConversationMutationView(conversationID: string): ConversationMutationView {
@@ -688,6 +837,7 @@
 	loading={initialLoading}
 	loadingLayout="list"
 	loadingItems={6}
+	contentLayout="fill"
 >
 	{#snippet actions()}
 		<Button
@@ -707,87 +857,133 @@
 	{#snippet navigation()}
 		<div class="space-y-5">
 			<CommunicationsNavigation active="messages" />
-			<div class="flex flex-wrap items-center gap-3">
-				<Select.Root
-					type="single"
-					value={platformFilter || 'all'}
-					onValueChange={(value) => {
-						platformFilter = value === 'all' ? '' : value;
-						clearSelectedConversation();
-						const selectedAccount = accounts.find((account) => account.id === accountFilter);
-						if (selectedAccount && platformFilter && selectedAccount.platform !== platformFilter) {
-							accountFilter = '';
-						}
-					}}
-				>
-					<Select.Trigger class="h-11 w-44 sm:h-9" aria-label={m.engagement_all_platforms()}>
-						{platformFilter ? getPlatformName(platformFilter) : m.engagement_all_platforms()}
-					</Select.Trigger>
-					<Select.Content>
-						<Select.Item value="all">{m.engagement_all_platforms()}</Select.Item>
-						{#each knownPlatforms as provider (provider)}
-							<Select.Item value={provider}>{getPlatformName(provider)}</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-				<Select.Root
-					type="single"
-					value={accountFilter || 'all'}
-					onValueChange={(value) => {
-						accountFilter = value === 'all' ? '' : value;
-						clearSelectedConversation();
-					}}
-				>
-					<Select.Trigger
-						class="h-11 w-60 sm:h-9"
-						aria-label={accountFilterLabel(
-							accounts.find((account) => account.id === accountFilter)
-						)}
+			<div class="hidden sm:block">{@render conversationFilterControls()}</div>
+			<div class="sm:hidden">
+				<Popover.Root>
+					<Popover.Trigger>
+						{#snippet child({ props })}<Button {...props} variant="outline"
+								><ThemeIcon
+									role="filter"
+									class="size-4"
+								/>{m.media_filters()}{#if hasConversationFilters}<span aria-hidden="true">•</span
+									>{/if}</Button
+							>{/snippet}
+					</Popover.Trigger>
+					<Popover.Content align="start" class="w-80 max-w-[calc(100vw-2rem)]"
+						>{@render conversationFilterControls()}</Popover.Content
 					>
-						{#if accountFilter}
-							{@const selectedAccount = accounts.find((account) => account.id === accountFilter)}
-							{#if selectedAccount}
-								<SocialAccountIdentity
-									name={accountName(selectedAccount)}
-									platform={selectedAccount.platform}
-									avatarUrl={selectedAccount.account_avatar_url}
-									size="sm"
-								/>
-							{:else}
-								{m.engagement_all_accounts()}
-							{/if}
-						{:else}
-							{m.engagement_all_accounts()}
-						{/if}
-					</Select.Trigger>
-					<Select.Content class="w-72 max-w-[calc(100vw-1rem)]">
-						<Select.Item value="all" class="min-h-11">{m.engagement_all_accounts()}</Select.Item>
-						{#each accounts.filter((account) => !platformFilter || account.platform === platformFilter) as account (account.id)}
-							<Select.Item value={account.id} class="min-h-12 py-2">
-								<SocialAccountIdentity
-									name={accountName(account)}
-									platform={account.platform}
-									avatarUrl={account.account_avatar_url}
-								/>
-							</Select.Item>
-						{/each}
-					</Select.Content>
-				</Select.Root>
-				<label class="flex min-h-11 items-center gap-2 text-sm">
-					<Checkbox
-						checked={archived}
-						onCheckedChange={(checked) => {
-							archived = checked;
-							clearSelectedConversation();
-						}}
-					/>
-					{m.engagement_archived()}
-				</label>
+				</Popover.Root>
 			</div>
 		</div>
 	{/snippet}
 
-	<div class="space-y-5">
+	{#snippet conversationFilterControls()}
+		<div class="flex flex-wrap items-center gap-3">
+			<Input
+				value={search}
+				oninput={(event) => {
+					search = event.currentTarget.value;
+					clearSelectedConversation();
+				}}
+				placeholder={m.messages_search()}
+				aria-label={m.messages_search()}
+				class="w-64 max-w-full"
+			/>
+			<label class="flex min-h-11 items-center gap-2 text-sm"
+				><Checkbox
+					checked={unreadOnly}
+					onCheckedChange={(checked) => {
+						unreadOnly = checked;
+						clearSelectedConversation();
+					}}
+				/>{m.engagement_unread_only()}</label
+			>
+			<Select.Root
+				type="single"
+				value={platformFilter || 'all'}
+				onValueChange={(value) => {
+					platformFilter = value === 'all' ? '' : value;
+					clearSelectedConversation();
+					const selectedAccount = accounts.find((account) => account.id === accountFilter);
+					if (selectedAccount && platformFilter && selectedAccount.platform !== platformFilter) {
+						accountFilter = '';
+					}
+				}}
+			>
+				<Select.Trigger
+					class="h-11 w-44 max-w-full sm:h-9"
+					aria-label={m.engagement_all_platforms()}
+				>
+					{platformFilter ? getPlatformName(platformFilter) : m.engagement_all_platforms()}
+				</Select.Trigger>
+				<Select.Content>
+					<Select.Item value="all">{m.engagement_all_platforms()}</Select.Item>
+					{#each knownPlatforms as provider (provider)}
+						<Select.Item value={provider}>{getPlatformName(provider)}</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+			<Select.Root
+				type="single"
+				value={accountFilter || 'all'}
+				onValueChange={(value) => {
+					accountFilter = value === 'all' ? '' : value;
+					clearSelectedConversation();
+				}}
+			>
+				<Select.Trigger
+					class="h-11 w-60 max-w-full sm:h-9"
+					aria-label={accountFilterLabel(accounts.find((account) => account.id === accountFilter))}
+				>
+					{#if accountFilter}
+						{@const selectedAccount = accounts.find((account) => account.id === accountFilter)}
+						{#if selectedAccount}
+							<SocialAccountIdentity
+								name={accountName(selectedAccount)}
+								platform={selectedAccount.platform}
+								avatarUrl={selectedAccount.account_avatar_url}
+								size="sm"
+							/>
+						{:else}
+							{m.engagement_all_accounts()}
+						{/if}
+					{:else}
+						{m.engagement_all_accounts()}
+					{/if}
+				</Select.Trigger>
+				<Select.Content class="w-72 max-w-[calc(100vw-1rem)]">
+					<Select.Item value="all" class="min-h-11">{m.engagement_all_accounts()}</Select.Item>
+					{#each accounts.filter((account) => !platformFilter || account.platform === platformFilter) as account (account.id)}
+						<Select.Item value={account.id} class="min-h-12 py-2">
+							<SocialAccountIdentity
+								name={accountName(account)}
+								platform={account.platform}
+								avatarUrl={account.account_avatar_url}
+							/>
+						</Select.Item>
+					{/each}
+				</Select.Content>
+			</Select.Root>
+			<label class="flex min-h-11 items-center gap-2 text-sm">
+				<Checkbox
+					checked={archived}
+					onCheckedChange={(checked) => {
+						archived = checked;
+						clearSelectedConversation();
+					}}
+				/>
+				{m.engagement_archived()}
+			</label>
+		</div>
+	{/snippet}
+
+	<div class="flex min-h-0 flex-1 flex-col gap-5">
+		<InboxUpdates
+			{workspaceId}
+			view={querySelectedID ? 'conversation' : 'chats'}
+			conversationId={querySelectedID}
+			viewKey={conversationViewKey()}
+		/>
 		{#if backgroundError}
 			<InlineNotice tone="error" message={backgroundError}>
 				{#snippet actions()}
@@ -869,7 +1065,7 @@
 			/>
 		{:else}
 			<div
-				class="min-h-[34rem] overflow-hidden rounded-lg border bg-card transition-opacity lg:grid lg:grid-cols-[20rem_minmax(0,1fr)]"
+				class="min-h-0 flex-1 overflow-hidden rounded-lg border bg-card transition-opacity lg:grid lg:grid-cols-[20rem_minmax(0,1fr)]"
 				class:opacity-70={loading}
 				aria-busy={loading || loadingMore}
 			>
@@ -877,7 +1073,7 @@
 					class={['border-r', selectedId ? 'hidden lg:block' : 'block']}
 					aria-label={m.messages_heading()}
 				>
-					<div class="max-h-[42rem] divide-y overflow-y-auto">
+					<div class="h-full divide-y overflow-y-auto">
 						{#each conversations as conversation (conversation.id)}
 							<button
 								type="button"
@@ -921,7 +1117,7 @@
 
 				<section
 					class={selectedId
-						? 'flex max-h-[42rem] min-h-[34rem] flex-col'
+						? 'flex h-full min-h-0 flex-col'
 						: 'hidden lg:flex lg:items-center lg:justify-center'}
 				>
 					{#if selected}
@@ -950,9 +1146,10 @@
 						</header>
 
 						<div
-							class="flex flex-1 flex-col gap-3 overflow-y-auto bg-muted/15 p-3 sm:p-5"
+							class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-muted/15 p-3 sm:p-5"
 							aria-busy={loadingMessages || loadingOlderMessages}
 							bind:this={messageViewport}
+							onscroll={trackMessageScroll}
 							data-testid="message-history"
 						>
 							{#if messageError}
@@ -1007,6 +1204,19 @@
 										{/if}
 									</div>
 								{/if}
+								{#if !messageNextCursor && messageQuery.data?.pages[0]?.history_available}
+									<div class="flex justify-center">
+										<Button
+											variant="outline"
+											size="sm"
+											onclick={collectHistory}
+											disabled={collectingHistory}
+											>{collectingHistory
+												? m.common_loading()
+												: m.messages_load_older_messages()}</Button
+										>
+									</div>
+								{/if}
 								{#each messages as message (message.id)}
 									<div
 										data-message-id={message.id}
@@ -1023,7 +1233,11 @@
 													: 'rounded-bl-sm border bg-background'
 											]}
 										>
-											{#if message.body}<p class="leading-5 whitespace-pre-wrap">
+											{#if message.deleted_at && !message.deleted_at.startsWith('0001-')}<p
+													class="text-sm italic"
+												>
+													{m.engagement_deleted_item()}
+												</p>{:else if message.body}<p class="leading-5 whitespace-pre-wrap">
 													{message.body}
 												</p>{/if}
 											{#each attachments(message) as attachment (attachment.url)}
@@ -1038,26 +1252,56 @@
 											{/each}
 											<p
 												class={[
-													'mt-1 text-[10px]',
+													'mt-1 text-xs',
 													message.direction === 'outbound'
-														? 'text-primary-foreground/75'
+														? 'text-primary-foreground'
 														: 'text-muted-foreground'
 												]}
 											>
 												{dateLabel(message.remote_created_at || message.created_at)}
 												{#if message.send_status === 'queued'}
-													· {m.messages_queued_status()}{/if}
+													· {m.publication_delivery_queued()}{/if}
 												{#if message.send_status === 'failed'}
 													· {m.messages_failed_status()}{/if}
+												{#if message.send_status === 'sent'}· {m.messages_sent_status()}{/if}
+												{#if message.send_status === 'sending'}· {m.messages_sending_status()}{/if}
 											</p>
+											{#if message.send_status === 'failed' && message.error_message}<p
+													class="mt-2 text-sm"
+												>
+													{message.error_message}
+												</p>{/if}
+											{#if message.send_status === 'failed'}<Button
+													variant="outline"
+													size="sm"
+													onclick={() => void retryMessage(message)}
+													disabled={Boolean(retryingMessageId)}>{m.common_retry()}</Button
+												>{/if}
 										</div>
 									</div>
 								{/each}
 							{/if}
 						</div>
 
+						{#if hasNewMessages}
+							<div class="flex justify-center border-t px-3 py-2">
+								<Button
+									variant="outline"
+									size="sm"
+									onclick={() => void scrollToLatestMessage(`${workspaceId}:${selectedId}`)}
+									>{m.messages_new_messages()}</Button
+								>
+							</div>
+						{/if}
 						{#if !loadingMessages && !messageError}
 							<div class="border-t p-3 sm:p-4" data-testid="conversation-reply-composer">
+								{#if sendUncertain}<InlineNotice
+										tone="warning"
+										message={m.messages_send_uncertain()}
+									/>{/if}
+								{#if sending}<p role="status" class="mb-2 text-xs text-muted-foreground">
+										{m.messages_sending()}
+									</p>{/if}
 								{#if replyWindowClosed}
 									<InlineNotice tone="warning" message={m.messages_window_closed()} />
 								{:else}
@@ -1089,7 +1333,7 @@
 											size="icon"
 											class="mb-0.5 shrink-0"
 											disabled={sending || !replyBody.trim() || messagingAllDisabled}
-											aria-label={m.messages_send()}
+											aria-label={sendUncertain ? m.common_retry() : m.messages_send()}
 										>
 											<ThemeIcon role="send" class="size-4" />
 										</Button>

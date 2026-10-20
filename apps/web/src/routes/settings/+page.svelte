@@ -181,6 +181,9 @@
 
 	async function initializeAccountsURL(url: URL, actorID: string, requestSequence: number) {
 		const interpreted = interpretAccountManagementURL(url);
+		const requestedWorkspaceID =
+			interpreted.workspaceID ||
+			(url.searchParams.has('account_id') ? (url.searchParams.get('workspace_id') ?? '') : '');
 		const cleanHref = interpreted.cleanHref;
 		const isCurrentRequest = () =>
 			active &&
@@ -195,11 +198,8 @@
 		}
 		if (!isCurrentRequest()) return;
 		try {
-			if (
-				interpreted.workspaceID &&
-				workspaceCtx.currentWorkspace?.id !== interpreted.workspaceID
-			) {
-				await workspaceCtx.initialize(interpreted.workspaceID, {
+			if (requestedWorkspaceID && workspaceCtx.currentWorkspace?.id !== requestedWorkspaceID) {
+				await workspaceCtx.initialize(requestedWorkspaceID, {
 					selectionIsCurrent: isCurrentRequest
 				});
 			}
@@ -346,6 +346,7 @@
 						{#if panels['accounts']}
 							{@const AccountManagement = panels['accounts'].default}
 							<AccountManagement
+								accountId={page.url.searchParams.get('account_id') ?? ''}
 								workspace={workspaceCtx.currentWorkspace}
 								workspaces={workspaceCtx.workspaces}
 								links={accountLinks}

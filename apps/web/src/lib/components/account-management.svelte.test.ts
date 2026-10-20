@@ -80,6 +80,41 @@ function deferred<T>() {
 }
 
 describe('account management modes', () => {
+	it('opens the requested X account directly with stored messaging readiness', async () => {
+		queryClient.setQueryData(openPostQueryKeys.accounts(workspace.id), [account]);
+		queryClient.setQueryData(accountCatalogQueryKeys.providers(workspace.id), []);
+		getMock.mockImplementation(async (path: string) => ({
+			data:
+				path === '/accounts/{account_id}/messaging/x'
+					? {
+							authorized: false,
+							can_send: false,
+							can_subscribe: false,
+							encrypted_chat: false,
+							reason: 'oauth2_authorization_required'
+						}
+					: [],
+			response: new Response()
+		}));
+		const screen = await render(
+			AccountManagement,
+			{
+				workspace,
+				accountId: account.id,
+				workspaces: [workspace],
+				links,
+				onContinue: vi.fn(),
+				onAccountsChanged: vi.fn()
+			},
+			{ wrapper: QueryClientProvider, wrapperProps: { client: queryClient } }
+		);
+		await expect
+			.element(screen.getByRole('button', { name: 'Authorize X messaging', exact: true }))
+			.toBeVisible();
+		expect(document.body.textContent).toContain('Encrypted XChat is unsupported.');
+		expect(postMock).not.toHaveBeenCalled();
+	});
+
 	it('refreshes stale displayed accounts after reconnect', async () => {
 		queryClient.setQueryData(openPostQueryKeys.accounts(workspace.id), [account], {
 			updatedAt: Date.now() - 60_000

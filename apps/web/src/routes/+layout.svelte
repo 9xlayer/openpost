@@ -125,6 +125,7 @@
 		'/impersonate',
 		'/cli/authorize',
 		'/oauth/authorize',
+		'/oauth/x-messaging',
 		'/accounts/mastodon/callback',
 		'/accounts/callback'
 	];
@@ -142,6 +143,7 @@
 		'/impersonate',
 		'/cli/authorize',
 		'/oauth/authorize',
+		'/oauth/x-messaging',
 		'/accounts/mastodon/callback',
 		'/accounts/callback'
 	];

@@ -20,6 +20,8 @@
 	import { onDestroy, onMount, tick } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { accountFilterLabel, accountName } from '$lib/account-filter-label';
+	import { auth } from '$lib/stores/auth';
+	import { inboxSendOperation } from '$lib/inbox-send-operation';
 	import { client } from '$lib/api/client';
 	import type { components } from '$lib/api/types';
 	import { queryAPI } from '$lib/query/api';
@@ -37,6 +39,7 @@
 	import { m } from '$lib/paraglide/messages';
 	import { getLocaleTag } from '$lib/i18n';
 	import { formatSocialAccountName, getPlatformName } from '$lib/utils';
+	import InboxUpdates from '$lib/components/inbox-updates.svelte';
 	import PageContainer from '$lib/components/page-container.svelte';
 	import CommunicationsNavigation from '$lib/components/communications-navigation.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -475,17 +478,27 @@
 		action: 'reply' | 'hide' | 'delete' | 'like' | 'unlike',
 		announce = true
 	) {
-		if (!workspaceId || engagementAllDisabled) return false;
+		if (!workspaceId || engagementAllDisabled || actionInFlight) return false;
+		const identity = auth.captureIdentity();
+		if (!identity) return false;
 		const scope = captureEngagementMutationView(item.id, unreadOnly);
 		const requestSequence = ++actionRequestSequence;
 		const submittedReply = action === 'reply' ? replyBody : '';
 		actionInFlight = item.id;
 		try {
+			const operation = await inboxSendOperation(
+				identity.userID,
+				scope.workspaceID,
+				`engagement:${item.id}:${action}`,
+				submittedReply.trim()
+			);
+			if (!engagementMutationViewIsCurrent(scope)) return false;
 			const { error: apiError, response } = await client.POST('/engagement/{item_id}/actions', {
 				params: { path: { item_id: item.id } },
 				body: {
 					workspace_id: scope.workspaceID,
 					action,
+					client_operation_id: operation.id,
 					message: action === 'reply' ? submittedReply.trim() : undefined
 				}
 			});
@@ -496,6 +509,7 @@
 				}
 				return false;
 			}
+			operation.complete();
 			if (
 				action === 'reply' &&
 				engagementMutationViewIsCurrent(scope) &&
@@ -946,6 +960,17 @@
 	{/snippet}
 
 	<div class="space-y-5">
+		<InboxUpdates
+			{workspaceId}
+			view="comments"
+			viewKey={JSON.stringify([
+				platformFilter,
+				accountFilter,
+				publicationFilter,
+				unreadOnly,
+				archived
+			])}
+		/>
 		{#if backgroundError}
 			<InlineNotice tone="error" message={backgroundError}>
 				{#snippet actions()}

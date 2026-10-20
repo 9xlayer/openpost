@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { QueryClientProvider } from '@tanstack/svelte-query';
 import { client, type User, type Workspace } from '$lib/api/client';
+import { inboxQueryKeys } from '@openpost/query-catalog';
 import { queryClient } from '$lib/query/client';
 import { auth } from '$lib/stores/auth';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
@@ -64,7 +65,75 @@ describe('messages counterpart avatar', () => {
 		initializeMock.mockResolvedValue();
 		getMock.mockReset();
 		postMock.mockReset();
+		postMock.mockResolvedValue({ response: new Response(null, { status: 204 }) });
 		putMock.mockReset();
+	});
+
+	it('keeps a reader above the latest messages in place until they choose New messages', async () => {
+		mockInbox([conversation('Ava Stone', 0)]);
+		putMock.mockResolvedValue({ response: new Response() });
+		const screen = await renderMessages();
+		await vi.waitFor(() => expect(rowByName(screen.container, 'Ava Stone')).toBeTruthy());
+		rowByName(screen.container, 'Ava Stone').click();
+		await vi.waitFor(() =>
+			expect(screen.container.querySelector('[data-testid="message-history"]')).not.toBeNull()
+		);
+		const viewport = screen.container.querySelector<HTMLElement>(
+			'[data-testid="message-history"]'
+		)!;
+		viewport.style.height = '150px';
+		viewport.style.flex = 'none';
+		const key = inboxQueryKeys.messages(workspace.id, 'conversation-1', { limit: 200 });
+		const items = Array.from({ length: 30 }, (_, i) => directMessage(i));
+		queryClient.setQueryData(key, { pages: [{ items, next_cursor: '' }], pageParams: [''] });
+		await vi.waitFor(() => expect(viewport.querySelectorAll('[data-message-id]')).toHaveLength(30));
+		await new Promise((resolve) => requestAnimationFrame(resolve));
+		viewport.scrollTop = 0;
+		viewport.dispatchEvent(new Event('scroll'));
+		queryClient.setQueryData(key, {
+			pages: [{ items: [...items, directMessage(30)], next_cursor: '' }],
+			pageParams: ['']
+		});
+		await vi.waitFor(() => expect(screen.container.textContent).toContain('New messages'));
+		expect(viewport.scrollTop).toBe(0);
+		await screen.getByRole('button', { name: 'New messages' }).click();
+		await vi.waitFor(() => expect(viewport.scrollTop).toBeGreaterThan(0));
+	});
+
+	it('retries an interrupted send with the same receipt and reports the confirmed queue state', async () => {
+		mockInbox([conversation('Ava Stone', 0)]);
+		putMock.mockResolvedValue({ response: new Response() });
+		const submitted: string[] = [];
+		postMock.mockImplementation(async (path, options) => {
+			if (path !== '/messages/{conversation_id}/send')
+				return { response: new Response(null, { status: 204 }) };
+			const operationId = options?.body?.client_operation_id;
+			if (!operationId) throw new Error('Send receipt is missing');
+			submitted.push(operationId);
+			if (submitted.length === 1) throw new TypeError('Network interrupted');
+			return {
+				data: {
+					...directMessage(40),
+					direction: 'outbound',
+					body: 'One intentional message',
+					send_status: 'queued'
+				},
+				response: new Response()
+			};
+		});
+		const screen = await renderMessages();
+		await vi.waitFor(() => expect(rowByName(screen.container, 'Ava Stone')).toBeTruthy());
+		rowByName(screen.container, 'Ava Stone').click();
+		await screen.getByRole('textbox', { name: 'Write a message…' }).fill('One intentional message');
+		await screen.getByRole('button', { name: 'Send' }).click();
+		await vi.waitFor(() =>
+			expect(screen.container.textContent).toContain('The request was interrupted.')
+		);
+		await screen.getByRole('button', { name: 'Try again', exact: true }).click();
+		await vi.waitFor(() => expect(submitted).toHaveLength(2));
+		expect(submitted[1]).toBe(submitted[0]);
+		await vi.waitFor(() => expect(screen.container.textContent).toContain('Queued'));
+		expect(screen.container.querySelector('textarea')?.value).toBe('');
 	});
 
 	it('loads the counterpart photo lazily without sending a referrer', async () => {
@@ -162,5 +231,25 @@ function user(id: string): User {
 		legal_acceptance_required: false,
 		email_verified: true,
 		created_at: '2026-09-01T10:00:00Z'
+	};
+}
+
+function directMessage(index: number) {
+	return {
+		id: `message-${index}`,
+		workspace_id: workspace.id,
+		conversation_id: 'conversation-1',
+		social_account_id: 'account-a',
+		platform: 'bluesky',
+		remote_message_id: `remote-${index}`,
+		author_remote_id: 'person-1',
+		direction: 'inbound',
+		body: `Incoming message ${index}`,
+		attachments_json: '[]',
+		send_status: '',
+		error_message: '',
+		remote_created_at: `2026-09-01T10:00:${String(index).padStart(2, '0')}Z`,
+		created_at: `2026-09-01T10:00:${String(index).padStart(2, '0')}Z`,
+		updated_at: '2026-09-01T10:00:00Z'
 	};
 }

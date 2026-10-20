@@ -28,6 +28,7 @@ export type AccountManagementContinuation =
 
 export interface AccountManagementProps {
 	workspace: Workspace | null;
+	accountId?: string;
 	workspaces: Workspace[];
 	links: AccountManagementLinks;
 	loading?: boolean;

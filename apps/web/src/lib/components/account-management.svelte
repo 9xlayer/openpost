@@ -1,4 +1,5 @@
 <script lang="ts">
+	import XMessagingSettings from '$lib/components/x-messaging-settings.svelte';
 	import { onDestroy } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { auth, type AuthIdentityToken } from '$lib/stores/auth';
@@ -95,6 +96,7 @@
 	type ProviderEntry = ProviderInfo;
 	let {
 		workspace,
+		accountId = '',
 		workspaces,
 		links,
 		loading = false,
@@ -521,6 +523,16 @@
 			}
 		}
 	}
+
+	let openedDeepLink = '';
+	$effect(() => {
+		const scope = `${selectedWorkspaceId}:${accountId}`;
+		if (!accountId || openedDeepLink === scope || !accountsReady) return;
+		const account = accounts.find((item) => item.id === accountId);
+		if (!account) return;
+		openedDeepLink = scope;
+		void openEditAccount(account);
+	});
 
 	async function openEditAccount(account: SocialAccount) {
 		const workspaceID = selectedWorkspaceId;
@@ -1704,7 +1716,8 @@
 												{/if}
 											</div>
 										</div>
-										{#if canEditWorkspace}<DropdownMenu.Root>
+										{#if canEditWorkspace || (canConnectWorkspace && account.platform === 'x')}<DropdownMenu.Root
+											>
 												<DropdownMenu.Trigger>
 													{#snippet child({ props })}
 														<Button
@@ -1721,18 +1734,23 @@
 													{/snippet}
 												</DropdownMenu.Trigger>
 												<DropdownMenu.Content align="end" class="w-64">
+													{#if account.platform === 'x'}
+														<DropdownMenu.Item onclick={() => openEditAccount(account)}
+															>{m.x_messaging_manage()}</DropdownMenu.Item
+														>
+													{/if}
 													<DropdownMenu.Item onclick={() => openEditAccount(account)}
 														>{m.accounts_details()}</DropdownMenu.Item
 													>
-													<DropdownMenu.Separator />
-													{#each accountRemovalKinds(account) as kind (kind)}
-														<DropdownMenu.Item
-															variant="destructive"
-															onclick={() => requestAccountRemoval(account, kind)}
-														>
-															{accountRemovalActionLabel(account, kind)}
-														</DropdownMenu.Item>
-													{/each}
+													{#if canEditWorkspace}<DropdownMenu.Separator />
+														{#each accountRemovalKinds(account) as kind (kind)}
+															<DropdownMenu.Item
+																variant="destructive"
+																onclick={() => requestAccountRemoval(account, kind)}
+															>
+																{accountRemovalActionLabel(account, kind)}
+															</DropdownMenu.Item>
+														{/each}{/if}
 												</DropdownMenu.Content>
 											</DropdownMenu.Root>{/if}
 									</div>
@@ -2146,6 +2164,15 @@
 							dismissLabel={m.common_dismiss()}
 							onDismiss={() => (accountMetadataRefreshError = '')}
 						/>
+					{/if}
+					{#if editingAccount.platform === 'x'}
+						{#key `${selectedWorkspaceId}:${editingAccount.id}`}
+							<XMessagingSettings
+								workspaceId={selectedWorkspaceId}
+								accountId={editingAccount.id}
+								canConnect={canConnectWorkspace}
+							/>
+						{/key}
 					{/if}
 					{#if editFeaturesLoading && !editFeaturesReady}
 						<div class="rounded-lg border p-3 text-sm text-muted-foreground">
