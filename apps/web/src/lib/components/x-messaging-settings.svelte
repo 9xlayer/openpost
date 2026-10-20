@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { openPostQueryPolicy, openPostWorkspaceKey } from '@openpost/query-catalog';
+	import { xMessagingReadinessQueryOptions } from '@openpost/query-catalog';
 	import { client } from '$lib/api/client';
-	import { queryGET } from '$lib/query/transport';
+	import { xMessagingQueryAPI } from '$lib/query/inbox';
 	import { auth } from '$lib/stores/auth';
 	import { rememberXMessagingAuthorization } from '$lib/auth/x-messaging';
 	import { m } from '$lib/paraglide/messages';
@@ -16,23 +16,9 @@
 	}: { workspaceId: string; accountId: string; canConnect: boolean } = $props();
 	let busy = $state(false);
 	let error = $state('');
-	const readiness = createQuery(() => ({
-		...openPostQueryPolicy(),
-		queryKey: openPostWorkspaceKey(workspaceId, 'x-messaging', accountId),
-		enabled: Boolean(workspaceId && accountId),
-		queryFn: async ({ signal }) =>
-			(
-				await queryGET({
-					signal,
-					fallback: m.x_messaging_load_failed(),
-					request: (signal) =>
-						client.GET('/accounts/{account_id}/messaging/x', {
-							params: { path: { account_id: accountId }, query: { workspace_id: workspaceId } },
-							signal
-						})
-				})
-			).data
-	}));
+	const readiness = createQuery(() =>
+		xMessagingReadinessQueryOptions(xMessagingQueryAPI, workspaceId, accountId)
+	);
 	async function authorize() {
 		const identity = auth.captureIdentity();
 		if (busy || !canConnect || !identity) return;

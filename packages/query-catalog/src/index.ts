@@ -51,3 +51,5 @@ export * from "./image-generation";
 export * from "./publication-reviews";
 
 export * from "./inbox-updates";
+
+export * from "./x-messaging";

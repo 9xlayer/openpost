@@ -8,7 +8,7 @@
 		xMessagingSettingsHref
 	} from '$lib/auth/x-messaging';
 	import { queryClient } from '$lib/query/client';
-	import { openPostWorkspaceKey } from '@openpost/query-catalog';
+	import { xMessagingQueryKeys } from '@openpost/query-catalog';
 	import { m } from '$lib/paraglide/messages';
 	import StandaloneShell from '$lib/components/standalone-shell.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
@@ -71,7 +71,7 @@
 					return;
 				}
 				await queryClient.invalidateQueries({
-					queryKey: openPostWorkspaceKey(pending.workspaceId, 'x-messaging', pending.accountId)
+					queryKey: xMessagingQueryKeys.readiness(pending.workspaceId, pending.accountId)
 				});
 				status = 'success';
 			} catch {

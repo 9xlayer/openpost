@@ -3,6 +3,7 @@ import {
 	OpenPostQueryError,
 	type InboxQueryAPI,
 	type InboxUpdateAPI,
+	type XMessagingQueryAPI,
 	type NormalizedConversationFilters,
 	type NormalizedEngagementFilters
 } from '@openpost/query-catalog';
@@ -165,5 +166,20 @@ export const inboxUpdateAPI: InboxUpdateAPI = {
 		);
 		if (error)
 			throw new OpenPostQueryError('Could not update inbox activity.', { status: response.status });
+	}
+};
+
+export const xMessagingQueryAPI: XMessagingQueryAPI = {
+	async getReadiness(workspaceId, accountId, signal) {
+		const { data } = await queryGET({
+			signal,
+			fallback: 'Could not load X messaging access.',
+			request: (signal) =>
+				client.GET('/accounts/{account_id}/messaging/x', {
+					params: { path: { account_id: accountId }, query: { workspace_id: workspaceId } },
+					signal
+				})
+		});
+		return data;
 	}
 };
