@@ -1,4 +1,9 @@
 export const offlineTranslations = {
+	ru: [
+		'Нет подключения',
+		'Эта страница пока недоступна на этом устройстве. Подключитесь к интернету, чтобы открыть её. Сохранённые локальные проекты остаются на устройстве.',
+		'Попробовать ещё раз'
+	],
 	pt: [
 		'Está offline',
 		'Esta página ainda não está disponível neste dispositivo. Volte a ligar-se para a abrir. Os seus projetos locais guardados continuam neste dispositivo.',
