@@ -7,7 +7,7 @@ on:
         description: Publish an independent package without rebuilding the app
         required: true
         type: choice
-        options: [n8n]
+        options: [n8n, sdk]
   push:
     tags:
       - "v*"
@@ -538,6 +538,7 @@ jobs:
 
   publish-sdk:
     name: Publish and verify npm SDK package
+    if: "!cancelled() && (needs.promote-image.result == 'success' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.package == 'sdk'))"
     runs-on: ubuntu-latest
     # Like the n8n package, the SDK keeps its own publication identity and
     # runs beside the Hosted deployment, never behind it.
