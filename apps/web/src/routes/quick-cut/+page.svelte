@@ -2097,9 +2097,9 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 		{:else}
 			{#if cloudConflictId}
 				<InlineNotice tone="error" label={m.video_editor_conflict_title()}>
-					<span class="block text-sm font-semibold">
+					<h2 id="quick-cut-cloud-conflict-title" class="block text-sm font-semibold">
 						{m.video_editor_conflict_title()}
-					</span>
+					</h2>
 					<span class="mt-1 block text-xs text-muted-foreground">
 						{m.video_editor_conflict_preserved()}
 					</span>
