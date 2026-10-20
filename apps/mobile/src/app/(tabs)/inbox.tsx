@@ -169,7 +169,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
       />
       <AccountFilter accounts={accounts.data ?? []} value={accountId} onChange={setAccountId} />
       {accounts.data?.some((account) => account.id === accountId && account.platform === "x") ? (
-        <XMessagingRecovery accountId={accountId} />
+        <XMessagingRecovery accountId={accountId} workspaceId={workspaceId} />
       ) : null}
       {undo ? (
         <View

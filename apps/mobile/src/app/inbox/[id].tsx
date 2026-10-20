@@ -326,7 +326,7 @@ function ChatContent({
           }}
         >
           {chat?.platform === "x" && blocked ? (
-            <XMessagingRecovery accountId={chat.social_account_id} />
+            <XMessagingRecovery accountId={chat.social_account_id} workspaceId={workspaceId} />
           ) : null}
           {blocked ? <BodyText>{blocked}</BodyText> : null}
           {composer.error ? <BodyText accessibilityRole="alert">{composer.error}</BodyText> : null}

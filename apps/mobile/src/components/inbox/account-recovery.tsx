@@ -4,7 +4,13 @@ import { getServer } from "@/lib/server";
 import { View } from "react-native";
 import { useState } from "react";
 
-export function XMessagingRecovery({ accountId }: { accountId: string }) {
+export function XMessagingRecovery({
+  accountId,
+  workspaceId,
+}: {
+  accountId: string;
+  workspaceId: string;
+}) {
   const [error, setError] = useState<string | null>(null);
   async function openSettings() {
     const server = getServer();
@@ -12,6 +18,7 @@ export function XMessagingRecovery({ accountId }: { accountId: string }) {
     const url = new URL("/settings", server.baseUrl);
     url.searchParams.set("tab", "accounts");
     url.searchParams.set("account_id", accountId);
+    url.searchParams.set("workspace_id", workspaceId);
     try {
       await WebBrowser.openBrowserAsync(url.toString());
     } catch {
