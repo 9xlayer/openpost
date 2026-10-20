@@ -232,3 +232,38 @@ test("disconnecting during durable reply admission restores the editable draft w
   await session.setText("Still editable");
   expect(session.snapshot().text).toBe("Still editable");
 });
+
+test("pending reply admission locks the submitted body before the asynchronous device write completes", async () => {
+  let release!: () => void;
+  const saved = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let disk: ConversationDraft = { text: "The submitted body", sends: [] };
+  const requests: string[] = [];
+  const session = new PublicReplySession({
+    read: async () => disk,
+    write: async (draft) => {
+      await saved;
+      disk = draft;
+    },
+    canEdit: () => true,
+    online: () => true,
+    current: () => true,
+    newOperationId: () => operationId,
+    admit: async (body) => {
+      requests.push(body);
+      return { job_id: "reply-job" };
+    },
+  });
+  await session.restore();
+  const submitting = session.submit();
+  expect(session.snapshot().operation?.state).toBe("sending");
+  const typing = session.setText("A different body");
+  release();
+  await Promise.all([submitting, typing]);
+  expect(requests).toEqual(["The submitted body"]);
+  expect(disk).toMatchObject({
+    text: "The submitted body",
+    sends: [{ operationId, jobId: "reply-job" }],
+  });
+});

@@ -143,6 +143,7 @@ export class PublicReplySession {
     };
     const before = this.value;
     this.inFlight = true;
+    this.emit({ ready: true, text: body, operation, history: before.history });
     try {
       const saved = await this.persist(
         { ready: true, text: body, operation },
