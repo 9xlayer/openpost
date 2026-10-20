@@ -14,6 +14,7 @@ import {
   captureApiRequestIdentity,
   settleApiUnauthorized,
 } from "../api/client";
+import { requireInboxConnection } from "./connection";
 import { mobileQueryTransportRequest } from "../query-api";
 
 export type Conversation = components["schemas"]["Conversation"];
@@ -194,6 +195,7 @@ export async function sendMessage(
   message: string,
   clientOperationId: string,
 ): Promise<DirectMessage> {
+  requireInboxConnection();
   const body = { workspace_id: workspaceId, message, client_operation_id: clientOperationId };
   return result(
     api().POST("/messages/{conversation_id}/send", {
@@ -263,6 +265,7 @@ export async function commentAction(
   message?: string,
   clientOperationId?: string,
 ) {
+  if (action === "reply") requireInboxConnection();
   return result(
     api().POST("/engagement/{item_id}/actions", {
       params: { path: { item_id: itemId } },
@@ -310,6 +313,7 @@ export function listConversationMessages(
   );
 }
 export function retryMessage(workspaceId: string, conversationId: string, messageId: string) {
+  requireInboxConnection();
   return result(
     api().POST("/messages/{conversation_id}/retry", {
       params: { path: { conversation_id: conversationId } },

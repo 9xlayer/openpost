@@ -25,6 +25,7 @@ import {
   setConversationState,
   type DirectMessage,
 } from "@/lib/inbox/api";
+import { getInboxOnline, useInboxOnline } from "@/lib/inbox/connection";
 import { useChatComposer } from "@/lib/inbox/use-composer";
 import { uniqueMessages, type PendingSend } from "@/lib/inbox/state";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
@@ -85,8 +86,10 @@ function ChatContent({
   }, []);
   const expired =
     !!chat?.messaging_window_expires_at && Date.parse(chat.messaging_window_expires_at) < now;
-  const canSend =
+  const online = useInboxOnline();
+  const canCompose =
     canEdit && messaging?.effective_enabled === true && !expired && !!chat && !chat.archived_at;
+  const canSend = canCompose && online;
   const liveError = useInboxUpdates("conversation", conversationId);
   const readInFlight = useRef(false);
   useEffect(() => {
@@ -150,7 +153,7 @@ function ChatContent({
     }
   }
   async function retryServer(messageId: string) {
-    if (!canSend) return;
+    if (!canSend || !getInboxOnline()) return;
     try {
       await retryMessage(workspaceId, conversationId, messageId);
       await history.refetch();
@@ -345,14 +348,17 @@ function ChatContent({
             <XMessagingRecovery accountId={chat.social_account_id} workspaceId={workspaceId} />
           ) : null}
           {blocked ? <BodyText>{blocked}</BodyText> : null}
+          {!online ? (
+            <BodyText>You’re offline. Your draft is saved. Reconnect, then tap Send.</BodyText>
+          ) : null}
           {composer.error ? <BodyText accessibilityRole="alert">{composer.error}</BodyText> : null}
           <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8 }}>
             <TextField
               accessibilityLabel="Message"
-              placeholder={canSend ? "Message" : "Reply unavailable"}
+              placeholder={canCompose ? "Message" : "Reply unavailable"}
               value={composer.draft.text}
               onChangeText={composer.setText}
-              editable={canSend && composer.ready}
+              editable={canCompose && composer.ready}
               multiline
               maxLength={10000}
               style={{

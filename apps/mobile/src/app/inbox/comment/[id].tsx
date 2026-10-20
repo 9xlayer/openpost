@@ -14,6 +14,7 @@ import { MediaImage } from "@/components/media-image";
 import { useComment } from "@/lib/inbox/queries";
 import { commentAction, setCommentState } from "@/lib/inbox/api";
 import { orderedCommentAncestors } from "@/lib/inbox/ancestors";
+import { useInboxOnline } from "@/lib/inbox/connection";
 import { usePublicReply } from "@/lib/inbox/use-public-reply";
 import { useInboxJob } from "@/lib/inbox/use-job";
 import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "@/lib/api/client";
@@ -43,6 +44,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const account = accounts.data?.find((row) => row.id === comment?.social_account_id);
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
+  const online = useInboxOnline();
   const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at;
   const reply = usePublicReply(workspaceId, id, replyable);
   const [busy, setBusy] = useState(false);
@@ -395,6 +397,11 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   "receiving account"}{" "}
                 · {platformLabel(comment.platform)}
               </BodyText>
+              {!online ? (
+                <BodyText>
+                  You’re offline. Your draft is saved. Reconnect, then tap Reply publicly.
+                </BodyText>
+              ) : null}
               {!replyable ? (
                 <BodyText>
                   {comment.deleted_at
@@ -491,6 +498,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 intent="focal"
                 loading={reply.operation?.state === "sending"}
                 disabled={
+                  !online ||
                   !replyable ||
                   !reply.ready ||
                   !reply.text.trim() ||

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { commentAction } from "./api";
+import { getInboxOnline } from "./connection";
 import { PublicReplySession } from "./reply";
 import {
   inboxStorageScope,
@@ -20,6 +21,7 @@ export function usePublicReply(workspaceId: string, itemId: string, canEdit: boo
       newOperationId: newInboxOperationId,
       current: scope.current,
       canEdit: () => false,
+      online: getInboxOnline,
     });
   }, [workspaceId, itemId]);
   const state = useSyncExternalStore(session.subscribe, session.snapshot, session.snapshot);

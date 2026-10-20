@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { OpenPostQueryError, reconcileInboxChanges } from "@openpost/query-catalog";
+import { getInboxOnline, InboxOfflineError } from "./connection";
 import { sendMessage, type DirectMessage } from "./api";
 import {
   inboxStorageScope,
@@ -60,7 +61,7 @@ export function useChatComposer(
   }, [messages, ready, update]); // update reads the latest draft to preserve text typed during refresh.
 
   async function submit(existing?: PendingSend) {
-    if (!ready || !scope.current()) return;
+    if (!ready || !scope.current() || !getInboxOnline()) return;
     const body = existing?.body ?? current.current.text.trim();
     if (!body) return;
     const send: PendingSend = {
@@ -108,6 +109,18 @@ export function useChatComposer(
       });
     } catch (cause) {
       if (mounted.current && scope.current()) {
+        if (cause instanceof InboxOfflineError) {
+          await update({
+            text: existing
+              ? current.current.text
+              : [body, current.current.text].filter(Boolean).join("\n"),
+            sends: current.current.sends.flatMap((row) =>
+              row.operationId !== send.operationId ? [row] : existing ? [existing] : [],
+            ),
+          });
+          setError(cause.message);
+          return;
+        }
         const message = cause instanceof Error ? cause.message : "Delivery could not be confirmed.";
         const state =
           cause instanceof OpenPostQueryError &&

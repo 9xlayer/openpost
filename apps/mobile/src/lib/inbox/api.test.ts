@@ -1,10 +1,12 @@
+import { onlineManager } from "@tanstack/react-query";
 import { expect, mock, spyOn, test } from "bun:test";
 mock.module("expo-secure-store", () => ({
   getItemAsync: async () => null,
   setItemAsync: async () => undefined,
   deleteItemAsync: async () => undefined,
 }));
-const { setConversationState, setCommentState } = await import("./api");
+const { setConversationState, setCommentState, sendMessage, retryMessage, commentAction } =
+  await import("./api");
 const { setServer, clearServer } = await import("../server");
 
 test("viewer read and archive paths never send a write, while editor paths use workspace-scoped state endpoints", async () => {
@@ -38,6 +40,40 @@ test("viewer read and archive paths never send a write, while editor paths use w
       archived: true,
     });
   } finally {
+    network.mockRestore();
+    await clearServer();
+  }
+});
+
+test("offline message admission and retries never dispatch HTTP", async () => {
+  let requests = 0;
+  const network = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async () => {
+        requests++;
+        return Response.json({ id: "admitted", job_id: "reply-job" });
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  const wasOnline = onlineManager.isOnline();
+  try {
+    await setServer("https://native-inbox-review.invalid");
+    onlineManager.setOnline(false);
+    await expect(sendMessage("workspace", "chat", "Keep draft", "operation")).rejects.toThrow(
+      "offline",
+    );
+    expect(() => retryMessage("workspace", "chat", "message")).toThrow("offline");
+    await expect(
+      commentAction("workspace", "comment", "reply", "Keep reply", "reply-operation"),
+    ).rejects.toThrow("offline");
+    expect(requests).toBe(0);
+    onlineManager.setOnline(true);
+    expect(requests).toBe(0);
+    await sendMessage("workspace", "chat", "Keep draft", "operation");
+    expect(requests).toBe(1);
+  } finally {
+    onlineManager.setOnline(wasOnline);
     network.mockRestore();
     await clearServer();
   }

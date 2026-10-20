@@ -7,6 +7,7 @@ function fixture(canEdit = true) {
   let disk: ConversationDraft = { text: "Thanks, Alex!", sends: [] };
   const requests: { body: string; operationId: string }[] = [];
   let loseResponse = false;
+  let online = true;
   let operationCount = 0;
   const create = () =>
     new PublicReplySession({
@@ -15,6 +16,7 @@ function fixture(canEdit = true) {
         disk = JSON.parse(JSON.stringify(value));
       },
       canEdit: () => canEdit,
+      online: () => online,
       current: () => true,
       newOperationId: () => (operationCount++ ? "intentional-replacement" : operationId),
       admit: async (body, id) => {
@@ -27,6 +29,9 @@ function fixture(canEdit = true) {
   return {
     create,
     requests,
+    online: (value: boolean) => {
+      online = value;
+    },
     disk: () => disk,
     loseResponse: (value: boolean) => {
       loseResponse = value;
@@ -102,6 +107,7 @@ test("typing updates the controlled native field immediately while device persis
         release = resolve;
       }),
     canEdit: () => true,
+    online: () => true,
     current: () => true,
     newOperationId: () => operationId,
     admit: async () => ({ job_id: "unused" }),
@@ -172,4 +178,57 @@ test("an unknown provider outcome with a known receipt cannot be replaced as a c
     operation: { state: "queued", jobId: "reply-job", operationId },
   });
   expect(f.requests).toHaveLength(1);
+});
+
+test("offline reply typing stays editable and reconnection requires an explicit send, including an ambiguous retry", async () => {
+  const f = fixture();
+  const session = f.create();
+  await session.restore();
+  f.online(false);
+  await session.setText("Draft written offline");
+  await session.submit();
+  expect(f.requests).toHaveLength(0);
+  expect(f.disk()).toEqual({ text: "Draft written offline", sends: [] });
+  f.online(true);
+  expect(f.requests).toHaveLength(0);
+  f.loseResponse(true);
+  await session.submit();
+  expect(f.requests).toHaveLength(1);
+  f.online(false);
+  await session.submit();
+  expect(f.requests).toHaveLength(1);
+  expect(session.snapshot().operation).toMatchObject({ operationId, state: "ambiguous" });
+  f.online(true);
+  f.loseResponse(false);
+  expect(f.requests).toHaveLength(1);
+  await session.submit();
+  expect(f.requests[1]).toEqual({ body: "Draft written offline", operationId });
+});
+
+test("disconnecting during durable reply admission restores the editable draft without dispatch", async () => {
+  let online = true;
+  const requests: string[] = [];
+  let disk: ConversationDraft = { text: "Keep this draft", sends: [] };
+  const session = new PublicReplySession({
+    read: async () => disk,
+    write: async (value) => {
+      disk = value;
+      online = false;
+    },
+    canEdit: () => true,
+    online: () => online,
+    current: () => true,
+    newOperationId: () => operationId,
+    admit: async (body) => {
+      requests.push(body);
+      return { job_id: "must-not-dispatch" };
+    },
+  });
+  await session.restore();
+  await session.submit();
+  expect(requests).toEqual([]);
+  expect(disk).toEqual({ text: "Keep this draft", sends: [] });
+  expect(session.snapshot().operation).toBeNull();
+  await session.setText("Still editable");
+  expect(session.snapshot().text).toBe("Still editable");
 });

@@ -14,6 +14,7 @@ interface ReplyDependencies {
   admit(body: string, operationId: string): Promise<{ job_id?: string }>;
   newOperationId(): string;
   canEdit(): boolean;
+  online(): boolean;
   current(): boolean;
 }
 /** Owns admission, crash recovery and provider receipts for one authored public reply. */
@@ -114,6 +115,7 @@ export class PublicReplySession {
   async submit() {
     if (
       !this.value.ready ||
+      !this.dependencies.online() ||
       !(this.allowed ?? this.dependencies.canEdit()) ||
       !this.current() ||
       this.inFlight
@@ -130,10 +132,15 @@ export class PublicReplySession {
       createdAt: prior?.createdAt ?? new Date().toISOString(),
       state: "sending",
     };
+    const before = this.value;
     this.inFlight = true;
     try {
       await this.persist({ ready: true, text: body, operation });
       if (!this.current()) return;
+      if (!this.dependencies.online()) {
+        await this.persist(before);
+        return;
+      }
       const receipt = await this.dependencies.admit(body, operation.operationId);
       if (!receipt.job_id) throw new Error("The server did not confirm a durable reply receipt.");
       if (!this.current()) return;
