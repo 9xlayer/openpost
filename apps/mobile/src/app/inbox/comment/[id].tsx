@@ -1,17 +1,18 @@
+import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Linking, ScrollView, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useHeaderHeight } from "expo-router/react-navigation";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { engagementQueryOptions, inboxQueryKeys } from "@openpost/query-catalog";
+import { useQueryClient } from "@tanstack/react-query";
+import { inboxQueryKeys } from "@openpost/query-catalog";
 import { AccountAvatar } from "@/components/account-avatar";
 import { BodyText, Button, ContentTitle, Screen, TextField } from "@/components/ui";
 import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
 import { MediaImage } from "@/components/media-image";
 import { useComment } from "@/lib/inbox/queries";
-import { commentAction, markCommentRead, mobileInboxAPI } from "@/lib/inbox/api";
+import { commentAction, markCommentRead } from "@/lib/inbox/api";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
 import {
   inboxStorageScope,
@@ -25,7 +26,11 @@ import { useNativeTheme } from "@/theme";
 export default function CommentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const workspaceId = useWorkspaceId() ?? "";
-  return <CommentContent key={`${workspaceId}:${id}`} workspaceId={workspaceId} id={id} />;
+  return (
+    <InboxSessionBoundary>
+      <CommentContent key={`${workspaceId}:${id}`} workspaceId={workspaceId} id={id} />
+    </InboxSessionBoundary>
+  );
 }
 function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }) {
   const { colors, spacing, shape } = useNativeTheme().manifest;
@@ -45,22 +50,12 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const scope = useMemo(() => inboxStorageScope(workspaceId), [workspaceId]);
   const draftId = `comment-${id}`;
   const liveError = useInboxUpdates("comments");
-  const discussion = useInfiniteQuery({
-    ...engagementQueryOptions(mobileInboxAPI, workspaceId, {
-      publicationId: comment?.publication_id,
-      accountId: comment?.social_account_id,
-      limit: 100,
-    }),
-    enabled: !!comment?.parent_remote_id && !!comment.publication_id,
-  });
-  const parent = discussion.data?.pages
-    .flatMap((page) => page.items ?? [])
-    .find((row) => row.remote_id === comment?.parent_remote_id);
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = discussion;
-  useEffect(() => {
-    if (comment?.parent_remote_id && !parent && hasNextPage && !isFetchingNextPage)
-      void fetchNextPage();
-  }, [comment?.parent_remote_id, parent, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const parentQuery = useComment(
+    comment?.parent_remote_id ?? "",
+    comment?.social_account_id ?? "",
+    true,
+  );
+  const parent = parentQuery.data;
   useEffect(() => {
     let active = true;
     void readConversationDraft(scope, draftId)
@@ -171,7 +166,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     </>
                   ) : (
                     <BodyText>
-                      {discussion.isFetching
+                      {parentQuery.isPending
                         ? "Loading parent comment…"
                         : "The parent comment is not available in stored history."}
                     </BodyText>

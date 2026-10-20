@@ -1,3 +1,4 @@
+import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Linking, View } from "react-native";
 import { Stack, useLocalSearchParams } from "expo-router";
@@ -24,7 +25,6 @@ import {
   setConversationState,
   type DirectMessage,
 } from "@/lib/inbox/api";
-import { useConversation } from "@/lib/inbox/queries";
 import { useChatComposer } from "@/lib/inbox/use-composer";
 import { uniqueMessages, type PendingSend } from "@/lib/inbox/state";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
@@ -34,7 +34,11 @@ import { useNativeTheme } from "@/theme";
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const workspaceId = useWorkspaceId() ?? "";
-  return <ChatContent key={`${workspaceId}:${id}`} workspaceId={workspaceId} conversationId={id} />;
+  return (
+    <InboxSessionBoundary>
+      <ChatContent key={`${workspaceId}:${id}`} workspaceId={workspaceId} conversationId={id} />
+    </InboxSessionBoundary>
+  );
 }
 function ChatContent({
   workspaceId,
@@ -46,7 +50,6 @@ function ChatContent({
   const { colors, spacing, shape } = useNativeTheme().manifest;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
-  const conversation = useConversation(conversationId);
   const accounts = useAccounts();
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
@@ -65,7 +68,7 @@ function ChatContent({
   const newest = useRef<string | undefined>(undefined);
   const [actionError, setActionError] = useState<string | null>(null);
   const [stateBusy, setStateBusy] = useState(false);
-  const chat = conversation.data;
+  const chat = history.data?.pages[0]?.conversation;
   const account = accounts.data?.find((row) => row.id === chat?.social_account_id);
   const features = useQuery(
     accountFeaturesQueryOptions(mobileInboxAPI, workspaceId, chat ? [chat.social_account_id] : []),
@@ -109,7 +112,7 @@ function ChatContent({
     try {
       await setConversationState(workspaceId, conversationId, { archived: !chat.archived_at });
       await Promise.all([
-        conversation.refetch(),
+        history.refetch(),
         queryClient.invalidateQueries({ queryKey: inboxQueryKeys.conversationsRoot(workspaceId) }),
       ]);
     } catch (error) {
@@ -199,16 +202,7 @@ function ChatContent({
             />
           </View>
         ) : null}
-        <DelayedQueryPlaceholder
-          pending={history.isPending || conversation.isPending}
-          shape="detail"
-        />
-        {conversation.isError ? (
-          <QueryNotice
-            message={conversation.error.message}
-            retry={() => void conversation.refetch()}
-          />
-        ) : null}
+        <DelayedQueryPlaceholder pending={history.isPending} shape="detail" />
         {history.isError ? (
           <QueryNotice
             message={
@@ -227,7 +221,7 @@ function ChatContent({
             message={actionError}
             retry={() => {
               setActionError(null);
-              void conversation.refetch();
+              void history.refetch();
             }}
           />
         ) : null}

@@ -1,3 +1,4 @@
+import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { FlatList, Pressable, RefreshControl, View } from "react-native";
@@ -28,7 +29,11 @@ import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "@/lib/ap
 
 export default function InboxScreen() {
   const workspaceId = useWorkspaceId();
-  return <InboxContent key={workspaceId} workspaceId={workspaceId ?? ""} />;
+  return (
+    <InboxSessionBoundary>
+      <InboxContent key={workspaceId} workspaceId={workspaceId ?? ""} />
+    </InboxSessionBoundary>
+  );
 }
 function InboxContent({ workspaceId }: { workspaceId: string }) {
   const { colors, spacing } = useNativeTheme().manifest;

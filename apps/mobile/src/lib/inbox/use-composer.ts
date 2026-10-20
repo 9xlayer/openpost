@@ -84,14 +84,6 @@ export function useChatComposer(
       if (!scope.current()) return;
       const response = await sendMessage(workspaceId, conversationId, body, send.operationId);
       if (!scope.current()) return;
-      await update({
-        ...current.current,
-        sends: current.current.sends.map((row) =>
-          row.operationId === send.operationId
-            ? { ...row, serverId: response.id, state: "queued", error: undefined }
-            : row,
-        ),
-      });
       reconcileInboxChanges(queryClient, workspaceId, {
         cursor: "",
         reset: false,
@@ -105,8 +97,17 @@ export function useChatComposer(
         ],
         messages: [response],
       });
+      if (!mounted.current) return;
+      await update({
+        ...current.current,
+        sends: current.current.sends.map((row) =>
+          row.operationId === send.operationId
+            ? { ...row, serverId: response.id, state: "queued", error: undefined }
+            : row,
+        ),
+      });
     } catch (cause) {
-      if (scope.current()) {
+      if (mounted.current && scope.current()) {
         const message = cause instanceof Error ? cause.message : "Delivery could not be confirmed.";
         await update({
           ...current.current,

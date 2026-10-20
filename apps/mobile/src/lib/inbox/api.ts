@@ -26,6 +26,7 @@ export type DirectMessage = components["schemas"]["DirectMessage"] & {
 export type MessagePage = Omit<components["schemas"]["MessagePage"], "items"> & {
   items: DirectMessage[] | null;
   history_available?: boolean;
+  conversation?: Conversation;
 };
 export type Comment = components["schemas"]["EngagementItem"];
 export type { InboxView } from "@openpost/query-catalog";
@@ -273,9 +274,12 @@ export async function setConversationState(
 }
 
 export async function markCommentRead(workspaceId: string, id: string) {
+  const identity = captureApiRequestIdentity();
   const response = await api().POST("/engagement/state", {
     body: { workspace_id: workspaceId, ids: [id], read: true },
   });
+  await settleApiUnauthorized(identity, response.response);
+  if (!apiRequestIdentityIsCurrent(identity)) throw new Error("The signed-in Workspace changed.");
   if (response.error)
     throw createOpenPostQueryError(
       response.response.status,
@@ -289,10 +293,13 @@ export async function commentAction(
   action: "reply" | "hide" | "delete" | "like" | "unlike",
   message?: string,
 ) {
+  const identity = captureApiRequestIdentity();
   const response = await api().POST("/engagement/{item_id}/actions", {
     params: { path: { item_id: itemId } },
     body: { workspace_id: workspaceId, action, message },
   });
+  await settleApiUnauthorized(identity, response.response);
+  if (!apiRequestIdentityIsCurrent(identity)) throw new Error("The signed-in Workspace changed.");
   if (response.error)
     throw createOpenPostQueryError(
       response.response.status,

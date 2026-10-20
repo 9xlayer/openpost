@@ -1,9 +1,17 @@
+import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { NativeTabs } from "expo-router/unstable-native-tabs";
 import { useColors } from "@/components/ui";
 import { navigationPresentation, useNativeTheme } from "@/theme";
 import { resolveNativeThemeNavigationIcon } from "@/theme/native-tab-icons";
 
 export default function TabLayout() {
+  return (
+    <InboxSessionBoundary>
+      <NativeTabLayout />
+    </InboxSessionBoundary>
+  );
+}
+function NativeTabLayout() {
   const colors = useColors();
   const theme = useNativeTheme();
   const drafts = resolveNativeThemeNavigationIcon(theme.manifest, "drafts");

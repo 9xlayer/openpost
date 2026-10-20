@@ -1,78 +1,63 @@
-import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { inboxQueryKeys, type ConversationPage } from "@openpost/query-catalog";
-import { mobileInboxAPI, listConversations } from "./api";
+import { useEffect } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { engagementQueryOptions } from "@openpost/query-catalog";
+import { mobileInboxAPI } from "./api";
 import { useWorkspaceId } from "../queries";
 
-export function useConversation(id: string) {
+/** Select a stored comment through the canonical paginated inventory, including archives. */
+export function useComment(id: string, accountId = "", remoteIdentity = false) {
   const workspaceId = useWorkspaceId() ?? "";
-  const client = useQueryClient();
-  return useQuery({
-    queryKey: [...inboxQueryKeys.conversationsRoot(workspaceId), "detail", id],
-    enabled: Boolean(workspaceId && id),
-    initialData: () => {
-      for (const [, data] of client.getQueriesData<InfiniteData<ConversationPage>>({
-        queryKey: inboxQueryKeys.conversationsRoot(workspaceId),
-      })) {
-        const row = data?.pages?.flatMap((page) => page.items ?? []).find((row) => row.id === id);
-        if (row) return row;
-      }
-    },
-    queryFn: async ({ signal }) => {
-      for (const archived of [false, true]) {
-        let cursor = "";
-        const seen = new Set<string>();
-        do {
-          const page = await listConversations(
-            workspaceId,
-            { archived, limit: 100 },
-            cursor,
-            signal,
-          );
-          const row = page.items?.find((row) => row.id === id);
-          if (row) return row;
-          const next = page.next_cursor ?? "";
-          if (seen.has(next)) break;
-          seen.add(next);
-          cursor = next;
-        } while (cursor);
-      }
-      throw new Error("This chat is no longer available in this Workspace.");
-    },
+  const active = useInfiniteQuery({
+    ...engagementQueryOptions(mobileInboxAPI, workspaceId, {
+      accountId,
+      archived: false,
+      limit: 100,
+    }),
+    enabled: !!id && !!workspaceId,
   });
-}
-
-export function useComment(id: string) {
-  const workspaceId = useWorkspaceId() ?? "";
-  return useQuery({
-    queryKey: [...inboxQueryKeys.engagementRoot(workspaceId), "item", id],
-    enabled: Boolean(workspaceId && id),
-    queryFn: async ({ signal }) => {
-      for (const archived of [false, true]) {
-        let cursor = "";
-        const seen = new Set<string>();
-        do {
-          const page = await mobileInboxAPI.listEngagement(
-            workspaceId,
-            {
-              accountId: "",
-              platform: "",
-              publicationId: "",
-              unreadOnly: false,
-              archived,
-              limit: 100,
-            },
-            cursor,
-            signal,
-          );
-          const item = page.items?.find((item) => item.id === id);
-          if (item) return item;
-          const next = page.next_cursor ?? "";
-          if (seen.has(next)) break;
-          seen.add(next);
-          cursor = next;
-        } while (cursor);
-      }
-      throw new Error("This comment is no longer available in this Workspace.");
-    },
+  const matches = (item: { id: string; remote_id: string }) =>
+    remoteIdentity ? item.remote_id === id : item.id === id;
+  const current = active.data?.pages.flatMap((page) => page.items ?? []).find(matches);
+  const archived = useInfiniteQuery({
+    ...engagementQueryOptions(mobileInboxAPI, workspaceId, {
+      accountId,
+      archived: true,
+      limit: 100,
+    }),
+    enabled: !!id && !!workspaceId && !current && !active.isPending && !active.hasNextPage,
   });
+  const data = current ?? archived.data?.pages.flatMap((page) => page.items ?? []).find(matches);
+  const {
+    hasNextPage: activeNext,
+    isFetchingNextPage: activeFetching,
+    fetchNextPage: nextActive,
+  } = active;
+  const {
+    hasNextPage: archivedNext,
+    isFetchingNextPage: archivedFetching,
+    fetchNextPage: nextArchived,
+  } = archived;
+  useEffect(() => {
+    if (id && !data && activeNext && !activeFetching) void nextActive();
+  }, [id, data, activeNext, activeFetching, nextActive]);
+  useEffect(() => {
+    if (id && !data && !activeNext && archivedNext && !archivedFetching) void nextArchived();
+  }, [id, data, activeNext, archivedNext, archivedFetching, nextArchived]);
+  const pending =
+    !!id &&
+    !data &&
+    (active.isPending ||
+      activeNext ||
+      activeFetching ||
+      archived.isPending ||
+      archivedNext ||
+      archivedFetching);
+  const error = active.error ?? archived.error;
+  return {
+    data,
+    isPending: pending,
+    isError: !!error,
+    error: error instanceof Error ? error : new Error("Could not load comment"),
+    refetch: () => Promise.all([active.refetch(), archived.refetch()]),
+  };
 }
