@@ -356,9 +356,6 @@
 						align="end"
 						sideOffset={6}
 					>
-						<DropdownMenu.Item onclick={() => ui.openFeedback()}
-							><ThemeIcon role="feedback" class="size-4" />{m.feedback_open()}</DropdownMenu.Item
-						>
 						<AccountPreferencesMenu
 							onNavigate={() => {
 								profileMenuOpen = false;

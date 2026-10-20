@@ -25,6 +25,8 @@ test("navigation separates work, workspace management, and personal preferences"
     0,
   );
   await expect(page.getByRole("menuitem", { name: "Preferences", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Send feedback", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("menuitem", { name: "Help & feedback", exact: true })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Editors", exact: true })).toHaveCount(0);
   await page.getByRole("menuitem", { name: "Preferences", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Preferences", exact: true });
