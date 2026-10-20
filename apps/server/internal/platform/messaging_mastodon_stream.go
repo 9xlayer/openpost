@@ -41,23 +41,9 @@ func (m *MastodonAdapter) StreamMessageEvents(ctx context.Context, token, accoun
 }
 
 func (m *MastodonAdapter) messageStreamURL(ctx context.Context) (*url.URL, error) {
-	body, err := DoRequest(ctx, http.MethodGet, strings.TrimRight(m.compat.instanceURL, "/")+"/api/v2/instance", nil, nil)
+	raw, err := m.messageStreamOrigin(ctx)
 	if err != nil {
 		return nil, err
-	}
-	var info struct {
-		Configuration struct {
-			URLs struct {
-				Streaming string `json:"streaming"`
-			} `json:"urls"`
-		} `json:"configuration"`
-	}
-	if err = json.Unmarshal(body, &info); err != nil {
-		return nil, errors.New("invalid Mastodon instance metadata")
-	}
-	raw := info.Configuration.URLs.Streaming
-	if raw == "" {
-		return nil, errors.New("mastodon instance does not advertise a streaming endpoint")
 	}
 	endpoint, err := url.Parse(raw)
 	if err != nil || endpoint.User != nil || endpoint.RawQuery != "" || endpoint.Fragment != "" {
@@ -72,6 +58,36 @@ func (m *MastodonAdapter) messageStreamURL(ctx context.Context) (*url.URL, error
 	}
 	endpoint.Path = strings.TrimRight(endpoint.Path, "/") + "/api/v1/streaming/direct"
 	return endpoint, nil
+}
+
+func (m *MastodonAdapter) messageStreamOrigin(ctx context.Context) (string, error) {
+	for _, path := range []string{"/api/v2/instance", "/api/v1/instance"} {
+		body, err := DoRequest(ctx, http.MethodGet, strings.TrimRight(m.compat.instanceURL, "/")+path, nil, nil)
+		if err != nil {
+			var status *HTTPError
+			if errors.As(err, &status) && status.StatusCode == http.StatusNotFound {
+				continue
+			}
+			return "", err
+		}
+		var info struct {
+			Configuration struct {
+				URLs struct {
+					Streaming string `json:"streaming"`
+				} `json:"urls"`
+			} `json:"configuration"`
+			URLs struct {
+				StreamingAPI string `json:"streaming_api"`
+			} `json:"urls"`
+		}
+		if json.Unmarshal(body, &info) != nil {
+			return "", errors.New("invalid Mastodon instance metadata")
+		}
+		if raw := firstNonEmptyString(info.Configuration.URLs.Streaming, info.URLs.StreamingAPI); raw != "" {
+			return raw, nil
+		}
+	}
+	return "", errors.New("mastodon instance does not advertise a streaming endpoint")
 }
 
 func (m *MastodonAdapter) consumeMessageStream(ctx context.Context, client *http.Client, endpoint, token, accountID string, connected func(context.Context) error, consume func(context.Context, FetchMessageEventsResult) error) error {
