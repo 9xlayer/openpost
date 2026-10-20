@@ -89,7 +89,10 @@ export function useChatComposer(
           text: existing ? before.text : "",
           sends: [...before.sends.filter((row) => row.operationId !== send.operationId), send],
         },
-        { eligible: () => mounted.current && getInboxOnline(), rollback: before },
+        {
+          eligible: () => mounted.current && scope.current() && getInboxOnline(),
+          rollback: before,
+        },
       );
       if (!saved) {
         current.current = before;
