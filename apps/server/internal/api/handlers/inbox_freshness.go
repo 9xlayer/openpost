@@ -3,13 +3,14 @@ package handlers
 import (
 	"context"
 	"errors"
+	"net/http"
+	"time"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/services/engagement"
 	"github.com/openpost/backend/internal/services/inboxchanges"
 	"github.com/openpost/backend/internal/services/messaging"
-	"net/http"
-	"time"
 )
 
 type InboxChangesInput struct {

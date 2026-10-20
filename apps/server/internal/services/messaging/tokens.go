@@ -3,6 +3,7 @@ package messaging
 import (
 	"context"
 	"errors"
+
 	"github.com/openpost/backend/internal/models"
 )
 

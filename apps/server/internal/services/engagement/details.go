@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/workspaceaccess"
 )
 
+//nolint:revive // This name identifies the detail in the shared API schema.
 type EngagementDetail struct {
 	Item    models.EngagementItem   `json:"item"`
 	Parents []models.EngagementItem `json:"parents"`

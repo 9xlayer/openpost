@@ -92,42 +92,7 @@ func (s *Service) RunTransports(ctx context.Context, ingress *providerinbox.Serv
 			go func(account models.SocialAccount, adapter platform.MessageStreamAdapter) {
 				defer group.Done()
 				defer close(done)
-				eligible := func(checkCtx context.Context) (bool, error) {
-					active, err := s.db.NewSelect().Model((*models.SocialAccount)(nil)).Where("id=? AND is_active=? AND oauth_grant_id=?", account.ID, true, account.OAuthGrantID).Exists(checkCtx)
-					return active && s.isMessagingEnabled(checkCtx, account.ID), err
-				}
-				err := ingress.RunLeasedStream(streamCtx, account.ID, eligible, func(connectionCtx context.Context) error {
-					token, err := s.messagingToken(connectionCtx, account)
-					if err != nil {
-						return err
-					}
-					repair := func(repairCtx context.Context) error {
-						cursor := ""
-						for page := 0; page < 100; page++ {
-							snapshot, err := s.provider(account).FetchMessages(repairCtx, token, platform.FetchMessagesRequest{AccountID: account.AccountID, Cursor: cursor, Limit: 100})
-							if err != nil {
-								return err
-							}
-							if err = s.ApplyProviderEvents(repairCtx, account.ID, platform.FetchMessageEventsResult{Conversations: snapshot.Conversations}); err != nil {
-								return err
-							}
-							if snapshot.NextCursor == "" {
-								return nil
-							}
-							if snapshot.NextCursor == cursor {
-								return errors.New("provider history cursor did not advance")
-							}
-							cursor = snapshot.NextCursor
-						}
-						return errors.New("provider gap repair exceeded its page budget")
-					}
-					return adapter.StreamMessageEvents(connectionCtx, token, account.AccountID, repair, func(applyCtx context.Context, batch platform.FetchMessageEventsResult) error {
-						return s.ApplyProviderEvents(applyCtx, account.ID, batch)
-					})
-				})
-				if err != nil && streamCtx.Err() == nil {
-					log.Printf("inbox stream ended for account %s", account.ID)
-				}
+				s.runAccountStream(streamCtx, ingress, account, adapter)
 			}(account, adapter)
 		}
 		select {
@@ -136,4 +101,47 @@ func (s *Service) RunTransports(ctx context.Context, ingress *providerinbox.Serv
 		case <-ticker.C:
 		}
 	}
+}
+
+func (s *Service) runAccountStream(streamCtx context.Context, ingress *providerinbox.Service, account models.SocialAccount, adapter platform.MessageStreamAdapter) {
+	eligible := func(checkCtx context.Context) (bool, error) {
+		active, err := s.db.NewSelect().Model((*models.SocialAccount)(nil)).Where("id=? AND is_active=? AND oauth_grant_id=?", account.ID, true, account.OAuthGrantID).Exists(checkCtx)
+		return active && s.isMessagingEnabled(checkCtx, account.ID), err
+	}
+	err := ingress.RunLeasedStream(streamCtx, account.ID, eligible, func(connectionCtx context.Context) error {
+		token, err := s.messagingToken(connectionCtx, account)
+		if err != nil {
+			return err
+		}
+		repair := func(repairCtx context.Context) error {
+			return s.repairStreamGap(repairCtx, account, token)
+		}
+		return adapter.StreamMessageEvents(connectionCtx, token, account.AccountID, repair, func(applyCtx context.Context, batch platform.FetchMessageEventsResult) error {
+			return s.ApplyProviderEvents(applyCtx, account.ID, batch)
+		})
+	})
+	if err != nil && streamCtx.Err() == nil {
+		log.Printf("inbox stream ended for account %s", account.ID)
+	}
+}
+
+func (s *Service) repairStreamGap(ctx context.Context, account models.SocialAccount, token string) error {
+	cursor := ""
+	for page := 0; page < 100; page++ {
+		snapshot, err := s.provider(account).FetchMessages(ctx, token, platform.FetchMessagesRequest{AccountID: account.AccountID, Cursor: cursor, Limit: 100})
+		if err != nil {
+			return err
+		}
+		if err = s.ApplyProviderEvents(ctx, account.ID, platform.FetchMessageEventsResult{Conversations: snapshot.Conversations}); err != nil {
+			return err
+		}
+		if snapshot.NextCursor == "" {
+			return nil
+		}
+		if snapshot.NextCursor == cursor {
+			return errors.New("provider history cursor did not advance")
+		}
+		cursor = snapshot.NextCursor
+	}
+	return errors.New("provider gap repair exceeded its page budget")
 }

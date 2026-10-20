@@ -129,38 +129,9 @@ func (s *Service) syncIncremental(ctx context.Context, account models.SocialAcco
 		return err
 	}
 	if !checkpoint.Initialized {
-		if checkpoint.BootstrapCursor == "" {
-			head, err := incremental.FetchMessageEvents(ctx, token, platform.FetchMessageEventsRequest{AccountID: account.AccountID, Limit: 20})
-			if err != nil {
-				return err
-			}
-			if !head.Bootstrap || head.NextCursor == "" {
-				return platform.ErrMessageBootstrapCursorRequired
-			}
-			if _, err = s.db.NewRaw(`UPDATE message_event_checkpoints SET bootstrap_cursor=? WHERE social_account_id=? AND bootstrap_cursor=''`, head.NextCursor, account.ID).Exec(ctx); err != nil {
-				return err
-			}
-			checkpoint.BootstrapCursor = head.NextCursor
-		}
-		snapshot, err := provider.FetchMessages(ctx, token, platform.FetchMessagesRequest{AccountID: account.AccountID, Cursor: checkpoint.HistoryCursor, Limit: 100})
-		if err != nil {
-			return err
-		}
-		return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-			if err := organizationguard.LockWorkspace(txCtx, tx, account.WorkspaceID); err != nil {
-				return err
-			}
-			// persist owner is transaction-local; checkpoint and inbox cannot diverge.
-			if _, err := s.persistConversationsWithDB(txCtx, tx, account, snapshot.Conversations); err != nil {
-				return err
-			}
-			complete := snapshot.NextCursor == ""
-			if _, err = tx.NewRaw(`UPDATE message_event_checkpoints SET history_cursor=?,history_complete=?,initialized=?,cursor=? WHERE social_account_id=?`, snapshot.NextCursor, complete, complete, checkpoint.BootstrapCursor, account.ID).Exec(txCtx); err != nil {
-				return err
-			}
-			return nil
-		})
+		return s.bootstrapMessageEvents(ctx, account, provider, incremental, token, checkpoint)
 	}
+
 	for range 4 {
 		events, err := incremental.FetchMessageEvents(ctx, token, platform.FetchMessageEventsRequest{AccountID: account.AccountID, Cursor: checkpoint.Cursor, Limit: 20})
 		if err != nil {
@@ -180,4 +151,38 @@ func (s *Service) syncIncremental(ctx context.Context, account models.SocialAcco
 		}
 	}
 	return nil // Bounded batch; the committed cursor continues next collection.
+}
+
+func (s *Service) bootstrapMessageEvents(ctx context.Context, account models.SocialAccount, provider Provider, incremental platform.IncrementalMessagingAdapter, token string, checkpoint eventCheckpoint) error {
+	if checkpoint.BootstrapCursor == "" {
+		head, err := incremental.FetchMessageEvents(ctx, token, platform.FetchMessageEventsRequest{AccountID: account.AccountID, Limit: 20})
+		if err != nil {
+			return err
+		}
+		if !head.Bootstrap || head.NextCursor == "" {
+			return platform.ErrMessageBootstrapCursorRequired
+		}
+		if _, err = s.db.NewRaw(`UPDATE message_event_checkpoints SET bootstrap_cursor=? WHERE social_account_id=? AND bootstrap_cursor=''`, head.NextCursor, account.ID).Exec(ctx); err != nil {
+			return err
+		}
+		checkpoint.BootstrapCursor = head.NextCursor
+	}
+	snapshot, err := provider.FetchMessages(ctx, token, platform.FetchMessagesRequest{AccountID: account.AccountID, Cursor: checkpoint.HistoryCursor, Limit: 100})
+	if err != nil {
+		return err
+	}
+	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if err := organizationguard.LockWorkspace(txCtx, tx, account.WorkspaceID); err != nil {
+			return err
+		}
+		// persist owner is transaction-local; checkpoint and inbox cannot diverge.
+		if _, err := s.persistConversationsWithDB(txCtx, tx, account, snapshot.Conversations); err != nil {
+			return err
+		}
+		complete := snapshot.NextCursor == ""
+		if _, err = tx.NewRaw(`UPDATE message_event_checkpoints SET history_cursor=?,history_complete=?,initialized=?,cursor=? WHERE social_account_id=?`, snapshot.NextCursor, complete, complete, checkpoint.BootstrapCursor, account.ID).Exec(txCtx); err != nil {
+			return err
+		}
+		return nil
+	})
 }

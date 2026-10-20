@@ -3,11 +3,12 @@ package engagement
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/models"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 type admissionGate struct{}

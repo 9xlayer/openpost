@@ -1521,7 +1521,7 @@ func (s *Service) SetEngagementState(ctx context.Context, actor Actor, workspace
 			return err
 		}
 		var items []models.EngagementItem
-		if err = tx.NewSelect().Model(&items).Where("workspace_id=? AND id IN (?)", workspaceID, bun.In(ids)).Scan(txCtx); err != nil {
+		if err = tx.NewSelect().Model(&items).Where("workspace_id=? AND id IN (?)", workspaceID, bun.List(ids)).Scan(txCtx); err != nil {
 			return err
 		}
 		for _, item := range items {

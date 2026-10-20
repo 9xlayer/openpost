@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
@@ -44,12 +45,7 @@ func (s *Service) RetryMessage(ctx context.Context, actor Actor, workspaceID, co
 		if message.SendStatus != "failed" {
 			return ErrRetryUnsafe
 		}
-		var attempt models.ProviderWriteAttempt
-		err = tx.NewSelect().Model(&attempt).Where("operation_id=?", "messaging:"+message.ID).Order("attempt_number DESC").Limit(1).Scan(txCtx)
-		if err == nil && (attempt.Status != providerwrite.StatusDefiniteFailure || attempt.RetrySafety != string(platform.PublishRetrySafe)) {
-			return ErrRetryUnsafe
-		}
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		if err = s.validateMessageRetry(txCtx, tx, message.ID); err != nil {
 			return err
 		}
 		payload, _ := json.Marshal(subjectJob{ID: message.ID})
@@ -72,4 +68,16 @@ func (s *Service) RetryMessage(ctx context.Context, actor Actor, workspaceID, co
 		return nil, err
 	}
 	return &message, nil
+}
+
+func (s *Service) validateMessageRetry(ctx context.Context, tx bun.Tx, messageID string) error {
+	var attempt models.ProviderWriteAttempt
+	err := tx.NewSelect().Model(&attempt).Where("operation_id=?", "messaging:"+messageID).Order("attempt_number DESC").Limit(1).Scan(ctx)
+	if err == nil && (attempt.Status != providerwrite.StatusDefiniteFailure || attempt.RetrySafety != string(platform.PublishRetrySafe)) {
+		return ErrRetryUnsafe
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	return nil
 }

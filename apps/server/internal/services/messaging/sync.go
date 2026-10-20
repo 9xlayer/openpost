@@ -218,7 +218,7 @@ func (s *Service) persistConversationsWithDB(ctx context.Context, tx bun.IDB, ac
 				}
 			}
 		}
-		if newInbound > 0 && !(state.created && remote.UnreadCountKnown) {
+		if newInbound > 0 && (!state.created || !remote.UnreadCountKnown) {
 			if _, err = tx.NewUpdate().Model((*models.Conversation)(nil)).Set("unread_count=?", unreadCount+newInbound).Set("read_at=NULL").Set("archived_at=NULL").Where("id=?", conversationID).Exec(ctx); err != nil {
 				return nil, err
 			}
@@ -260,7 +260,7 @@ func upsertConversation(ctx context.Context, db bun.IDB, account models.SocialAc
 	if remote.ReplyWindowExpiresAt.Before(existing.MessagingWindowExpiresAt) || remote.ReplyWindowExpiresAt.IsZero() {
 		remote.ReplyWindowExpiresAt = existing.MessagingWindowExpiresAt
 	}
-	changed := existing.ID == "" || existing.CounterpartRemoteID != remote.CounterpartRemoteID || existing.CounterpartName != remote.CounterpartName || existing.CounterpartHandle != remote.CounterpartHandle || existing.CounterpartAvatarURL != remote.CounterpartAvatarURL || !existing.LastMessageAt.Equal(remote.LastMessageAt) || existing.LastMessagePreview != remote.LastMessagePreview || existing.LastRemoteMessageID != remote.LastRemoteMessageID || !existing.MessagingWindowExpiresAt.Equal(remote.ReplyWindowExpiresAt)
+	changed := conversationSummaryChanged(existing, remote)
 	if !changed {
 		return conversationUpsert{id: conversationID, unread: existing.UnreadCount}, nil
 	}
@@ -283,6 +283,18 @@ func upsertConversation(ctx context.Context, db bun.IDB, account models.SocialAc
 		Set("last_remote_message_id = EXCLUDED.last_remote_message_id").
 		Set("messaging_window_expires_at = EXCLUDED.messaging_window_expires_at").Set("updated_at = EXCLUDED.updated_at").Exec(ctx)
 	return conversationUpsert{id: conversationID, unread: existing.UnreadCount, changed: changed, created: existing.ID == ""}, err
+}
+
+func conversationSummaryChanged(existing models.Conversation, remote platform.ProviderConversation) bool {
+	return existing.ID == "" ||
+		existing.CounterpartRemoteID != remote.CounterpartRemoteID ||
+		existing.CounterpartName != remote.CounterpartName ||
+		existing.CounterpartHandle != remote.CounterpartHandle ||
+		existing.CounterpartAvatarURL != remote.CounterpartAvatarURL ||
+		!existing.LastMessageAt.Equal(remote.LastMessageAt) ||
+		existing.LastMessagePreview != remote.LastMessagePreview ||
+		existing.LastRemoteMessageID != remote.LastRemoteMessageID ||
+		!existing.MessagingWindowExpiresAt.Equal(remote.ReplyWindowExpiresAt)
 }
 
 func insertProviderMessage(ctx context.Context, db bun.IDB, account models.SocialAccount, conversationID string, remote platform.ProviderMessage, now time.Time) (bool, error) {

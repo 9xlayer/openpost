@@ -3,10 +3,11 @@ package engagement
 import (
 	"context"
 	"encoding/json"
+	"strings"
+
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/inboxchanges"
 	"github.com/uptrace/bun"
-	"strings"
 )
 
 // RefreshFromWebhook queues only stored posts belonging to the receiving

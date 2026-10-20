@@ -74,6 +74,10 @@ func (s *Service) syncHistory(ctx context.Context, accountID, conversationID str
 	if err != nil {
 		return err
 	}
+	return s.persistHistoryPage(ctx, account, c, page)
+}
+
+func (s *Service) persistHistoryPage(ctx context.Context, account models.SocialAccount, c models.Conversation, page platform.FetchMessageHistoryResult) error {
 	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 		if err := organizationguard.LockWorkspace(txCtx, tx, account.WorkspaceID); err != nil {
 			return err

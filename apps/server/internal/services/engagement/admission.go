@@ -43,69 +43,82 @@ func (s *Service) QueueEngagementActionReceipt(ctx context.Context, actor Actor,
 	bodyHash := hex.EncodeToString(digest[:])
 	jobID := ""
 	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
-		if err := organizationguard.LockWorkspace(txCtx, tx, item.WorkspaceID); err != nil {
-			return err
-		}
-		decision, err := workspaceaccess.NewAuthorizer(tx).Authorize(txCtx, item.WorkspaceID, actor, workspaceaccess.LevelEdit)
-		if err != nil {
-			return err
-		}
-		if !decision.Allowed {
-			return ErrAccessDenied
-		}
-		if operationID != "" {
-			var stored struct {
-				BodyHash string
-				JobID    string
-			}
-			err = tx.NewRaw(`SELECT body_hash,job_id FROM engagement_operations WHERE workspace_id=? AND user_id=? AND item_id=? AND operation_id=?`, item.WorkspaceID, actor.UserID, item.ID, operationID).Scan(txCtx, &stored)
-			if err == nil {
-				if stored.BodyHash != bodyHash {
-					return ErrOperationConflict
-				}
-				jobID = stored.JobID
-				return nil
-			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return err
-			}
-		}
-		if err = tx.NewSelect().Model(&item).WherePK().Scan(txCtx); err != nil {
-			return err
-		}
-		if scoped, ok := s.featureGate.(interface {
-			IsEffectiveEnabledWithDB(context.Context, bun.IDB, string, string) (bool, error)
-		}); ok {
-			enabled, err := scoped.IsEffectiveEnabledWithDB(txCtx, tx, item.SocialAccountID, "engagement")
-			if err != nil {
-				return err
-			}
-			if !enabled {
-				return fmt.Errorf("engagement is disabled for this account")
-			}
-		}
-		if _, err = validateEngagementAction(item, action, message); err != nil {
-			return err
-		}
-		// A new intentional action gets its own durable payload identity. Only the
-		// actor-scoped client receipt identifies a replay, never its text content.
-		payload, _ := json.Marshal(engagementActionJob{ItemID: item.ID, Action: action, Message: message, UserID: actor.UserID, ClientOperationID: firstActionID(operationID)})
-		job, err := jobregistry.NewJob(JobTypeEngagementAct, string(payload), s.now())
-		if err != nil {
-			return err
-		}
-		job.ScopeID = item.WorkspaceID
-		if _, err = tx.NewInsert().Model(job).Exec(txCtx); err != nil {
-			return err
-		}
-		jobID = job.ID
-		if operationID != "" {
-			_, err = tx.NewRaw(`INSERT INTO engagement_operations(workspace_id,user_id,item_id,operation_id,body_hash,job_id) VALUES(?,?,?,?,?,?)`, item.WorkspaceID, actor.UserID, item.ID, operationID, bodyHash, job.ID).Exec(txCtx)
-		}
+		var err error
+		jobID, err = s.queueEngagementActionWithDB(txCtx, tx, actor, item, action, message, operationID, bodyHash)
 		return err
 	})
 	return jobID, err
 }
+
+func (s *Service) queueEngagementActionWithDB(ctx context.Context, tx bun.Tx, actor Actor, item models.EngagementItem, action, message, operationID, bodyHash string) (string, error) {
+	if err := organizationguard.LockWorkspace(ctx, tx, item.WorkspaceID); err != nil {
+		return "", err
+	}
+	decision, err := workspaceaccess.NewAuthorizer(tx).Authorize(ctx, item.WorkspaceID, actor, workspaceaccess.LevelEdit)
+	if err != nil {
+		return "", err
+	}
+	if !decision.Allowed {
+		return "", ErrAccessDenied
+	}
+	if storedID, found, err := engagementOperationReceipt(ctx, tx, actor, item, operationID, bodyHash); found || err != nil {
+		return storedID, err
+	}
+	if err = tx.NewSelect().Model(&item).WherePK().Scan(ctx); err != nil {
+		return "", err
+	}
+	if scoped, ok := s.featureGate.(interface {
+		IsEffectiveEnabledWithDB(context.Context, bun.IDB, string, string) (bool, error)
+	}); ok {
+		enabled, err := scoped.IsEffectiveEnabledWithDB(ctx, tx, item.SocialAccountID, "engagement")
+		if err != nil {
+			return "", err
+		}
+		if !enabled {
+			return "", fmt.Errorf("engagement is disabled for this account")
+		}
+	}
+	if _, err = validateEngagementAction(item, action, message); err != nil {
+		return "", err
+	}
+	// A new intentional action gets its own durable payload identity. Only the
+	// actor-scoped client receipt identifies a replay, never its text content.
+	payload, _ := json.Marshal(engagementActionJob{ItemID: item.ID, Action: action, Message: message, UserID: actor.UserID, ClientOperationID: firstActionID(operationID)})
+	job, err := jobregistry.NewJob(JobTypeEngagementAct, string(payload), s.now())
+	if err != nil {
+		return "", err
+	}
+	job.ScopeID = item.WorkspaceID
+	if _, err = tx.NewInsert().Model(job).Exec(ctx); err != nil {
+		return "", err
+	}
+	if operationID != "" {
+		_, err = tx.NewRaw(`INSERT INTO engagement_operations(workspace_id,user_id,item_id,operation_id,body_hash,job_id) VALUES(?,?,?,?,?,?)`, item.WorkspaceID, actor.UserID, item.ID, operationID, bodyHash, job.ID).Exec(ctx)
+	}
+	return job.ID, err
+}
+
+func engagementOperationReceipt(ctx context.Context, tx bun.Tx, actor Actor, item models.EngagementItem, operationID, bodyHash string) (string, bool, error) {
+	if operationID == "" {
+		return "", false, nil
+	}
+	var stored struct {
+		BodyHash string
+		JobID    string
+	}
+	err := tx.NewRaw(`SELECT body_hash,job_id FROM engagement_operations WHERE workspace_id=? AND user_id=? AND item_id=? AND operation_id=?`, item.WorkspaceID, actor.UserID, item.ID, operationID).Scan(ctx, &stored)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if stored.BodyHash != bodyHash {
+		return "", true, ErrOperationConflict
+	}
+	return stored.JobID, true, nil
+}
+
 func firstActionID(operationID string) string {
 	if operationID != "" {
 		return operationID

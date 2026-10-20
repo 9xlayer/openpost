@@ -658,7 +658,7 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 			FROM next_job
 			WHERE jobs.id = next_job.id AND jobs.status = ?
 			RETURNING jobs.*
-		`, jobStatusPending, len(w.jobTypes) == 0, bun.In(w.jobTypes), len(w.excludedJobTypes) == 0, bun.In(w.excludedJobTypes), jobStatusProcessing, w.workerID, jobStatusPending).Scan(ctx, job)
+		`, jobStatusPending, len(w.jobTypes) == 0, bun.List(w.jobTypes), len(w.excludedJobTypes) == 0, bun.List(w.excludedJobTypes), jobStatusProcessing, w.workerID, jobStatusPending).Scan(ctx, job)
 	} else {
 		err = w.db.NewRaw(`
 		UPDATE jobs
@@ -670,7 +670,7 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 			LIMIT 1
 		)
 		RETURNING *
-		`, jobStatusProcessing, w.workerID, jobStatusPending, jobStatusPending, len(w.jobTypes) == 0, bun.In(w.jobTypes), len(w.excludedJobTypes) == 0, bun.In(w.excludedJobTypes)).Scan(ctx, job)
+		`, jobStatusProcessing, w.workerID, jobStatusPending, jobStatusPending, len(w.jobTypes) == 0, bun.List(w.jobTypes), len(w.excludedJobTypes) == 0, bun.List(w.excludedJobTypes)).Scan(ctx, job)
 	}
 
 	if err != nil {
