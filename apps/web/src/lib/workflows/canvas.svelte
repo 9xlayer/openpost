@@ -156,6 +156,18 @@
 					const node = selected[0];
 					if (!readonly && node && node.id !== selectedID) onselection?.(node.id);
 				})}
+			onnodeclick={({ event, node }) => {
+				// Selecting a node re-renders it, which can replace the node button
+				// between pointerdown and pointerup and swallow its click. The wrapper
+				// still receives that click, so open the inspector from here too.
+				const target = event.target;
+				if (
+					readonly ||
+					(target instanceof Element && target.closest('.nodrag, .svelte-flow__handle'))
+				)
+					return;
+				onselect(node.id);
+			}}
 			onkeydown={(event) => {
 				if (readonly || !event.defaultPrevented || !event.key.startsWith('Arrow')) return;
 				const target = event.target;

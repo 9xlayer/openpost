@@ -116,6 +116,15 @@ async function focusCanvasNode(node: HTMLElement) {
 	expect(document.activeElement).toBe(node);
 }
 
+it('opens the step inspector when a click reaches the node wrapper', async () => {
+	await page.viewport(1280, 900);
+	const { screen, node } = await openLayout();
+	// Selection re-renders the node, so a click can land on the wrapper instead
+	// of the node button that carries the inspector action.
+	node.click();
+	await expect.element(screen.getByRole('dialog')).toBeVisible();
+});
+
 it('retains pointer placement locally on reopen without saving authored workflow content', async () => {
 	await page.viewport(1280, 900);
 	const put = vi.spyOn(client, 'PUT');
