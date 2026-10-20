@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 )
@@ -27,7 +26,11 @@ func (b *BlueskyAdapter) MessagingSupport() MessagingSupport {
 }
 
 func (b *BlueskyAdapter) FetchMessages(ctx context.Context, accessToken string, input FetchMessagesRequest) (FetchMessagesResult, error) {
-	query := url.Values{"limit": {"100"}}
+	limit := input.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	query := url.Values{"limit": {fmt.Sprint(limit)}}
 	if input.Cursor != "" {
 		query.Set("cursor", input.Cursor)
 	}
@@ -36,81 +39,19 @@ func (b *BlueskyAdapter) FetchMessages(ctx context.Context, accessToken string, 
 		return FetchMessagesResult{}, err
 	}
 	var list struct {
-		Conversations []struct {
-			ID      string `json:"id"`
-			Members []struct {
-				DID         string `json:"did"`
-				Handle      string `json:"handle"`
-				DisplayName string `json:"displayName"`
-				Avatar      string `json:"avatar"`
-			} `json:"members"`
-			LastMessage struct {
-				ID     string `json:"id"`
-				Text   string `json:"text"`
-				SentAt string `json:"sentAt"`
-			} `json:"lastMessage"`
-			UnreadCount int `json:"unreadCount"`
-		} `json:"convos"`
-		Cursor string `json:"cursor"`
+		Conversations []blueskyChatConversation `json:"convos"`
+		Cursor        string                    `json:"cursor"`
 	}
 	if err := json.Unmarshal(body, &list); err != nil {
 		return FetchMessagesResult{}, fmt.Errorf("decoding Bluesky conversations: %w", err)
 	}
 	result := FetchMessagesResult{NextCursor: list.Cursor}
-	for _, conversation := range list.Conversations {
-		messageQuery := url.Values{"convoId": {conversation.ID}, "limit": {"100"}}
-		messageBody, err := b.chatRequest(ctx, accessToken, http.MethodGet, "/xrpc/chat.bsky.convo.getMessages?"+messageQuery.Encode(), nil)
-		if err != nil {
-			return FetchMessagesResult{}, err
+	for _, remote := range list.Conversations {
+		convo := remote.provider(input.AccountID)
+		if remote.LastMessage.ID != "" && (remote.LastMessage.Type == "" || remote.LastMessage.Type == blueskyChatMessageView) {
+			convo.Messages = []ProviderMessage{remote.LastMessage.provider(input.AccountID)}
 		}
-		var messageList struct {
-			Messages []struct {
-				Type   string `json:"$type"`
-				ID     string `json:"id"`
-				Text   string `json:"text"`
-				SentAt string `json:"sentAt"`
-				Sender struct {
-					DID string `json:"did"`
-				} `json:"sender"`
-			} `json:"messages"`
-		}
-		if err := json.Unmarshal(messageBody, &messageList); err != nil {
-			return FetchMessagesResult{}, fmt.Errorf("decoding Bluesky messages: %w", err)
-		}
-		messages := make([]ProviderMessage, 0, len(messageList.Messages))
-		for _, message := range messageList.Messages {
-			// getMessages also returns deletedMessageView (deleted by this
-			// account) and systemMessageView (group events), which carry no
-			// text and must not arrive as empty messages.
-			if message.ID == "" || (message.Type != "" && message.Type != blueskyChatMessageView) {
-				continue
-			}
-			sentAt, _ := time.Parse(time.RFC3339Nano, message.SentAt)
-			direction := "inbound"
-			if message.Sender.DID == input.AccountID {
-				direction = "outbound"
-			}
-			messages = append(messages, ProviderMessage{
-				ID: message.ID, Direction: direction, AuthorRemoteID: message.Sender.DID,
-				Body: message.Text, RemoteCreatedAt: sentAt,
-			})
-		}
-		sort.Slice(messages, func(a, c int) bool { return messages[a].RemoteCreatedAt.Before(messages[c].RemoteCreatedAt) })
-		var counterpart struct{ DID, Handle, Name, Avatar string }
-		for _, member := range conversation.Members {
-			if member.DID != input.AccountID {
-				counterpart = struct{ DID, Handle, Name, Avatar string }{member.DID, member.Handle, member.DisplayName, member.Avatar}
-				break
-			}
-		}
-		lastAt, _ := time.Parse(time.RFC3339Nano, conversation.LastMessage.SentAt)
-		result.Conversations = append(result.Conversations, ProviderConversation{
-			ID: conversation.ID, CounterpartRemoteID: counterpart.DID,
-			CounterpartName: counterpart.Name, CounterpartHandle: prefixHandle(counterpart.Handle),
-			CounterpartAvatarURL: counterpart.Avatar, LastMessageAt: lastAt,
-			LastMessagePreview: conversation.LastMessage.Text, LastRemoteMessageID: conversation.LastMessage.ID,
-			UnreadCount: conversation.UnreadCount, Messages: messages,
-		})
+		result.Conversations = append(result.Conversations, convo)
 	}
 	return result, nil
 }

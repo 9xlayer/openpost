@@ -12,7 +12,7 @@ import (
 // deletedMessageView (a message the viewer deleted for themselves) and
 // systemMessageView (group events such as a member joining). Only
 // messageView carries text from a sender.
-func TestBlueskyFetchMessagesSkipsDeletedAndSystemMessages(t *testing.T) {
+func TestBlueskyMessageHistorySkipsDeletedAndSystemMessages(t *testing.T) {
 	originalClient := httpClient
 	defer func() { httpClient = originalClient }()
 
@@ -36,10 +36,9 @@ func TestBlueskyFetchMessagesSkipsDeletedAndSystemMessages(t *testing.T) {
 		}
 	})}
 
-	result, err := NewBlueskyAdapter("").FetchMessages(t.Context(), "access", FetchMessagesRequest{AccountID: "did:plc:me", Limit: 100})
+	result, err := NewBlueskyAdapter("").FetchMessageHistory(t.Context(), "access", FetchMessageHistoryRequest{AccountID: "did:plc:me", ConversationID: "convo-1", Limit: 100})
 	require.NoError(t, err)
-	require.Len(t, result.Conversations, 1)
-	messages := result.Conversations[0].Messages
+	messages := result.Messages
 	require.Len(t, messages, 2)
 	require.Equal(t, "m1", messages[0].ID)
 	require.Equal(t, "inbound", messages[0].Direction)
