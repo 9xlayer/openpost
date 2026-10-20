@@ -133,6 +133,12 @@ export function reconcileInboxChanges(
     // Stop an older in-flight snapshot before patching committed events. A cold
     // read has no rows to patch, so restart it after the observed commit.
     void client.cancelQueries({ queryKey: messageKey });
+    const conversationDeleted = page.changes.some(
+      (change) =>
+        change.kind === "conversation" &&
+        change.conversation_id === conversationId &&
+        change.deleted,
+    );
     const records = (page.messages ?? []).filter((item) => item.conversation_id === conversationId);
     const removed = new Set(
       page.changes
@@ -174,7 +180,16 @@ export function reconcileInboxChanges(
             .filter((m) => !removed.has(m.id))
             .map((m) => {
               seen.add(m.id);
-              return byId.get(m.id) ?? m;
+              const next = byId.get(m.id) ?? m;
+              return conversationDeleted && next.remote_message_id
+                ? {
+                    ...next,
+                    body: "",
+                    attachments_json: "[]",
+                    author_remote_id: "",
+                    deleted_at: conversation?.archived_at ?? new Date().toISOString(),
+                  }
+                : next;
             }),
         }));
         const newest = pages[0];
@@ -200,6 +215,7 @@ export function reconcileInboxChanges(
         return { ...old, pages };
       },
     );
+    if (conversationDeleted) void client.invalidateQueries({ queryKey: messageKey });
   }
   // List filters can depend on server-side message search, account permission,
   // and unread state. The server remains authoritative for their membership.

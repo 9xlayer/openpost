@@ -116,6 +116,40 @@ describe("foreground inbox updates", () => {
     expect(client.getQueryData(key)).toMatchObject({ pages: [{ items: rows }] });
     client.clear();
   });
+  it("removes deleted conversation content immediately while retaining local pending sends", () => {
+    const client = new QueryClient();
+    const key = inboxQueryKeys.messages("ws", "chat", {});
+    const queued = {
+      ...message("local", "Draft awaiting delivery", "2026-10-20"),
+      remote_message_id: "",
+      send_status: "queued",
+    };
+    client.setQueryData(key, {
+      pages: [
+        { items: [message("recent", "Recent private content", "2026-10-20"), queued] },
+        { items: [message("old", "Older private content", "2026-10-19")] },
+      ],
+      pageParams: ["", "older"],
+    });
+    reconcileInboxChanges(client, "ws", {
+      cursor: "deleted",
+      reset: false,
+      messages: [],
+      changes: [{ revision: 1, kind: "conversation", conversation_id: "chat", deleted: true }],
+    });
+    const rows = client
+      .getQueryData<InfiniteData<MessagePage>>(key)
+      ?.pages.flatMap((p) => p.items ?? []);
+    for (const id of ["recent", "old"])
+      expect(rows?.find((row) => row.id === id)).toMatchObject({
+        body: "",
+        attachments_json: "[]",
+        author_remote_id: "",
+      });
+    expect(rows?.find((row) => row.id === "local")).toEqual(queued);
+    expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    client.clear();
+  });
   it.each([false, true])(
     "keeps committed updates when a %s cached read returns late",
     async (warm) => {
