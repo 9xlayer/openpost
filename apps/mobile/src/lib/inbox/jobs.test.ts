@@ -103,6 +103,7 @@ test("an empty receipt never claims upstream freshness without an advanced succe
 
 test("collection and reply observation support React Native's actual AbortController implementation", async () => {
   const nativeRequire = createRequire(import.meta.resolve("react-native/package.json"));
+  // Bun aliases the bare package name to its own controller. Load the native implementation.
   const NativeAbortController = nativeRequire(
     "abort-controller/dist/abort-controller.js",
   ).AbortController;

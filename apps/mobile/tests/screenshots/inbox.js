@@ -88,6 +88,20 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
     },
   ];
   let revision = 0;
+  let lastSuccess = new SystemDate(now.getTime() - 180000).toISOString();
+  const jobReads = new Map();
+  const replyReceipts = new Map();
+  const syncStates = () => [
+    {
+      id: "sample-sync",
+      social_account_id: accounts[0].id,
+      platform: "bluesky",
+      status: "idle",
+      error_code: "",
+      error_message: "",
+      last_success_at: lastSuccess,
+    },
+  ];
   return async (url, method, input, options) => {
     const path = url.pathname.replace(/^\/api\/v1/, "");
     const json = (value) =>
@@ -95,6 +109,43 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
+    if (
+      !workspace.can_edit &&
+      method === "POST" &&
+      (path === "/engagement/state" ||
+        path.endsWith("/actions") ||
+        path.endsWith("/refresh") ||
+        path.endsWith("/state") ||
+        path.endsWith("/send"))
+    )
+      return new Response(JSON.stringify({ detail: "Sample viewer cannot change Inbox state" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    if (path.startsWith("/jobs/") && method === "GET") {
+      const id = path.split("/")[2];
+      const read = (jobReads.get(id) || 0) + 1;
+      jobReads.set(id, read);
+      const failed = id.startsWith("sample-reply-failed-");
+      const status = read < 4 ? "pending" : failed ? "failed" : "completed";
+      if (status === "completed" && id.startsWith("sample-collection-"))
+        lastSuccess = new SystemDate(now.getTime() + 60000).toISOString();
+      return json({
+        id,
+        status,
+        type: id.startsWith("sample-collection-") ? "engagement_sync" : "engagement_action",
+        attempts: status === "pending" ? 0 : 1,
+        max_attempts: 3,
+        created_at: now.toISOString(),
+        run_at: now.toISOString(),
+        last_error:
+          status === "failed"
+            ? "The network rejected this sample reply. Check the original thread."
+            : undefined,
+      });
+    }
+    if (method === "POST" && (path === "/messages/refresh" || path === "/engagement/refresh"))
+      return json({ status: "queued", queued: 1, job_ids: [`sample-collection-${++revision}`] });
     if (path === "/inbox/changes") {
       await new Promise((resolve) => setTimeout(resolve, 25000));
       return json({ cursor: String(revision), reset: false, changes: [] });
@@ -141,20 +192,46 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
       comments
         .filter((row) => body.ids.includes(row.id))
         .forEach((row) => {
-          row.read_at = now.toISOString();
+          if (body.read !== undefined) row.read_at = body.read ? now.toISOString() : undefined;
+          if (body.archived !== undefined)
+            row.archived_at = body.archived ? now.toISOString() : undefined;
         });
       return json({});
     }
-    if (method === "POST" && path.startsWith("/engagement/") && path.endsWith("/actions"))
-      return json({ job_id: "sample-engagement-job" });
+    if (method === "POST" && path.startsWith("/engagement/") && path.endsWith("/actions")) {
+      const body = options.body ? JSON.parse(options.body) : await input.json();
+      const failed = path.includes("comment-provider-failure");
+      const id = `sample-reply-${failed ? "failed" : "success"}-${body.client_operation_id || ++revision}`;
+      const existing = replyReceipts.has(id);
+      replyReceipts.set(id, body.message);
+      if (path.includes("comment-lost-response") && !existing)
+        throw new TypeError("Sample lost response after job admission");
+      return json({ job_id: id });
+    }
     if (path === "/inbox/summary")
       return json({
         unread_conversations: chats.filter((chat) => !chat.archived_at && chat.unread_count > 0)
           .length,
-        unread_comments: comments.filter((comment) => !comment.read_at).length,
+        unread_comments: comments.filter((comment) => !comment.read_at && !comment.archived_at)
+          .length,
       });
-    if (path.startsWith("/engagement/") && method === "GET")
-      return json({ item: comments.find((item) => item.id === path.split("/")[2]), parents: [] });
+    if (path.startsWith("/engagement/") && method === "GET") {
+      const id = path.split("/")[2];
+      if (
+        !comments.some((item) => item.id === id) &&
+        ["comment-provider-failure", "comment-lost-response"].some((prefix) =>
+          id.startsWith(prefix),
+        )
+      )
+        comments.push({
+          ...comments[0],
+          id,
+          remote_id: id,
+          read_at: undefined,
+          body: "Will the demo video be available today?",
+        });
+      return json({ item: comments.find((item) => item.id === id), parents: [] });
+    }
     if (path === "/messages") {
       const search = (url.searchParams.get("search") || "").toLowerCase();
       const items = chats.filter(
@@ -168,7 +245,7 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
               .toLowerCase()
               .includes(search)),
       );
-      return json({ items, total: items.length, next_cursor: "", sync_states: [] });
+      return json({ items, total: items.length, next_cursor: "", sync_states: syncStates() });
     }
     if (path.startsWith("/messages/")) {
       const all = messages
@@ -186,11 +263,12 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
     if (path === "/engagement") {
       const items = comments.filter(
         (row) =>
+          Boolean(row.archived_at) === (url.searchParams.get("archived") === "true") &&
           (!url.searchParams.get("account_id") ||
             row.social_account_id === url.searchParams.get("account_id")) &&
           (url.searchParams.get("unread_only") !== "true" || !row.read_at),
       );
-      return json({ items, total: items.length, next_cursor: "", sync_states: [] });
+      return json({ items, total: items.length, next_cursor: "", sync_states: syncStates() });
     }
     if (path === "/account-features")
       return json(

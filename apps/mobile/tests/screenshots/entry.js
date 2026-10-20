@@ -25,6 +25,12 @@ const workspace = {
   can_connect: true,
   can_approve: true,
 };
+if (process.env.EXPO_PUBLIC_OPENPOST_SCREENSHOT_ROLE === "viewer") {
+  workspace.role = "viewer";
+  workspace.can_edit = false;
+  workspace.can_connect = false;
+  workspace.can_approve = false;
+}
 const now = new Date();
 const at = (day, hour) => new Date(now.getFullYear(), now.getMonth(), day, hour).toISOString();
 const media = [

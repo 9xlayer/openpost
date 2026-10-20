@@ -84,7 +84,7 @@ test("a provider job failure retains text and receipt, and submit cannot create 
     ],
   });
 });
-test("a viewer can restore a draft but cannot dispatch or alter a retained reply operation", async () => {
+test("a viewer can restore a draft without dispatching a reply", async () => {
   const f = fixture(false);
   const session = f.create();
   await session.restore();

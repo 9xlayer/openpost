@@ -1,0 +1,30 @@
+appId: com.openpost.app
+---
+# Optional sample-only outcome capture after the standard screenshot launch.
+# Pass a unique CASE_ID for each run so retained failed drafts remain untouched.
+- openLink: openpost:///inbox/comment/comment-one
+- extendedWaitUntil:
+    visible: Original post
+    timeout: 20000
+- tapOn: ".*Public reply.*Write a public reply.*"
+- inputText: Thanks, Alex. I will share the release notes.
+- tapOn: Reply publicly
+- assertVisible: Public reply queued.*
+- takeScreenshot: reply-job-queued-${SCHEME}
+- extendedWaitUntil:
+    visible: Public reply confirmed by the network.
+    timeout: 20000
+- takeScreenshot: reply-job-confirmed-${SCHEME}
+- openLink: openpost:///inbox/comment/comment-provider-failure-${CASE_ID}
+- extendedWaitUntil:
+    visible: Original post
+    timeout: 20000
+- tapOn: ".*Public reply.*Write a public reply.*"
+- inputText: I will share the demo video today.
+- tapOn: Reply publicly
+- extendedWaitUntil:
+    visible: Public reply failed.*
+    timeout: 20000
+- assertVisible: I will share the demo video today.
+- assertVisible: Check original thread
+- takeScreenshot: reply-job-failed-${SCHEME}
