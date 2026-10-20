@@ -1,0 +1,37 @@
+appId: com.openpost.app
+---
+# Uses only tests/screenshots/entry.js sample data, never a live provider.
+- openLink: openpost:///inbox
+- extendedWaitUntil:
+    visible: Chats
+    timeout: 20000
+- assertVisible: Comments
+- tapOn: Chats
+- assertVisible: Alex Morgan.*
+- takeScreenshot: inbox-${SCHEME}
+- tapOn: Alex Morgan.*
+- extendedWaitUntil:
+    visible: alex.bsky.social
+    timeout: 20000
+- tapOn: ".*Message.*"
+- inputText: The launch update is ready.
+- assertVisible: Send
+- takeScreenshot: chat-keyboard-${SCHEME}
+- tapOn: Send
+- assertVisible: The launch update is ready.
+- assertVisible: ".*Queued.*"
+- takeScreenshot: chat-${SCHEME}
+- openLink: openpost:///inbox
+- tapOn: Comments
+- extendedWaitUntil:
+    visible: ".*The new workspace looks great.*"
+    timeout: 20000
+- takeScreenshot: comments-${SCHEME}
+- tapOn: ".*The new workspace looks great.*"
+- assertVisible: Original post
+- assertVisible: Reply publicly
+- takeScreenshot: comment-${SCHEME}
+- openLink: openpost:///media
+- assertVisible: Images
+- assertVisible: lisbon-tram.png
+- takeScreenshot: media-${SCHEME}

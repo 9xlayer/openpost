@@ -117,3 +117,6 @@ appId: com.openpost.app
     timeout: 20000
 - assertNotVisible: Approve this version
 - takeScreenshot: client-approved-${SCHEME}
+
+# Inbox captures use the same isolated native screenshot entry.
+- runFlow: inbox.yaml

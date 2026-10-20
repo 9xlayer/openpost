@@ -456,10 +456,19 @@ function jsonResponse(value, status = 200) {
   });
 }
 
+const inboxSampleRequest = require("./inbox").createInboxSamples({
+  workspace,
+  accounts,
+  media,
+  now,
+  SystemDate,
+});
 global.fetch = async (input, options = {}) => {
   const url = new URL(typeof input === "string" ? input : input.url);
   const method = options.method || input.method || "GET";
   const path = url.pathname.replace(/^\/api\/v1/, "");
+  const inboxResponse = await inboxSampleRequest(url, method, input, options);
+  if (inboxResponse) return inboxResponse;
   if (method === "PUT" && path === "/publications/client-review/reviews/review-one") {
     const body = options.body ? JSON.parse(options.body) : await input.json();
     if (body.expected_epoch !== 1 || !["approved", "changes_requested"].includes(body.decision))
