@@ -1,8 +1,8 @@
 import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Linking, ScrollView, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useHeaderHeight } from "expo-router/react-navigation";
+import { Stack, useLocalSearchParams, router } from "expo-router";
+import { useHeaderHeight, useIsFocused } from "expo-router/react-navigation";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,9 +13,11 @@ import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
 import { MediaImage } from "@/components/media-image";
 import { useComment } from "@/lib/inbox/queries";
 import { commentAction, markCommentRead } from "@/lib/inbox/api";
+import type { PendingSend } from "@/lib/inbox/state";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
 import {
   inboxStorageScope,
+  newInboxOperationId,
   readConversationDraft,
   saveConversationDraft,
 } from "@/lib/inbox/storage";
@@ -36,6 +38,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const { colors, spacing, shape } = useNativeTheme().manifest;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const focused = useIsFocused();
   const item = useComment(id);
   const comment = item.data;
   const accounts = useAccounts();
@@ -45,6 +48,15 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const [text, setText] = useState("");
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [replyOperation, setReplyOperation] = useState<PendingSend | null>(null);
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const scope = useMemo(() => inboxStorageScope(workspaceId), [workspaceId]);
@@ -62,6 +74,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
       .then((draft) => {
         if (active && scope.current()) {
           setText(draft.text);
+          setReplyOperation(draft.sends[0] ?? null);
           setReady(true);
         }
       })
@@ -73,13 +86,13 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const commentRead = comment?.read_at;
   const commentId = comment?.id;
   useEffect(() => {
-    if (!commentId || commentRead) return;
+    if (!focused || !commentId || commentRead) return;
     void markCommentRead(workspaceId, id)
       .then(() =>
         queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) }),
       )
       .catch(() => setError("Could not mark this comment read. Try again."));
-  }, [commentId, commentRead, workspaceId, id, queryClient]);
+  }, [commentId, commentRead, focused, workspaceId, id, queryClient]);
   function changeText(value: string) {
     setText(value);
     void saveConversationDraft(scope, draftId, { text: value, sends: [] }).catch(() =>
@@ -87,35 +100,80 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
     );
   }
   async function action(kind: "reply" | "hide" | "delete" | "like" | "unlike") {
-    if (!comment || busy || !scope.current()) return;
+    if (!comment || inFlight.current || !scope.current()) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
-    const submitted = text.trim();
+    const submitted = replyOperation?.body ?? text.trim();
+    const operation =
+      kind === "reply"
+        ? (replyOperation ?? {
+            operationId: newInboxOperationId(),
+            body: submitted,
+            createdAt: new Date().toISOString(),
+            state: "sending" as const,
+          })
+        : null;
     try {
-      await commentAction(workspaceId, id, kind, kind === "reply" ? submitted : undefined);
-      if (!scope.current()) return;
+      if (operation) {
+        setReplyOperation(operation);
+        await saveConversationDraft(scope, draftId, { text: submitted, sends: [operation] });
+      }
+      const receipt = await commentAction(
+        workspaceId,
+        id,
+        kind,
+        kind === "reply" ? submitted : undefined,
+        operation?.operationId ?? newInboxOperationId(),
+      );
+      if (!scope.current() || !mounted.current) return;
+      if (!receipt.job_id) throw new Error("The server did not confirm a durable action receipt.");
       setNotice(kind === "reply" ? "Public reply queued" : "Action queued");
       if (kind === "reply") {
+        setReplyOperation(null);
         setText((current) => (current.trim() === submitted ? "" : current));
         await saveConversationDraft(scope, draftId, { text: "", sends: [] });
       }
       await queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
     } catch (cause) {
-      if (scope.current())
+      if (mounted.current && scope.current() && operation) {
+        const uncertain: PendingSend = { ...operation, state: "ambiguous" };
+        setReplyOperation(uncertain);
+        await saveConversationDraft(scope, draftId, { text: submitted, sends: [uncertain] }).catch(
+          () => undefined,
+        );
+      }
+      if (mounted.current && scope.current())
         setError(
           cause instanceof Error
             ? cause.message
             : "Could not confirm this action. Check the thread before trying again.",
         );
     } finally {
-      if (scope.current()) setBusy(false);
+      inFlight.current = false;
+      if (mounted.current && scope.current()) setBusy(false);
     }
   }
   const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at;
   return (
     <Screen safeTop={false}>
-      <Stack.Screen options={{ title: "Comment", headerBackTitle: "Inbox", headerShown: true }} />
+      <Stack.Screen
+        options={{
+          title: "Comment",
+          headerBackTitle: "Inbox",
+          headerLeft: router.canGoBack()
+            ? undefined
+            : () => (
+                <Button
+                  title="Inbox"
+                  intent="quiet"
+                  onPress={() => router.replace("/(tabs)/inbox")}
+                />
+              ),
+          headerShown: true,
+        }}
+      />
       <KeyboardAvoidingView
         behavior="padding"
         keyboardVerticalOffset={headerHeight}
@@ -291,13 +349,13 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               accessibilityLabel="Public reply"
               placeholder="Write a public reply"
               multiline
-              editable={replyable && ready && !busy}
+              editable={replyable && ready && !busy && !replyOperation}
               value={text}
               onChangeText={changeText}
               style={{ minHeight: 64, maxHeight: 144, paddingVertical: 12 }}
             />
             <Button
-              title="Reply publicly"
+              title={replyOperation ? "Retry public reply safely" : "Reply publicly"}
               intent="focal"
               loading={busy}
               disabled={!replyable || !ready || !text.trim()}

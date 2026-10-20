@@ -13,7 +13,7 @@ export default function MoreScreen() {
           title="Video Projects"
           icon="videoProjects"
           intent="ordinary"
-          onPress={() => router.push("/(tabs)/projects")}
+          onPress={() => router.push("/projects")}
         />
         <Button
           title="Ideate"

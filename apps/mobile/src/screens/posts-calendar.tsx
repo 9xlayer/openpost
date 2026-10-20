@@ -87,7 +87,7 @@ export default function CalendarScreen({ navigation }: { navigation?: React.Reac
     <Screen>
       <Stack.Screen options={{ headerShown: false }} />
       <WorkspaceHeader>
-        <IconButton label="Write a post" role="add" onPress={() => router.push("/(tabs)/drafts")} />
+        <IconButton label="Write a post" role="add" onPress={() => router.push("/drafts")} />
       </WorkspaceHeader>
       {navigation}
 
@@ -298,7 +298,7 @@ export default function CalendarScreen({ navigation }: { navigation?: React.Reac
                   <Text style={[typography.bodyLarge, { color: colors.onSurfaceVariant }]}>
                     Nothing planned.
                   </Text>
-                  <Button title="Write a post" onPress={() => router.push("/(tabs)/drafts")} />
+                  <Button title="Write a post" onPress={() => router.push("/drafts")} />
                 </View>
               ) : (
                 selectedItems.map((item) => (

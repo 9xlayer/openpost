@@ -1,8 +1,8 @@
 import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FlatList, Linking, View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
-import { useHeaderHeight } from "expo-router/react-navigation";
+import { Stack, useLocalSearchParams, router } from "expo-router";
+import { useHeaderHeight, useIsFocused } from "expo-router/react-navigation";
 import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -50,6 +50,7 @@ function ChatContent({
   const { colors, spacing, shape } = useNativeTheme().manifest;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const focused = useIsFocused();
   const accounts = useAccounts();
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
@@ -64,6 +65,7 @@ function ChatContent({
   const composer = useChatComposer(workspaceId, conversationId, messages);
   const list = useRef<FlatList<DirectMessage | PendingSend>>(null);
   const nearLatest = useRef(true);
+  const [atLatest, setAtLatest] = useState(true);
   const [newMessages, setNewMessages] = useState(false);
   const newest = useRef<string | undefined>(undefined);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -88,7 +90,7 @@ function ChatContent({
   const liveError = useInboxUpdates("conversation", conversationId);
   const readInFlight = useRef(false);
   useEffect(() => {
-    if (!chat || chat.unread_count === 0 || readInFlight.current) return;
+    if (!focused || !atLatest || !chat || chat.unread_count === 0 || readInFlight.current) return;
     readInFlight.current = true;
     void setConversationState(workspaceId, conversationId, { read: true })
       .then(() =>
@@ -98,7 +100,7 @@ function ChatContent({
       .finally(() => {
         readInFlight.current = false;
       });
-  }, [chat, workspaceId, conversationId, queryClient]);
+  }, [chat, focused, atLatest, workspaceId, conversationId, queryClient]);
   useEffect(() => {
     const latest = messages[0]?.id;
     if (latest && newest.current && latest !== newest.current && !nearLatest.current)
@@ -162,6 +164,15 @@ function ChatContent({
           headerShown: true,
           title: chat?.counterpart_name || chat?.counterpart_handle || "Chat",
           headerBackTitle: "Inbox",
+          headerLeft: router.canGoBack()
+            ? undefined
+            : () => (
+                <Button
+                  title="Inbox"
+                  intent="quiet"
+                  onPress={() => router.replace("/(tabs)/inbox")}
+                />
+              ),
         }}
       />
       <KeyboardAvoidingView
@@ -233,6 +244,7 @@ function ChatContent({
           maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
           onScroll={({ nativeEvent }) => {
             nearLatest.current = nativeEvent.contentOffset.y < 80;
+            setAtLatest(nearLatest.current);
             if (nearLatest.current) setNewMessages(false);
           }}
           scrollEventThrottle={100}
@@ -369,7 +381,9 @@ function MessageBubble({
       ? "Sending…"
       : message.state === "queued"
         ? "Queued"
-        : "Delivery unconfirmed"
+        : message.state === "failed"
+          ? "Failed"
+          : "Delivery unconfirmed"
     : message.provider_read_at
       ? "Read"
       : message.send_status === "sent"

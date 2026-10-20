@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { reconcileInboxChanges } from "@openpost/query-catalog";
+import { OpenPostQueryError, reconcileInboxChanges } from "@openpost/query-catalog";
 import { sendMessage, type DirectMessage } from "./api";
 import {
   inboxStorageScope,
@@ -109,12 +109,18 @@ export function useChatComposer(
     } catch (cause) {
       if (mounted.current && scope.current()) {
         const message = cause instanceof Error ? cause.message : "Delivery could not be confirmed.";
+        const state =
+          cause instanceof OpenPostQueryError &&
+          cause.status !== undefined &&
+          cause.status >= 400 &&
+          cause.status < 500 &&
+          ![408, 425].includes(cause.status)
+            ? "failed"
+            : "ambiguous";
         await update({
           ...current.current,
           sends: current.current.sends.map((row) =>
-            row.operationId === send.operationId
-              ? { ...row, state: "ambiguous", error: message }
-              : row,
+            row.operationId === send.operationId ? { ...row, state, error: message } : row,
           ),
         }).catch(() => {
           if (mounted.current)

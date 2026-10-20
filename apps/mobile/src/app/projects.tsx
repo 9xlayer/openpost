@@ -11,7 +11,7 @@ import {
 } from "expo-camera";
 import { WorkspaceHeader } from "@/components/workspace-header";
 import { DitherPanel } from "@/components/dither-panel";
-import { useFocusEffect } from "expo-router";
+import { Stack, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, Switch, View } from "react-native";
 
@@ -301,7 +301,8 @@ export default function VideoProjectsScreen() {
   }
 
   return (
-    <Screen>
+    <Screen safeTop={false}>
+      <Stack.Screen options={{ title: "Video Projects", headerBackTitle: "More" }} />
       <WorkspaceHeader />
       <ScrollView
         contentContainerStyle={{

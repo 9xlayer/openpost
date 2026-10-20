@@ -76,10 +76,6 @@ function NativeTabLayout() {
         <NativeTabs.Trigger.Label>More</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon renderingMode="template" src={more} />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="drafts" hidden />
-      <NativeTabs.Trigger name="calendar" hidden />
-      <NativeTabs.Trigger name="queue" hidden />
-      <NativeTabs.Trigger name="projects" hidden />
     </NativeTabs>
   );
 }
