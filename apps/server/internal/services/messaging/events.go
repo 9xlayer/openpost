@@ -51,25 +51,25 @@ func (s *Service) applyProviderEventBatch(ctx context.Context, tx bun.Tx, accoun
 	if !active {
 		return nil, ErrNotFound
 	}
-	received, err := s.persistConversationsWithDB(ctx, tx, account, batch.Conversations)
-	if err != nil {
-		return nil, err
-	}
 	changes, err := s.applyDeletedMessages(ctx, tx, account, batch.DeletedMessages)
 	if err != nil {
 		return nil, err
 	}
-	applied, err := s.applyProviderReadStates(ctx, tx, account, batch.ReadStates)
+	applied, err := s.applyDeletedConversations(ctx, tx, account, batch.DeletedConversations)
+	if err != nil {
+		return nil, err
+	}
+	changes = append(changes, applied...)
+	received, err := s.persistConversationsWithDB(ctx, tx, account, batch.Conversations)
+	if err != nil {
+		return nil, err
+	}
+	applied, err = s.applyProviderReadStates(ctx, tx, account, batch.ReadStates)
 	if err != nil {
 		return nil, err
 	}
 	changes = append(changes, applied...)
 	applied, err = s.applyMessageReactions(ctx, tx, account, batch.Reactions)
-	if err != nil {
-		return nil, err
-	}
-	changes = append(changes, applied...)
-	applied, err = s.applyDeletedConversations(ctx, tx, account, batch.DeletedConversations)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +84,18 @@ func (s *Service) applyProviderEventBatch(ctx context.Context, tx bun.Tx, accoun
 
 func (s *Service) applyDeletedMessages(ctx context.Context, tx bun.Tx, account models.SocialAccount, deletedMessages []platform.DeletedProviderMessage) ([]inboxchanges.Change, error) {
 	changes := []inboxchanges.Change{}
-	var err error
 	for _, deleted := range deletedMessages {
+		if deleted.MessageID == "" {
+			continue
+		}
+		if err := recordProviderMessageDeletion(ctx, tx, account.ID, deleted, s.now()); err != nil {
+			return nil, err
+		}
+		previews, err := clearDeletedMessagePreviews(ctx, tx, account.ID, deleted)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, previews...)
 		var messages []models.DirectMessage
 		query := tx.NewSelect().Model(&messages).Join("JOIN conversations AS conversation ON conversation.id=direct_message.conversation_id").Where("conversation.social_account_id=? AND direct_message.remote_message_id=?", account.ID, deleted.MessageID)
 		if deleted.ConversationID != "" {
@@ -102,10 +112,6 @@ func (s *Service) applyDeletedMessages(ctx context.Context, tx bun.Tx, account m
 				return nil, err
 			}
 			if _, err = tx.NewDelete().Table("message_reactions").Where("message_id=?", m.ID).Exec(ctx); err != nil {
-				return nil, err
-			}
-			// Never retain a deleted message in the list preview.
-			if _, err = tx.NewUpdate().Model((*models.Conversation)(nil)).Set("last_message_preview=''").Where("id=? AND last_remote_message_id=?", m.ConversationID, deleted.MessageID).Exec(ctx); err != nil {
 				return nil, err
 			}
 			changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: m.ConversationID, MessageID: m.ID, Deleted: true})
@@ -213,6 +219,12 @@ func (s *Service) applyDeletedConversations(ctx context.Context, tx bun.Tx, acco
 	changes := []inboxchanges.Change{}
 	var err error
 	for _, remoteID := range remoteIDs {
+		if remoteID == "" {
+			continue
+		}
+		if err := recordProviderConversationDeletion(ctx, tx, account.ID, remoteID, s.now()); err != nil {
+			return nil, err
+		}
 		var c models.Conversation
 		if err = tx.NewSelect().Model(&c).Where("social_account_id=? AND remote_conversation_id=?", account.ID, remoteID).Scan(ctx); errors.Is(err, sql.ErrNoRows) {
 			continue
@@ -221,7 +233,10 @@ func (s *Service) applyDeletedConversations(ctx context.Context, tx bun.Tx, acco
 		}
 		// Keep local pending writes and operation receipts inspectable, but remove
 		// provider content and archive a conversation no longer accessible remotely.
-		if _, err = tx.NewUpdate().Model((*models.DirectMessage)(nil)).Set("body=''").Set("attachments_json='[]'").Set("deleted_at=?", s.now()).Where("conversation_id=? AND remote_message_id<>''", c.ID).Exec(ctx); err != nil {
+		if _, err = tx.NewUpdate().Model((*models.DirectMessage)(nil)).Set("body=''").Set("attachments_json='[]'").Set("author_remote_id=''").Set("deleted_at=?", s.now()).Where("conversation_id=? AND remote_message_id<>''", c.ID).Exec(ctx); err != nil {
+			return nil, err
+		}
+		if _, err = tx.NewRaw(`DELETE FROM message_reactions WHERE message_id IN (SELECT id FROM direct_messages WHERE conversation_id=? AND remote_message_id<>'')`, c.ID).Exec(ctx); err != nil {
 			return nil, err
 		}
 		if _, err = tx.NewUpdate().Model(&c).Set("archived_at=?", s.now()).Set("last_message_preview=''").Set("unread_count=0").WherePK().Exec(ctx); err != nil {

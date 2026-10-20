@@ -194,40 +194,59 @@ func (s *Service) persistConversationsWithDB(ctx context.Context, tx bun.IDB, ac
 		if remote.ID == "" {
 			continue
 		}
-		state, err := upsertConversation(ctx, tx, account, remote, now)
-		conversationID, unreadCount, changed := state.id, state.unread, state.changed
+		remote, eligible, err := prepareProviderConversation(ctx, tx, account, remote)
 		if err != nil {
 			return nil, err
 		}
-		newInbound := 0
-		for _, rm := range remote.Messages {
-			inserted, err := insertProviderMessage(ctx, tx, account, conversationID, rm, now)
-			if err != nil {
-				return nil, err
-			}
-			if inserted {
-				changed = true
-				var localID string
-				if err = tx.NewSelect().Model((*models.DirectMessage)(nil)).Column("id").Where("conversation_id=? AND remote_message_id=?", conversationID, rm.ID).Scan(ctx, &localID); err != nil {
-					return nil, err
-				}
-				changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversationID, MessageID: localID})
-				if rm.Direction == "inbound" {
-					newInbound++
-					received = append(received, receivedMessage{conversationID: conversationID, messageID: rm.ID, senderName: firstNonEmpty(remote.CounterpartName, remote.CounterpartHandle, "a social account"), provider: account.Platform})
-				}
-			}
+		if !eligible {
+			continue
 		}
-		if newInbound > 0 && (!state.created || !remote.UnreadCountKnown) {
-			if _, err = tx.NewUpdate().Model((*models.Conversation)(nil)).Set("unread_count=?", unreadCount+newInbound).Set("read_at=NULL").Set("archived_at=NULL").Where("id=?", conversationID).Exec(ctx); err != nil {
-				return nil, err
-			}
+		newReceived, newChanges, err := s.persistConversationWithDB(ctx, tx, account, remote, now)
+		if err != nil {
+			return nil, err
 		}
-		if changed {
-			changes = append(changes, inboxchanges.Change{Kind: "conversation", ConversationID: conversationID})
-		}
+		received = append(received, newReceived...)
+		changes = append(changes, newChanges...)
 	}
 	return received, inboxchanges.Append(ctx, tx, account.WorkspaceID, changes...)
+}
+
+func (s *Service) persistConversationWithDB(ctx context.Context, tx bun.IDB, account models.SocialAccount, remote platform.ProviderConversation, now time.Time) ([]receivedMessage, []inboxchanges.Change, error) {
+	received := []receivedMessage{}
+	changes := []inboxchanges.Change{}
+	state, err := upsertConversation(ctx, tx, account, remote, now)
+	conversationID, unreadCount, changed := state.id, state.unread, state.changed
+	if err != nil {
+		return nil, nil, err
+	}
+	newInbound := 0
+	for _, rm := range remote.Messages {
+		inserted, err := insertProviderMessage(ctx, tx, account, conversationID, rm, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		if inserted {
+			changed = true
+			var localID string
+			if err = tx.NewSelect().Model((*models.DirectMessage)(nil)).Column("id").Where("conversation_id=? AND remote_message_id=?", conversationID, rm.ID).Scan(ctx, &localID); err != nil {
+				return nil, nil, err
+			}
+			changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversationID, MessageID: localID})
+			if rm.Direction == "inbound" {
+				newInbound++
+				received = append(received, receivedMessage{conversationID: conversationID, messageID: rm.ID, senderName: firstNonEmpty(remote.CounterpartName, remote.CounterpartHandle, "a social account"), provider: account.Platform})
+			}
+		}
+	}
+	if newInbound > 0 && (!state.created || !remote.UnreadCountKnown) {
+		if _, err = tx.NewUpdate().Model((*models.Conversation)(nil)).Set("unread_count=?", unreadCount+newInbound).Set("read_at=NULL").Set("archived_at=NULL").Where("id=?", conversationID).Exec(ctx); err != nil {
+			return nil, nil, err
+		}
+	}
+	if changed {
+		changes = append(changes, inboxchanges.Change{Kind: "conversation", ConversationID: conversationID})
+	}
+	return received, changes, nil
 }
 
 type conversationUpsert struct {
@@ -300,6 +319,14 @@ func conversationSummaryChanged(existing models.Conversation, remote platform.Pr
 func insertProviderMessage(ctx context.Context, db bun.IDB, account models.SocialAccount, conversationID string, remote platform.ProviderMessage, now time.Time) (bool, error) {
 	if remote.ID == "" {
 		return false, nil
+	}
+	var remoteConversationID string
+	if err := db.NewSelect().Model((*models.Conversation)(nil)).Column("remote_conversation_id").Where("id=? AND social_account_id=?", conversationID, account.ID).Scan(ctx, &remoteConversationID); err != nil {
+		return false, err
+	}
+	suppressed, err := providerMessageSuppressed(ctx, db, account.ID, remoteConversationID, remote.ID, remote.RemoteCreatedAt)
+	if err != nil || suppressed {
+		return false, err
 	}
 	exists, err := db.NewSelect().Model((*models.DirectMessage)(nil)).
 		Where("conversation_id = ? AND remote_message_id = ?", conversationID, remote.ID).Exists(ctx)
