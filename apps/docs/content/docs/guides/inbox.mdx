@@ -14,22 +14,38 @@ Turning a feature off stops its future activity. Saved history stays available a
 
 ## Read and reply to comments
 
-Open the engagement list in **Inbox**. Filter by account or post and select a comment to read its thread. Write your reply and send it. Check the delivery state. If the reply fails, read the error before retrying.
+Open **Inbox → Comments**. Filter by account, unread state, or archived activity, then select a comment. Its detail shows the original post and the known parent replies. Check both the selected person and the receiving account above the public reply field before sending. A public reply is visible on the social network.
+
+OpenPost queues the action and keeps a receipt so retrying an interrupted request does not create another reply. If the provider rejects it, inspect the reported failure before retrying. Marking a comment read does not mean you have replied or resolved it.
 
 Moderation actions depend on the provider. Use the actions shown for that comment to hide, delete, or respond. Use **Load older** to reach saved history beyond the first page.
 
 ## Work with direct messages
 
-Choose a conversation to read its newest saved messages. Scroll upward or choose **Load older messages** for earlier history. The selected workspace and filters determine which conversations appear.
+Open **Inbox → Chats** to browse existing conversations, ordered by recent activity. Search people and saved messages, filter by receiving account, or choose **Unread**. Each conversation identifies the network and the account you will reply from. Starting a new conversation is not available.
+
+Select a conversation for its full-screen chat. OpenPost keeps your draft for that conversation on the device. New messages do not pull you away while you read older history. Use **Load older messages** for earlier saved messages. Where supported, **Load older history from network** queues another history page.
+
+**Archive** removes a chat from the main list. Use **Undo** immediately or find it under **Archived**. A new incoming message returns the chat to the main list.
+
+While Inbox is open, OpenPost collects and displays updates according to the provider's supported transport and limits. Leaving the app stops its foreground connection. Reopening Inbox refreshes stored history; mobile push alerts are not part of this release.
 
 Check the conversation's provider restrictions before replying:
 
 - Facebook and Instagram enforce a customer-service reply window. OpenPost blocks sends after the stored deadline.
-- X requires direct-message permission for the app and connected account.
+- X requires direct-message permission for the app and connected account. **Manage X messaging** opens account settings for separate messaging authorization when needed. Publishing authorization stays connected. Event subscriptions require administrator configuration and an explicit budget; ordinary authorization does not activate them. Encrypted XChat conversations are unsupported.
 - Bluesky chat requires an app-password session.
 - Mastodon direct posts are visible to the mentioned accounts and involved servers. They are not end-to-end encrypted.
 
-A failed reply stays visible with its status. Reconnect an expired account or fix the reported issue before retrying. Sending a direct message does not create a post.
+The send state describes what OpenPost knows:
+
+- **Sending…** means the app is submitting your request.
+- **Queued** means OpenPost saved it for delivery.
+- **Sent** means the provider accepted the message. It does not establish delivery or a read receipt.
+- **Delivery unconfirmed** means the request may have reached the server or provider. Keep the message and use its safe recovery action. OpenPost reuses the original request identity and blocks a resend when the provider outcome remains ambiguous.
+- **Failed** retains the message and its error. Reconnect an expired account or fix the reported issue before retrying.
+
+Sending a direct message does not create a post. Read indicators appear only when the provider supplies that state.
 
 ## Choose email notifications
 

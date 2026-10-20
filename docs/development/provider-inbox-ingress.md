@@ -4,11 +4,11 @@
 
 ## Register Meta callbacks
 
-Register public GET and POST `/api/v1/provider-inbox/meta/{appID}` with `Service.MetaHandler`. Resolve `{appID}` against an active provider app before constructing its handler. Load these values from the credential owner:
+Register public GET and POST `/api/v1/provider-inbox/meta/{appID}` with `Service.MetaHandler`. The server constructs handlers from its normalized active provider configurations. `{appID}` is `platform.AppConfigMergeKey(app) + ":" + app.ClientID`, not the database row ID. For example, the Facebook callback ends in `facebook:CLIENT_ID`; direct Instagram Login ends in `instagram:instagram_login:CLIENT_ID`. Use the exact configured client ID and login mode. Load these values from the credential owner:
 
 | `MetaApp` field  | Source                                              |
 | ---------------- | --------------------------------------------------- |
-| `ID`             | Provider app ID                                     |
+| `ID`             | Configured provider, login mode and client identity |
 | `ClientID`       | Provider app client ID                              |
 | `Platform`       | `facebook` or `instagram`                           |
 | `ConnectionMode` | Stored connection mode, including `instagram_login` |
@@ -21,11 +21,11 @@ GET answers `hub.challenge` only when `hub.mode=subscribe` and the verification 
 
 Intake resolves `entry.id` through active accounts and their current canonical OAuth grants. The grant must belong to the same Workspace, provider, and app client ID. Instagram's saved login mode must match. Message intake also requires the canonical messaging scopes. All matched receipts commit in one transaction before acknowledgement. Receipt payloads are encrypted; neither signatures nor private message bodies belong in logs.
 
-Install `SetReceiptScheduler` before serving callbacks. Its callback must durably enqueue a unique `inbox_receipt_drain` job for every acknowledged batch, including duplicate deliveries. An enqueue failure returns 503 after preserving the receipts, so a provider retry can enqueue again. A periodic recovery sweep must also schedule pending receipts after a crash. No configured scheduler means a bound receipt is persisted but the request returns 503.
+Install `SetReceiptScheduler` before serving callbacks. Its callback durably enqueues the coalesced `messages_sync` job with subject `provider-receipts:pending` after every acknowledged batch, including duplicate deliveries. The active-job index merges duplicate wakeups. An enqueue failure returns 503 after preserving the receipts, so a provider retry can enqueue again. A one-second stored-receipt scheduler also checks for pending work, so a receipt arriving while the drain job finishes cannot lose its wakeup. The regular sweep remains crash recovery. No configured scheduler means a bound receipt is persisted but the request returns 503.
 
 ## Drain receipts in worker roles
 
-In `worker` and `all`, call `ProcessPending(ctx, 100, processor)` from the durable drain job. Continue while work is applied. Failed receipts retain their encrypted payload and a bounded exponential retry delay. The periodic sweep covers delayed retries and abandoned processing leases. Call `Prune` daily to remove acknowledged receipt keys after seven days. Successful processing erases the payload immediately.
+In `worker` and `all`, the durable drain job calls `ProcessPending(ctx, 100, processor)` and the X receipt owner. The one-second scheduler continues draining pending pages without keeping a worker occupied indefinitely. Failed receipts retain their encrypted payload and a bounded exponential retry delay. The periodic sweep covers delayed retries and abandoned processing leases. Call `Prune` daily to remove acknowledged receipt keys after seven days. Successful processing erases the payload immediately.
 
 The processor receives `Event` with local account ID, grant ID, app ID, kind, and decrypted payload. Decode the payload as `providerinbox.MetaEvent`. Recheck account feature opt-in and current authorization through the owning services.
 
@@ -53,7 +53,7 @@ The database lease lasts 60 seconds and renews every 20 seconds. A failed renewa
 3. Replay events from the captured head. Apply each batch and its `NextCursor` together. Follow `HasMore` until the log returns empty.
 4. Use `MessageHistoryAdapter.FetchMessageHistory` only for older messages in a known conversation. Keep its cursor separate from the account log cursor. Facebook and both Instagram login modes also implement this history interface.
 
-`getLog` has no limit parameter. OpenPost limits the processed prefix to at most 100 events and checkpoints its final revision, so the unprocessed tail is replayed. Deleted messages remain tombstones, viewer read state stays distinct from message authorship, and reactions retain add/remove order. Message snapshots set `ReactionsKnown` and carry complete `Reactions`; replace the stored snapshot even when that list is empty. Fill each reaction's conversation ID from its parent message. Fence history application against live account progress, or seed snapshots only on first message insertion. A history response started before a live removal must not resurrect the removed reaction. A confirmed `InvalidConvo` response retires an inaccessible conversation without blocking log progress; transport failures still abort the batch. Unknown log kinds may refresh conversation metadata without creating empty message bubbles. Preserve the last committed cursor on fetch or hydration failure.
+`getLog` has no limit parameter. OpenPost limits the processed prefix to at most 100 events and checkpoints its final revision, so the unprocessed tail is replayed. Deleted messages remain tombstones, viewer read state stays distinct from message authorship, and reactions retain add/remove order. Message snapshots set `ReactionsKnown` and carry complete `Reactions`. The persistence owner seeds the snapshot only on first message insertion, then applies live reaction events in order. Fill each reaction's conversation ID from its parent message. A history response started before a live removal must not resurrect the removed reaction. A confirmed `InvalidConvo` response retires an inaccessible conversation without blocking log progress; transport failures still abort the batch. Unknown log kinds may refresh conversation metadata without creating empty message bubbles. Preserve the last committed cursor on fetch or hydration failure.
 
 The official [Bluesky log lexicon](https://github.com/bluesky-social/social-app/blob/main/lexicons/chat/bsky/convo/getLog.json) and [Mastodon streaming reference](https://docs.joinmastodon.org/methods/streaming/) document the underlying transports. These modules do not provision subscriptions, prove provider approval, or enable unsupported networks.
 
