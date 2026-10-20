@@ -128,6 +128,11 @@ export async function authenticatePage(page: Page, token: string) {
   ]);
 }
 
+/** The composer destination row is a labelled group of pressed-state buttons, not tabs. */
+export function composerDestinations(page: Page) {
+  return page.getByRole("group", { name: "Destinations", exact: true });
+}
+
 export async function clickComposerDeliveryAction(page: Page, name: string) {
   const trigger = page.getByTestId("composer-delivery-menu");
   await expect(trigger).toBeVisible();

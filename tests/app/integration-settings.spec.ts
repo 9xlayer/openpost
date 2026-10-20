@@ -4,6 +4,7 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 import AxeBuilder from "@axe-core/playwright";
 import {
   authenticatePage,
+  composerDestinations,
   createWorkspace,
   openComposerPlatformSettings,
   registerUser,
@@ -67,7 +68,9 @@ for (const width of [1440, 390, 320]) {
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await openDiscordPublication(page, request, width, scheme);
-      await page.getByRole("tab", { name: /^Test server/ }).click();
+      await composerDestinations(page)
+        .getByRole("button", { name: /^Test server/ })
+        .click();
       await openComposerPlatformSettings(page);
       const dialog = page.getByRole("dialog", { name: "Discord settings", exact: true });
       await expect(dialog).toBeVisible();
@@ -173,7 +176,9 @@ for (const width of [1440, 390, 320]) {
       await expect(manager).not.toBeVisible();
       await page.goto("/");
       await expect(page.getByTestId("composer-account-control")).toContainText("Launch updates");
-      await page.getByRole("tab", { name: /^Test server/ }).click();
+      await composerDestinations(page)
+        .getByRole("button", { name: /^Test server/ })
+        .click();
       await openComposerPlatformSettings(page);
       await expect(dialog.getByRole("combobox", { name: "Channel", exact: true })).toContainText(
         "#updates",

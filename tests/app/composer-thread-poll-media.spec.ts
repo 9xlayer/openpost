@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, composerDestinations, createWorkspace, registerUser } from "./helpers";
 
 // The capability resolver and draft persistence are real. Synthetic credentials
 // cannot publish, and this test never requests delivery.
@@ -135,7 +135,9 @@ test("media on a follow-up preserves the first post's native poll", async ({
       await page.evaluate((value) => localStorage.setItem("mode-watcher-mode", value), scheme);
       await page.goto(`/publications/${saved.id}`);
       await expect(poll.getByText("Which option?", { exact: true })).toBeVisible();
-      await page.getByRole("tab", { name: /@auditpoll,/ }).click();
+      await composerDestinations(page)
+        .getByRole("button", { name: /@auditpoll,/ })
+        .click();
       const version = poll.getByRole("button", {
         name: "Poll version",
         exact: true,
@@ -152,7 +154,7 @@ test("media on a follow-up preserves the first post's native poll", async ({
       await page.screenshot({
         path: testInfo.outputPath(`poll-${width}-${scheme}.png`),
       });
-      await page.getByRole("tab", { name: "All", exact: true }).click();
+      await composerDestinations(page).getByRole("button", { name: "All", exact: true }).click();
     }
   }
   // Moving the same photo onto the poll's own post must still be refused.
@@ -162,7 +164,9 @@ test("media on a follow-up preserves the first post's native poll", async ({
     .getByRole("button", { name: "Remove media", exact: true })
     .click();
   await attachPhoto(0);
-  await page.getByRole("tab", { name: /@auditpoll,/ }).click();
+  await composerDestinations(page)
+    .getByRole("button", { name: /@auditpoll,/ })
+    .click();
   await expect(
     poll.getByText("Remove media from this destination or choose a text version of the poll.", {
       exact: true,
@@ -184,7 +188,7 @@ test("media on a follow-up preserves the first post's native poll", async ({
   await page.screenshot({
     path: testInfo.outputPath("same-post-media-guard.png"),
   });
-  await page.getByRole("tab", { name: "All", exact: true }).click();
+  await composerDestinations(page).getByRole("button", { name: "All", exact: true }).click();
   await page
     .getByRole("region", { name: "Drop zone for post 1", exact: true })
     .getByRole("button", { name: "Remove media", exact: true })

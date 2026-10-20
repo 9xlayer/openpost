@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, composerDestinations, createWorkspace, registerUser } from "./helpers";
 
 for (const width of [1280, 390, 320]) {
   test.describe(`${width}px controls`, () => {
@@ -286,7 +286,9 @@ for (const width of [1280, 390, 320]) {
         await page.keyboard.press("Escape");
         await expect(poll.getByRole("button", { name: "Edit poll", exact: true })).toBeFocused();
         await expect(poll.getByText("Would you use this?", { exact: true })).toBeVisible();
-        await page.getByRole("tab", { name: /@pollx,/ }).click();
+        await composerDestinations(page)
+          .getByRole("button", { name: /@pollx,/ })
+          .click();
         await poll.getByRole("button", { name: "Edit poll", exact: true }).click();
         const custom = poll.getByTestId("preview-poll-editor");
         await custom.getByRole("button", { name: "Voting closes after", exact: true }).click();
@@ -296,7 +298,9 @@ for (const width of [1280, 390, 320]) {
         await custom.getByRole("button", { name: "Save", exact: true }).click();
         await expect(poll.getByText("Usarias isto?", { exact: true })).toBeVisible();
         await expect(poll.getByRole("checkbox")).toHaveCount(0);
-        await page.getByRole("tab", { name: /polllinkedin,/ }).click();
+        await composerDestinations(page)
+          .getByRole("button", { name: /polllinkedin,/ })
+          .click();
         await poll.getByRole("button", { name: "Edit poll", exact: true }).click();
         const linkedinDialog = poll.getByTestId("preview-poll-editor");
         await expect(
@@ -325,7 +329,9 @@ for (const width of [1280, 390, 320]) {
           }),
         ).toBeDisabled();
         await linkedinDialog.getByRole("button", { name: "Cancel", exact: true }).click();
-        await page.getByRole("tab", { name: /@pollmastodon,/ }).click();
+        await composerDestinations(page)
+          .getByRole("button", { name: /@pollmastodon,/ })
+          .click();
         await poll.getByRole("button", { name: "Edit poll", exact: true }).click();
         await poll
           .getByRole("checkbox", {
@@ -346,9 +352,11 @@ for (const width of [1280, 390, 320]) {
         await expect(poll.getByRole("button", { name: "Poll version", exact: true })).toContainText(
           "Custom poll",
         );
-        await page.getByRole("tab", { name: "All", exact: true }).click();
+        await composerDestinations(page).getByRole("button", { name: "All", exact: true }).click();
         await expect(poll.getByText("Would you use this?", { exact: true })).toBeVisible();
-        await page.getByRole("tab", { name: /@pollsky,/ }).click();
+        await composerDestinations(page)
+          .getByRole("button", { name: /@pollsky,/ })
+          .click();
         await expect(poll.getByRole("button", { name: "Poll version", exact: true })).toContainText(
           "Text version",
         );
@@ -374,7 +382,9 @@ for (const width of [1280, 390, 320]) {
           })
           .toBe("Usarias isto?");
         await page.goto(`/publications/${saved.id}`);
-        await page.getByRole("tab", { name: /@pollx,/ }).click();
+        await composerDestinations(page)
+          .getByRole("button", { name: /@pollx,/ })
+          .click();
         await expect(poll.getByText("Usarias isto?", { exact: true })).toBeVisible();
         const late = {
           id: randomUUID(),
@@ -457,7 +467,9 @@ for (const width of [1280, 390, 320]) {
         });
         expect(imported.ok(), await imported.text()).toBe(true);
         await page.goto(`/publications/${saved.id}`);
-        await page.getByRole("tab", { name: /@pollx,/ }).click();
+        await composerDestinations(page)
+          .getByRole("button", { name: /@pollx,/ })
+          .click();
         await expect(poll.getByText(/does not support the selected voting options/)).toBeVisible();
         await poll.getByRole("button", { name: "Edit poll", exact: true }).click();
         await poll

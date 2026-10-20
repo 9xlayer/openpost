@@ -72,7 +72,7 @@ test("composer destination order survives edits, reload and inventory return", a
   );
   await authenticatePage(page, auth.token);
   await page.goto(`/publications/${publication.id}?workspace_id=${workspace.id}`);
-  const tabs = page.locator('[id^="composer-destination-"]');
+  const tabs = page.locator('[id^="composer-destination-"]:not(#composer-destination-all)');
   await expect(tabs).toHaveCount(accounts.length);
   const readOrder = () =>
     tabs.evaluateAll((elements) =>
@@ -166,7 +166,7 @@ test("composer destination order survives edits, reload and inventory return", a
       ).toEqual(expectedIDs);
       await tabs.last().focus();
       await page.keyboard.press("Enter");
-      await expect(tabs.last()).toHaveAttribute("aria-selected", "true");
+      await expect(tabs.last()).toHaveAttribute("aria-pressed", "true");
       await page.screenshot({
         path: testInfo.outputPath(`order-${width}-${scheme}.png`),
       });
