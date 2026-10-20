@@ -25,7 +25,7 @@ const workspace = {
   can_connect: true,
   can_approve: true,
 };
-if (process.env.EXPO_PUBLIC_OPENPOST_SCREENSHOT_ROLE === "viewer") {
+if (global.__OPENPOST_SCREENSHOT_VIEWER__ === true) {
   workspace.role = "viewer";
   workspace.can_edit = false;
   workspace.can_connect = false;

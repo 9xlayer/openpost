@@ -23,7 +23,12 @@ export function useInboxRefresh({
   const active = useInboxActive();
   const queryClient = useQueryClient();
   const controller = useRef<AbortController | undefined>(undefined);
-  const [state, setState] = useState<{ key: string; busy: boolean; notice?: string }>({
+  const [state, setState] = useState<{
+    key: string;
+    busy: boolean;
+    notice?: string;
+    signal?: AbortSignal;
+  }>({
     key: viewKey,
     busy: false,
   });
@@ -39,7 +44,7 @@ export function useInboxRefresh({
     const run = new AbortController();
     controller.current = run;
     const identity = captureApiRequestIdentity();
-    setState({ key: viewKey, busy: true });
+    setState({ key: viewKey, busy: true, signal: run.signal });
     try {
       const notice = await refreshInbox({
         canEdit,
@@ -65,12 +70,12 @@ export function useInboxRefresh({
         });
     } finally {
       if (controller.current === run) controller.current = undefined;
-      setState((state) => (state.key === viewKey ? { ...state, busy: false } : state));
+      setState((state) => (state.signal === run.signal ? { ...state, busy: false } : state));
     }
   }, [active, canEdit, workspaceId, view, viewKey, previousSuccess, queryClient, reloadStored]);
   return {
     refresh,
-    refreshing: active && state.key === viewKey && state.busy,
+    refreshing: active && state.key === viewKey && state.busy && !state.signal?.aborted,
     notice: state.key === viewKey ? state.notice : undefined,
   };
 }
