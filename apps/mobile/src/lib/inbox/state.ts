@@ -12,6 +12,7 @@ export interface PendingSend {
 export interface ConversationDraft {
   text: string;
   sends: PendingSend[];
+  replyHistory?: PendingSend[];
 }
 
 /** Server identity wins, including a send receipt observed before its HTTP response. */
@@ -31,6 +32,7 @@ export function reconcileSends(
 export function recoverDraft(draft: ConversationDraft): ConversationDraft {
   return {
     text: draft.text,
+    ...(draft.replyHistory?.length ? { replyHistory: draft.replyHistory } : {}),
     sends: draft.sends.map((send) =>
       send.state === "sending"
         ? {
@@ -68,8 +70,18 @@ export function parseDraft(value: string): ConversationDraft {
     !Array.isArray(data.sends)
   )
     throw new Error("Invalid saved chat draft");
+  const sends = parseOperations(data.sends);
+  const history = "replyHistory" in data ? parseOperations(data.replyHistory) : [];
+  return recoverDraft({
+    text: data.text,
+    sends,
+    ...(history.length ? { replyHistory: history } : {}),
+  });
+}
+function parseOperations(values: unknown): PendingSend[] {
+  if (!Array.isArray(values)) return [];
   const sends: PendingSend[] = [];
-  for (const send of data.sends) {
+  for (const send of values) {
     if (
       !send ||
       typeof send !== "object" ||
@@ -100,5 +112,5 @@ export function parseDraft(value: string): ConversationDraft {
       error: typeof send.error === "string" ? send.error : undefined,
     });
   }
-  return recoverDraft({ text: data.text, sends });
+  return sends;
 }

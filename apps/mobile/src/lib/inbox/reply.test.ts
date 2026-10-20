@@ -7,6 +7,7 @@ function fixture(canEdit = true) {
   let disk: ConversationDraft = { text: "Thanks, Alex!", sends: [] };
   const requests: { body: string; operationId: string }[] = [];
   let loseResponse = false;
+  let operationCount = 0;
   const create = () =>
     new PublicReplySession({
       read: async () => parseDraft(JSON.stringify(disk)),
@@ -15,12 +16,12 @@ function fixture(canEdit = true) {
       },
       canEdit: () => canEdit,
       current: () => true,
-      newOperationId: () => operationId,
+      newOperationId: () => (operationCount++ ? "intentional-replacement" : operationId),
       admit: async (body, id) => {
         expect(disk.sends[0]?.operationId).toBe(id);
         requests.push({ body, operationId: id });
         if (loseResponse) throw new Error("connection lost after admission");
-        return { job_id: "reply-job" };
+        return { job_id: id === operationId ? "reply-job" : "replacement-job" };
       },
     });
   return {
@@ -110,4 +111,65 @@ test("typing updates the controlled native field immediately while device persis
   expect(session.snapshot().text).toBe("Thanks, Alex");
   release?.();
   await save;
+});
+test("a failed reply survives restart and explicit new-reply recovery preserves its receipt before a distinct intentional send", async () => {
+  const f = fixture();
+  const session = f.create();
+  await session.restore();
+  await session.submit();
+  await session.observe({
+    id: "reply-job",
+    status: "failed",
+    last_error: "Reconnect this receiving account",
+  });
+  const reopened = f.create();
+  await reopened.restore();
+  await reopened.startNewReply();
+  expect(f.requests).toHaveLength(1);
+  expect(reopened.snapshot()).toMatchObject({
+    text: "Thanks, Alex!",
+    operation: null,
+    history: [{ jobId: "reply-job", operationId, state: "failed" }],
+  });
+  await reopened.setText("Thanks, Alex! The account is reconnected.");
+  await reopened.submit();
+  expect(f.requests[1]).toEqual({
+    body: "Thanks, Alex! The account is reconnected.",
+    operationId: "intentional-replacement",
+  });
+  const restored = f.create();
+  await restored.restore();
+  expect(restored.snapshot().history[0]).toMatchObject({
+    jobId: "reply-job",
+    operationId,
+    state: "failed",
+  });
+});
+test("unknown admission cannot be replaced by the explicit failed-job recovery action", async () => {
+  const f = fixture();
+  const session = f.create();
+  await session.restore();
+  f.loseResponse(true);
+  await session.submit();
+  await session.startNewReply();
+  await session.setText("Different body");
+  expect(session.snapshot()).toMatchObject({
+    text: "Thanks, Alex!",
+    operation: { operationId, state: "ambiguous" },
+  });
+  expect(f.requests).toHaveLength(1);
+});
+test("an unknown provider outcome with a known receipt cannot be replaced as a confirmed failure", async () => {
+  const f = fixture();
+  const session = f.create();
+  await session.restore();
+  await session.submit();
+  await session.observe({ id: "reply-job", status: "unknown" });
+  await session.startNewReply();
+  await session.setText("Another body");
+  expect(session.snapshot()).toMatchObject({
+    text: "Thanks, Alex!",
+    operation: { state: "queued", jobId: "reply-job", operationId },
+  });
+  expect(f.requests).toHaveLength(1);
 });

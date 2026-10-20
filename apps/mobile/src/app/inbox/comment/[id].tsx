@@ -13,6 +13,7 @@ import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
 import { MediaImage } from "@/components/media-image";
 import { useComment } from "@/lib/inbox/queries";
 import { commentAction, setCommentState } from "@/lib/inbox/api";
+import { orderedCommentAncestors } from "@/lib/inbox/ancestors";
 import { usePublicReply } from "@/lib/inbox/use-public-reply";
 import { useInboxJob } from "@/lib/inbox/use-job";
 import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "@/lib/api/client";
@@ -59,7 +60,8 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
     };
   }, []);
   const liveError = useInboxUpdates("comments");
-  const parent = item.data?.parents?.find((row) => row.remote_id === comment?.parent_remote_id);
+  const ancestors = comment ? orderedCommentAncestors(comment, item.data?.parents ?? []) : [];
+  const [showReceipts, setShowReceipts] = useState(false);
   const commentRead = comment?.read_at;
   const commentId = comment?.id;
   useEffect(() => {
@@ -185,12 +187,23 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               </View>
               {comment.parent_remote_id ? (
                 <View style={{ gap: 6 }}>
-                  <ContentTitle>Replying to</ContentTitle>
-                  {parent ? (
-                    <>
-                      <BodyText>{parent.author_name || parent.author_handle}</BodyText>
-                      <BodyText selectable>{parent.body}</BodyText>
-                    </>
+                  <ContentTitle>Earlier in this thread</ContentTitle>
+                  {ancestors.length ? (
+                    <View style={{ gap: 12 }}>
+                      {ancestors[0].parent_remote_id ? (
+                        <BodyText>Earlier replies are not available in stored history.</BodyText>
+                      ) : null}
+                      {ancestors.map((ancestor) => (
+                        <View key={ancestor.id} style={{ gap: 4 }}>
+                          <BodyText>
+                            {ancestor.author_name || ancestor.author_handle || "Unknown author"}
+                          </BodyText>
+                          <BodyText selectable>
+                            {ancestor.deleted_at ? "This comment was deleted." : ancestor.body}
+                          </BodyText>
+                        </View>
+                      ))}
+                    </View>
                   ) : (
                     <BodyText>
                       {item.isPending
@@ -310,6 +323,28 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               ) : null}
             </>
           ) : null}
+          {reply.history.length ? (
+            <View style={{ gap: 8 }}>
+              <Button
+                title={`Previous reply receipts (${reply.history.length})`}
+                intent="ordinary"
+                accessibilityState={{ expanded: showReceipts }}
+                onPress={() => setShowReceipts((value) => !value)}
+              />
+              {showReceipts
+                ? reply.history.map((receipt) => (
+                    <View key={receipt.operationId} style={{ gap: 6, paddingVertical: 8 }}>
+                      <ContentTitle>
+                        Failed reply · {new Date(receipt.createdAt).toLocaleString()}
+                      </ContentTitle>
+                      <BodyText selectable>{receipt.body}</BodyText>
+                      {receipt.error ? <BodyText>{receipt.error}</BodyText> : null}
+                      <BodyText selectable>Receipt: {receipt.jobId}</BodyText>
+                    </View>
+                  ))
+                : null}
+            </View>
+          ) : null}
           {liveError ? <BodyText>Reconnecting to Inbox…</BodyText> : null}
           {error ? <QueryNotice message={error} /> : null}
           {moderation.job?.status === "completed" ? (
@@ -392,6 +427,14 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     title="Check original thread"
                     intent="link"
                     onPress={() => void Linking.openURL(comment.provider_post_url!)}
+                  />
+                ) : null}
+                {reply.operation.state === "failed" && replyable ? (
+                  <Button
+                    title="Start a new reply"
+                    intent="ordinary"
+                    accessibilityHint="Check the original thread first, then edit the retained text and send another reply explicitly."
+                    onPress={reply.startNewReply}
                   />
                 ) : null}
               </View>

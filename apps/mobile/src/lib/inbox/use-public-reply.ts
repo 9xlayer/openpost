@@ -43,5 +43,8 @@ export function usePublicReply(workspaceId: string, itemId: string, canEdit: boo
     submit: () => {
       void session.submit();
     },
+    startNewReply: () => {
+      void session.startNewReply();
+    },
   };
 }

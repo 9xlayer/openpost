@@ -5,6 +5,7 @@ interface ReplySnapshot {
   ready: boolean;
   text: string;
   operation: PendingSend | null;
+  history: PendingSend[];
   error?: string;
 }
 interface ReplyDependencies {
@@ -17,7 +18,7 @@ interface ReplyDependencies {
 }
 /** Owns admission, crash recovery and provider receipts for one authored public reply. */
 export class PublicReplySession {
-  private value: ReplySnapshot = { ready: false, text: "", operation: null };
+  private value: ReplySnapshot = { ready: false, text: "", operation: null, history: [] };
   private listeners = new Set<() => void>();
   private inFlight = false;
   private active = true;
@@ -42,18 +43,25 @@ export class PublicReplySession {
     this.value = value;
     for (const listener of this.listeners) listener();
   }
-  private async persist(value: ReplySnapshot) {
+  private async persist(update: Omit<ReplySnapshot, "history"> & { history?: PendingSend[] }) {
+    const value: ReplySnapshot = { ...update, history: update.history ?? this.value.history };
     if (!this.current()) return;
     await this.dependencies.write({
       text: value.text,
       sends: value.operation ? [value.operation] : [],
+      ...(value.history.length ? { replyHistory: value.history } : {}),
     });
     this.emit(value);
   }
   async restore() {
     try {
       const draft = await this.dependencies.read();
-      this.emit({ ready: true, text: draft.text, operation: draft.sends[0] ?? null });
+      this.emit({
+        ready: true,
+        text: draft.text,
+        operation: draft.sends[0] ?? null,
+        history: draft.replyHistory ?? [],
+      });
     } catch {
       this.emit({
         ...this.value,
@@ -64,16 +72,44 @@ export class PublicReplySession {
   async setText(text: string) {
     if (!this.value.ready || (this.value.operation && this.value.operation.state !== "confirmed"))
       return;
-    const next: ReplySnapshot = { ready: true, text, operation: null };
+    const next: ReplySnapshot = { ready: true, text, operation: null, history: this.value.history };
     this.emit(next);
     try {
-      await this.dependencies.write({ text, sends: [] });
+      await this.dependencies.write({
+        text,
+        sends: [],
+        ...(next.history.length ? { replyHistory: next.history } : {}),
+      });
     } catch {
       this.emit({
         ...this.value,
         error: "Could not save this reply. Keep this screen open and try again.",
       });
     }
+  }
+  async startNewReply() {
+    const operation = this.value.operation;
+    if (
+      !this.current() ||
+      !(this.allowed ?? this.dependencies.canEdit()) ||
+      !operation?.jobId ||
+      operation.state !== "failed" ||
+      this.inFlight
+    )
+      return;
+    // Only this deliberate recovery unlocks editing. A new UUID is allocated by the later Send.
+    await this.persist({
+      ready: true,
+      text: operation.body,
+      operation: null,
+      history: [...this.value.history, operation],
+    }).catch(() =>
+      this.emit({
+        ...this.value,
+        error:
+          "Could not save the failed receipt. Reopen this comment before starting another reply.",
+      }),
+    );
   }
   async submit() {
     if (
