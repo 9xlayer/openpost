@@ -407,6 +407,7 @@ func TestMemePreviewLoadsWorkspaceOverlayBytesWithoutPublicURLAndDoesNotPersist(
 	require.Len(t, requests, 1)
 	require.Empty(t, requests[0].OverlayURLs)
 	require.Len(t, requests[0].OverlayImages, 1)
+	require.Equal(t, memePreviewRenderHeight, requests[0].Height)
 	require.Equal(t, "image/png", requests[0].OverlayImages[0].MIMEType)
 	require.Equal(t, validMemePNG(t), requests[0].OverlayImages[0].Data)
 	count, err := srv.db.NewSelect().Model((*models.MediaGenerationRecipe)(nil)).Count(t.Context())
@@ -487,6 +488,9 @@ func TestMemeRenderImportsMediaPersistsImmutableRecipeAndAllowsRecipeRead(t *tes
 	var output RenderMemeOutput
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &output.Body))
 	require.NotEmpty(t, output.Body.Media.ID)
+	requests := srv.provider.renderedRequests()
+	require.Len(t, requests, 1)
+	require.Equal(t, memePublishRenderHeight, requests[0].Height)
 	require.Equal(t, "meme_generator", output.Body.Media.Source)
 	require.Equal(t, "parent-1", output.Body.Media.ParentMediaID)
 	require.Equal(t, output.Body.Media.ID, output.Body.Recipe.MediaID)
