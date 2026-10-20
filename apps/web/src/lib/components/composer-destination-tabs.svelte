@@ -30,7 +30,7 @@
 		void tick().then(() => {
 			if (activeAccountId !== accountId || activeTabIsCustom !== custom) return;
 			const tabs = tabsElement;
-			const selected = tabs?.querySelector<HTMLElement>('[aria-selected="true"]');
+			const selected = tabs?.querySelector<HTMLElement>('[aria-pressed="true"]');
 			if (!tabs || !selected) return;
 			const tabBounds = selected.getBoundingClientRect();
 			const viewport = tabs.getBoundingClientRect();
