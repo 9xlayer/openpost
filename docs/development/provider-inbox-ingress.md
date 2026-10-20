@@ -4,7 +4,7 @@
 
 ## Register Meta callbacks
 
-Register public GET and POST `/api/v1/provider-inbox/meta/{appID}` with `Service.MetaHandler`. The server constructs handlers from its normalized active provider configurations. `{appID}` is `platform.AppConfigMergeKey(app) + ":" + app.ClientID`, not the database row ID. For example, the Facebook callback ends in `facebook:CLIENT_ID`; direct Instagram Login ends in `instagram:instagram_login:CLIENT_ID`. Use the exact configured client ID and login mode. Load these values from the credential owner:
+Register public GET and POST `/api/v1/provider-inbox/meta/{appID}` with `Service.MetaHandler`. The server constructs handlers from its normalized active provider configurations. `{appID}` is `platform.AppConfigMergeKey(app) + ":" + app.ClientID`, not the database row ID. For example, the Facebook callback ends in `facebook:CLIENT_ID`; direct Instagram Login ends in `instagram:instagram_login:CLIENT_ID`. Use the exact configured client ID and login mode. Callback handlers capture startup configuration. Restart after adding or changing an app, client secret, or verification token, including edits in administrator settings. Load these values from the credential owner:
 
 | `MetaApp` field  | Source                                              |
 | ---------------- | --------------------------------------------------- |

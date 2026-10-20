@@ -14,7 +14,7 @@ The runner cancels older in-flight message reads before applying committed event
 
 `services/inboxchanges` stores typed identifiers, not message bodies. Each visible mutation appends its records in the same transaction. A per-Workspace head row serializes revision allocation until commit. PostgreSQL sequences alone would allow a later revision to commit before an earlier one and let readers skip the late commit.
 
-A feed page returns at most 200 changes and never reads beyond its captured committed head. Cursors bind to a Workspace. The server retains the last 10,000 changes per Workspace. An empty or expired cursor requests a fresh stored-data view. A deleted message remains a tombstone, and a merged duplicate emits its own removal record.
+A feed page returns at most 200 changes and never reads beyond its captured committed head. Cursors bind to a Workspace. The server retains the last 10,000 changes per Workspace. An empty or expired cursor requests a fresh stored-data view. A deleted message remains a tombstone, and a merged duplicate emits its own removal record. Account-scoped provider deletion identities survive even when deletion arrives before local discovery or history. Conversation deletion retains its observed cutoff; a later provider message can reopen the conversation without exposing older content.
 
 Long waits release database connections between one-second checks. Every check and completed response revalidates the credential and Workspace access. A revoked session, expired token, or removed member cannot keep reading an already-open feed.
 
@@ -40,11 +40,11 @@ The client saves a random `client_operation_id` before submitting a DM or public
 
 DM provider writes keep a stable fence based on the canonical local message ID. An echo received before the send response converges by remote message ID while retaining that local ID. The client reconciles optimistic rows using `client_operation_id`. Provider acceptance establishes Sent; it does not invent typing, delivery, or read state.
 
-A definite pre-send failure may be retried through the dedicated retry endpoint. An uncertain provider write remains inspectable and blocks automatic resend. Public-reply admission receipts outlive pruned job history, so a lost response cannot cause a second public reply on replay.
+A definite pre-send failure may be retried through the dedicated retry endpoint. An uncertain provider write remains inspectable and blocks automatic resend. Public-reply admission receipts outlive pruned job history, so a lost response cannot cause a second public reply on replay. Refresh responses expose active Workspace collection job IDs, and `/jobs/{id}` authorizes Inbox receipts through their Workspace scope. A refresh is complete only after those jobs finish, not when they are enqueued. Moderation completion updates stored state and the change journal in one transaction.
 
 ## Verify and operate
 
-Migrations 165 through 167 are additive for SQLite and PostgreSQL. Run migration once before separate Hosted web and worker roles. Self-hosted `all` follows the existing automatic migration policy. Downgrading binaries requires stopping new Inbox workers and explicit paid subscriptions first; keep the additive tables and unreconciled provider-write/cost records.
+Migrations 165 through 168 are additive for SQLite and PostgreSQL. Run migration once before separate Hosted web and worker roles. Self-hosted `all` follows the existing automatic migration policy. Downgrading binaries requires stopping new Inbox workers and explicit paid subscriptions first; keep the additive tables and unreconciled provider-write/cost records.
 
 The focused tests cover request replay, echo races, unread/archive behavior, stale reaction snapshots, credential revocation, foreground coalescing, queue separation, and PostgreSQL commit ordering. Run them in Devenv:
 
