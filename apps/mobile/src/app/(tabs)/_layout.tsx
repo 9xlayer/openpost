@@ -7,9 +7,9 @@ export default function TabLayout() {
   const colors = useColors();
   const theme = useNativeTheme();
   const drafts = resolveNativeThemeNavigationIcon(theme.manifest, "drafts");
-  const calendar = resolveNativeThemeNavigationIcon(theme.manifest, "calendar");
-  const queue = resolveNativeThemeNavigationIcon(theme.manifest, "queue");
-  const video = resolveNativeThemeNavigationIcon(theme.manifest, "videoProjects");
+  const inbox = resolveNativeThemeNavigationIcon(theme.manifest, "inbox");
+  const media = resolveNativeThemeNavigationIcon(theme.manifest, "media");
+  const more = resolveNativeThemeNavigationIcon(theme.manifest, "more");
   const analytics = resolveNativeThemeNavigationIcon(theme.manifest, "analytics");
   const navigation = navigationPresentation(theme.manifest);
   const label = theme.manifest.typography.labelMedium;
@@ -48,26 +48,30 @@ export default function TabLayout() {
       shadowColor={navigation.shadowColor}
       tintColor={navigation.selectedColor}
     >
-      <NativeTabs.Trigger name="drafts">
-        <NativeTabs.Trigger.Label>Drafts</NativeTabs.Trigger.Label>
+      <NativeTabs.Trigger name="posts">
+        <NativeTabs.Trigger.Label>Posts</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon renderingMode="template" src={drafts} />
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="calendar">
-        <NativeTabs.Trigger.Label>Calendar</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon renderingMode="template" src={calendar} />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="queue">
-        <NativeTabs.Trigger.Label>Queue</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon renderingMode="template" src={queue} />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="projects">
-        <NativeTabs.Trigger.Label>Video</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon renderingMode="template" src={video} />
+      <NativeTabs.Trigger name="inbox">
+        <NativeTabs.Trigger.Label>Inbox</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={inbox} />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="analytics">
         <NativeTabs.Trigger.Label>Analytics</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon renderingMode="template" src={analytics} />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="media">
+        <NativeTabs.Trigger.Label>Media</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={media} />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="more">
+        <NativeTabs.Trigger.Label>More</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon renderingMode="template" src={more} />
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="drafts" hidden />
+      <NativeTabs.Trigger name="calendar" hidden />
+      <NativeTabs.Trigger name="queue" hidden />
+      <NativeTabs.Trigger name="projects" hidden />
     </NativeTabs>
   );
 }
