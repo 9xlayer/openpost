@@ -206,3 +206,27 @@ func TestMetaReplayRequeuesAfterDurableSchedulerFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
 }
+
+func TestTransportLeaseDeadlineCancelsIndependentlyOfRenewal(t *testing.T) {
+	for _, renewEarly := range []bool{false, true} {
+		t.Run(map[bool]string{false: "expires", true: "renewal updates deadline"}[renewEarly], func(t *testing.T) {
+			deadline := time.Now().Add(25 * time.Millisecond)
+			if renewEarly {
+				deadline = time.Now().Add(5 * time.Second)
+			}
+			ctx, cancel, renew := transportLeaseContext(t.Context(), deadline)
+			defer cancel()
+			if renewEarly {
+				renew(time.Now().Add(25 * time.Millisecond))
+			}
+			// No monitor or database callback has to return for the upstream context
+			// to stop. A stalled renewal cannot keep an expired owner consuming.
+			select {
+			case <-ctx.Done():
+				require.NoError(t, t.Context().Err())
+			case <-time.After(time.Second):
+				t.Fatal("lease deadline did not cancel the stream")
+			}
+		})
+	}
+}
