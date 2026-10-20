@@ -696,13 +696,21 @@ jobs:
       - name: Require a package version increase for publishable changes
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "$BASE_SHA" =~ ^0+$ ]]; then
-            echo "Initial repository push has no version base."
-          else
-            bun scripts/npm-package-release.mjs check-version --package packages/sdk --base "$BASE_SHA" --head "$GITHUB_SHA"
-            bun scripts/npm-package-release.mjs check-version --package packages/cli --base "$BASE_SHA" --head "$GITHUB_SHA"
+            if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+              # A new tag has no previous commit in the push event, so compare
+              # the tagged package sources with the previous published release.
+              BASE_SHA="$(bun scripts/published-release-tag.mjs --exclude "$GITHUB_REF_NAME")"
+              echo "Comparing tagged package versions against $BASE_SHA."
+            else
+              echo "Initial repository push has no version base."
+              exit 0
+            fi
           fi
+          bun scripts/npm-package-release.mjs check-version --package packages/sdk --base "$BASE_SHA" --head "$GITHUB_SHA"
+          bun scripts/npm-package-release.mjs check-version --package packages/cli --base "$BASE_SHA" --head "$GITHUB_SHA"
       - name: Check, test, and build the packages
         run: bun scripts/tasks.mjs check npm-packages
       - name: Inspect the exact SDK npm payload
