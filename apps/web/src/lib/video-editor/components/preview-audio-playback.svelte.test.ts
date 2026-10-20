@@ -100,7 +100,11 @@ it.each(
 	const screen = await render(PreviewPlayer, { onedit: () => {} });
 	try {
 		await expect
-			.poll(() => screen.container.querySelector<HTMLMediaElement>('audio,video')?.readyState)
+			.poll(() => screen.container.querySelector<HTMLMediaElement>('audio,video')?.readyState, {
+				// Nested compositions create their media element asynchronously, and
+				// the browser shard shares one Chromium process with every other file.
+				timeout: 5_000
+			})
 			.toBeGreaterThanOrEqual(2);
 		await userEvent.click(screen.container);
 		editorSession.startPlayback({ start: 0, end: 300 });
