@@ -10,7 +10,9 @@ import (
 	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/inboxchanges"
 	"github.com/openpost/backend/internal/services/providerwrite"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,6 +84,91 @@ func TestQueuedReplyTargetSurvivesIncomingMessagesAndSafeRetry(t *testing.T) {
 	}
 }
 
+func TestSendAcceptancePreservesDeletionAcrossEchoOrdering(t *testing.T) {
+	for _, backend := range []string{"sqlite", "postgres"} {
+		for _, order := range []string{"echo then delete", "delete then echo"} {
+			for _, scope := range []string{"conversation", "account", "conversation deletion"} {
+				t.Run(backend+"/"+order+"/"+scope, func(t *testing.T) {
+					s, db, account, actor := messagingBackendFixture(t, backend)
+					now := time.Now().UTC().Truncate(time.Second).Add(time.Hour)
+					s.now = func() time.Time { return now }
+					echo := platform.FetchMessageEventsResult{Conversations: []platform.ProviderConversation{{ID: "remote-thread", LastMessageAt: now, LastRemoteMessageID: "accepted-remote-id", LastMessagePreview: "private outbound body", Messages: []platform.ProviderMessage{{ID: "accepted-remote-id", Direction: "outbound", Body: "private outbound body", AuthorRemoteID: account.AccountID, RemoteCreatedAt: now, Attachments: []platform.MessageAttachment{{URL: "https://private.example/attachment"}}, ReactionsKnown: true, Reactions: []platform.ProviderMessageReaction{{ActorRemoteID: "friend", Value: "heart"}}}}}}}
+					conversationScope := ""
+					if scope == "conversation" {
+						conversationScope = "remote-thread"
+					}
+					deletion := platform.FetchMessageEventsResult{DeletedMessages: []platform.DeletedProviderMessage{{ConversationID: conversationScope, MessageID: "accepted-remote-id"}}}
+					if scope == "conversation deletion" {
+						deletion = platform.FetchMessageEventsResult{DeletedConversations: []string{"remote-thread"}}
+					}
+					var beforeAcceptance inboxchanges.Page
+					calls := 0
+					s.SetProvider("bluesky", sendRequestProvider{sendRequest: func(ctx context.Context, _ platform.SendMessageRequest) (platform.SendMessageResult, error) {
+						calls++
+						first, second := echo, deletion
+						if order == "delete then echo" {
+							first, second = deletion, echo
+						}
+						if err := s.ApplyProviderEvents(ctx, account.ID, first); err != nil {
+							return platform.SendMessageResult{}, err
+						}
+						if err := s.ApplyProviderEvents(ctx, account.ID, second); err != nil {
+							return platform.SendMessageResult{}, err
+						}
+						// HTTP completion follows the deletion. It is not a new provider
+						// creation timestamp that can bypass a conversation cutoff.
+						now = now.Add(time.Second)
+						var err error
+						beforeAcceptance, err = inboxchanges.Read(ctx, db, account.WorkspaceID, "")
+						return platform.SendMessageResult{RemoteMessageID: "accepted-remote-id"}, err
+					}})
+					queued, err := s.QueueMessage(t.Context(), actor, "conversation", "private outbound body", "deleted-send-operation")
+					require.NoError(t, err)
+					require.NoError(t, s.HandleJob(t.Context(), JobTypeMessageSend, `{"id":"`+queued.ID+`"}`))
+					page, err := s.ListMessages(t.Context(), actor, MessageQuery{WorkspaceID: "workspace", ConversationID: "conversation"})
+					require.NoError(t, err)
+					require.Len(t, page.Items, 1)
+					message := page.Items[0]
+					assert.Equal(t, queued.ID, message.ID)
+					assert.Equal(t, "accepted-remote-id", message.RemoteMessageID)
+					assert.Equal(t, "deleted-send-operation", message.ClientOperationID)
+					assert.Equal(t, "sent", message.SendStatus, "deletion must not erase the accepted provider send receipt")
+					assert.True(t, queued.CreatedAt.Equal(message.CreatedAt))
+					assert.False(t, message.DeletedAt.IsZero(), "provider deletion was lost during send finalization")
+					assert.Empty(t, message.Body)
+					assert.JSONEq(t, "[]", message.AttachmentsJSON)
+					assert.Empty(t, message.AuthorRemoteID)
+					var reactions int
+					require.NoError(t, db.NewRaw(`SELECT COUNT(*) FROM message_reactions`).Scan(t.Context(), &reactions))
+					assert.Zero(t, reactions)
+					var preview string
+					require.NoError(t, db.NewSelect().Model((*models.Conversation)(nil)).Column("last_message_preview").Where("id=?", "conversation").Scan(t.Context(), &preview))
+					assert.Empty(t, preview, "the conversation must not retain the deleted outbound body")
+					changes, err := s.Changes(t.Context(), actor, account.WorkspaceID, beforeAcceptance.Cursor, 0)
+					require.NoError(t, err)
+					canonicalDeletion := false
+					for _, change := range changes.Changes {
+						if change.MessageID == queued.ID && change.Deleted {
+							canonicalDeletion = true
+						}
+					}
+					assert.True(t, canonicalDeletion, "the admitted ID needs a deletion journal entry")
+					replay, err := s.QueueMessage(t.Context(), actor, "conversation", "private outbound body", "deleted-send-operation")
+					require.NoError(t, err)
+					assert.Equal(t, queued.ID, replay.ID)
+					assert.Empty(t, replay.Body)
+					require.NoError(t, s.HandleJob(t.Context(), JobTypeMessageSend, `{"id":"`+queued.ID+`"}`))
+					assert.Equal(t, 1, calls)
+					var attempt models.ProviderWriteAttempt
+					require.NoError(t, db.NewSelect().Model(&attempt).Where("operation_id=?", "messaging:"+queued.ID).Scan(t.Context()))
+					assert.Equal(t, providerwrite.StatusAccepted, attempt.Status)
+					assert.Equal(t, "accepted-remote-id", attempt.ExternalID)
+				})
+			}
+		}
+	}
+}
+
 func TestReplyTargetMigrationPreservesAttemptedRequests(t *testing.T) {
 	for _, backend := range []string{"sqlite", "postgres"} {
 		t.Run(backend, func(t *testing.T) {
@@ -142,6 +229,35 @@ func TestReplyTargetMigrationPreservesAttemptedRequests(t *testing.T) {
 			require.Len(t, attempts, 2)
 			require.Equal(t, attempts[0].PayloadFingerprint, attempts[1].PayloadFingerprint)
 			require.Equal(t, providerwrite.StatusAccepted, attempts[1].Status)
+		})
+	}
+}
+
+func TestDeletedSendKeepsNewerConversationPreview(t *testing.T) {
+	for _, backend := range []string{"sqlite", "postgres"} {
+		t.Run(backend, func(t *testing.T) {
+			s, db, account, actor := messagingBackendFixture(t, backend)
+			now := time.Now().UTC().Truncate(time.Second).Add(time.Hour)
+			s.now = func() time.Time { return now }
+			s.SetProvider("bluesky", sendRequestProvider{sendRequest: func(ctx context.Context, _ platform.SendMessageRequest) (platform.SendMessageResult, error) {
+				if err := s.ApplyProviderEvents(ctx, account.ID, platform.FetchMessageEventsResult{DeletedMessages: []platform.DeletedProviderMessage{{MessageID: "deleted-outbound"}}}); err != nil {
+					return platform.SendMessageResult{}, err
+				}
+				now = now.Add(time.Second)
+				err := s.ApplyProviderEvents(ctx, account.ID, platform.FetchMessageEventsResult{Conversations: []platform.ProviderConversation{{ID: "remote-thread", LastMessageAt: now, LastRemoteMessageID: "newer-incoming", LastMessagePreview: "keep this new preview", Messages: []platform.ProviderMessage{{ID: "newer-incoming", Direction: "inbound", Body: "keep this new preview", RemoteCreatedAt: now}}}}})
+				return platform.SendMessageResult{RemoteMessageID: "deleted-outbound"}, err
+			}})
+			queued, err := s.QueueMessage(t.Context(), actor, "conversation", "deleted pending body")
+			require.NoError(t, err)
+			require.NoError(t, s.HandleJob(t.Context(), JobTypeMessageSend, `{"id":"`+queued.ID+`"}`))
+			var message models.DirectMessage
+			require.NoError(t, db.NewSelect().Model(&message).Where("id=?", queued.ID).Scan(t.Context()))
+			assert.False(t, message.DeletedAt.IsZero())
+			assert.Empty(t, message.Body)
+			var conversation models.Conversation
+			require.NoError(t, db.NewSelect().Model(&conversation).Where("id=?", "conversation").Scan(t.Context()))
+			assert.Equal(t, "keep this new preview", conversation.LastMessagePreview)
+			assert.Equal(t, "newer-incoming", conversation.LastRemoteMessageID)
 		})
 	}
 }

@@ -224,7 +224,6 @@ func (s *Service) acceptSentMessage(ctx context.Context, message models.DirectMe
 		}
 		var echo models.DirectMessage
 		err := tx.NewSelect().Model(&echo).Where("conversation_id=? AND remote_message_id=? AND id<>?", message.ConversationID, remoteID, message.ID).Scan(txCtx)
-		message.RemoteCreatedAt = s.now()
 		changes := []inboxchanges.Change{}
 		if err == nil {
 			if err = mergeMessageEcho(txCtx, tx, &message, echo); err != nil {
@@ -238,15 +237,29 @@ func (s *Service) acceptSentMessage(ctx context.Context, message models.DirectMe
 		message.SendStatus = "sent"
 		message.ErrorMessage = ""
 		message.UpdatedAt = s.now()
+		if err := s.applySentMessageDeletion(txCtx, tx, conversation, &message); err != nil {
+			return err
+		}
+		if message.RemoteCreatedAt.IsZero() {
+			message.RemoteCreatedAt = s.now()
+		}
 		if _, err = tx.NewUpdate().Model(&message).
-			Column("remote_message_id", "send_status", "error_message", "remote_created_at", "provider_read_at", "author_remote_id", "attachments_json", "updated_at").
+			Column("remote_message_id", "send_status", "error_message", "remote_created_at", "provider_read_at", "author_remote_id", "attachments_json", "body", "deleted_at", "updated_at").
 			WherePK().Exec(txCtx); err != nil {
 			return err
 		}
-		if _, err = tx.NewUpdate().Model(&conversation).Set("last_remote_message_id=?", remoteID).Set("updated_at=?", s.now()).WherePK().Exec(txCtx); err != nil {
+		query := tx.NewUpdate().Model(&conversation).Set("updated_at=?", s.now()).WherePK()
+		if message.DeletedAt.IsZero() {
+			query = query.Set("last_remote_message_id=?", remoteID)
+		} else {
+			// Clear a deleted send's pending preview without erasing a newer
+			// incoming message or replacing that message's provider identity.
+			query = query.Set("last_message_preview=CASE WHEN last_remote_message_id=? OR last_message_at<=? THEN '' ELSE last_message_preview END", remoteID, message.CreatedAt)
+		}
+		if _, err = query.Exec(txCtx); err != nil {
 			return err
 		}
-		changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: message.ID})
+		changes = append(changes, inboxchanges.Change{Kind: "message", ConversationID: conversation.ID, MessageID: message.ID, Deleted: !message.DeletedAt.IsZero()})
 		return inboxchanges.Append(txCtx, tx, message.WorkspaceID, changes...)
 	})
 }
@@ -258,6 +271,9 @@ func mergeMessageEcho(ctx context.Context, tx bun.Tx, message *models.DirectMess
 	if echo.ProviderReadAt.After(message.ProviderReadAt) {
 		message.ProviderReadAt = echo.ProviderReadAt
 	}
+	if message.DeletedAt.IsZero() && !echo.DeletedAt.IsZero() {
+		message.DeletedAt = echo.DeletedAt
+	}
 	message.AuthorRemoteID = firstNonEmpty(echo.AuthorRemoteID, message.AuthorRemoteID)
 	if echo.AttachmentsJSON != "" && echo.AttachmentsJSON != "null" && echo.AttachmentsJSON != "[]" {
 		message.AttachmentsJSON = echo.AttachmentsJSON
@@ -268,6 +284,30 @@ func mergeMessageEcho(ctx context.Context, tx bun.Tx, message *models.DirectMess
 		return err
 	}
 	_, err := tx.NewDelete().Model(&echo).WherePK().Exec(ctx)
+	return err
+}
+
+func (s *Service) applySentMessageDeletion(ctx context.Context, tx bun.Tx, conversation models.Conversation, message *models.DirectMessage) error {
+	createdAt := message.RemoteCreatedAt
+	if createdAt.IsZero() {
+		// Admission precedes sending. A later local HTTP completion time must
+		// not move an old pending write past a conversation deletion cutoff.
+		createdAt = message.CreatedAt
+	}
+	suppressed, err := providerMessageSuppressed(ctx, tx, conversation.SocialAccountID, conversation.RemoteConversationID, message.RemoteMessageID, createdAt)
+	if err != nil {
+		return err
+	}
+	if !suppressed && message.DeletedAt.IsZero() {
+		return nil
+	}
+	if message.DeletedAt.IsZero() {
+		message.DeletedAt = s.now()
+	}
+	message.Body = ""
+	message.AttachmentsJSON = "[]"
+	message.AuthorRemoteID = ""
+	_, err = tx.NewDelete().Table("message_reactions").Where("message_id=?", message.ID).Exec(ctx)
 	return err
 }
 
