@@ -82,6 +82,16 @@ func (s *Service) persistHistoryPage(ctx context.Context, account models.SocialA
 		if err := organizationguard.LockWorkspace(txCtx, tx, account.WorkspaceID); err != nil {
 			return err
 		}
+		if !s.isMessagingEnabledWithDB(txCtx, tx, account.ID) {
+			return nil
+		}
+		active, err := tx.NewSelect().Model((*models.SocialAccount)(nil)).Where("id=? AND workspace_id=? AND is_active=?", account.ID, account.WorkspaceID, true).Exists(txCtx)
+		if err != nil {
+			return err
+		}
+		if !active {
+			return ErrNotFound
+		}
 		deletions := make([]platform.DeletedProviderMessage, 0, len(page.DeletedMessages))
 		for _, deleted := range page.DeletedMessages {
 			// A history page can only delete messages in its requested conversation.

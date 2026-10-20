@@ -28,11 +28,11 @@ func messagingBackendFixture(t *testing.T, backend string) (*Service, *bun.DB, m
 	if dsn == "" {
 		t.Skip("OPENPOST_TEST_POSTGRES_URL is not configured")
 	}
-	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn)))
+	schema := "messaging_deletions_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	sqlDB := sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(dsn), pgdriver.WithConnParams(map[string]any{"search_path": schema})))
 	sqlDB.SetMaxOpenConns(1)
 	db := bun.NewDB(sqlDB, pgdialect.New())
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	schema := "messaging_deletions_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	_, err := db.NewRaw(`CREATE SCHEMA ?`, bun.Ident(schema)).Exec(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -61,10 +61,14 @@ func messagingBackendFixture(t *testing.T, backend string) (*Service, *bun.DB, m
 
 type historyTestProvider struct {
 	testProvider
-	page platform.FetchMessageHistoryResult
+	page        platform.FetchMessageHistoryResult
+	beforeFetch func()
 }
 
 func (p historyTestProvider) FetchMessageHistory(context.Context, string, platform.FetchMessageHistoryRequest) (platform.FetchMessageHistoryResult, error) {
+	if p.beforeFetch != nil {
+		p.beforeFetch()
+	}
 	return p.page, nil
 }
 
