@@ -100,29 +100,35 @@ it('shows the sampled channel levels after graphics initialization', async () =>
 	screen.container.style.width = '342px';
 	await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
 	await create.mock.results[0]!.value;
-	await vi.waitFor(async () => {
-		const canvas = screen.container.querySelector<HTMLCanvasElement>('[data-color-scope-canvas]')!;
-		// Read presented pixels: WebGPU canvas contents are discarded after presentation.
-		const screenshot = await page.screenshot({ element: canvas, save: false });
-		const bitmap = await createImageBitmap(
-			await (await fetch(`data:image/png;base64,${screenshot}`)).blob()
-		);
-		const snapshot = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')!;
-		snapshot.drawImage(bitmap, 0, 0);
-		bitmap.close();
-		// A neutral 50% input places the red trace halfway up its lane, not at zero.
-		const pixels = snapshot.getImageData(
-			0,
-			Math.floor(snapshot.canvas.height * 0.4),
-			Math.floor(snapshot.canvas.width / 3),
-			Math.max(1, Math.floor(snapshot.canvas.height * 0.2))
-		).data;
-		let redTrace = false;
-		for (let offset = 0; offset < pixels.length; offset += 4) {
-			if (pixels[offset]! > 100 && pixels[offset]! > pixels[offset + 1]! * 1.5) redTrace = true;
-		}
-		expect(redTrace).toBe(true);
-	});
+	await vi.waitFor(
+		async () => {
+			const canvas = screen.container.querySelector<HTMLCanvasElement>(
+				'[data-color-scope-canvas]'
+			)!;
+			// Read presented pixels: WebGPU canvas contents are discarded after presentation.
+			const screenshot = await page.screenshot({ element: canvas, save: false });
+			const bitmap = await createImageBitmap(
+				await (await fetch(`data:image/png;base64,${screenshot}`)).blob()
+			);
+			const snapshot = new OffscreenCanvas(bitmap.width, bitmap.height).getContext('2d')!;
+			snapshot.drawImage(bitmap, 0, 0);
+			bitmap.close();
+			// A neutral 50% input places the red trace halfway up its lane, not at zero.
+			const pixels = snapshot.getImageData(
+				0,
+				Math.floor(snapshot.canvas.height * 0.4),
+				Math.floor(snapshot.canvas.width / 3),
+				Math.max(1, Math.floor(snapshot.canvas.height * 0.2))
+			).data;
+			let redTrace = false;
+			for (let offset = 0; offset < pixels.length; offset += 4) {
+				if (pixels[offset]! > 100 && pixels[offset]! > pixels[offset + 1]! * 1.5) redTrace = true;
+			}
+			expect(redTrace).toBe(true);
+		},
+		// Each attempt captures and decodes a frame, so allow more than one attempt.
+		{ timeout: 5_000 }
+	);
 });
 
 it('uses one readable shared overlay for CPU scope guides', async () => {
