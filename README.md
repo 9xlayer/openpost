@@ -72,8 +72,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/mobile-gallery-dark.png">
-    <img src="./assets/screenshots/mobile-gallery-light.png" alt="OpenPost on iOS: Drafts, Post, Calendar, and Analytics, each shown in a labelled phone mockup" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/mobile-inbox-gallery-dark.png">
+    <img src="./assets/screenshots/mobile-inbox-gallery-light.png" alt="OpenPost on iOS with sample data: Chats, a conversation, Comments, a public reply, and Media" width="100%">
   </picture>
 </p>
 

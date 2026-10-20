@@ -7,19 +7,28 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const input = resolve(process.argv[2] ?? "apps/mobile/artifacts/screenshots");
 const output = resolve(root, "assets/screenshots");
-const screens = [
-  ["drafts", "Drafts"],
-  ["composer", "Post"],
-  ["ideate", "Ideate"],
-  ["calendar", "Calendar"],
-  ["analytics", "Analytics"],
-];
+const inbox = process.argv.includes("--inbox");
+const screens = inbox
+  ? [
+      ["inbox", "Chats"],
+      ["chat", "Conversation"],
+      ["comments", "Comments"],
+      ["comment", "Public reply"],
+      ["media", "Media"],
+    ]
+  : [
+      ["drafts", "Drafts"],
+      ["composer", "Post"],
+      ["ideate", "Ideate"],
+      ["calendar", "Calendar"],
+      ["analytics", "Analytics"],
+    ];
 const width = 1840;
 const phoneWidth = 320;
 const bezel = 10;
 const screenWidth = phoneWidth - bezel * 2;
 const gutter = 40;
-const labelHeight = 44;
+const labelHeight = inbox ? 64 : 44;
 const radius = 44;
 
 GlobalFonts.registerFromPath(
@@ -30,7 +39,7 @@ await mkdir(output, { recursive: true });
 for (const scheme of ["light", "dark"]) {
   const background = { r: 0, g: 0, b: 0, alpha: 0 };
   const foreground = scheme === "dark" ? "#ede9e5" : "#24201c";
-  const metadata = await sharp(resolve(input, `drafts-${scheme}.png`)).metadata();
+  const metadata = await sharp(resolve(input, `${screens[0][0]}-${scheme}.png`)).metadata();
   if (!metadata.width || !metadata.height) throw new Error("Missing iOS capture dimensions");
   const screenHeight = Math.round((metadata.height / metadata.width) * screenWidth);
   const phoneHeight = screenHeight + bezel * 2;
@@ -50,6 +59,10 @@ for (const scheme of ["light", "dark"]) {
     labelContext.fillStyle = foreground;
     labelContext.textAlign = "center";
     labelContext.fillText(label, phoneWidth / 2, 22);
+    if (inbox) {
+      labelContext.font = "12px OpenPostGallery";
+      labelContext.fillText("Sample data", phoneWidth / 2, 42);
+    }
     const frameSvg = `<svg width="${phoneWidth}" height="${phoneHeight}"><rect x="1" y="1" width="${phoneWidth - 2}" height="${phoneHeight - 2}" rx="${radius}" fill="#090909" stroke="#57514d" stroke-width="2"/><rect x="5" y="5" width="${phoneWidth - 10}" height="${phoneHeight - 10}" rx="${radius - 4}" fill="none" stroke="#282624"/></svg>`;
     const mask = Buffer.from(
       `<svg width="${screenWidth}" height="${screenHeight}"><rect width="${screenWidth}" height="${screenHeight}" rx="${radius - bezel}" fill="white"/></svg>`,
@@ -66,6 +79,6 @@ for (const scheme of ["light", "dark"]) {
   await sharp({ create: { width, height, channels: 4, background } })
     .composite(layers)
     .png()
-    .toFile(resolve(output, `mobile-gallery-${scheme}.png`));
+    .toFile(resolve(output, `mobile-${inbox ? "inbox-" : ""}gallery-${scheme}.png`));
 }
 console.log("Rendered labelled iOS phone galleries in assets/screenshots.");

@@ -11,6 +11,8 @@ OpenPost Mobile is a standalone Expo app. It uses native tabs and platform contr
 - Quick draft capture, the full composer, photos, and Android share capture
 - Destination selection, per-platform text, scheduling, and publish now
 - Calendar, queue, retry state, and provider-level post results
+- Inbox with existing-chat DMs, public comment replies, saved drafts, and provider-confirmed outcomes
+- Native Media browsing and Posts, Inbox, Analytics, Media, and More navigation
 - Video capture and projects, plus stored account and destination analytics
 - Shared web theme tokens, icon packs, and Bayer textures, with native safe areas
 
@@ -134,6 +136,7 @@ The release-signing plugin intentionally fails if Expo changes the Gradle templa
 - `src/lib/auth.ts`: login, TOTP, and pairing
 - `src/lib/media.ts`: direct upload sessions
 - `src/lib/share.ts`: content received from the Android share sheet
+- `src/lib/inbox/`: foreground updates, durable reply sessions, collection and job outcomes
 - `src/app/`: Expo Router screens and native tabs
 
 For background on local production builds and APKs, see the [Expo local app development guide](https://docs.expo.dev/guides/local-app-development/), [local production guide](https://docs.expo.dev/guides/local-app-production/), and [APK guide](https://docs.expo.dev/build-reference/apk/).
@@ -143,6 +146,15 @@ For background on local production builds and APKs, see the [Expo local app deve
 Content sections sit on the screen canvas. Use cards only for isolated surfaces. Filled action and icon buttons use the shared `@openpost/dither/paint` Bayer gradient, with fixed endpoints and a density transition on press, hover, and keyboard focus. Reduced motion changes the state immediately. Native palettes keep text contrast at 4.5:1 and the two material colors between 1.18:1 and 1.8:1.
 
 The five tabs share a compact brand and workspace header. Keep page titles and introductory copy out of this chrome. Capture, writing, and chart panels use a static shared Bayer texture; content rows stay on the canvas.
+
+Posts retains Drafts, Calendar, and Queue. More includes Video. Inbox keeps Chats and Comments separate; conversation and comment details hide the tab bar. Provider configuration remains in account settings on the web.
+
+Generate labelled sample galleries with `bun run capture:mobile-screenshots` from the repository root. The maintained flows live in `tests/screenshots/`; the shipping entry never imports their data. Capture both schemes, software-keyboard layout, enlarged text, and failure recovery before accepting Inbox UI changes.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../../assets/screenshots/mobile-inbox-gallery-dark.png">
+  <img src="../../assets/screenshots/mobile-inbox-gallery-light.png" alt="Native Inbox sample data: Chats, conversation, Comments, public reply, and Media" width="100%">
+</picture>
 
 On iOS, `NativeText` lets Dynamic Type choose its line box at enlarged sizes. Use it for display text instead of fixed-height React Native text.
 

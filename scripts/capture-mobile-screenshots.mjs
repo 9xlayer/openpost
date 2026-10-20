@@ -128,23 +128,25 @@ try {
   for (const scheme of ["light", "dark"]) {
     command("xcrun", ["simctl", "ui", simulator, "appearance", scheme]);
     const startedAt = Date.now();
-    await run(
-      maestro,
-      [
-        "--udid",
-        simulator,
-        "test",
-        "--test-output-dir",
-        output,
-        "-e",
-        `SCHEME=${scheme}`,
-        "apps/mobile/tests/screenshots/gallery.yaml",
-      ],
-      { env },
-    );
+    for (const flow of ["gallery", "inbox"])
+      await run(
+        maestro,
+        [
+          "--udid",
+          simulator,
+          "test",
+          "--test-output-dir",
+          output,
+          "-e",
+          `SCHEME=${scheme}`,
+          `apps/mobile/tests/screenshots/${flow}.yaml`,
+        ],
+        { env },
+      );
     await collectScreenshots(output, scheme, startedAt);
   }
   await run("bun", ["scripts/render-mobile-gallery.mjs", output]);
+  await run("bun", ["scripts/render-mobile-gallery.mjs", output, "--inbox"]);
 } finally {
   cleanup();
 }
