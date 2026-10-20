@@ -12,7 +12,6 @@ import {
   messagesQueryOptions,
 } from "@openpost/query-catalog";
 import { XMessagingRecovery } from "@/components/inbox/account-recovery";
-import { AccountAvatar } from "@/components/account-avatar";
 import { BodyText, Button, EmptyState, Screen, TextField } from "@/components/ui";
 import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
 import { MediaImage } from "@/components/media-image";
@@ -31,6 +30,21 @@ import { uniqueMessages, type PendingSend } from "@/lib/inbox/state";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
 import { platformLabel } from "@/lib/format";
 import { useNativeTheme } from "@/theme";
+
+const MESSAGE_GROUP_GAP_MS = 5 * 60 * 1000;
+
+type ChatRow = {
+  key: string;
+  message: DirectMessage | PendingSend;
+  timeLabel: string | null;
+};
+
+function messageTime(message: DirectMessage | PendingSend): number {
+  const raw =
+    "operationId" in message ? message.createdAt : message.remote_created_at || message.created_at;
+  const parsed = new Date(raw).getTime();
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,7 +78,7 @@ function ChatContent({
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
   const messages = useMemo(() => uniqueMessages(history.data?.pages ?? []), [history.data]);
   const composer = useChatComposer(workspaceId, conversationId, messages);
-  const list = useRef<FlatList<DirectMessage | PendingSend>>(null);
+  const list = useRef<FlatList<ChatRow>>(null);
   const nearLatest = useRef(true);
   const [atLatest, setAtLatest] = useState(true);
   const [newMessages, setNewMessages] = useState(false);
@@ -161,8 +175,43 @@ function ChatContent({
       setActionError(cause instanceof Error ? cause.message : "Could not retry this message");
     }
   }
-  const rows: (DirectMessage | PendingSend)[] = [...composer.draft.sends].reverse();
-  rows.push(...messages);
+  const rows: ChatRow[] = useMemo(() => {
+    const flat: (DirectMessage | PendingSend)[] = [...composer.draft.sends].reverse();
+    flat.push(...messages);
+    return flat.map((message, index) => {
+      const next = flat[index + 1];
+      const outgoing = "operationId" in message ? true : message.direction === "outbound";
+      const nextOutgoing = next
+        ? "operationId" in next
+          ? true
+          : next.direction === "outbound"
+        : null;
+      const time = messageTime(message);
+      const nextTime = next ? messageTime(next) : Number.NaN;
+      const breaks =
+        !next ||
+        nextOutgoing !== outgoing ||
+        !Number.isFinite(time) ||
+        !Number.isFinite(nextTime) ||
+        Math.abs(time - nextTime) > MESSAGE_GROUP_GAP_MS;
+      return {
+        key: "operationId" in message ? message.operationId : message.id,
+        message,
+        timeLabel:
+          breaks && Number.isFinite(time)
+            ? new Date(time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : null,
+      };
+    });
+  }, [composer.draft.sends, messages]);
+  const headRowKey = rows[0]?.key;
+  // Pending sends swap for stored messages and keyboard changes still animate
+  // the container around those swaps; MVCP alone can leave the newest row
+  // below the fold. Whoever is already viewing the latest row should keep it
+  // pinned across every head-row identity change.
+  useEffect(() => {
+    if (nearLatest.current) list.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [headRowKey]);
   const blocked = expired
     ? "The network's reply window has closed."
     : chat?.archived_at
@@ -181,6 +230,18 @@ function ChatContent({
           headerShown: true,
           title: chat?.counterpart_name || chat?.counterpart_handle || "Chat",
           headerBackTitle: "Inbox",
+          headerRight:
+            chat && canEdit
+              ? () => (
+                  <Button
+                    title={chat.archived_at ? "Reopen" : "Archive"}
+                    intent="quiet"
+                    loading={stateBusy}
+                    onPress={() => void archive()}
+                    style={{ minHeight: 44, paddingHorizontal: spacing.small }}
+                  />
+                )
+              : undefined,
           headerLeft: router.canGoBack()
             ? undefined
             : () => (
@@ -192,46 +253,21 @@ function ChatContent({
               ),
         }}
       />
+      {chat ? (
+        <BodyText
+          numberOfLines={1}
+          style={{ paddingHorizontal: spacing.large, paddingVertical: 8, textAlign: "center" }}
+        >
+          {chat.counterpart_handle || chat.counterpart_name} · via{" "}
+          {account?.alias || account?.account_username || "receiving account"} ·{" "}
+          {platformLabel(chat.platform)}
+        </BodyText>
+      ) : null}
       <KeyboardAvoidingView
         behavior="padding"
         style={{ flex: 1 }}
         keyboardVerticalOffset={headerHeight}
       >
-        {chat ? (
-          <View
-            style={{
-              paddingHorizontal: spacing.large,
-              paddingVertical: 12,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              borderBottomWidth: 1,
-              borderBottomColor: colors.outlineVariant,
-            }}
-          >
-            <AccountAvatar
-              name={chat.counterpart_name || chat.counterpart_handle}
-              platform={chat.platform}
-              avatarUrl={chat.counterpart_avatar_url}
-              size={40}
-            />
-            <View style={{ flex: 1, gap: 3 }}>
-              <BodyText>{chat.counterpart_handle || chat.counterpart_name}</BodyText>
-              <BodyText>
-                Via {platformLabel(chat.platform)} ·{" "}
-                {account?.alias || account?.account_username || "Receiving account"}
-              </BodyText>
-            </View>
-            {canEdit ? (
-              <Button
-                title={chat.archived_at ? "Reopen" : "Archive"}
-                intent="quiet"
-                loading={stateBusy}
-                onPress={() => void archive()}
-              />
-            ) : null}
-          </View>
-        ) : null}
         <DelayedQueryPlaceholder pending={history.isPending} shape="detail" />
         {history.isError ? (
           <QueryNotice
@@ -255,11 +291,11 @@ function ChatContent({
             }}
           />
         ) : null}
-        <FlatList<DirectMessage | PendingSend>
+        <FlatList<ChatRow>
           ref={list}
           inverted
           data={rows}
-          keyExtractor={(row) => ("operationId" in row ? row.operationId : row.id)}
+          keyExtractor={(row) => row.key}
           maintainVisibleContentPosition={{ minIndexForVisible: 0, autoscrollToTopThreshold: 80 }}
           onScroll={({ nativeEvent }) => {
             nearLatest.current = nativeEvent.contentOffset.y < 80;
@@ -311,12 +347,13 @@ function ChatContent({
           }
           renderItem={({ item }) => (
             <MessageBubble
-              message={item}
+              message={item.message}
+              timeLabel={item.timeLabel}
               retry={
                 canSend
                   ? () => {
-                      if ("operationId" in item) void composer.submit(item);
-                      else void retryServer(item.id);
+                      if ("operationId" in item.message) void composer.submit(item.message);
+                      else void retryServer(item.message.id);
                     }
                   : undefined
               }
@@ -389,12 +426,14 @@ function ChatContent({
 }
 function MessageBubble({
   message,
+  timeLabel,
   retry,
 }: {
   message: DirectMessage | PendingSend;
+  timeLabel: string | null;
   retry?: () => void;
 }) {
-  const { colors, shape, spacing } = useNativeTheme().manifest;
+  const { colors, shape, spacing, typography } = useNativeTheme().manifest;
   const local = "operationId" in message;
   const outgoing = local || message.direction === "outbound";
   const failed = local
@@ -418,39 +457,43 @@ function MessageBubble({
             ? "Failed"
             : message.send_status;
   return (
-    <View style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "88%", gap: 4 }}>
-      <View
-        style={{
-          backgroundColor: outgoing ? colors.secondaryContainer : colors.surfaceContainer,
-          borderRadius: shape.large,
-          padding: spacing.medium,
-          gap: 8,
-        }}
-      >
-        <BodyText
-          selectable
-          style={{ color: outgoing ? colors.onSecondaryContainer : colors.onSurface }}
-        >
-          {!local && message.deleted_at ? "This message was deleted." : message.body}
+    <View style={{ gap: 4 }}>
+      {timeLabel ? (
+        <BodyText style={[typography.labelMedium, { alignSelf: "center", paddingBottom: 2 }]}>
+          {timeLabel}
         </BodyText>
-        {!local && !message.deleted_at ? (
-          <MessageAttachments value={message.attachments_json} />
+      ) : null}
+      <View style={{ alignSelf: outgoing ? "flex-end" : "flex-start", maxWidth: "88%", gap: 4 }}>
+        <View
+          style={{
+            backgroundColor: outgoing ? colors.secondaryContainer : colors.surfaceContainer,
+            borderRadius: shape.large,
+            padding: spacing.medium,
+            gap: 8,
+          }}
+        >
+          <BodyText
+            selectable
+            style={{ color: outgoing ? colors.onSecondaryContainer : colors.onSurface }}
+          >
+            {!local && message.deleted_at ? "This message was deleted." : message.body}
+          </BodyText>
+          {!local && !message.deleted_at ? (
+            <MessageAttachments value={message.attachments_json} />
+          ) : null}
+        </View>
+        {outgoing ? (
+          <BodyText style={[typography.labelMedium, { alignSelf: "flex-end" }]}>{status}</BodyText>
+        ) : null}
+        {failed ? (
+          <>
+            <BodyText accessibilityRole="alert">
+              {local ? message.error : message.error_message}
+            </BodyText>
+            {retry ? <Button title="Retry safely" intent="ordinary" onPress={retry} /> : null}
+          </>
         ) : null}
       </View>
-      <BodyText style={{ alignSelf: outgoing ? "flex-end" : "flex-start" }}>
-        {new Date(
-          local ? message.createdAt : message.remote_created_at || message.created_at,
-        ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-        {outgoing ? ` · ${status}` : ""}
-      </BodyText>
-      {failed ? (
-        <>
-          <BodyText accessibilityRole="alert">
-            {local ? message.error : message.error_message}
-          </BodyText>
-          {retry ? <Button title="Retry safely" intent="ordinary" onPress={retry} /> : null}
-        </>
-      ) : null}
     </View>
   );
 }

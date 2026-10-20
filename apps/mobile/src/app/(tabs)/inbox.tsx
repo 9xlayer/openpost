@@ -2,6 +2,7 @@ import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { useEffect, useState } from "react";
 import { router } from "expo-router";
 import { FlatList, Pressable, RefreshControl, View } from "react-native";
+import Swipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import * as SecureStore from "expo-secure-store";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -13,8 +14,14 @@ import { Screen, BodyText, Button, ContentTitle, EmptyState, TextField } from "@
 import { XMessagingRecovery } from "@/components/inbox/account-recovery";
 import { WorkspaceHeader } from "@/components/workspace-header";
 import { AccountAvatar } from "@/components/account-avatar";
-import { InboxSegments, AccountFilter, InboxDivider } from "@/components/inbox/controls";
+import {
+  InboxSegments,
+  InboxStatusTabs,
+  AccountFilter,
+  InboxDivider,
+} from "@/components/inbox/controls";
 import { DelayedQueryPlaceholder, QueryNotice } from "@/components/query-state";
+import { NativeText as Text } from "@/components/native-text";
 import { useAccounts, useWorkspaceCapabilities, useWorkspaceId } from "@/lib/queries";
 import {
   mobileInboxAPI,
@@ -39,7 +46,7 @@ export default function InboxScreen() {
   );
 }
 function InboxContent({ workspaceId }: { workspaceId: string }) {
-  const { colors, spacing } = useNativeTheme().manifest;
+  const { colors, spacing, typography } = useNativeTheme().manifest;
   const accounts = useAccounts();
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
@@ -190,7 +197,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
           clearButtonMode="while-editing"
         />
       ) : null}
-      <InboxSegments
+      <InboxStatusTabs
         values={[
           { value: "all", label: "All" },
           { value: "unread", label: "Unread" },
@@ -219,11 +226,6 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
           />
         </View>
       ) : null}
-      <BodyText>
-        {successfulAt
-          ? `Last successful collection: ${new Date(successfulAt).toLocaleString()}. Networks may deliver updates later.`
-          : "No successful collection recorded. Showing stored items."}
-      </BodyText>
       {refresh.notice ? (
         <BodyText accessibilityLiveRegion="polite">{refresh.notice}</BodyText>
       ) : null}
@@ -264,7 +266,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
         ListHeaderComponent={header}
         ItemSeparatorComponent={InboxDivider}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingBottom: 32 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
         refreshControl={
           <RefreshControl
             refreshing={refresh.refreshing}
@@ -277,15 +279,21 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
             void activeQuery.fetchNextPage();
         }}
         ListFooterComponent={
-          activeQuery.hasNextPage ? (
-            <Button
-              title={activeQuery.isFetchingNextPage ? "Loading…" : "Load more"}
-              loading={activeQuery.isFetchingNextPage}
-              intent="ordinary"
-              onPress={() => void activeQuery.fetchNextPage()}
-              style={{ margin: 16 }}
-            />
-          ) : null
+          <View style={{ gap: 8, paddingHorizontal: spacing.large, paddingTop: 12 }}>
+            {activeQuery.hasNextPage ? (
+              <Button
+                title={activeQuery.isFetchingNextPage ? "Loading…" : "Load more"}
+                loading={activeQuery.isFetchingNextPage}
+                intent="ordinary"
+                onPress={() => void activeQuery.fetchNextPage()}
+              />
+            ) : null}
+            <BodyText style={[typography.labelMedium]}>
+              {successfulAt
+                ? `Last successful collection: ${new Date(successfulAt).toLocaleString()}. Networks may deliver updates later.`
+                : "No successful collection recorded. Showing stored items."}
+            </BodyText>
+          </View>
         }
         ListEmptyComponent={
           !activeQuery.isPending && !activeQuery.isError ? (
@@ -311,108 +319,169 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
         }
         renderItem={({ item }) =>
           "counterpart_name" in item ? (
-            <View
-              style={{
-                flexDirection: "row",
-                paddingHorizontal: spacing.large,
-                alignItems: "center",
-                gap: 8,
-              }}
+            <SwipeableRow
+              enabled={canEdit}
+              actionLabel={filter === "archived" ? "Reopen" : "Archive"}
+              onAction={() =>
+                void updateArchive("chat", item.id, filter !== "archived", !!item.archived_at)
+              }
             >
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`${item.counterpart_name || item.counterpart_handle}, ${item.unread_count} unread, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}`}
-                onPress={() => openChat(item)}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  flexDirection: "row",
-                  gap: 12,
-                  minHeight: 100,
-                  alignItems: "center",
-                  paddingVertical: 14,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <AccountAvatar
-                  name={item.counterpart_name || item.counterpart_handle}
-                  platform={item.platform}
-                  avatarUrl={item.counterpart_avatar_url}
-                  size={44}
-                />
-                <View style={{ flex: 1, gap: 4 }}>
-                  <ContentTitle numberOfLines={1}>
-                    {item.counterpart_name || item.counterpart_handle || "Conversation"}
-                    {item.unread_count ? ` · ${item.unread_count}` : ""}
-                  </ContentTitle>
-                  <BodyText numberOfLines={2}>
-                    {item.last_message_preview || "No messages"}
-                  </BodyText>
-                  <BodyText numberOfLines={1}>
-                    {accountName(item.social_account_id)} · {relativeTime(item.last_message_at)}
-                  </BodyText>
-                </View>
-              </Pressable>
-              {canEdit ? (
-                <Button
-                  title={filter === "archived" ? "Reopen" : "Archive"}
-                  intent="quiet"
-                  disabled={!!archiving}
-                  onPress={() =>
-                    void updateArchive("chat", item.id, filter !== "archived", !!item.archived_at)
-                  }
-                />
-              ) : null}
-            </View>
+              <View style={{ paddingHorizontal: spacing.large }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.counterpart_name || item.counterpart_handle}, ${item.unread_count} unread, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}`}
+                  onPress={() => openChat(item)}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    flexDirection: "row",
+                    gap: 12,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
+                  <AccountAvatar
+                    name={item.counterpart_name || item.counterpart_handle}
+                    platform={item.platform}
+                    avatarUrl={item.counterpart_avatar_url}
+                    size={44}
+                  />
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <ContentTitle numberOfLines={1} style={{ flex: 1 }}>
+                        {item.counterpart_name || item.counterpart_handle || "Conversation"}
+                      </ContentTitle>
+                      <BodyText>{relativeTime(item.last_message_at)}</BodyText>
+                      {item.unread_count ? <UnreadBadge count={item.unread_count} /> : null}
+                    </View>
+                    <BodyText
+                      numberOfLines={2}
+                      style={item.unread_count ? { color: colors.onSurface } : null}
+                    >
+                      {item.last_message_preview || "No messages"}
+                    </BodyText>
+                    <BodyText numberOfLines={1}>{accountName(item.social_account_id)}</BodyText>
+                  </View>
+                </Pressable>
+              </View>
+            </SwipeableRow>
           ) : (
-            <View style={{ padding: spacing.large, gap: 8 }}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => openComment(item)}
-                style={({ pressed }) => ({
-                  gap: 8,
-                  minHeight: 48,
-                  opacity: pressed ? 0.6 : 1,
-                })}
-              >
-                <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+            <SwipeableRow
+              enabled={canEdit}
+              actionLabel={item.archived_at ? "Reopen" : "Archive"}
+              onAction={() =>
+                void updateArchive("comment", item.id, !item.archived_at, !!item.archived_at)
+              }
+            >
+              <View style={{ paddingHorizontal: spacing.large }}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`${item.author_name || item.author_handle}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}`}
+                  onPress={() => openComment(item)}
+                  style={({ pressed }) => ({
+                    flexDirection: "row",
+                    gap: 12,
+                    paddingVertical: 12,
+                    opacity: pressed ? 0.6 : 1,
+                  })}
+                >
                   <AccountAvatar
                     name={item.author_name || item.author_handle}
                     platform={item.platform}
                     avatarUrl={item.author_avatar_url}
                     size={36}
                   />
-                  <View style={{ flex: 1 }}>
-                    <ContentTitle>
-                      {item.author_name || item.author_handle}
-                      {item.read_at ? "" : " · Unread"}
-                    </ContentTitle>
-                    <BodyText>
-                      {accountName(item.social_account_id)} · {platformLabel(item.platform)}
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <ContentTitle numberOfLines={1} style={{ flex: 1 }}>
+                        {item.author_name || item.author_handle}
+                      </ContentTitle>
+                      <BodyText>{relativeTime(item.remote_created_at || item.created_at)}</BodyText>
+                      {item.read_at ? null : <UnreadBadge />}
+                    </View>
+                    <BodyText
+                      numberOfLines={2}
+                      style={item.read_at ? null : { color: colors.onSurface }}
+                    >
+                      {item.body}
+                    </BodyText>
+                    <BodyText numberOfLines={1}>
+                      On: {item.publication_title || item.publication_excerpt || "Public post"}
                     </BodyText>
                   </View>
-                </View>
-                <BodyText numberOfLines={3} style={{ color: colors.onSurface }}>
-                  {item.body}
-                </BodyText>
-                <BodyText numberOfLines={2}>
-                  On: {item.publication_title || item.publication_excerpt || "Public post"}
-                </BodyText>
-              </Pressable>
-              {canEdit ? (
-                <Button
-                  title={item.archived_at ? "Reopen comment" : "Archive comment"}
-                  intent="ordinary"
-                  disabled={!!archiving}
-                  onPress={() =>
-                    void updateArchive("comment", item.id, !item.archived_at, !!item.archived_at)
-                  }
-                  style={{ alignSelf: "flex-start" }}
-                />
-              ) : null}
-            </View>
+                </Pressable>
+              </View>
+            </SwipeableRow>
           )
         }
       />
     </Screen>
+  );
+}
+
+function UnreadBadge({ count }: { count?: number }) {
+  const { colors, shape, typography } = useNativeTheme().manifest;
+  if (count === undefined) {
+    return (
+      <View
+        style={{ backgroundColor: colors.primary, borderRadius: shape.full, height: 8, width: 8 }}
+      />
+    );
+  }
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.primaryContainer,
+        borderRadius: shape.full,
+        justifyContent: "center",
+        minWidth: 20,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+      }}
+    >
+      <Text style={[typography.labelMedium, { color: colors.onPrimaryContainer }]}>{count}</Text>
+    </View>
+  );
+}
+
+function SwipeableRow({
+  actionLabel,
+  children,
+  enabled,
+  onAction,
+}: {
+  actionLabel: string;
+  children: React.ReactNode;
+  enabled: boolean;
+  onAction: () => void;
+}) {
+  const { colors, shape, spacing, typography } = useNativeTheme().manifest;
+  if (!enabled) return <>{children}</>;
+  return (
+    <Swipeable
+      friction={1.6}
+      overshootRight={false}
+      rightThreshold={72}
+      renderRightActions={() => (
+        <View
+          style={{
+            alignItems: "flex-start",
+            backgroundColor: colors.secondaryContainer,
+            borderRadius: shape.medium,
+            justifyContent: "center",
+            paddingHorizontal: spacing.large,
+            width: 112,
+          }}
+        >
+          <Text style={[typography.labelLarge, { color: colors.onSecondaryContainer }]}>
+            {actionLabel}
+          </Text>
+        </View>
+      )}
+      onSwipeableOpen={onAction}
+    >
+      {children}
+    </Swipeable>
   );
 }

@@ -34,7 +34,8 @@ export default function CommentScreen() {
   );
 }
 function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }) {
-  const { colors, spacing, shape } = useNativeTheme().manifest;
+  const { colors, spacing, shape, typography } = useNativeTheme().manifest;
+  const compactAction = { minHeight: 44, paddingHorizontal: spacing.medium };
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const focused = useIsFocused();
@@ -192,6 +193,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                     title="Open original post"
                     intent="link"
                     onPress={() => void Linking.openURL(comment.provider_post_url!)}
+                    style={{ alignSelf: "flex-start" }}
                   />
                 ) : null}
               </View>
@@ -265,12 +267,13 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 )}
               </View>
               {canEdit ? (
-                <View style={{ gap: 8 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   <Button
                     title={comment.archived_at ? "Reopen comment" : "Archive comment"}
                     intent="ordinary"
                     disabled={busy || moderation.checking}
                     onPress={() => void archive(!comment.archived_at)}
+                    style={compactAction}
                   />
                   {undoArchive !== null ? (
                     <Button
@@ -278,56 +281,61 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                       intent="ordinary"
                       disabled={busy || moderation.checking}
                       onPress={() => void archive(undoArchive, true)}
+                      style={compactAction}
                     />
                   ) : null}
-                </View>
-              ) : null}
-              {canEdit && !comment.deleted_at ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                  {comment.can_like && !comment.liked ? (
-                    <Button
-                      title="Like"
-                      intent="ordinary"
-                      disabled={busy || moderation.checking}
-                      onPress={() => void action("like")}
-                    />
-                  ) : null}
-                  {comment.can_unlike && comment.liked ? (
-                    <Button
-                      title="Unlike"
-                      intent="ordinary"
-                      disabled={busy || moderation.checking}
-                      onPress={() => void action("unlike")}
-                    />
-                  ) : null}
-                  {comment.can_hide && !comment.hidden ? (
-                    <Button
-                      title="Hide"
-                      intent="ordinary"
-                      disabled={busy || moderation.checking}
-                      onPress={() => void action("hide")}
-                    />
-                  ) : null}
-                  {comment.can_delete ? (
-                    <Button
-                      title="Delete"
-                      intent="destructive"
-                      disabled={busy || moderation.checking}
-                      onPress={() =>
-                        Alert.alert(
-                          "Delete comment?",
-                          "This removes the comment from the network. This cannot be undone.",
-                          [
-                            { text: "Cancel", style: "cancel" },
-                            {
-                              text: "Delete",
-                              style: "destructive",
-                              onPress: () => void action("delete"),
-                            },
-                          ],
-                        )
-                      }
-                    />
+                  {!comment.deleted_at ? (
+                    <>
+                      {comment.can_like && !comment.liked ? (
+                        <Button
+                          title="Like"
+                          intent="ordinary"
+                          disabled={busy || moderation.checking}
+                          onPress={() => void action("like")}
+                          style={compactAction}
+                        />
+                      ) : null}
+                      {comment.can_unlike && comment.liked ? (
+                        <Button
+                          title="Unlike"
+                          intent="ordinary"
+                          disabled={busy || moderation.checking}
+                          onPress={() => void action("unlike")}
+                          style={compactAction}
+                        />
+                      ) : null}
+                      {comment.can_hide && !comment.hidden ? (
+                        <Button
+                          title="Hide"
+                          intent="ordinary"
+                          disabled={busy || moderation.checking}
+                          onPress={() => void action("hide")}
+                          style={compactAction}
+                        />
+                      ) : null}
+                      {comment.can_delete ? (
+                        <Button
+                          title="Delete"
+                          intent="destructive"
+                          disabled={busy || moderation.checking}
+                          onPress={() =>
+                            Alert.alert(
+                              "Delete comment?",
+                              "This removes the comment from the network. This cannot be undone.",
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Delete",
+                                  style: "destructive",
+                                  onPress: () => void action("delete"),
+                                },
+                              ],
+                            )
+                          }
+                          style={compactAction}
+                        />
+                      ) : null}
+                    </>
                   ) : null}
                 </View>
               ) : null}
@@ -340,6 +348,11 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 intent="ordinary"
                 accessibilityState={{ expanded: showReceipts }}
                 onPress={() => setShowReceipts((value) => !value)}
+                style={{
+                  alignSelf: "flex-start",
+                  minHeight: 44,
+                  paddingHorizontal: spacing.medium,
+                }}
               />
               {showReceipts
                 ? reply.history.map((receipt) => (
@@ -389,7 +402,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               onContentSizeChange={revealComposer}
               contentContainerStyle={{ paddingHorizontal: spacing.large, paddingTop: 12, gap: 8 }}
             >
-              <BodyText>
+              <BodyText style={[typography.labelMedium]}>
                 Public reply to {comment.author_name || comment.author_handle || "this person"}, as{" "}
                 {account?.alias ||
                   comment.account_username ||
@@ -479,7 +492,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 onBlur={() => {
                   composerFocused.current = false;
                 }}
-                style={{ minHeight: 64, maxHeight: 144, paddingVertical: 12 }}
+                style={{ minHeight: 48, maxHeight: 144, paddingVertical: 12 }}
               />
             </ScrollView>
             <View
