@@ -542,6 +542,9 @@
 	const textCardResults = new SvelteMap<string, TextCardResult>();
 	let textCardNoticeDismissed = $state(false);
 	let savedCardPreviews = $state<Record<string, TextCardResult>>({});
+	// Renditions whose stored text-card images back savedCardPreviews. Kept so
+	// the preview keys can be recomputed once capability defaults resolve.
+	let savedCardRenditions: Publication['renditions'] | undefined;
 	let segmentSettingsByPost = $state<Record<string, Record<string, ComposerSettings>>>({});
 	let mediaSettingsByAccount = $state<Record<string, Record<string, ComposerSettings>>>({});
 	let mediaPickerOpen = $state(false);
@@ -1668,6 +1671,23 @@
 		return textCardDefaultsFrom(resolvedCapabilities[account.id] ?? visibleSettings(account));
 	}
 
+	// Rebuild the stored text-card previews with the catalogue defaults the
+	// current capabilities resolve to, so omitted styling keys from API-created
+	// publications still match the preview request key.
+	function refreshSavedTextCardPreviews(): void {
+		const previews: Record<string, TextCardResult> = {};
+		for (const rendition of savedCardRenditions ?? []) {
+			const account = selectedAccounts.find(
+				(candidate) => candidate.id === rendition.social_account_id
+			);
+			const defaults = account
+				? textCardDefaultsForAccount(account)
+				: textCardDefaultsFrom(capabilities.flatMap((capability) => capability.settings ?? []));
+			Object.assign(previews, savedTextCardPreviews([rendition], textCardIdentities, defaults));
+		}
+		savedCardPreviews = previews;
+	}
+
 	function previewForAccount(account: SocialAccount) {
 		const model = authoredPreviewForAccount(account);
 		const requestKey = textCardRequestKey(
@@ -2505,6 +2525,7 @@
 			}
 			validationIssues = resolvedAccounts.flatMap((capability) => capability.issues ?? []);
 			lastResolvedCapabilityInputSnapshot = inputSnapshot;
+			refreshSavedTextCardPreviews();
 			void loadRequiredDestinationOptions();
 		} catch (resolveError) {
 			if (abortController.signal.aborted) return;
@@ -3269,11 +3290,8 @@
 			].map((media) => [media.id, media.alt_text ?? ''])
 		);
 		hydrateCanonicalSettings(publication);
-		savedCardPreviews = savedTextCardPreviews(
-			publication.renditions ?? [],
-			textCardIdentities,
-			textCardDefaultsFrom(capabilities.flatMap((capability) => capability.settings ?? []))
-		);
+		savedCardRenditions = publication.renditions;
+		refreshSavedTextCardPreviews();
 		if (resolveAfter) await resolveCapabilities();
 		lastSavedSnapshot = getSaveSnapshot();
 	}
@@ -4116,7 +4134,8 @@
 			publicationId = savedPublicationId;
 			revision = saved.revision;
 			reviewState = saved.review_state ?? '';
-			savedCardPreviews = savedTextCardPreviews(saved.renditions ?? [], textCardIdentities);
+			savedCardRenditions = saved.renditions;
+			refreshSavedTextCardPreviews();
 			draftConflict = null;
 			lastSavedSnapshot = snapshot;
 			showSavedIndicator();
@@ -4219,7 +4238,8 @@
 		publicationId = saved.id;
 		revision = saved.revision;
 		reviewState = saved.review_state ?? '';
-		savedCardPreviews = savedTextCardPreviews(saved.renditions ?? [], textCardIdentities);
+		savedCardRenditions = saved.renditions;
+		refreshSavedTextCardPreviews();
 		lastSavedSnapshot = getSaveSnapshot();
 		draftConflict = null;
 		success = m.compose_changes_saved();
