@@ -16,7 +16,8 @@ type admissionGate struct{}
 func (admissionGate) IsEffectiveEnabled(context.Context, string, string) (bool, error) {
 	return true, nil
 }
-func TestPublicReplyReceiptSurvivesLostResponseAndCompletedJob(t *testing.T) {
+func admissionTestService(t *testing.T) *Service {
+	t.Helper()
 	db, err := database.InitDBWithDriver("sqlite", fmt.Sprintf("file:reply-%d?mode=memory&cache=shared", time.Now().UnixNano()))
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -36,6 +37,11 @@ func TestPublicReplyReceiptSurvivesLostResponseAndCompletedJob(t *testing.T) {
 	}
 	s := NewService(db, nil, nil)
 	s.SetFeatureGate(admissionGate{})
+	return s
+}
+func TestPublicReplyReceiptSurvivesLostResponseAndCompletedJob(t *testing.T) {
+	s := admissionTestService(t)
+	db := s.db
 	actor := Actor{UserID: "u"}
 	jobID, err := s.QueueEngagementActionReceipt(t.Context(), actor, "c", "reply", "answer", "op")
 	require.NoError(t, err)
@@ -56,5 +62,27 @@ func TestPublicReplyReceiptSurvivesLostResponseAndCompletedJob(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, jobID, replay)
 	_, err = s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u", CredentialWorkspaceID: "other"}, "c", "reply", "answer", "op")
+	require.ErrorIs(t, err, ErrAccessDenied)
+}
+
+func TestManualCommentRefreshReturnsScopedCollectionReceipts(t *testing.T) {
+	s := admissionTestService(t)
+	s.SetProvider("bluesky", &moderationProvider{})
+	_, err := s.db.NewUpdate().Model((*models.Rendition)(nil)).Set("external_id='remote-post'").Where("id='r'").Exec(t.Context())
+	require.NoError(t, err)
+	actor := Actor{UserID: "u"}
+	queued, err := s.RefreshWorkspace(t.Context(), actor, "w", true)
+	require.NoError(t, err)
+	require.Equal(t, 1, queued)
+	first, err := s.ActiveRefreshJobIDs(t.Context(), actor, "w")
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	queued, err = s.RefreshWorkspace(t.Context(), actor, "w", true)
+	require.NoError(t, err)
+	require.Zero(t, queued)
+	again, err := s.ActiveRefreshJobIDs(t.Context(), actor, "w")
+	require.NoError(t, err)
+	require.Equal(t, first, again)
+	_, err = s.ActiveRefreshJobIDs(t.Context(), Actor{UserID: "u", CredentialWorkspaceID: "other"}, "w")
 	require.ErrorIs(t, err, ErrAccessDenied)
 }

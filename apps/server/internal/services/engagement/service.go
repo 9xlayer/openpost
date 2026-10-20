@@ -204,7 +204,21 @@ func (s *Service) RefreshWorkspace(ctx context.Context, actor Actor, workspaceID
 	return s.refreshWorkspace(ctx, workspaceID, force)
 }
 
+// ActiveRefreshJobIDs returns the durable collection receipts a manual refresh
+// can wait on. Admission coalesces callers onto the same account/post job.
+//
 //nolint:gocyclo // Scheduling keeps capability, scope, cadence, backoff, budget, and fairness gates in one pass.
+func (s *Service) ActiveRefreshJobIDs(ctx context.Context, actor Actor, workspaceID string) ([]string, error) {
+	if err := s.authorize(ctx, workspaceID, actor, workspaceaccess.LevelEdit); err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	err := s.db.NewSelect().Model((*models.Job)(nil)).Column("id").
+		Where("scope_id=? AND type=? AND status IN ('pending','processing')", workspaceID, JobTypeEngagementSync).
+		Order("created_at", "id").Scan(ctx, &ids)
+	return ids, err
+}
+
 func (s *Service) refreshWorkspace(ctx context.Context, workspaceID string, force bool) (int, error) {
 	now := s.now()
 	queued := 0
@@ -940,26 +954,7 @@ func (s *Service) executeEngagementAction(
 	if err != nil {
 		return err
 	}
-	switch input.Action {
-	case "reply":
-		return nil
-	case "hide":
-		_, err = s.db.NewUpdate().Model(item).Set("hidden = ?", true).WherePK().Exec(ctx)
-		return err
-	case "delete":
-		return s.markEngagementItemDeleted(ctx, item)
-	case "like", "unlike":
-		liked := input.Action == "like"
-		_, err = s.db.NewUpdate().Model(item).
-			Set("liked = ?", liked).
-			Set("can_like = ?", !liked).
-			Set("can_unlike = ?", liked).
-			Set("updated_at = ?", s.now()).
-			WherePK().Exec(ctx)
-		return err
-	default:
-		return fmt.Errorf("unsupported engagement action %q", input.Action)
-	}
+	return s.commitEngagementAction(ctx, item, input.Action)
 }
 
 func sendEngagementAction(
@@ -984,12 +979,12 @@ func sendEngagementAction(
 		if err := commenter.HideComment(ctx, token, account.AccountID, item.RemoteID); err != nil {
 			return platform.PublishResult{}, err
 		}
-		return platform.AcceptedPublishResult(""), nil
+		return platform.AcceptedPublishResult(item.RemoteID), nil
 	case "delete":
 		if err := commenter.DeleteComment(ctx, token, account.AccountID, item.RemoteID); err != nil {
 			return platform.PublishResult{}, err
 		}
-		return platform.AcceptedPublishResult(""), nil
+		return platform.AcceptedPublishResult(item.RemoteID), nil
 	case "like", "unlike":
 		reactions, supported := commenter.(platform.CommentReactionAdapter)
 		if !supported {
@@ -1004,7 +999,7 @@ func sendEngagementAction(
 		if err != nil {
 			return platform.PublishResult{}, err
 		}
-		return platform.AcceptedPublishResult(""), nil
+		return platform.AcceptedPublishResult(item.RemoteID), nil
 	default:
 		return platform.PublishResult{}, fmt.Errorf("unsupported engagement action %q", input.Action)
 	}
@@ -1213,29 +1208,6 @@ func providerCommentErrorClass(err error) string {
 		return "provider_unavailable"
 	}
 	return "provider_write_failed"
-}
-
-func (s *Service) markEngagementItemDeleted(
-	ctx context.Context,
-	item *models.EngagementItem,
-) error {
-	now := s.now()
-	_, err := s.db.NewUpdate().Model(item).
-		Set("body = ''").
-		Set("attachments_json = '[]'").
-		Set("author_remote_id = ''").
-		Set("author_name = ''").
-		Set("author_handle = ''").
-		Set("author_avatar_url = ''").
-		Set("deleted_at = ?", now).
-		Set("can_reply = ?", false).
-		Set("can_hide = ?", false).
-		Set("can_delete = ?", false).
-		Set("can_like = ?", false).
-		Set("can_unlike = ?", false).
-		Set("updated_at = ?", now).
-		WherePK().Exec(ctx)
-	return err
 }
 
 type Cursor struct {
@@ -1773,6 +1745,7 @@ func (s *Service) enqueue(ctx context.Context, workspaceID, jobType, payload str
 	if err != nil {
 		return false, err
 	}
+	job.ScopeID = workspaceID
 	var inserted bool
 	err = s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 		if workspaceID != "" {
@@ -1785,7 +1758,14 @@ func (s *Service) enqueue(ctx context.Context, workspaceID, jobType, payload str
 			return err
 		}
 		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
 		inserted = rows > 0
+		if workspaceID != "" {
+			_, err = tx.NewUpdate().Model((*models.Job)(nil)).Set("scope_id=?", workspaceID).
+				Where("type=? AND payload=? AND scope_id='' AND status IN ('pending','processing')", jobType, payload).Exec(txCtx)
+		}
 		return err
 	})
 	return inserted, err

@@ -168,6 +168,19 @@ func (s *Service) RefreshWorkspace(ctx context.Context, actor Actor, workspaceID
 	return s.refreshWorkspace(ctx, workspaceID, force)
 }
 
+// ActiveRefreshJobIDs returns the durable collection receipts a manual refresh
+// can wait on. Admission coalesces callers onto the same account/post job.
+func (s *Service) ActiveRefreshJobIDs(ctx context.Context, actor Actor, workspaceID string) ([]string, error) {
+	if err := s.authorize(ctx, workspaceID, actor, workspaceaccess.LevelEdit); err != nil {
+		return nil, err
+	}
+	ids := []string{}
+	err := s.db.NewSelect().Model((*models.Job)(nil)).Column("id").
+		Where("scope_id=? AND type=? AND status IN ('pending','processing')", workspaceID, JobTypeMessagesSync).
+		Order("created_at", "id").Scan(ctx, &ids)
+	return ids, err
+}
+
 func (s *Service) refreshWorkspace(ctx context.Context, workspaceID string, force bool) (int, error) {
 	var accounts []models.SocialAccount
 	if err := s.db.NewSelect().Model(&accounts).Where("workspace_id = ? AND is_active = ?", workspaceID, true).Scan(ctx); err != nil {
@@ -223,6 +236,13 @@ func (s *Service) enqueue(ctx context.Context, workspaceID, jobType, payload str
 		return false, err
 	}
 	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if workspaceID != "" {
+		_, err = s.db.NewUpdate().Model((*models.Job)(nil)).Set("scope_id=?", workspaceID).
+			Where("type=? AND payload=? AND scope_id='' AND status IN ('pending','processing')", jobType, payload).Exec(ctx)
+	}
 	return rows == 1, err
 }
 

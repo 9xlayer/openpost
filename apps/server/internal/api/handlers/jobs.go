@@ -11,6 +11,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/api/middleware"
+	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/uptrace/bun"
 )
@@ -277,9 +278,10 @@ func (h *JobHandler) getWorkspaceScopedJob(ctx context.Context, jobID string) (m
 		safeJobPayloadTextExpr(h.db, "publication_id") + ")"
 	err := h.db.NewSelect().
 		TableExpr("jobs AS job").
-		ColumnExpr("COALESCE(publication.workspace_id, sa.workspace_id, '')").
+		ColumnExpr("COALESCE(inbox_workspace.id, publication.workspace_id, sa.workspace_id, '')").
 		Join("LEFT JOIN publications AS publication ON job.type IN (?, ?) AND publication.id = "+publicationScopeExpr, jobTypePublishPublication, jobTypePublishPost).
 		Join("LEFT JOIN social_accounts AS sa ON sa.id = "+safeJobPayloadTextExpr(h.db, "account_id")).
+		Join("LEFT JOIN workspaces AS inbox_workspace ON job.type IN (?, ?, ?, ?) AND inbox_workspace.id = NULLIF(TRIM(job.scope_id), '')", jobregistry.TypeMessagesSync, jobregistry.TypeMessageSend, jobregistry.TypeEngagementSync, jobregistry.TypeEngagementAction).
 		Where("job.id = ?", jobID).
 		Scan(ctx, &workspaceID)
 	if err != nil {
@@ -302,7 +304,8 @@ func (h *JobHandler) listJobsQuery(
 		Model(model).
 		ModelTableExpr("jobs AS job").
 		Join("LEFT JOIN publications AS publication ON job.type IN (?, ?) AND publication.id = "+publicationScopeExpr, jobTypePublishPublication, jobTypePublishPost).
-		Join("LEFT JOIN social_accounts AS sa ON sa.id = " + safeJobPayloadTextExpr(h.db, "account_id"))
+		Join("LEFT JOIN social_accounts AS sa ON sa.id = "+safeJobPayloadTextExpr(h.db, "account_id")).
+		Join("LEFT JOIN workspaces AS inbox_workspace ON job.type IN (?, ?, ?, ?) AND inbox_workspace.id = NULLIF(TRIM(job.scope_id), '')", jobregistry.TypeMessagesSync, jobregistry.TypeMessageSend, jobregistry.TypeEngagementSync, jobregistry.TypeEngagementAction)
 
 	if input.Status != "" {
 		query = query.Where("job.status = ?", input.Status)
@@ -314,7 +317,7 @@ func (h *JobHandler) listJobsQuery(
 		query = query.Where("job.run_at < ?", runBefore)
 	}
 	if input.WorkspaceID != "" {
-		return query.Where("COALESCE(publication.workspace_id, sa.workspace_id) = ?", input.WorkspaceID)
+		return query.Where("COALESCE(inbox_workspace.id, publication.workspace_id, sa.workspace_id) = ?", input.WorkspaceID)
 	}
 	if isAdmin {
 		return query
@@ -324,7 +327,7 @@ func (h *JobHandler) listJobsQuery(
 	for workspaceID := range allowedWorkspaces {
 		workspaceIDs = append(workspaceIDs, workspaceID)
 	}
-	return query.Where("COALESCE(publication.workspace_id, sa.workspace_id) IN (?)", bun.List(workspaceIDs))
+	return query.Where("COALESCE(inbox_workspace.id, publication.workspace_id, sa.workspace_id) IN (?)", bun.List(workspaceIDs))
 }
 
 func listJobsOutput(body []JobResponse, total, limit, offset int) *ListJobsOutput {

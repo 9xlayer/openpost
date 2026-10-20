@@ -43,9 +43,9 @@ func newJobsTestServerWithAuthenticator(t *testing.T, authenticator middleware.A
 	)
 	ctx := context.Background()
 	users := []models.User{
-		{ID: "user-1", Email: "user@example.com", PasswordHash: "hash", CreatedAt: time.Now().UTC()},
-		{ID: "user-2", Email: "other@example.com", PasswordHash: "hash", CreatedAt: time.Now().UTC()},
-		{ID: "admin-1", Email: "admin@example.com", PasswordHash: "hash", IsAdmin: true, CreatedAt: time.Now().UTC()},
+		{ID: "user-1", Email: "user@example.com", PasswordHash: "hash"},
+		{ID: "user-2", Email: "other@example.com", PasswordHash: "hash"},
+		{ID: "admin-1", Email: "admin@example.com", PasswordHash: "hash", IsAdmin: true},
 	}
 	for index := range users {
 		_, err := db.NewInsert().Model(&users[index]).Exec(ctx)
@@ -301,4 +301,26 @@ func (s *jobsTestServer) getJSONWithToken(t *testing.T, path, token string) *htt
 	rec := httptest.NewRecorder()
 	s.echo.ServeHTTP(rec, req)
 	return rec
+}
+
+func TestInboxCollectionAndReplyJobReceiptsStayWorkspaceScoped(t *testing.T) {
+	srv := newJobsTestServerWithAuthenticator(t, jobsAuthenticator{})
+	for _, kind := range []string{"messages_sync", "message_send", "engagement_sync", "engagement_action"} {
+		job := models.Job{ID: "inbox-" + kind, Type: kind, ScopeID: "ws-1", Status: "pending", Payload: `{"body":"private reply"}`, RunAt: time.Now().UTC()}
+		_, err := srv.db.NewInsert().Model(&job).Exec(t.Context())
+		require.NoError(t, err)
+		response := srv.getJSONWithToken(t, "/api/v1/jobs/"+job.ID, "browser-session")
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		var receipt JobResponse
+		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &receipt))
+		require.Equal(t, "pending", receipt.Status)
+		require.Empty(t, receipt.Payload)
+		foreign := srv.getJSONWithToken(t, "/api/v1/jobs/"+job.ID, "api-read-ws-2")
+		require.Equal(t, http.StatusForbidden, foreign.Code, foreign.Body.String())
+	}
+	response := srv.getJSONWithToken(t, "/api/v1/jobs?workspace_id=ws-1", "browser-session")
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	var receipts []JobResponse
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &receipts))
+	require.Len(t, receipts, 4)
 }

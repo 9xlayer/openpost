@@ -347,3 +347,27 @@ func TestCounterpartReadReceiptsRespectWatermarksAndNeverRegress(t *testing.T) {
 		})
 	}
 }
+
+func TestManualRefreshReturnsCoalescedWorkspaceCollectionReceipts(t *testing.T) {
+	s, db, _, actor := messagingFixture(t)
+	s.SetProvider("bluesky", testProvider{})
+	queued, err := s.RefreshWorkspace(t.Context(), actor, "workspace", true)
+	require.NoError(t, err)
+	require.Equal(t, 1, queued)
+	first, err := s.ActiveRefreshJobIDs(t.Context(), actor, "workspace")
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	queued, err = s.RefreshWorkspace(t.Context(), actor, "workspace", true)
+	require.NoError(t, err)
+	require.Zero(t, queued)
+	again, err := s.ActiveRefreshJobIDs(t.Context(), actor, "workspace")
+	require.NoError(t, err)
+	require.Equal(t, first, again)
+	_, err = s.ActiveRefreshJobIDs(t.Context(), Actor{UserID: actor.UserID, CredentialWorkspaceID: "other"}, "workspace")
+	require.ErrorIs(t, err, ErrAccessDenied)
+	_, err = db.NewUpdate().Model((*models.Job)(nil)).Set("status='completed'").Where("id=?", first[0]).Exec(t.Context())
+	require.NoError(t, err)
+	finished, err := s.ActiveRefreshJobIDs(t.Context(), actor, "workspace")
+	require.NoError(t, err)
+	require.Empty(t, finished)
+}

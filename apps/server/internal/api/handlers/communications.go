@@ -169,9 +169,10 @@ type RefreshCapabilitiesInput struct {
 }
 
 type RefreshCapabilityOutcome struct {
-	Status    string `json:"status" enum:"queued,failed,unavailable"`
-	Queued    int    `json:"queued"`
-	ErrorCode string `json:"error_code,omitempty"`
+	JobIDs    []string `json:"job_ids,omitempty" doc:"Durable collection jobs to observe before presenting upstream refresh completion"`
+	Status    string   `json:"status" enum:"queued,failed,unavailable"`
+	Queued    int      `json:"queued"`
+	ErrorCode string   `json:"error_code,omitempty"`
 }
 
 type RefreshCapabilitiesResult struct {
@@ -597,25 +598,56 @@ func (h *EngagementMessagingHandler) refreshEngagementAndMessaging(ctx context.C
 			return h.messaging.RefreshWorkspace(callCtx, messagingActor(ctx), input.Body.WorkspaceID, true)
 		}
 	}
-	return &RefreshCapabilitiesOutput{Body: coordinateCapabilityRefresh(ctx, engagementRefresh, messagingRefresh)}, nil
+	outcome := coordinateCapabilityRefresh(ctx, engagementRefresh, messagingRefresh)
+	if h.engagement != nil && outcome.Engagement.Status == "queued" {
+		var err error
+		outcome.Engagement.JobIDs, err = h.engagement.ActiveRefreshJobIDs(ctx, engagementActor(ctx), input.Body.WorkspaceID)
+		if err != nil {
+			return nil, engagementHTTPError(err, "failed to inspect comment collection jobs")
+		}
+	}
+	if h.messaging != nil && outcome.Messaging.Status == "queued" {
+		var err error
+		outcome.Messaging.JobIDs, err = h.messaging.ActiveRefreshJobIDs(ctx, messagingActor(ctx), input.Body.WorkspaceID)
+		if err != nil {
+			return nil, messagingHTTPError(err, "failed to inspect message collection jobs")
+		}
+	}
+	return &RefreshCapabilitiesOutput{Body: outcome}, nil
 }
 
 func (h *EngagementMessagingHandler) refreshEngagement(ctx context.Context, input *RefreshCapabilitiesInput) (*RefreshCapabilityOutput, error) {
 	if h.engagement == nil {
 		return &RefreshCapabilityOutput{Body: runCapabilityRefresh(ctx, nil)}, nil
 	}
-	return &RefreshCapabilityOutput{Body: runCapabilityRefresh(ctx, func(callCtx context.Context) (int, error) {
+	outcome := runCapabilityRefresh(ctx, func(callCtx context.Context) (int, error) {
 		return h.engagement.RefreshWorkspace(callCtx, engagementActor(ctx), input.Body.WorkspaceID, true)
-	})}, nil
+	})
+	if outcome.Status == "queued" {
+		var err error
+		outcome.JobIDs, err = h.engagement.ActiveRefreshJobIDs(ctx, engagementActor(ctx), input.Body.WorkspaceID)
+		if err != nil {
+			return nil, engagementHTTPError(err, "failed to inspect collection jobs")
+		}
+	}
+	return &RefreshCapabilityOutput{Body: outcome}, nil
 }
 
 func (h *EngagementMessagingHandler) refreshMessaging(ctx context.Context, input *RefreshCapabilitiesInput) (*RefreshCapabilityOutput, error) {
 	if h.messaging == nil {
 		return &RefreshCapabilityOutput{Body: runCapabilityRefresh(ctx, nil)}, nil
 	}
-	return &RefreshCapabilityOutput{Body: runCapabilityRefresh(ctx, func(callCtx context.Context) (int, error) {
+	outcome := runCapabilityRefresh(ctx, func(callCtx context.Context) (int, error) {
 		return h.messaging.RefreshWorkspace(callCtx, messagingActor(ctx), input.Body.WorkspaceID, true)
-	})}, nil
+	})
+	if outcome.Status == "queued" {
+		var err error
+		outcome.JobIDs, err = h.messaging.ActiveRefreshJobIDs(ctx, messagingActor(ctx), input.Body.WorkspaceID)
+		if err != nil {
+			return nil, messagingHTTPError(err, "failed to inspect collection jobs")
+		}
+	}
+	return &RefreshCapabilityOutput{Body: outcome}, nil
 }
 func engagementActor(ctx context.Context) engagement.Actor {
 	return engagement.Actor{
