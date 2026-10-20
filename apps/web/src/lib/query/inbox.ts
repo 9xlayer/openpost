@@ -150,7 +150,7 @@ export const inboxUpdateAPI: InboxUpdateAPI = {
 					signal
 				})
 		});
-		return data;
+		return { ...data, changes: data.changes ?? [] };
 	},
 	async inboxActivity(workspaceId, activity, signal) {
 		const { error, response } = await queryTransportRequest(signal, (signal) =>

@@ -33,7 +33,7 @@ function renderMessages() {
 	);
 }
 
-function mockInbox(items: ReturnType<typeof conversation>) {
+function mockInbox(items: ReturnType<typeof conversation>[]) {
 	getMock.mockImplementation(async (path) => {
 		if (path === '/messages') {
 			return { data: { items, total: items.length, sync_states: [], next_cursor: '' } };
@@ -47,11 +47,10 @@ function mockInbox(items: ReturnType<typeof conversation>) {
 }
 
 function rowByName(container: Element, name: string): HTMLElement {
-	const rows = [...container.querySelectorAll('button[data-unread]')];
+	const rows = [...container.querySelectorAll<HTMLButtonElement>('button[data-unread]')];
 	const row = rows.find((candidate) => candidate.textContent?.includes(name));
 	if (!row) throw new Error(`Expected a conversation row for ${name}.`);
-	// SAFETY: Conversation rows are <button> elements, which are always HTMLElements.
-	return row as HTMLElement;
+	return row;
 }
 
 describe('messages counterpart avatar', () => {
@@ -104,23 +103,25 @@ describe('messages counterpart avatar', () => {
 		mockInbox([conversation('Ava Stone', 0)]);
 		putMock.mockResolvedValue({ response: new Response() });
 		const submitted: string[] = [];
-		postMock.mockImplementation(async (path, options) => {
-			if (path !== '/messages/{conversation_id}/send')
-				return { response: new Response(null, { status: 204 }) };
-			const operationId = options?.body?.client_operation_id;
-			if (!operationId) throw new Error('Send receipt is missing');
-			submitted.push(operationId);
-			if (submitted.length === 1) throw new TypeError('Network interrupted');
-			return {
-				data: {
-					...directMessage(40),
-					direction: 'outbound',
-					body: 'One intentional message',
-					send_status: 'queued'
-				},
-				response: new Response()
-			};
-		});
+		postMock.mockImplementation(
+			async (path, options?: { body?: { client_operation_id?: string } }) => {
+				if (path !== '/messages/{conversation_id}/send')
+					return { response: new Response(null, { status: 204 }) };
+				const operationId = options?.body?.client_operation_id;
+				if (!operationId) throw new Error('Send receipt is missing');
+				submitted.push(operationId);
+				if (submitted.length === 1) throw new TypeError('Network interrupted');
+				return {
+					data: {
+						...directMessage(40),
+						direction: 'outbound',
+						body: 'One intentional message',
+						send_status: 'queued'
+					},
+					response: new Response()
+				};
+			}
+		);
 		const screen = await renderMessages();
 		await vi.waitFor(() => expect(rowByName(screen.container, 'Ava Stone')).toBeTruthy());
 		rowByName(screen.container, 'Ava Stone').click();
@@ -139,11 +140,10 @@ describe('messages counterpart avatar', () => {
 	it('loads the counterpart photo lazily without sending a referrer', async () => {
 		mockInbox([conversation('Ava Stone', 1, 'https://example.com/avatars/ava.png')]);
 		const screen = await renderMessages();
-		let image: HTMLImageElement | null = null;
 		await vi.waitFor(() => {
-			image = rowByName(screen.container, 'Ava Stone').querySelector('img');
-			expect(image).not.toBeNull();
+			expect(rowByName(screen.container, 'Ava Stone').querySelector('img')).not.toBeNull();
 		});
+		const image = rowByName(screen.container, 'Ava Stone').querySelector('img');
 		expect(image?.getAttribute('referrerpolicy')).toBe('no-referrer');
 		expect(image?.getAttribute('loading')).toBe('lazy');
 	});

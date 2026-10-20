@@ -26,7 +26,7 @@ it('retires pending updates on view, visibility, connectivity and actor changes'
 		created_at: '2026-10-20T10:00:00Z'
 	});
 	const signals: AbortSignal[] = [];
-	get.mockImplementation(async (path, options) => {
+	get.mockImplementation(async (path, options?: { signal?: AbortSignal | null }) => {
 		if (path !== '/inbox/changes') throw new Error('Unexpected read');
 		const signal = options?.signal;
 		if (!signal) throw new Error('Missing cancellation signal');
