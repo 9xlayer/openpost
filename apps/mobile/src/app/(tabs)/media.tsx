@@ -75,7 +75,11 @@ export default function MediaScreen() {
                 retry={() => void media.refetch()}
               />
             ) : null}
-            {media.data ? <BodyText>{media.data.total} items</BodyText> : null}
+            {media.data ? (
+              <BodyText>
+                {media.data.total} {media.data.total === 1 ? "item" : "items"}
+              </BodyText>
+            ) : null}
           </>
         }
         ListEmptyComponent={
