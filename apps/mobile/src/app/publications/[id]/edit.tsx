@@ -1284,7 +1284,12 @@ function Composer({
             >
               <View style={styles.thumbWrap}>
                 {attachment.uri && attachment.mimeType.startsWith("image/") ? (
-                  <MediaImage uri={attachment.uri} style={styles.thumb} contentFit="cover" />
+                  <MediaImage
+                    uri={attachment.uri}
+                    size="md"
+                    style={styles.thumb}
+                    contentFit="cover"
+                  />
                 ) : (
                   <View
                     style={[

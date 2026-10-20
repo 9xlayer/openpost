@@ -124,6 +124,46 @@ test("supplied attachments carry their per-post alt text into the required varia
   expect(input.segments?.[0]?.media).toEqual([{ media_id: "demo", alt_text: "Demo walkthrough" }]);
 });
 
+test("editing a destination image caption updates the destination's own media row", () => {
+  const attached: components["schemas"]["MediaSummary"] = {
+    id: "demo",
+    mime_type: "video/mp4",
+    url: "/media/demo",
+    original_filename: "demo.mp4",
+    alt_text: "Old caption",
+    analysis_status: "ready",
+    aspect_ratio: "16:9",
+    dominant_type: "video",
+    duration_ms: 1000,
+    frame_rate: 30,
+    height: 1080,
+    width: 1920,
+    size: 1000,
+    public_url_ready: false,
+    public_url_status: 0,
+  };
+  const destination = {
+    ...rendition,
+    segments: (rendition.segments ?? []).map((segment) => ({
+      ...segment,
+      source_overrides: undefined,
+      media_inherited: false,
+      media: [attached],
+    })),
+  };
+  const input = mobileRenditionInput(
+    { renditions: [destination], segments: [] },
+    "founder",
+    undefined,
+    [{ mediaId: "demo", mimeType: "video/mp4", altText: "New caption" }],
+  );
+  expect(input.segments?.[0]?.media?.length).toBe(1);
+  expect(input.segments?.[0]?.media?.[0]).toMatchObject({
+    media_id: "demo",
+    alt_text: "New caption",
+  });
+});
+
 test("editing one joined source keeps independent images, inherited continuation, and explicit omissions", () => {
   const custom = {
     media_id: "custom-image",
