@@ -20,14 +20,18 @@ function tileProps(isVideo: boolean) {
 }
 
 describe('composer media tile', () => {
-	it('shows the thumbnail tier instead of the full original for images', async () => {
-		await render(ComposerMediaTile, { props: tileProps(false) });
+	it('shows the full original for images so the large tile stays sharp', async () => {
+		const screen = await render(ComposerMediaTile, { props: tileProps(false) });
 
-		// Assert the initial still without waiting: the harness 404s the
-		// thumbnail tier, so the tile's retry chain settles to the fallback.
+		// The harness 404s both still tiers, so assert the requested source
+		// before the retry chain settles.
 		const element = document.querySelector('img');
 		if (!(element instanceof HTMLImageElement)) throw new Error('Expected an image element.');
-		expect(element.src).toContain('/media/media-tile-1/thumb/md');
+		expect(element.src).toContain('/media/media-tile-1');
+		expect(element.src).not.toContain('/thumb/');
+
+		await expect.element(screen.getByRole('img')).not.toBeInTheDocument();
+		await expect.element(screen.getByRole('presentation')).toBeVisible();
 	});
 
 	it('shows the video poster while keeping the player on the original', async () => {

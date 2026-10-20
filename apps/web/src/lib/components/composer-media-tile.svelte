@@ -37,12 +37,15 @@
 	const originalURL = $derived(getAuthenticatedMediaByID(mediaId));
 	const thumbURL = $derived(getAuthenticatedMediaURL(`/media/${mediaId}/thumb/md`));
 	const posterURL = $derived(getAuthenticatedMediaURL(`/media/${mediaId}/poster`));
-	let showingOriginal = $state(false);
+	// The composer tile is large, so the 400px thumbnail tier blurs once the
+	// image is stretched across the editor column. Show the authored original
+	// and keep the thumbnail only as a fallback for originals that fail.
+	let showingThumbnail = $state(false);
 	let missing = $state(false);
 
 	function handleImageError(): void {
-		if (!showingOriginal) {
-			showingOriginal = true;
+		if (!showingThumbnail) {
+			showingThumbnail = true;
 			return;
 		}
 		missing = true;
@@ -76,7 +79,7 @@
 		></video>
 	{:else}
 		<img
-			src={showingOriginal ? originalURL : thumbURL}
+			src={showingThumbnail ? thumbURL : originalURL}
 			alt={altTexts.get(mediaId) || ''}
 			class="{mediaCount === 1 ? 'aspect-video' : 'aspect-square'} w-full object-cover"
 			onerror={handleImageError}
