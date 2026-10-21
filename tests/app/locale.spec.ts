@@ -4,10 +4,10 @@ test.use({ locale: "ru-RU" });
 
 test("a fresh Russian browser selects Russian", async ({ page }) => {
   await page.goto("/login");
-  await expect(page.locator("html")).toHaveAttribute("lang", "ru");
   await expect(page.getByRole("heading", { name: "Войти", exact: true })).toBeVisible({
     timeout: 30_000,
   });
+  await expect(page.locator("html")).toHaveAttribute("lang", "ru");
 });
 
 test("a saved language takes precedence over the browser language", async ({
