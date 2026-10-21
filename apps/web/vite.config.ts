@@ -13,7 +13,8 @@ import { phonemizerRuntimePlugin } from './src/lib/build/phonemizer-runtime.ts';
 
 const rawParaglidePlugin = paraglideVitePlugin({
 	project: './project.inlang',
-	outdir: './src/lib/paraglide'
+	outdir: './src/lib/paraglide',
+	strategy: ['cookie', 'globalVariable', 'preferredLanguage', 'baseLocale']
 });
 // SAFETY: paraglideVitePlugin returns a Vite-compatible plugin, but its package type is not assignable to this Vite version.
 const paraglidePlugin = rawParaglidePlugin as PluginOption;
