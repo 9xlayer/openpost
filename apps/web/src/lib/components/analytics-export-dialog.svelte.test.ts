@@ -4,17 +4,13 @@ import '../../routes/layout.css';
 import { render } from 'vitest-browser-svelte';
 import AnalyticsExportDialog from './analytics-export-dialog.svelte';
 
-const get = vi.hoisted(() => vi.fn());
-vi.mock('$lib/api/client', () => ({ client: { GET: get } }));
-
 beforeEach(() => {
-	get.mockReset();
 	URL.createObjectURL = vi.fn(() => 'blob:analytics-export');
 	URL.revokeObjectURL = vi.fn();
 });
 
 it('requests the chosen format, grouping and filters, then closes', async () => {
-	get.mockResolvedValue({
+	const requestExport = vi.fn().mockResolvedValue({
 		data: new Blob(['a,b']),
 		response: new Response(null, {
 			headers: { 'content-disposition': 'attachment; filename="export.xlsx"' }
@@ -32,7 +28,8 @@ it('requests the chosen format, grouping and filters, then closes', async () => 
 			{ id: 'account-3', username: 'founder', platform: 'bluesky' }
 		],
 		metrics: ['likes', 'views'],
-		onExported
+		onExported,
+		requestExport
 	});
 
 	await screen.getByRole('button', { name: 'Excel (with charts)' }).click();
@@ -45,32 +42,30 @@ it('requests the chosen format, grouping and filters, then closes', async () => 
 	await screen.getByRole('button', { name: 'Download' }).click();
 
 	await vi.waitFor(() => expect(onExported).toHaveBeenCalledOnce());
-	expect(get).toHaveBeenCalledWith(
-		'/analytics/export',
+	expect(requestExport).toHaveBeenCalledWith(
 		expect.objectContaining({
-			parseAs: 'blob',
-			params: {
-				query: expect.objectContaining({
-					workspace_id: 'ws-1',
-					days: 90,
-					account_ids: 'account-2',
-					format: 'xlsx',
-					group_by: 'day',
-					metrics: 'views'
-				})
-			}
+			workspace_id: 'ws-1',
+			days: 90,
+			account_ids: 'account-2',
+			format: 'xlsx',
+			group_by: 'day',
+			metrics: 'views'
 		})
 	);
 });
 
 it('keeps the dialog open and explains a failed export', async () => {
-	get.mockResolvedValue({ error: { detail: 'nope' }, response: new Response(null) });
+	const requestExport = vi.fn().mockResolvedValue({
+		error: { detail: 'nope' },
+		response: new Response(null)
+	});
 	const screen = await render(AnalyticsExportDialog, {
 		open: true,
 		workspaceId: 'ws-1',
 		days: 30,
 		accounts: [],
-		metrics: []
+		metrics: [],
+		requestExport
 	});
 
 	await screen.getByRole('button', { name: 'Download' }).click();

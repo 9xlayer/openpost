@@ -2,6 +2,7 @@
 	import AsyncActionButton from '$lib/components/async-action-button.svelte';
 	import AccountPickerRow from '$lib/components/account-picker/row.svelte';
 	import { client } from '$lib/api/client';
+	import type { paths } from '$lib/api/types';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Dialog from '$lib/components/ui/dialog';
@@ -16,6 +17,9 @@
 	type GroupBy = 'post' | 'day' | 'week' | 'month' | 'platform' | 'account';
 	type Dataset = 'report' | 'posts' | 'daily' | 'accounts';
 
+	type ExportQuery = NonNullable<paths['/analytics/export']['get']['parameters']['query']>;
+	type ExportResult = { data?: unknown; error?: unknown; response: Response };
+
 	interface Props {
 		open?: boolean;
 		workspaceId: string;
@@ -26,6 +30,12 @@
 		/** Metric keys measured across the full filtered population. */
 		metrics: string[];
 		onExported?: () => void;
+		/** Fetches the file. Defaults to the API client; tests inject a fake. */
+		requestExport?: (query: ExportQuery) => Promise<ExportResult>;
+	}
+
+	function fetchExport(query: ExportQuery): Promise<ExportResult> {
+		return client.GET('/analytics/export', { params: { query }, parseAs: 'blob' });
 	}
 
 	let {
@@ -35,7 +45,8 @@
 		accountId = '',
 		accounts,
 		metrics,
-		onExported
+		onExported,
+		requestExport = fetchExport
 	}: Props = $props();
 
 	const browserTimezone = (() => {
@@ -125,23 +136,18 @@
 		exporting = true;
 		error = '';
 		try {
-			const result = await client.GET('/analytics/export', {
-				params: {
-					query: {
-						workspace_id: workspaceId,
-						days,
-						account_ids: selectedAccounts.join(',') || undefined,
-						format,
-						timezone,
-						group_by: groupBy,
-						dataset,
-						metrics:
-							format === 'xlsx' || dataset === 'report' || dataset === 'posts'
-								? selectedMetrics.join(',') || undefined
-								: undefined
-					}
-				},
-				parseAs: 'blob'
+			const result = await requestExport({
+				workspace_id: workspaceId,
+				days,
+				account_ids: selectedAccounts.join(',') || undefined,
+				format,
+				timezone,
+				group_by: groupBy,
+				dataset,
+				metrics:
+					format === 'xlsx' || dataset === 'report' || dataset === 'posts'
+						? selectedMetrics.join(',') || undefined
+						: undefined
 			});
 			if (result.error || !(result.data instanceof Blob))
 				throw new Error('analytics export failed');
