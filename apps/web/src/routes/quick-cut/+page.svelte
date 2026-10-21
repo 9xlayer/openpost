@@ -82,6 +82,7 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 		deleteProjectFromWorkspace,
 		projectFileName,
 		persistSourceHandles,
+		restoreSourceHandles,
 		reconcileSourceAfterProbe,
 		snapshotProject
 	} from '$lib/quick-cut/project';
@@ -1513,7 +1514,6 @@ LosslessCut (GPL - behavioral reference only, no code ported).
 			resetHistory();
 			project = parsed;
 			// Sources are metadata only; need to reconnect handles
-			const { restoreSourceHandles } = await import('$lib/quick-cut/project');
 			const handleMap = await restoreSourceHandles(parsed.sources);
 			lifetime.signal.throwIfAborted();
 			// For missing handles, keep source entry but mark missing; user must re-add file
