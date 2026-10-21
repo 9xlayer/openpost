@@ -389,6 +389,13 @@ type AccountCapabilityProvider interface {
 	ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, input AccountCapabilityInput) (AccountCapabilityResult, error)
 }
 
+// AccountCapabilityKeyer declares which inputs can change an adapter's
+// ResolveAccountPublishingCapabilities result. Adapters that ignore their input
+// return an empty key.
+type AccountCapabilityKeyer interface {
+	AccountCapabilityKeyInput(input AccountCapabilityInput) string
+}
+
 // TokenResult is a platform-agnostic token response.
 type TokenResult struct {
 	AccessToken      string            `json:"access_token"`

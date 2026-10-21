@@ -61,6 +61,10 @@ describe('media thumbnail', () => {
 
 		element.dispatchEvent(new Event('error'));
 		await tick();
+		expect(element.src).toContain(THUMB_SRC);
+
+		element.dispatchEvent(new Event('error'));
+		await tick();
 		expect(element.src).toContain(ORIGINAL_SRC);
 	});
 

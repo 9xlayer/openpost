@@ -379,6 +379,8 @@ func (p *PeerTubeAdapter) searchPeerTubeStaticOptions(ctx context.Context, acces
 // ResolveAccountPublishingCapabilities advertises PeerTube's channel-scoped
 // destination model. Static catalog limits stay conservative; the instance
 // enforces quota and transcoding policy at upload time.
+func (p *PeerTubeAdapter) AccountCapabilityKeyInput(AccountCapabilityInput) string { return "" }
+
 func (p *PeerTubeAdapter) ResolveAccountPublishingCapabilities(_ context.Context, _ string, _ AccountCapabilityInput) (AccountCapabilityResult, error) {
 	return AccountCapabilityResult{
 		Revision: "peertube:channel",

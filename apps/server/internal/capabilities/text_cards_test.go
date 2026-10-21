@@ -13,6 +13,22 @@ import (
 // and defaults, and the capability catalogue derives from it. Every option
 // the composer offers must parse successfully through textcards.Parse, so
 // adding an option to textcards reaches the composer with no second edit.
+// TestProjectTextCardsDoesNotMutateCallerSegments guards destination
+// resolution from racing on shared input: joining and card projection rewrite
+// the first segment's media, and callers resolve several destinations from the
+// same segment slice.
+func TestProjectTextCardsDoesNotMutateCallerSegments(t *testing.T) {
+	segments := []ResolveSegment{{
+		ID:    "segment-1",
+		Body:  "hello",
+		Media: []MediaItem{{ID: "media-1"}, {ID: "media-1"}},
+	}}
+
+	projectTextCards("instagram", "instagram.feed", segments, nil)
+
+	require.Len(t, segments[0].Media, 2, "projection must not rewrite the caller's media")
+}
+
 func TestTextCardCatalogueOptionsParseThroughRenderer(t *testing.T) {
 	defs := TextCardSettings()
 	byKey := make(map[string]SettingDefinition, len(defs))

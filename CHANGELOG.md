@@ -4,49 +4,6 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
-### Added
-
-- Render account and workspace identity in the mobile app, including avatars and labels on drafts, the composer, analytics, and media previews.
-- Show per-destination publishing readiness in the mobile composer before publishing.
-- Publish the enforced media upload limits from the server and validate mobile attachments against them, with the limits guide generated from the same constants.
-
-### Changed
-
-- Load mobile media previews as thumbnails and show a placeholder when a preview cannot be loaded.
-- Derive marketing tool limits and provider capability claims from the same catalogues the product enforces.
-
-### Fixed
-
-- Recover LinkedIn Organization Page lookups when the provider rejects optional profile projections.
-- Save mobile posts whose destination account was disconnected.
-- Show the planned time in the web publication detail header.
-- Key text-card previews by account identity and retry failed avatars, and derive the avatar placeholder from the card colour.
-- Name Google Business and fediverse software correctly, and align the mobile and web handle rules on one allowlist.
-- Toggle both directions of the any-source checkbox in repost policies.
-- Keep the calendar's all-accounts filter mode visible and show the account photo on calendar surfaces.
-- Add referrer policy and lazy loading to preview avatars, and show the verified badge in the full-page preview.
-- Render the Inbox counterpart avatar through the shared control and announce the selected account in the account filter label.
-- Show the account photo in the workflow source-account picker.
-- Accept videos up to the server limit on mobile and validate attachments by type.
-- Derive the review fallback plan prices from the catalog.
-- Honour reduced motion in every settings pending spinner.
-- Keep destructive dialogs open while their action is pending.
-- Show the account photo in consent and analytics account lists, and on delivery and history destination rows.
-- Use content-shaped loading for media results and history.
-- Bound provider response bodies through the shared read helper.
-- Make the published SDK response types and the CLI's `--json` output match the served contract.
-- Settle a mutation 401 in the API client instead of at each call site.
-- Make the composer destination row match the control it renders.
-- Derive the mobile analytics account filter from the authorized overview.
-
-### Maintenance
-
-- Prepare the Android package at 0.2.63 (65) for the mobile identity, readiness, and media-preview changes in this release.
-- Consolidate shared web and native controls on one owner per concern, including the badge tone API, form field, section heading, overflow menu, empty state, inline notice, account row and select-all, async action button, clipboard helper, byte-size formatter, monogram rule, color picker and telemetry consent in `@openpost/ui`, and the editor media and audio primitives in `@openpost/editor-shared`.
-- Route shared server behavior through one owner, including the Discord webhook sender, bounded avatar fetch, credentialed-redirect policy, settings-map coercion, server-side text counter, provider feature table, and text-card option values.
-- Gate the hand-written SDK, CLI, and n8n surfaces against the served spec, and guard platform text limits and counting rules across TypeScript and Go.
-- Restore README asset and screenshot refreshes, stabilize native gallery capture, and update the pinned Alpine image and GitHub Actions group.
-
 ## [7.23.0] - 2026-10-20
 
 ### Added

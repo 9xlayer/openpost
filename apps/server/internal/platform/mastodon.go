@@ -88,6 +88,8 @@ func (m *MastodonAdapter) GetProfile(ctx context.Context, accessToken string) (*
 	return compatUserProfile(profile, FediverseSoftwareUnknown), nil
 }
 
+func (m *MastodonAdapter) AccountCapabilityKeyInput(AccountCapabilityInput) string { return "" }
+
 func (m *MastodonAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, _ AccountCapabilityInput) (AccountCapabilityResult, error) {
 	return compatPublishingCapabilities(ctx, m.compat.instanceURL, accessToken, "Mastodon", "mastodon", true)
 }
