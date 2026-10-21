@@ -43,10 +43,12 @@ var (
 type ExportOptions struct {
 	Days      int
 	AccountID string
+	// AccountIDs selects individual accounts. Empty means every account.
+	AccountIDs []string
 	// Platforms limits posts, accounts and daily trends to these platforms.
 	Platforms []string
 	GroupBy   string
-	// Metrics limits the metric columns. Empty means every metric that was measured.
+	// Metrics limits post and grouped-report columns. Empty means every measured metric.
 	Metrics  []string
 	Location *time.Location
 }
@@ -95,10 +97,15 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 	if location == nil {
 		location = time.UTC
 	}
-	platforms := map[string]bool{}
+	scope := exportScope{accountID: strings.TrimSpace(options.AccountID), accounts: map[string]bool{}, platforms: map[string]bool{}}
+	for _, id := range options.AccountIDs {
+		if id = strings.TrimSpace(id); id != "" {
+			scope.accounts[id] = true
+		}
+	}
 	for _, name := range options.Platforms {
 		if name = strings.ToLower(strings.TrimSpace(name)); name != "" {
-			platforms[name] = true
+			scope.platforms[name] = true
 		}
 	}
 	requested, err := normalizeExportMetrics(options.Metrics)
@@ -109,17 +116,17 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 	// One unpaged pass keeps the export complete without rebuilding the
 	// overview for every page of a large workspace.
 	overview, err := s.OverviewWithOptions(ctx, workspaceID, options.Days, OverviewOptions{
-		AccountID: options.AccountID, Sort: "newest", Unpaged: true,
+		AccountID: scope.accountID, Sort: "newest", Unpaged: true,
 	})
 	if err != nil {
 		return ExportDataset{}, err
 	}
-	content := filterExportContent(append([]ContentOverview(nil), overview.Content...), platforms)
+	content := filterExportContent(append([]ContentOverview(nil), overview.Content...), scope)
 	sort.SliceStable(content, func(i, j int) bool { return content[i].PublishedAt.Before(content[j].PublishedAt) })
 
 	metrics := requested
 	if len(metrics) == 0 {
-		metrics = measuredExportMetrics(content)
+		metrics = measuredContentMetrics(content)
 	}
 
 	dataset := ExportDataset{
@@ -131,8 +138,8 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 		GroupBy:     groupBy,
 		Metrics:     metrics,
 		Posts:       exportPostsTable(content, metrics, location),
-		Daily:       exportDailyTable(overview.Trends, platforms),
-		Accounts:    exportAccountsTable(overview.Accounts, platforms, location),
+		Daily:       exportDailyTable(overview.Trends, scope),
+		Accounts:    exportAccountsTable(overview.Accounts, scope, location),
 	}
 	if groupBy == ExportGroupPost {
 		dataset.Grouped = dataset.Posts
@@ -168,20 +175,29 @@ func normalizeExportMetrics(values []string) ([]string, error) {
 	return result, nil
 }
 
-func filterExportContent(content []ContentOverview, platforms map[string]bool) []ContentOverview {
-	if len(platforms) == 0 {
-		return content
-	}
-	filtered := content[:0:0]
+type exportScope struct {
+	accountID string
+	accounts  map[string]bool
+	platforms map[string]bool
+}
+
+func (scope exportScope) includes(accountID, platformName string) bool {
+	return (scope.accountID == "" || scope.accountID == accountID) &&
+		(len(scope.accounts) == 0 || scope.accounts[accountID]) &&
+		(len(scope.platforms) == 0 || scope.platforms[strings.ToLower(platformName)])
+}
+
+func filterExportContent(content []ContentOverview, scope exportScope) []ContentOverview {
+	filtered := content[:0]
 	for _, item := range content {
-		if platforms[strings.ToLower(item.Platform)] {
+		if scope.includes(item.AccountID, item.Platform) {
 			filtered = append(filtered, item)
 		}
 	}
 	return filtered
 }
 
-func measuredExportMetrics(content []ContentOverview) []string {
+func measuredContentMetrics(content []ContentOverview) []string {
 	present := map[string]bool{}
 	for _, item := range content {
 		for key := range item.Metrics {
@@ -217,11 +233,12 @@ func exportPostsTable(content []ContentOverview, metrics []string, location *tim
 		Rows:    [][]any{},
 	}
 	for _, item := range content {
-		row := []any{
+		row := make([]any, 0, 7+len(metrics))
+		row = append(row,
 			item.PublishedAt.In(location).Format("2006-01-02 15:04"),
 			firstNonEmpty(item.Title, item.Excerpt), item.Platform, item.Username, item.ContentProfile, item.ExternalURL,
 			exportEngagement(item),
-		}
+		)
 		for _, key := range metrics {
 			row = append(row, exportMetricValue(item.Metrics, key))
 		}
@@ -231,10 +248,23 @@ func exportPostsTable(content []ContentOverview, metrics []string, location *tim
 }
 
 func exportEngagement(item ContentOverview) any {
-	if item.MetricAvailability != "available" || !platform.HasEngagementMetric(item.Metrics) {
+	if item.MetricAvailability != "available" {
 		return nil
 	}
-	return item.Engagement
+	var total int64
+	measured := false
+	// An aggregate engagement value takes precedence over its components.
+	// Missing or incompatible metadata must not turn that projection into zero.
+	for _, metric := range engagementProjectionMetricNames(item.Metrics) {
+		if value, ok := compatibleCountMetricValue(item.Metrics, item.MetricMetadata, metric, platform.AnalyticsMetricAggregationLifetimeTotal); ok {
+			total += value
+			measured = true
+		}
+	}
+	if !measured {
+		return nil
+	}
+	return total
 }
 
 func exportMetricValue(values platform.AnalyticsValues, key string) any {
@@ -262,12 +292,14 @@ func exportGroupedTable(content []ContentOverview, metrics []string, groupBy str
 			buckets[key] = bucket
 		}
 		bucket.posts++
-		if item.MetricAvailability == "available" && platform.HasEngagementMetric(item.Metrics) {
-			bucket.engagement += item.Engagement
+		if engagement, ok := exportEngagement(item).(int64); ok {
+			bucket.engagement += engagement
 			bucket.measuredEng = true
 		}
 		for _, metric := range metrics {
-			if value, ok := item.Metrics[metric]; ok {
+			// Publish-date buckets can sum lifetime counters, not averages or
+			// values measured over separate provider reporting periods.
+			if value, ok := compatibleCountMetricValue(item.Metrics, item.MetricMetadata, metric, platform.AnalyticsMetricAggregationLifetimeTotal); ok {
 				bucket.metrics[metric] += value
 			}
 		}
@@ -338,7 +370,7 @@ func exportGroupKey(item ContentOverview, groupBy string, location *time.Locatio
 // exportDailyTable merges the three daily trend series on calendar day. Trend
 // days are the provider-neutral UTC days the dashboard charts use, so they do
 // not shift with the export timezone.
-func exportDailyTable(trends TrendSeries, platforms map[string]bool) ExportTable {
+func exportDailyTable(trends TrendSeries, scope exportScope) ExportTable {
 	type day struct {
 		followers, engagement, views          int64
 		hasFollowers, hasEngagement, hasViews bool
@@ -346,15 +378,18 @@ func exportDailyTable(trends TrendSeries, platforms map[string]bool) ExportTable
 	days := map[string]*day{}
 	add := func(points []DailyBreakdownPoint, apply func(*day, int64)) {
 		for _, point := range points {
-			value := point.Value
-			if len(platforms) > 0 {
-				value = 0
-				for _, item := range point.Items {
-					if platforms[strings.ToLower(item.Platform)] {
-						value += item.Value
-					}
+			var value int64
+			measured := false
+			for _, item := range point.Items {
+				if scope.includes(item.AccountID, item.Platform) {
+					value += item.Value
+					measured = true
 				}
 			}
+			if !measured {
+				continue
+			}
+
 			entry := days[point.Date]
 			if entry == nil {
 				entry = &day{}
@@ -390,13 +425,13 @@ func exportDailyTable(trends TrendSeries, platforms map[string]bool) ExportTable
 	return table
 }
 
-func exportAccountsTable(accounts []AccountOverview, platforms map[string]bool, location *time.Location) ExportTable {
+func exportAccountsTable(accounts []AccountOverview, scope exportScope, location *time.Location) ExportTable {
 	table := ExportTable{
 		Columns: []string{"Platform", "Account", "Status", "Followers", "Follower change", "Last synced"},
 		Rows:    [][]any{},
 	}
 	for _, account := range accounts {
-		if len(platforms) > 0 && !platforms[strings.ToLower(account.Platform)] {
+		if !scope.includes(account.ID, account.Platform) {
 			continue
 		}
 		row := []any{account.Platform, account.Username, account.Status, exportMetricValue(account.Metrics, platform.MetricFollowers), nil, ""}

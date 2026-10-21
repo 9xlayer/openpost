@@ -104,7 +104,7 @@
 	"analytics_export_table_daily": "日次推移",
 	"analytics_export_table_accounts": "アカウント",
 	"analytics_export_platforms": "プラットフォーム",
-	"analytics_export_metrics": "指標",
+	"analytics_export_metrics": "投稿の指標列",
 	"analytics_export_all_if_empty": "空のままにするとすべて含まれます。",
 	"analytics_export_download": "ダウンロード",
 	"analytics_export_failed": "分析をエクスポートできませんでした。",

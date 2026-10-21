@@ -8925,6 +8925,7 @@ export interface components {
             organization_id: string;
         };
         DailyBreakdownItem: {
+            account_id?: string;
             key: string;
             label: string;
             platform: string;
@@ -12527,6 +12528,7 @@ export interface components {
             account_growth_scope: "account_wide";
             accounts: components["schemas"]["AccountOverview"][] | null;
             content: components["schemas"]["ContentOverview"][] | null;
+            content_metric_keys?: string[] | null;
             content_next_cursor?: string;
             /** Format: int64 */
             content_total: number;
@@ -20414,6 +20416,8 @@ export interface operations {
                 workspace_id: string;
                 /** @description Reporting window in days (7, 30, or 90) */
                 days?: number;
+                /** @description Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied. */
+                account_ids?: string;
                 /** @description Optional social account ID to export */
                 account_id?: string;
                 /** @description Optional comma-separated platform filter, for example x,bluesky */
@@ -20426,7 +20430,7 @@ export interface operations {
                 group_by?: "post" | "day" | "week" | "month" | "platform" | "account";
                 /** @description Table to export for csv and json. report follows group_by; xlsx always includes all tables. */
                 dataset?: "report" | "posts" | "daily" | "accounts";
-                /** @description Optional comma-separated metric keys. Defaults to every measured metric. */
+                /** @description Optional comma-separated post metric columns for posts and grouped reports. Defaults to every measured metric. Daily and accounts tables retain their fixed columns. */
                 metrics?: string;
             };
             header?: never;

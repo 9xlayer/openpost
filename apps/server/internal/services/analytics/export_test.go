@@ -31,10 +31,14 @@ func TestExportGroupKeyFollowsTimezone(t *testing.T) {
 func TestExportGroupedTableKeepsUnmeasuredMetricsEmpty(t *testing.T) {
 	published := time.Date(2026, time.October, 1, 10, 0, 0, 0, time.UTC)
 	content := []ContentOverview{
-		{Platform: "x", PublishedAt: published, MetricAvailability: "available", Engagement: 10, Metrics: platform.AnalyticsValues{"views": 100, "likes": 0}},
-		{Platform: "x", PublishedAt: published, MetricAvailability: "available", Engagement: 5, Metrics: platform.AnalyticsValues{"views": 50, "likes": 0}},
+		{Platform: "x", PublishedAt: published, MetricAvailability: "available", Engagement: 10, Metrics: platform.AnalyticsValues{"views": 100, "likes": 0, "comments": 10}},
+		{Platform: "x", PublishedAt: published, MetricAvailability: "available", Engagement: 5, Metrics: platform.AnalyticsValues{"views": 50, "likes": 0, "comments": 5}},
 		{Platform: "bluesky", PublishedAt: published, MetricAvailability: "pending"},
 		{Platform: "threads", PublishedAt: published, MetricAvailability: "available", Metrics: platform.AnalyticsValues{"views": 7}},
+	}
+
+	for i := range content {
+		content[i].MetricMetadata = legacyMetricMetadata(content[i].Metrics, platform.AnalyticsMetricSubjectContent, content[i].Platform)
 	}
 
 	table := exportGroupedTable(content, []string{"views", "likes"}, ExportGroupPlatform, time.UTC)
@@ -58,4 +62,37 @@ func TestNormalizeExportGroupBy(t *testing.T) {
 func TestUnpagedOverviewRejectsCursor(t *testing.T) {
 	_, err := (&Service{}).OverviewWithOptions(t.Context(), "ws-1", 30, OverviewOptions{Unpaged: true, Cursor: "stale"})
 	require.ErrorIs(t, err, ErrInvalidOverviewCursor)
+}
+
+func TestExportDailyFilteringDoesNotInventMeasurements(t *testing.T) {
+	trends := TrendSeries{
+		Engagement: []DailyBreakdownPoint{{Date: "2026-10-01", Value: 3, Items: []DailyBreakdownItem{{Platform: "bluesky", Value: 3}}}},
+		Views:      []DailyBreakdownPoint{{Date: "2026-10-01", Value: 12, Items: []DailyBreakdownItem{{Platform: "youtube", Value: 12}}}},
+	}
+	table := exportDailyTable(trends, exportScope{platforms: map[string]bool{"bluesky": true}})
+	require.Equal(t, [][]any{{"2026-10-01", nil, int64(3), nil}}, table.Rows)
+}
+
+func TestExportGroupedTableDoesNotSumAverages(t *testing.T) {
+	metadata := map[string]platform.AnalyticsMetricMetadata{"average_view_percentage": {Unit: platform.AnalyticsMetricUnitBasisPoints, Aggregation: platform.AnalyticsMetricAggregationReportingPeriodAverage}}
+	content := []ContentOverview{
+		{Platform: "youtube", Metrics: platform.AnalyticsValues{"average_view_percentage": 8000}, MetricMetadata: metadata},
+		{Platform: "youtube", Metrics: platform.AnalyticsValues{"average_view_percentage": 8000}, MetricMetadata: metadata},
+	}
+	table := exportGroupedTable(content, []string{"average_view_percentage"}, ExportGroupPlatform, time.UTC)
+	require.Equal(t, [][]any{{"youtube", 2, nil, nil}}, table.Rows, "an average cannot be summed or averaged without its weights")
+	posts := exportPostsTable(content, []string{"average_view_percentage"}, time.UTC)
+	require.Equal(t, int64(8000), posts.Rows[0][7], "per-post source values remain available")
+}
+
+func TestExportEngagementRequiresCompatibleProjection(t *testing.T) {
+	content := []ContentOverview{
+		{Platform: "facebook", MetricAvailability: "available", Metrics: platform.AnalyticsValues{"views": 10, "reactions": 3, "engagements": 999}, MetricMetadata: map[string]platform.AnalyticsMetricMetadata{"views": {Unit: platform.AnalyticsMetricUnitCount, Aggregation: platform.AnalyticsMetricAggregationLifetimeTotal}, "reactions": {Unit: platform.AnalyticsMetricUnitCount, Aggregation: platform.AnalyticsMetricAggregationLifetimeTotal}}},
+		{Platform: "facebook", MetricAvailability: "available", Metrics: platform.AnalyticsValues{"likes": 0}, MetricMetadata: map[string]platform.AnalyticsMetricMetadata{"likes": {Unit: platform.AnalyticsMetricUnitCount, Aggregation: platform.AnalyticsMetricAggregationLifetimeTotal}}},
+	}
+	posts := exportPostsTable(content, nil, time.UTC)
+	require.Nil(t, posts.Rows[0][6], "an unsupported aggregate engagement projection is not a measured zero")
+	require.Equal(t, int64(0), posts.Rows[1][6], "compatible measured zero remains zero")
+	grouped := exportGroupedTable(content, nil, ExportGroupPlatform, time.UTC)
+	require.Equal(t, int64(0), grouped.Rows[0][2], "only compatible lifetime engagement contributes")
 }

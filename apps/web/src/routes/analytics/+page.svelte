@@ -121,12 +121,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				: ''
 	);
 	const contentItems = $derived(overview?.content ?? []);
-	const exportPlatforms = $derived(
-		[...new Set(accounts.map((account) => account.platform))].sort()
-	);
-	const exportMetrics = $derived(
-		[...new Set(contentItems.flatMap((item) => Object.keys(item.metrics ?? {})))].sort()
-	);
+	const exportMetrics = $derived(overview?.content_metric_keys ?? []);
 	const analyticsInsights = $derived(overview?.insights ?? []);
 	const selectedAccount = $derived(
 		queryAccountID === 'all'
@@ -635,7 +630,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	workspaceId={currentWorkspaceID}
 	days={rangeDays}
 	accountId={queryAccountID === 'all' ? '' : queryAccountID}
-	platforms={exportPlatforms}
+	{accounts}
 	metrics={exportMetrics}
 />
 

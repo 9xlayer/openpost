@@ -31,7 +31,7 @@ func dailyFollowerTrend(accounts []AccountOverview, accountID string) []DailyBre
 				continue
 			}
 			byDate[current.Date] = append(byDate[current.Date], DailyBreakdownItem{
-				Key: account.ID, Label: account.Username, Platform: account.Platform, Value: delta,
+				AccountID: account.ID, Key: account.ID, Label: account.Username, Platform: account.Platform, Value: delta,
 			})
 		}
 	}
@@ -220,7 +220,7 @@ func appendRenditionTrend(
 		}
 		date := snapshot.CapturedAt.UTC().Format("2006-01-02")
 		item := DailyBreakdownItem{
-			Key: snapshot.RenditionID, Label: label, Platform: snapshot.Platform,
+			AccountID: snapshot.SocialAccountID, Key: snapshot.RenditionID, Label: label, Platform: snapshot.Platform,
 			PublicationID: snapshot.PublicationID,
 		}
 		var engagementDelta int64

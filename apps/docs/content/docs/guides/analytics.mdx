@@ -24,15 +24,18 @@ Open a content row or insight to see the posts behind it. Compare similar format
 
 ## Export your analytics
 
-Choose **Export** to download the data behind the page for the selected date range and account.
+Choose **Export** to download the data behind the page for the selected date range. The account filter starts with the account selected on the page.
 
 - **Format.** CSV opens in any spreadsheet or script. Excel includes every table plus charts. JSON is for tools.
 - **Timezone.** Publish times and day, week, and month groups use the timezone you choose. Daily trend rows always use UTC calendar days, like the charts.
 - **Group rows by.** Keep one row per post, or total the results by day, week, month, platform, or account.
 - **Table.** For CSV and JSON, choose the grouped report, posts, daily trends, or accounts. Excel always contains all of them.
-- **Platforms and metrics.** Leave both empty to include everything that was measured.
+- **Accounts.** Select accounts by their avatar, platform, and handle, including multiple accounts on the same platform. Choose **All accounts** to remove the account filter. Your selection applies to every table.
+- **Post metric columns.** Choose the metric columns for the report and posts tables. Leave the selection empty to include every measured metric across the full range. Daily trends and accounts keep their own columns.
 
-A blank cell means the provider did not report that measurement. It is not zero. Scripts can use the same export through `GET /analytics/export` in the [API reference](/api-reference).
+Totals grouped by date, platform, or account sum lifetime counters. Provider averages and reporting-period measurements remain available in the posts table, but stay blank in grouped reports because they cannot be summed by publication date. Per-post values retain their stored integer units, including milliseconds for durations and basis points for percentages.
+
+A blank cell means the measurement is missing or cannot be aggregated for that report. It is not zero. Scripts with `api:read` access can use `GET /analytics/export`. Pass comma-separated `account_ids` to select accounts, and `platforms` to limit platforms. See the [API reference](/api-reference).
 
 ## Update or investigate missing data
 

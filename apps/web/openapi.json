@@ -5716,6 +5716,9 @@
 			"DailyBreakdownItem": {
 				"additionalProperties": false,
 				"properties": {
+					"account_id": {
+						"type": "string"
+					},
 					"key": {
 						"type": "string"
 					},
@@ -14415,6 +14418,12 @@
 					"content": {
 						"items": {
 							"$ref": "#/components/schemas/ContentOverview"
+						},
+						"type": ["array", "null"]
+					},
+					"content_metric_keys": {
+						"items": {
+							"type": "string"
 						},
 						"type": ["array", "null"]
 					},
@@ -30734,6 +30743,16 @@
 						}
 					},
 					{
+						"description": "Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied.",
+						"explode": false,
+						"in": "query",
+						"name": "account_ids",
+						"schema": {
+							"description": "Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied.",
+							"type": "string"
+						}
+					},
+					{
 						"description": "Optional social account ID to export",
 						"explode": false,
 						"in": "query",
@@ -30801,12 +30820,12 @@
 						}
 					},
 					{
-						"description": "Optional comma-separated metric keys. Defaults to every measured metric.",
+						"description": "Optional comma-separated post metric columns for posts and grouped reports. Defaults to every measured metric. Daily and accounts tables retain their fixed columns.",
 						"explode": false,
 						"in": "query",
 						"name": "metrics",
 						"schema": {
-							"description": "Optional comma-separated metric keys. Defaults to every measured metric.",
+							"description": "Optional comma-separated post metric columns for posts and grouped reports. Defaults to every measured metric. Daily and accounts tables retain their fixed columns.",
 							"type": "string"
 						}
 					}
@@ -30892,7 +30911,14 @@
 					}
 				},
 				"summary": "Export stored analytics as CSV, Excel, or JSON",
-				"tags": ["Analytics"]
+				"tags": ["Analytics"],
+				"x-openpost-automation": {
+					"access": "read",
+					"effect": "query",
+					"exposure": "disabled",
+					"idempotency": "none",
+					"retry": "transient"
+				}
 			}
 		},
 		"/analytics/refresh": {

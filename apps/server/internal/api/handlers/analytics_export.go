@@ -27,13 +27,14 @@ const (
 type ExportAnalyticsInput struct {
 	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID"`
 	Days        int    `query:"days" default:"30" doc:"Reporting window in days (7, 30, or 90)"`
+	AccountIDs  string `query:"account_ids" doc:"Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied."`
 	AccountID   string `query:"account_id" doc:"Optional social account ID to export"`
 	Platforms   string `query:"platforms" doc:"Optional comma-separated platform filter, for example x,bluesky"`
 	Format      string `query:"format" default:"csv" enum:"csv,xlsx,json" doc:"File format. xlsx contains every table plus charts."`
 	Timezone    string `query:"timezone" default:"UTC" doc:"IANA timezone used for publish times and day, week and month grouping"`
 	GroupBy     string `query:"group_by" default:"post" enum:"post,day,week,month,platform,account" doc:"Row grouping for the report"`
 	Dataset     string `query:"dataset" default:"report" enum:"report,posts,daily,accounts" doc:"Table to export for csv and json. report follows group_by; xlsx always includes all tables."`
-	Metrics     string `query:"metrics" doc:"Optional comma-separated metric keys. Defaults to every measured metric."`
+	Metrics     string `query:"metrics" doc:"Optional comma-separated post metric columns for posts and grouped reports. Defaults to every measured metric. Daily and accounts tables retain their fixed columns."`
 }
 
 type ExportAnalyticsOutput struct {
@@ -72,12 +73,13 @@ func (h *AnalyticsHandler) registerExportRoute(api huma.API) {
 			return nil, huma.Error400BadRequest("timezone must be an IANA timezone such as Europe/Rome")
 		}
 		dataset, err := h.service.BuildExport(ctx, input.WorkspaceID, analyticsservice.ExportOptions{
-			Days:      input.Days,
-			AccountID: input.AccountID,
-			Platforms: splitList(input.Platforms),
-			GroupBy:   input.GroupBy,
-			Metrics:   splitList(input.Metrics),
-			Location:  location,
+			Days:       input.Days,
+			AccountID:  input.AccountID,
+			AccountIDs: splitList(input.AccountIDs),
+			Platforms:  splitList(input.Platforms),
+			GroupBy:    input.GroupBy,
+			Metrics:    splitList(input.Metrics),
+			Location:   location,
 		})
 		if errors.Is(err, analyticsservice.ErrInvalidExportOptions) {
 			return nil, huma.Error400BadRequest("invalid analytics export options")
@@ -228,9 +230,11 @@ func analyticsExportWorkbook(dataset analyticsservice.ExportDataset) ([]byte, er
 		{"Posts exported", len(dataset.Posts.Rows)},
 		{},
 		{"Notes"},
-		{"Empty cells mean the provider did not report that metric. They are not zero."},
+		{"Empty cells mean a missing measurement or a metric that cannot be aggregated. They are not zero."},
 		{"Publish times and day, week and month groups use the selected timezone."},
 		{"Daily trends use UTC calendar days, as the Analytics charts do."},
+		{"Grouped reports sum lifetime counters; averages and reporting-period measurements remain in Posts."},
+		{"Post values retain stored integer units, including milliseconds and basis points."},
 	}
 	for index, row := range rows {
 		cell, _ := excelize.CoordinatesToCellName(1, index+1)

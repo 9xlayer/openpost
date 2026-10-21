@@ -104,7 +104,7 @@
 	"analytics_export_table_daily": "Tagesverlauf",
 	"analytics_export_table_accounts": "Konten",
 	"analytics_export_platforms": "Plattformen",
-	"analytics_export_metrics": "Kennzahlen",
+	"analytics_export_metrics": "Messwertspalten für Beiträge",
 	"analytics_export_all_if_empty": "Leer lassen, um alle einzubeziehen.",
 	"analytics_export_download": "Herunterladen",
 	"analytics_export_failed": "Die Analysen konnten nicht exportiert werden.",

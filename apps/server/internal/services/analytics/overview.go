@@ -43,6 +43,7 @@ type SeriesPoint struct {
 }
 
 type DailyBreakdownItem struct {
+	AccountID     string `json:"account_id,omitempty"`
 	Key           string `json:"key"`
 	Label         string `json:"label"`
 	Platform      string `json:"platform"`
@@ -136,17 +137,19 @@ type PublicationOverview struct {
 }
 
 type Overview struct {
-	GeneratedAt        time.Time             `json:"generated_at"`
-	LastSyncedAt       time.Time             `json:"last_synced_at,omitempty"`
-	RangeDays          int                   `json:"range_days"`
-	Summary            Summary               `json:"summary"`
-	Accounts           []AccountOverview     `json:"accounts"`
-	FollowerSeries     []SeriesPoint         `json:"follower_series"`
-	Trends             TrendSeries           `json:"trends"`
-	Publications       []PublicationOverview `json:"publications"`
-	Content            []ContentOverview     `json:"content"`
-	Insights           []Insight             `json:"insights"`
-	AccountGrowthScope string                `json:"account_growth_scope" enum:"account_wide"`
+	GeneratedAt    time.Time             `json:"generated_at"`
+	LastSyncedAt   time.Time             `json:"last_synced_at,omitempty"`
+	RangeDays      int                   `json:"range_days"`
+	Summary        Summary               `json:"summary"`
+	Accounts       []AccountOverview     `json:"accounts"`
+	FollowerSeries []SeriesPoint         `json:"follower_series"`
+	Trends         TrendSeries           `json:"trends"`
+	Publications   []PublicationOverview `json:"publications"`
+	Content        []ContentOverview     `json:"content"`
+	// ContentMetricKeys covers the complete filtered population, independent of pagination.
+	ContentMetricKeys  []string  `json:"content_metric_keys,omitempty"`
+	Insights           []Insight `json:"insights"`
+	AccountGrowthScope string    `json:"account_growth_scope" enum:"account_wide"`
 	// PublicationTotal is the distinct-post count behind Content: the number
 	// of publications with at least one published rendition in range. It is
 	// the field to compare against the Posts "Published" tab (after aligning
@@ -238,6 +241,7 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 	}
 	result.Insights = buildOverviewInsights(insightContent, result.Accounts, options.AccountID, start, now)
 	orderContentOverviews(allContent, options.Sort)
+	result.ContentMetricKeys = measuredContentMetrics(allContent)
 	result.ContentTotal = len(allContent)
 	result.PublicationTotal = uniquePublicationCount(allContent)
 	contentSummary := summarizeWholeAccountContent(allContent)

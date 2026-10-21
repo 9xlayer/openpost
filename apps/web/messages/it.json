@@ -104,7 +104,7 @@
 	"analytics_export_table_daily": "Andamento giornaliero",
 	"analytics_export_table_accounts": "Account",
 	"analytics_export_platforms": "Piattaforme",
-	"analytics_export_metrics": "Metriche",
+	"analytics_export_metrics": "Colonne delle metriche dei post",
 	"analytics_export_all_if_empty": "Lascia vuoto per includere tutto.",
 	"analytics_export_download": "Scarica",
 	"analytics_export_failed": "Impossibile esportare le analisi.",

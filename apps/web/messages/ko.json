@@ -104,7 +104,7 @@
 	"analytics_export_table_daily": "일별 추이",
 	"analytics_export_table_accounts": "계정",
 	"analytics_export_platforms": "플랫폼",
-	"analytics_export_metrics": "지표",
+	"analytics_export_metrics": "게시물 지표 열",
 	"analytics_export_all_if_empty": "비워 두면 모두 포함됩니다.",
 	"analytics_export_download": "다운로드",
 	"analytics_export_failed": "분석을 내보내지 못했습니다.",

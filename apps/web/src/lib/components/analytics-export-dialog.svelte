@@ -1,4 +1,6 @@
 <script lang="ts">
+	import AsyncActionButton from '$lib/components/async-action-button.svelte';
+	import AccountPickerRow from '$lib/components/account-picker/row.svelte';
 	import { client } from '$lib/api/client';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
@@ -6,10 +8,9 @@
 	import { Label } from '$lib/components/ui/label';
 	import * as Select from '$lib/components/ui/select';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
-	import { ThemeIcon } from '$lib/themes/icons';
 	import { analyticsMetricLabel } from '$lib/analytics-metric-label';
 	import { m } from '$lib/paraglide/messages';
-	import { getPlatformName } from '$lib/utils';
+	import { formatSocialAccountName } from '$lib/utils';
 
 	type ExportFormat = 'csv' | 'xlsx' | 'json';
 	type GroupBy = 'post' | 'day' | 'week' | 'month' | 'platform' | 'account';
@@ -20,9 +21,9 @@
 		workspaceId: string;
 		days: number;
 		accountId?: string;
-		/** Platforms that can be selected, from the connected accounts. */
-		platforms: string[];
-		/** Metric keys measured in the loaded content. */
+		/** Connected account identities, including multiple accounts per platform. */
+		accounts: { id: string; username: string; platform: string; avatar_url?: string | null }[];
+		/** Metric keys measured across the full filtered population. */
 		metrics: string[];
 		onExported?: () => void;
 	}
@@ -32,7 +33,7 @@
 		workspaceId,
 		days,
 		accountId = '',
-		platforms,
+		accounts,
 		metrics,
 		onExported
 	}: Props = $props();
@@ -61,10 +62,18 @@
 	let groupBy = $state<GroupBy>('day');
 	let dataset = $state<Dataset>('report');
 	// Empty selections mean "everything", so the default export needs no setup.
-	let selectedPlatforms = $state<string[]>([]);
+	let selectedAccounts = $state<string[]>([]);
 	let selectedMetrics = $state<string[]>([]);
 	let exporting = $state(false);
 	let error = $state('');
+
+	$effect(() => {
+		if (open) {
+			selectedAccounts = accountId ? [accountId] : [];
+			error = '';
+			selectedMetrics = [];
+		}
+	});
 
 	const formatOptions = $derived([
 		{ value: 'csv' as const, label: m.analytics_export_format_csv() },
@@ -121,13 +130,15 @@
 					query: {
 						workspace_id: workspaceId,
 						days,
-						account_id: accountId || undefined,
+						account_ids: selectedAccounts.join(',') || undefined,
 						format,
 						timezone,
 						group_by: groupBy,
 						dataset,
-						platforms: selectedPlatforms.join(',') || undefined,
-						metrics: selectedMetrics.join(',') || undefined
+						metrics:
+							format === 'xlsx' || dataset === 'report' || dataset === 'posts'
+								? selectedMetrics.join(',') || undefined
+								: undefined
 					}
 				},
 				parseAs: 'blob'
@@ -236,35 +247,43 @@
 				</div>
 			{/if}
 
-			{#if platforms.length > 1}
-				<fieldset class="space-y-2">
-					<legend class="text-sm font-medium">{m.analytics_export_platforms()}</legend>
-					<p class="text-xs text-muted-foreground">{m.analytics_export_all_if_empty()}</p>
-					<div class="grid gap-2 sm:grid-cols-2">
-						{#each platforms as platform (platform)}
-							<div class="flex min-h-9 items-center gap-2">
-								<Checkbox
-									id={`analytics-export-platform-${platform}`}
-									checked={selectedPlatforms.includes(platform)}
-									onCheckedChange={(checked) =>
-										(selectedPlatforms = toggle(selectedPlatforms, platform, checked === true))}
-								/>
-								<Label for={`analytics-export-platform-${platform}`} class="font-normal">
-									{getPlatformName(platform)}
-								</Label>
-							</div>
+			{#if accounts.length > 0}
+				<fieldset class="min-w-0 space-y-2">
+					<legend class="text-sm font-medium">{m.analytics_export_table_accounts()}</legend>
+					<label class="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+						<Checkbox
+							checked={selectedAccounts.length === 0}
+							onCheckedChange={() => (selectedAccounts = [])}
+						/>
+						<span>{m.analytics_all_accounts()}</span>
+					</label>
+					<div class="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+						{#each accounts as account (account.id)}
+							<AccountPickerRow
+								name={formatSocialAccountName(account.username, account.platform) ||
+									account.platform}
+								platform={account.platform}
+								avatarUrl={account.avatar_url}
+								selected={selectedAccounts.includes(account.id)}
+								onToggle={() =>
+									(selectedAccounts = toggle(
+										selectedAccounts,
+										account.id,
+										!selectedAccounts.includes(account.id)
+									))}
+							/>
 						{/each}
 					</div>
 				</fieldset>
 			{/if}
 
-			{#if metrics.length > 0}
-				<fieldset class="space-y-2">
+			{#if metrics.length > 0 && (format === 'xlsx' || dataset === 'report' || dataset === 'posts')}
+				<fieldset class="min-w-0 space-y-2">
 					<legend class="text-sm font-medium">{m.analytics_export_metrics()}</legend>
 					<p class="text-xs text-muted-foreground">{m.analytics_export_all_if_empty()}</p>
-					<div class="grid gap-2 sm:grid-cols-2">
+					<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
 						{#each metrics as metric (metric)}
-							<div class="flex min-h-9 items-center gap-2">
+							<div class="flex min-h-11 items-center gap-2">
 								<Checkbox
 									id={`analytics-export-metric-${metric}`}
 									checked={selectedMetrics.includes(metric)}
@@ -288,10 +307,12 @@
 			<Button type="button" variant="outline" onclick={() => (open = false)}>
 				{m.common_cancel()}
 			</Button>
-			<Button type="button" disabled={exporting || !workspaceId} onclick={download}>
-				<ThemeIcon role="download" class="size-4" />
-				{m.analytics_export_download()}
-			</Button>
+			<AsyncActionButton
+				label={m.analytics_export_download()}
+				icon="download"
+				disabled={!workspaceId}
+				onclick={download}
+			/>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
