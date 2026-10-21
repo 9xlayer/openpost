@@ -32,6 +32,10 @@
 	} = $props();
 
 	const kind = $derived(mediaThumbKind(item.mime_type));
+	const thumbnailURL = $derived.by(() => {
+		const selected = mediaThumbnailURL(item);
+		return selected ? getAuthenticatedMediaURL(selected) : '';
+	});
 	const stillURL = $derived.by(() => {
 		if (kind !== 'image' && kind !== 'video') return '';
 		const selected = still || mediaThumbnailURL(item);
@@ -58,6 +62,12 @@
 	function handleError(event: Event): void {
 		const image = event.currentTarget;
 		if (!(image instanceof HTMLImageElement)) return;
+		if (shownURL && shownURL !== thumbnailURL && shownURL !== originalURL) {
+			// The tier override (e.g. a larger still) is missing; fall back to the
+			// item's own thumbnail before the full original.
+			shownURL = thumbnailURL || originalURL;
+			return;
+		}
 		if (!retriedOriginal && shownURL && shownURL !== originalURL) {
 			retriedOriginal = true;
 			shownURL = originalURL;
