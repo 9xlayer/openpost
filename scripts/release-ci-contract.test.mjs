@@ -59,16 +59,20 @@ test("release candidate requires every independent CI job", () => {
   );
 });
 
-test("n8n recovery dispatch keeps app deployment out of the job graph", () => {
+test("package recovery dispatch keeps app deployment out of the job graph", () => {
   const workflow = load(release);
-  assert.deepEqual(workflow.on.workflow_dispatch.inputs.package.options, ["n8n"]);
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.package.options, ["n8n", "sdk"]);
   assert.equal(workflow.jobs["verify-candidate"].if, "github.event_name == 'push'");
   assert.equal(
     workflow.jobs["publish-n8n"].if,
     "!cancelled() && (needs.promote-image.result == 'success' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.package == 'n8n'))",
   );
+  assert.equal(
+    workflow.jobs["publish-sdk"].if,
+    "!cancelled() && (needs.promote-image.result == 'success' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.package == 'sdk'))",
+  );
   for (const [name, job] of Object.entries(workflow.jobs)) {
-    if (name === "verify-candidate" || name === "publish-n8n") continue;
+    if (name === "verify-candidate" || name === "publish-n8n" || name === "publish-sdk") continue;
     assert.ok(job.needs, `${name} must remain downstream of the release gate`);
     assert.ok(!job.if?.includes("always()"), `${name} must not run after skipped needs`);
   }
