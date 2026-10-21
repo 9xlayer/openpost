@@ -6,6 +6,57 @@ import {
 } from './account-management-route';
 
 describe('account management route URL interpretation', () => {
+	it('shows the failed callback stage and bounded provider diagnostics once', () => {
+		const url = new URL(
+			'https://openpost.test/settings?tab=accounts&oauth_status=failed&oauth_reason=profile_fetch_failed&workspace_id=workspace-62'
+		);
+		url.searchParams.set('oauth_diagnostic', 'HTTP 400; code=100; subcode=33; trace=trace-safe');
+		const state = interpretAccountManagementURL(url);
+		expect(state).toEqual({
+			feedback: {
+				kind: 'profile_fetch_failed',
+				diagnostic: 'HTTP 400; code=100; subcode=33; trace=trace-safe'
+			},
+			workspaceID: 'workspace-62',
+			cleanHref: '/settings?tab=accounts'
+		});
+		expect(presentAccountManagementFeedback(state.feedback)).toEqual({
+			tone: 'error',
+			message:
+				'OpenPost could not read the provider profile. Check the app permissions and account eligibility, then reconnect. HTTP 400; code=100; subcode=33; trace=trace-safe.'
+		});
+	});
+
+	it.each([
+		'profile=secret-token',
+		'access_token=secret-token',
+		'HTTP 400; code=<script>alert(1)</script>',
+		'HTTP 400; trace=' + 'a'.repeat(97),
+		'HTTP 400\naccess_token=secret-token'
+	])('discards untrusted callback diagnostic text: %s', (diagnostic) => {
+		const url = new URL(
+			'https://openpost.test/settings?tab=accounts&oauth_status=failed&oauth_reason=profile_fetch_failed'
+		);
+		url.searchParams.set('oauth_diagnostic', diagnostic);
+		const state = interpretAccountManagementURL(url);
+		expect(state.cleanHref).toBe('/settings?tab=accounts');
+		expect(presentAccountManagementFeedback(state.feedback)?.message).not.toContain(diagnostic);
+	});
+
+	it.each([
+		'profile=invalid_response',
+		'profile=invalid_user_id',
+		'profile=professional_account_required'
+	])('preserves controlled profile diagnostics: %s', (diagnostic) => {
+		const url = new URL(
+			'https://openpost.test/settings?tab=accounts&oauth_status=failed&oauth_reason=profile_fetch_failed'
+		);
+		url.searchParams.set('oauth_diagnostic', diagnostic);
+		const state = interpretAccountManagementURL(url);
+		expect(state.cleanHref).toBe('/settings?tab=accounts');
+		expect(presentAccountManagementFeedback(state.feedback)?.message).toContain(diagnostic);
+	});
+
 	it('keeps Settings navigation in place while consuming scoped OAuth feedback', () => {
 		expect(
 			interpretAccountManagementURL(

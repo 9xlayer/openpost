@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"testing"
@@ -23,6 +26,7 @@ import (
 type directOAuthTestAdapter struct {
 	tokenUserID string
 	profileID   string
+	exchangeErr error
 }
 
 func (a *directOAuthTestAdapter) GenerateAuthURL(state string) (string, map[string]string) {
@@ -30,6 +34,9 @@ func (a *directOAuthTestAdapter) GenerateAuthURL(state string) (string, map[stri
 }
 
 func (a *directOAuthTestAdapter) ExchangeCode(context.Context, string, map[string]string) (*platform.TokenResult, error) {
+	if a.exchangeErr != nil {
+		return nil, a.exchangeErr
+	}
 	token := &platform.TokenResult{AccessToken: "access-token", TokenType: "Bearer"}
 	if a.tokenUserID != "" {
 		token.Extra = map[string]string{"user_id": a.tokenUserID}
@@ -57,6 +64,50 @@ func (a *directOAuthTestAdapter) GetProfile(context.Context, string) (*platform.
 	}, nil
 }
 
+func TestOAuthCallbackFailuresPreserveSafeDiagnostics(t *testing.T) {
+	// The wrapper deliberately contains credentials. Only typed provider metadata
+	// may cross the redirect or log boundary.
+	cause := fmt.Errorf("access_token=secret-token code=secret-code: %w", &platform.HTTPError{
+		StatusCode: 400, Code: "100", Subcode: "33", TraceID: "trace-safe",
+	})
+	for _, tc := range []struct {
+		name, reason, mode, diagnostic string
+		adapter                        platform.Adapter
+	}{
+		{"exchange", "token_exchange_failed", "", "HTTP 400; code=100; subcode=33; trace=trace-safe", &directOAuthTestAdapter{exchangeErr: cause}},
+		{"profile", "profile_fetch_failed", "instagram_login", "HTTP 400; code=100; subcode=33; trace=trace-safe", &instagramLoginTestAdapter{profileErr: cause}},
+		{"selection", "account_selection_failed", "", "HTTP 400; code=100; subcode=33; trace=trace-safe", &selectionTestAdapter{listErr: cause}},
+		{"invalid profile", "profile_fetch_failed", "instagram_login", "profile=invalid_response", &instagramLoginTestAdapter{profileErr: platform.ErrInstagramLoginInvalidProfile}},
+		{"invalid user ID", "profile_fetch_failed", "instagram_login", "profile=invalid_user_id", &instagramLoginTestAdapter{profileErr: platform.ErrInstagramLoginInvalidUserID}},
+		{"personal account", "profile_fetch_failed", "instagram_login", "profile=professional_account_required", &instagramLoginTestAdapter{profileErr: platform.ErrInstagramLoginProfessionalAccount}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			previous := log.Writer()
+			log.SetOutput(&logs)
+			t.Cleanup(func() { log.SetOutput(previous) })
+			e, state, db := newOAuthCallbackRedirectTestServer(t, "instagram", tc.adapter, tc.mode)
+			rec := oauthSelectionRequest(t, e, http.MethodGet, "/api/v1/accounts/instagram/callback?code=secret-code&state="+url.QueryEscape(state), nil, true)
+			require.Equal(t, http.StatusTemporaryRedirect, rec.Code)
+			location, err := url.Parse(rec.Header().Get("Location"))
+			require.NoError(t, err)
+			require.Equal(t, "ws-1", location.Query().Get("workspace_id"))
+			require.Equal(t, tc.reason, location.Query().Get("oauth_reason"))
+			require.Equal(t, tc.diagnostic, location.Query().Get("oauth_diagnostic"))
+			require.Contains(t, logs.String(), tc.reason)
+			require.Contains(t, logs.String(), tc.diagnostic)
+			for _, secret := range []string{"secret-token", "secret-code"} {
+				require.NotContains(t, rec.Header().Get("Location")+logs.String(), secret)
+			}
+			for _, model := range []any{(*models.SocialAccount)(nil), (*models.OAuthAccountSelection)(nil)} {
+				count, err := db.NewSelect().Model(model).Count(t.Context())
+				require.NoError(t, err)
+				require.Zero(t, count)
+			}
+		})
+	}
+}
+
 func TestThreadsOAuthCallbackRejectsTokenAndProfileIdentityMismatch(t *testing.T) {
 	t.Parallel()
 
@@ -69,7 +120,7 @@ func TestThreadsOAuthCallbackRejectsTokenAndProfileIdentityMismatch(t *testing.T
 	t.Cleanup(func() { _ = result.Body.Close() })
 
 	require.Equal(t, http.StatusTemporaryRedirect, result.StatusCode)
-	require.Equal(t, "https://app.openpost.test/settings?oauth_status=failed&tab=accounts&workspace_id=ws-1", result.Header.Get("Location"))
+	require.Equal(t, "https://app.openpost.test/settings?oauth_reason=identity_mismatch&oauth_status=failed&tab=accounts&workspace_id=ws-1", result.Header.Get("Location"))
 
 	count, err := db.NewSelect().Model((*models.SocialAccount)(nil)).Count(t.Context())
 	require.NoError(t, err)
@@ -217,7 +268,7 @@ func TestXOAuthCallbackDenialPreservesWorkspaceScope(t *testing.T) {
 	require.Equal(t, "https://app.openpost.test/settings?oauth_status=cancelled&tab=accounts&workspace_id=ws-1", result.Header.Get("Location"))
 }
 
-func newOAuthCallbackRedirectTestServer(t *testing.T, providerName string, adapter platform.Adapter) (*echo.Echo, string, *bun.DB) {
+func newOAuthCallbackRedirectTestServer(t *testing.T, providerName string, adapter platform.Adapter, modes ...string) (*echo.Echo, string, *bun.DB) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -240,6 +291,14 @@ func newOAuthCallbackRedirectTestServer(t *testing.T, providerName string, adapt
 	api := humaecho.NewWithGroup(e, e.Group("/api/v1"), huma.DefaultConfig("Test", "1.0.0"))
 	providerKey := providerName
 	providerConfig := platform.AppConfig{Provider: providerName, ClientID: providerName + "-app"}
+	authParams := url.Values{"workspace_id": {"ws-1"}}
+	if len(modes) > 0 && modes[0] != "" {
+		providerConfig.ConnectionMode = modes[0]
+		providerConfig.ClientSecret = "client-secret"
+		providerConfig.RedirectURI = "https://app.openpost.test/api/v1/accounts/" + providerName + "/callback"
+		providerKey += ":" + modes[0]
+		authParams.Set("connection_mode", modes[0])
+	}
 	if providerName == "discord" {
 		providerKey = "discord:bot"
 		providerConfig = platform.AppConfig{
@@ -259,7 +318,7 @@ func newOAuthCallbackRedirectTestServer(t *testing.T, providerName string, adapt
 	handler.GetAuthURL(api)
 	handler.Callback(api)
 
-	authURLResp := oauthSelectionRequest(t, e, http.MethodGet, "/api/v1/accounts/"+providerName+"/auth-url?workspace_id=ws-1", nil, true)
+	authURLResp := oauthSelectionRequest(t, e, http.MethodGet, "/api/v1/accounts/"+providerName+"/auth-url?"+authParams.Encode(), nil, true)
 	require.Equal(t, http.StatusOK, authURLResp.Code, authURLResp.Body.String())
 	var authURLBody struct {
 		URL string `json:"url"`

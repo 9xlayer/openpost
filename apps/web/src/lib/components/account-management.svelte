@@ -1572,6 +1572,7 @@
 		<InlineNotice
 			tone={feedback.tone}
 			message={feedback.message}
+			class="[overflow-wrap:anywhere]"
 			dismissLabel={m.common_dismiss()}
 			onDismiss={onFeedbackDismiss}
 		/>

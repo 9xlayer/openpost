@@ -17,9 +17,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type instagramLoginTestAdapter struct{ selectionTestAdapter }
+type instagramLoginTestAdapter struct {
+	selectionTestAdapter
+	profileErr error
+}
 
-func (*instagramLoginTestAdapter) GetProfile(context.Context, string) (*platform.UserProfile, error) {
+func (a *instagramLoginTestAdapter) ExchangeCode(ctx context.Context, code string, extra map[string]string) (*platform.TokenResult, error) {
+	token, err := a.selectionTestAdapter.ExchangeCode(ctx, code, extra)
+	if err == nil {
+		token.Extra["user_id"] = "instagram-app-scoped-user"
+	}
+	return token, err
+}
+
+func (a *instagramLoginTestAdapter) GetProfile(context.Context, string) (*platform.UserProfile, error) {
+	if a.profileErr != nil {
+		return nil, a.profileErr
+	}
 	return &platform.UserProfile{
 		ID: "instagram-user", Username: "founder", CapabilityState: map[string]string{
 			"connection_type": "instagram_login", "instagram_account_type": "creator",
@@ -75,5 +89,8 @@ func TestInstagramLoginCallbackKeepsChosenMethodAndCanonicalAccount(t *testing.T
 	require.Equal(t, "instagram", accounts[0].Platform)
 	require.Empty(t, accounts[0].InstanceURL)
 	require.Equal(t, "instagram-user", accounts[0].AccountID)
+	var grant models.OAuthGrant
+	require.NoError(t, db.NewSelect().Model(&grant).Where("id = ?", accounts[0].OAuthGrantID).Scan(t.Context()))
+	require.Equal(t, "instagram-app-scoped-user", grant.ProviderSubject)
 	require.Equal(t, "instagram:instagram_login", platform.AccountProviderKey(accounts[0].Platform, accounts[0].InstanceURL, accounts[0].CapabilityState))
 }

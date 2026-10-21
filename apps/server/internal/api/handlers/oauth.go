@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"log"
 	"net/http"
 	"net/url"
@@ -1244,22 +1243,25 @@ func (h *OAuthHandler) finishOAuthCallback(ctx context.Context, input *OAuthCall
 	if err := h.requireProviderConnectionCompletion(
 		ctx, input.Platform, session.instanceRef, session.executionIntent, session.userID,
 	); err != nil {
-		return h.redirectWithError(err.Error(), session.workspaceID)
+		return h.redirectWithOAuthFailure(input.Platform, "connection_unavailable", err, session.workspaceID)
 	}
 
 	tokenResp, err := session.adapter.ExchangeCode(ctx, input.Code, session.extra)
 	if err != nil {
-		return h.redirectWithError(fmt.Sprintf("token exchange failed: %s", err.Error()), session.workspaceID)
+		return h.redirectWithOAuthFailure(input.Platform, "token_exchange_failed", err, session.workspaceID)
 	}
 
 	if err := h.requireProviderConnectionCompletion(
 		ctx, input.Platform, session.instanceRef, session.executionIntent, session.userID,
 	); err != nil {
-		return h.redirectWithError(err.Error(), session.workspaceID)
+		return h.redirectWithOAuthFailure(input.Platform, "connection_unavailable", err, session.workspaceID)
 	}
 
 	if selector, ok := session.adapter.(platform.AccountSelectionAdapter); ok && (input.Platform != "instagram" || session.instanceRef != platform.ConnectionModeInstagramLogin) {
-		if profile, profileErr := session.adapter.GetProfile(ctx, tokenResp.AccessToken); profileErr == nil && profile != nil && profile.ID != "" {
+		profile, profileErr := session.adapter.GetProfile(ctx, tokenResp.AccessToken)
+		if profileErr != nil {
+			logAccountConnectionError(input.Platform, "selection_profile_fetch_failed", profileErr)
+		} else if profile != nil && profile.ID != "" {
 			if tokenResp.Extra == nil {
 				tokenResp.Extra = map[string]string{}
 			}
@@ -1274,9 +1276,10 @@ func (h *OAuthHandler) finishOAuthCallback(ctx context.Context, input *OAuthCall
 	profile, err := session.adapter.GetProfile(ctx, tokenResp.AccessToken)
 	if err != nil {
 		if isCompatOAuthProvider(input.Platform) {
+			logAccountConnectionError(input.Platform, "compat_profile_fetch_failed", err)
 			profile = &platform.UserProfile{ID: input.Platform + "-user", Username: ""}
 		} else {
-			return h.redirectWithError(fmt.Sprintf("failed to get profile: %s", err.Error()), session.workspaceID)
+			return h.redirectWithOAuthFailure(input.Platform, "profile_fetch_failed", err, session.workspaceID)
 		}
 	}
 
@@ -1290,20 +1293,18 @@ func (h *OAuthHandler) oauthCallbackDenialResponse(ctx context.Context, input *O
 	if input.Platform == "x" && input.Denied != "" {
 		input.OAuthToken = input.Denied
 		workspaceID := h.callbackErrorWorkspace(ctx, input)
-		return h.redirectWithError("access_denied", workspaceID)
+		return h.redirectWithOAuthFeedback("cancelled", "", workspaceID)
 	}
 	if input.Error != "" {
-		msg := input.Error
-		if input.ErrorDescription != "" {
-			msg = fmt.Sprintf("%s: %s", input.Error, input.ErrorDescription)
-		}
-		log.Printf("[OAuth Callback Error] %s", msg)
 		workspaceID := h.callbackErrorWorkspace(ctx, input)
-		return h.redirectWithError(input.Error, workspaceID)
+		if strings.EqualFold(input.Error, "access_denied") || strings.EqualFold(input.Error, "cancelled") {
+			return h.redirectWithOAuthFeedback("cancelled", "", workspaceID)
+		}
+		return h.redirectWithOAuthFailure(input.Platform, "authorization_failed", nil, workspaceID)
 	}
 
 	if input.Code == "" && input.OAuthToken == "" {
-		return h.redirectWithError("missing authorization code")
+		return h.redirectWithOAuthFailure(input.Platform, "missing_code", nil)
 	}
 	return nil, nil
 }
@@ -1329,7 +1330,7 @@ func (h *OAuthHandler) resolveOAuthCallbackSession(ctx context.Context, input *O
 		var err error
 		adapter, err = h.getProvider(input.Platform, input.ServerName)
 		if err != nil {
-			resp, err := h.redirectWithError(err.Error())
+			resp, err := h.redirectWithOAuthFailure(input.Platform, "provider_unavailable", err)
 			return nil, resp, err
 		}
 		extra["oauth_token"] = input.OAuthToken
@@ -1339,12 +1340,12 @@ func (h *OAuthHandler) resolveOAuthCallbackSession(ctx context.Context, input *O
 	if input.Platform == "x" {
 		xAdapter, ok := adapter.(*platform.XAdapter)
 		if !ok {
-			resp, err := h.redirectWithError("x adapter type mismatch")
+			resp, err := h.redirectWithOAuthFailure(input.Platform, "provider_unavailable", nil)
 			return nil, resp, err
 		}
 		requestMeta, ok := xAdapter.GetRequestMetaForRequestToken(input.OAuthToken)
 		if !ok {
-			resp, err := h.redirectWithError("invalid or expired oauth request token")
+			resp, err := h.redirectWithOAuthFailure(input.Platform, "invalid_state", nil)
 			return nil, resp, err
 		}
 		workspaceID = requestMeta.WorkspaceID
@@ -1353,11 +1354,11 @@ func (h *OAuthHandler) resolveOAuthCallbackSession(ctx context.Context, input *O
 	} else {
 		statePayload, err := h.oauthStates.Consume(ctx, input.State)
 		if err != nil {
-			resp, err := h.redirectWithError("invalid or expired state")
+			resp, err := h.redirectWithOAuthFailure(input.Platform, "invalid_state", nil)
 			return nil, resp, err
 		}
 		if statePayload.Platform != input.Platform {
-			resp, err := h.redirectWithError("oauth state platform mismatch")
+			resp, err := h.redirectWithOAuthFailure(input.Platform, "invalid_state", nil)
 			return nil, resp, err
 		}
 		userID = statePayload.UserID
@@ -1376,18 +1377,17 @@ func (h *OAuthHandler) resolveOAuthCallbackSession(ctx context.Context, input *O
 	}
 
 	if middleware.GetUserID(ctx) == "" || middleware.GetUserID(ctx) != userID {
-		resp, err := h.redirectWithError("oauth initiating account mismatch", workspaceID)
+		resp, err := h.redirectWithOAuthFailure(input.Platform, "session_mismatch", nil, workspaceID)
 		return nil, resp, err
 	}
 	if err := h.checkWorkspaceConnectAccess(ctx, workspaceID, userID); err != nil {
-		log.Printf("[Callback] Workspace access check failed: %v", err)
-		resp, err := h.redirectWithError("workspace access denied", workspaceID)
+		resp, err := h.redirectWithOAuthFailure(input.Platform, "workspace_access_denied", err, workspaceID)
 		return nil, resp, err
 	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, input.Platform, instanceRef, executionIntent, userID,
 	); err != nil {
-		resp, err := h.redirectWithError(err.Error(), workspaceID)
+		resp, err := h.redirectWithOAuthFailure(input.Platform, "connection_unavailable", err, workspaceID)
 		return nil, resp, err
 	}
 
@@ -1400,14 +1400,14 @@ func (h *OAuthHandler) resolveOAuthCallbackAdapter(ctx context.Context, input *O
 		if isCompatOAuthProvider(input.Platform) {
 			session.adapter, _, err = h.getCompatProvider(ctx, input.Platform, input.ServerName, "")
 			if err != nil {
-				resp, err := h.redirectWithError(err.Error(), session.workspaceID)
+				resp, err := h.redirectWithOAuthFailure(input.Platform, "provider_unavailable", err, session.workspaceID)
 				return resp, err
 			}
 			session.instanceRef = mastodonInstanceURL(session.adapter)
 		} else {
 			session.adapter, err = h.getProvider(input.Platform, input.ServerName)
 			if err != nil {
-				resp, err := h.redirectWithError(err.Error(), session.workspaceID)
+				resp, err := h.redirectWithOAuthFailure(input.Platform, "provider_unavailable", err, session.workspaceID)
 				return resp, err
 			}
 		}
@@ -1438,32 +1438,6 @@ func (h *OAuthHandler) callbackErrorWorkspace(ctx context.Context, input *OAuthC
 	return payload.WorkspaceID
 }
 
-func (h *OAuthHandler) redirectWithError(msg string, workspaceIDs ...string) (*huma.StreamResponse, error) {
-	msg = strings.TrimSpace(html.UnescapeString(msg))
-	status := "failed"
-	if strings.EqualFold(msg, "access_denied") || strings.EqualFold(msg, "cancelled") {
-		status = "cancelled"
-	}
-	return h.redirectWithOAuthFeedback(status, "", workspaceIDs...)
-}
-
-func (h *OAuthHandler) redirectWithOAuthFeedback(status, reason string, workspaceIDs ...string) (*huma.StreamResponse, error) {
-	query := url.Values{"tab": {"accounts"}, "oauth_status": {status}}
-	if reason != "" {
-		query.Set("oauth_reason", reason)
-	}
-	if len(workspaceIDs) > 0 && strings.TrimSpace(workspaceIDs[0]) != "" {
-		query.Set("workspace_id", workspaceIDs[0])
-	}
-	location := h.frontendURL + "/settings?" + query.Encode()
-	return &huma.StreamResponse{
-		Body: func(ctx huma.Context) {
-			ctx.SetHeader("Location", location)
-			ctx.SetStatus(http.StatusTemporaryRedirect)
-		},
-	}, nil
-}
-
 func (h *OAuthHandler) redirectWithAccountSelection(platformName, connectionID string) (*huma.StreamResponse, error) {
 	location := h.frontendURL + "/accounts/callback?status=selection_required&platform=" + url.QueryEscape(platformName) + "&connection_id=" + url.QueryEscape(connectionID)
 	return &huma.StreamResponse{
@@ -1481,34 +1455,31 @@ func (h *OAuthHandler) saveAccountSelectionAndRedirect(
 	selector platform.AccountSelectionAdapter,
 ) (*huma.StreamResponse, error) {
 	if err := h.checkWorkspaceConnectAccess(ctx, workspaceID, userID); err != nil {
-		log.Printf("[Callback] Workspace access check failed: %v", err)
-		return h.redirectWithError("workspace access denied", workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "workspace_access_denied", err, workspaceID)
 	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, platformName, instanceURL, executionIntent, userID,
 	); err != nil {
-		return h.redirectWithError(err.Error(), workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "connection_unavailable", err, workspaceID)
 	}
 
 	options, err := selector.ListAccountSelections(ctx, tokenResp)
 	if err != nil {
-		log.Printf("[Callback] Failed to list selectable accounts: platform=%s error=%v", platformName, err)
 		if errors.Is(err, platform.ErrNoFacebookPages) {
-			return h.redirectWithOAuthFeedback("failed", oauthFailureReasonFacebookNoPages, workspaceID)
+			return h.redirectWithOAuthFailure(platformName, oauthFailureReasonFacebookNoPages, err, workspaceID)
 		}
 		if errors.Is(err, platform.ErrNoInstagramProfessionalAccount) {
-			return h.redirectWithOAuthFeedback("failed", oauthFailureReasonInstagramNoPageLinkedAccount, workspaceID)
+			return h.redirectWithOAuthFailure(platformName, oauthFailureReasonInstagramNoPageLinkedAccount, err, workspaceID)
 		}
-		return h.redirectWithError(fmt.Sprintf("failed to list selectable accounts: %s", err.Error()), workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "account_selection_failed", err, workspaceID)
 	}
 	if len(options) == 0 {
-		log.Printf("[Callback] No selectable accounts found: platform=%s", platformName)
-		return h.redirectWithError("no selectable accounts found for this provider", workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "account_selection_failed", nil, workspaceID)
 	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, platformName, instanceURL, executionIntent, userID,
 	); err != nil {
-		return h.redirectWithError(err.Error(), workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "connection_unavailable", err, workspaceID)
 	}
 
 	pending, err := h.createPendingAccountSelection(
@@ -1516,8 +1487,7 @@ func (h *OAuthHandler) saveAccountSelectionAndRedirect(
 		executionIntent, tokenResp, options,
 	)
 	if err != nil {
-		log.Printf("[Callback] Failed to save pending account selection: %v", err)
-		return h.redirectWithError("failed to save pending account selection", workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "account_save_failed", err, workspaceID)
 	}
 
 	log.Printf("[Callback] Pending account selection created: ID=%s platform=%s", pending.ID, platformName)
@@ -1603,18 +1573,24 @@ func (h *OAuthHandler) saveAccountAndRedirect(
 	adapter platform.Adapter,
 ) (*huma.StreamResponse, error) {
 	accountID := profile.ID
-	if (platformName == "threads" || (platformName == "instagram" && profile.CapabilityState["connection_type"] == platform.ConnectionModeInstagramLogin)) && tokenResp.Extra != nil {
+	if platformName == "threads" && tokenResp.Extra != nil {
 		if uid, ok := tokenResp.Extra["user_id"]; ok && uid != "" {
 			if profile.ID != "" && uid != profile.ID {
-				return h.redirectWithError("provider account identity mismatch", workspaceID)
+				return h.redirectWithOAuthFailure(platformName, "identity_mismatch", nil, workspaceID)
 			}
 			accountID = uid
 		}
 	}
+	grantSubject := accountID
+	if platformName == "instagram" && instanceURL == platform.ConnectionModeInstagramLogin {
+		// The code exchange identifies the app-scoped authorization subject;
+		// /me.user_id identifies the professional destination used by Graph.
+		grantSubject = firstNonEmpty(firstNonEmptyTokenValue(tokenResp, "user_id"), accountID)
+	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, platformName, instanceURL, executionIntent, userID,
 	); err != nil {
-		return h.redirectWithError(err.Error(), workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "connection_unavailable", err, workspaceID)
 	}
 
 	account, err := h.accountSaver.SaveAccountFromInput(ctx, account_saver.SaveAccountInput{
@@ -1628,11 +1604,10 @@ func (h *OAuthHandler) saveAccountAndRedirect(
 		InstanceURL:      selectedAccountInstanceURL(platformName, instanceURL),
 		Token:            tokenResp,
 		CapabilityState:  h.fediverseCapabilityState(ctx, platformName, instanceURL, profile),
-		Grant:            authorizationGrantInput(adapter, accountID),
+		Grant:            authorizationGrantInput(adapter, grantSubject),
 	})
 	if err != nil {
-		log.Printf("[Callback] Failed to save account: %v", err)
-		return h.redirectWithError(accountConnectionErrorMessage(err), workspaceID)
+		return h.redirectWithOAuthFailure(platformName, "account_save_failed", err, workspaceID)
 	}
 	firstConnection := account.ClaimedFirst
 	h.captureDestinationConnected(ctx, userID, workspaceID, platformName, 1, firstConnection)
@@ -1745,6 +1720,7 @@ func (h *OAuthHandler) exchangeCompatCode(ctx context.Context, provider string, 
 
 	tokenResp, err := adapter.ExchangeCode(ctx, input.Body.Code, nil)
 	if err != nil {
+		logAccountConnectionError(provider, "token_exchange_failed", err)
 		return nil, huma.Error500InternalServerError("Provider token exchange failed")
 	}
 	if err := h.requireProviderConnectionCompletion(
@@ -1755,6 +1731,7 @@ func (h *OAuthHandler) exchangeCompatCode(ctx context.Context, provider string, 
 
 	profile, err := adapter.GetProfile(ctx, tokenResp.AccessToken)
 	if err != nil {
+		logAccountConnectionError(provider, "compat_profile_fetch_failed", err)
 		profile = &platform.UserProfile{ID: provider + "-user", Username: ""}
 	}
 
@@ -2274,6 +2251,7 @@ func (h *OAuthHandler) DiscordWebhookLogin(api huma.API) {
 			Grant:            authorizationGrantInput(adapter, profile.ID),
 		})
 		if err != nil {
+			logAccountConnectionError("discord", "account_save_failed", err)
 			return nil, huma.Error403Forbidden(accountConnectionErrorMessage(err))
 		}
 		resp := h.normalizedAccountConnectionResponse(input.Body.WorkspaceID, []*models.SocialAccount{account}, account.ClaimedFirst)
@@ -2479,6 +2457,7 @@ func (h *OAuthHandler) persistAccountSelection(ctx context.Context, userID strin
 			Where("selection_id = ?", pending.ID).Exec(txCtx)
 		return err
 	}); err != nil {
+		logAccountConnectionError(pending.Platform, "account_selection_completion_failed", err)
 		return nil, huma.Error500InternalServerError("failed to complete account selection")
 	}
 	return &CompleteAccountSelectionOutput{Body: AccountSelectionCompletionResponse{
