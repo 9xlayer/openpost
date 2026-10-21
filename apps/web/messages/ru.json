@@ -3973,6 +3973,8 @@
 	"notifications_event_workspace_invite": "Приглашение в рабочее пространство",
 	"notifications_event_security_action": "Действие по безопасности",
 	"notifications_event_access_changed": "Доступ изменён",
+	"notifications_event_workflow_approval": "Согласование рабочего процесса",
+	"notifications_event_workflow_approval_description": "Пост ожидает решения. Вы получите напоминание до истечения срока.",
 	"notifications_event_critical_billing": "Критическое действие по оплате",
 	"notifications_event_post_published_description": "Публикация поста завершена на всех выбранных площадках.",
 	"notifications_event_publish_failed_description": "Не удалось опубликовать на одной или нескольких площадках.",
