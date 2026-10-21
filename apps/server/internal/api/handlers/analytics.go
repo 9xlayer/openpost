@@ -69,6 +69,8 @@ type RepurposeAnalyticsOutput struct {
 }
 
 func (h *AnalyticsHandler) RegisterRoutes(api huma.API) {
+	h.registerExportRoute(api)
+
 	huma.Register(api, huma.Operation{
 		OperationID: "get-analytics-overview",
 		Method:      http.MethodGet,

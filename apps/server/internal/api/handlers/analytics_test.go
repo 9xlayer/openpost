@@ -86,12 +86,17 @@ func TestAnalyticsOverviewRejectsStaleCursor(t *testing.T) {
 		return response
 	}
 
+	_, err = db.NewInsert().Model(&models.AnalyticsSyncState{ID: "rendition:rendition-2", WorkspaceID: "ws-1", SubjectType: "rendition", SubjectID: "rendition-2", SocialAccountID: "account-1", Platform: "youtube", Status: "ready", MetricsJSON: `{"views":0}`, LastSuccessAt: now}).Exec(ctx)
+	require.NoError(t, err)
+
 	firstResponse := get("?workspace_id=ws-1&days=30&limit=1")
 	require.Equal(t, http.StatusOK, firstResponse.Code, firstResponse.Body.String())
 	var first analyticsservice.Overview
 	require.NoError(t, json.Unmarshal(firstResponse.Body.Bytes(), &first))
 	require.NotEmpty(t, first.ContentNextCursor)
 	require.Len(t, first.Content, 1)
+	require.Equal(t, []string{"views"}, first.ContentMetricKeys, "metric options cover unloaded content, including measured zero")
+	require.NotContains(t, first.Content[0].Metrics, "views", "the measured metric belongs to a later page")
 
 	mismatchResponse := get("?workspace_id=ws-1&days=30&limit=1&account_id=account-2&cursor=" + first.ContentNextCursor)
 	require.Equal(t, http.StatusBadRequest, mismatchResponse.Code, mismatchResponse.Body.String())

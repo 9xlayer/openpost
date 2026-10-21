@@ -24,12 +24,6 @@ set -euo pipefail
 # CommonJS Assembler API with an incompatible ESM export. The published node
 # carries no runtime dependencies, so that parser never ships to customers.
 # Remove these exceptions when compatible upstream tools adopt patched releases.
-# GHSA-587h-7wmj-h5pm, GHSA-698v-4r3x-3vcv and GHSA-r825-w8mm-5pxw affect
-# launch-editor through launch-editor-middleware in the Vite dev server. Two
-# apply only on Windows; the third executes on the developer's own machine
-# when opening a file in an editor. None of those packages ship in the Go
-# image, static sites, or n8n package. Remove these exceptions when Vite moves
-# to a patched launch-editor release.
 bun "$(dirname "${BASH_SOURCE[0]}")/check-braces-security-patch.mjs"
 attempt=1
 while [ "$attempt" -le 3 ]; do
@@ -50,10 +44,7 @@ while [ "$attempt" -le 3 ]; do
   --ignore GHSA-vfj7-8cjw-p6xm \
   --ignore GHSA-hp3w-g68c-fv3c \
   --ignore GHSA-hqr4-qq8f-hg3x \
-  --ignore GHSA-mjw6-4jj6-33hc \
-  --ignore GHSA-587h-7wmj-h5pm \
-  --ignore GHSA-698v-4r3x-3vcv \
-  --ignore GHSA-r825-w8mm-5pxw
+  --ignore GHSA-mjw6-4jj6-33hc
   then
     break
   fi

@@ -27,11 +27,8 @@ func dailyFollowerTrend(accounts []AccountOverview, accountID string) []DailyBre
 		for index := 1; index < len(account.FollowerSeries); index++ {
 			current := account.FollowerSeries[index]
 			delta := current.Value - account.FollowerSeries[index-1].Value
-			if delta == 0 {
-				continue
-			}
 			byDate[current.Date] = append(byDate[current.Date], DailyBreakdownItem{
-				Key: account.ID, Label: account.Username, Platform: account.Platform, Value: delta,
+				AccountID: account.ID, Key: account.ID, Label: account.Username, Platform: account.Platform, Value: delta,
 			})
 		}
 	}
@@ -220,18 +217,21 @@ func appendRenditionTrend(
 		}
 		date := snapshot.CapturedAt.UTC().Format("2006-01-02")
 		item := DailyBreakdownItem{
-			Key: snapshot.RenditionID, Label: label, Platform: snapshot.Platform,
+			AccountID: snapshot.SocialAccountID, Key: snapshot.RenditionID, Label: label, Platform: snapshot.Platform,
 			PublicationID: snapshot.PublicationID,
 		}
 		var engagementDelta int64
+		engagementMeasured := false
 		for _, metric := range engagementProjectionMetricNames(current.values) {
-			engagementDelta += comparableContentMetricDelta(current.values, current.metadata, previous, metric)
+			if delta, measured := comparableContentMetricDelta(current.values, current.metadata, previous, metric); measured {
+				engagementDelta += delta
+				engagementMeasured = true
+			}
 		}
-		if engagementDelta != 0 {
+		if engagementMeasured {
 			engagementByDate[date] = append(engagementByDate[date], withTrendValue(item, engagementDelta, username))
 		}
-		viewsDelta := comparableContentMetricDelta(current.values, current.metadata, previous, platform.MetricViews)
-		if viewsDelta != 0 {
+		if viewsDelta, measured := comparableContentMetricDelta(current.values, current.metadata, previous, platform.MetricViews); measured {
 			viewsByDate[date] = append(viewsByDate[date], withTrendValue(item, viewsDelta, username))
 		}
 		previous = current
@@ -243,7 +243,7 @@ func comparableContentMetricDelta(
 	currentMetadata map[string]platform.AnalyticsMetricMetadata,
 	previous *decodedAnalyticsSnapshot,
 	metric string,
-) int64 {
+) (int64, bool) {
 	currentValue, ok := compatibleCountMetricValue(
 		current,
 		currentMetadata,
@@ -251,10 +251,10 @@ func comparableContentMetricDelta(
 		platform.AnalyticsMetricAggregationLifetimeTotal,
 	)
 	if !ok {
-		return 0
+		return 0, false
 	}
 	if previous == nil {
-		return currentValue
+		return currentValue, true
 	}
 	previousValue, ok := compatibleCountMetricValue(
 		previous.values,
@@ -263,9 +263,9 @@ func comparableContentMetricDelta(
 		platform.AnalyticsMetricAggregationLifetimeTotal,
 	)
 	if !ok {
-		return 0
+		return 0, false
 	}
-	return currentValue - previousValue
+	return currentValue - previousValue, true
 }
 
 func withTrendValue(item DailyBreakdownItem, value int64, username string) DailyBreakdownItem {

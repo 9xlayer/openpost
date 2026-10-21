@@ -2,7 +2,12 @@
 	import { untrack } from 'svelte';
 	import { renderTextCardPreview } from '$lib/text-card-renderer';
 	import { m } from '$lib/paraglide/messages';
-	import { textCardRequestKey, type TextCardRequest, type TextCardResult } from '$lib/text-cards';
+	import {
+		textCardRequestKey,
+		type TextCardIdentity,
+		type TextCardRequest,
+		type TextCardResult
+	} from '$lib/text-cards';
 	import type { ComposerSettings } from './compose/modes';
 	import InlineNotice from './inline-notice.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -12,6 +17,7 @@
 		visible = true,
 		showImages = true,
 		savedPreview,
+		identity = null,
 		defaults = {},
 		onResult
 	}: {
@@ -19,6 +25,7 @@
 		visible?: boolean;
 		showImages?: boolean;
 		savedPreview?: TextCardResult;
+		identity?: TextCardIdentity | null;
 		// Catalogue defaults resolved via textCardDefaultsFrom, so a request that
 		// omits styling keys the same way the resolved capability renders it.
 		defaults?: ComposerSettings;
@@ -26,7 +33,7 @@
 	} = $props();
 	let result = $state<TextCardResult>({ key: '', images: [], loading: false, error: '' });
 	let retry = $state(0);
-	const key = $derived(textCardRequestKey(request, null, defaults));
+	const key = $derived(textCardRequestKey(request, identity, defaults));
 	$effect(() => {
 		const requestKey = key;
 		const saved = savedPreview;

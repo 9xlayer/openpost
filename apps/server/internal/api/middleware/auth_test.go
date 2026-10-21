@@ -296,6 +296,7 @@ func TestPrincipalCanAccessREST(t *testing.T) {
 	require.True(t, PrincipalCanAccessREST(&Principal{Scope: apitokens.ScopeAPIRead}, "get-provider-readiness"))
 	require.True(t, PrincipalCanAccessREST(&Principal{Scope: apitokens.ScopeAPIRead}, "get-analytics-overview"))
 	for _, operationID := range []string{
+		"export-analytics",
 		"list-jobs",
 		"list-notifications",
 		"list-engagement",
