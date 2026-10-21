@@ -173,18 +173,16 @@ function AnalyticsDashboard() {
                 }
                 detail={`${overview.summary.views.measured} of ${overview.content_total} destinations`}
               />
-              {(["impressions", "reach"] as const).map((metric) => (
-                <Metric
-                  key={metric}
-                  label={metric[0].toUpperCase() + metric.slice(1)}
-                  value={
-                    overview.summary[metric].measured
-                      ? number.format(overview.summary[metric].value)
-                      : "No data"
-                  }
-                  detail={`${overview.summary[metric].measured} of ${overview.content_total} destinations`}
-                />
-              ))}
+              <Metric
+                label="Reach"
+                value={
+                  overview.summary.reach.measured
+                    ? number.format(overview.summary.reach.value)
+                    : "No data"
+                }
+                detail={`${overview.summary.reach.measured} of ${overview.content_total} destinations`}
+              />
+
               <Metric
                 label="Published"
                 value={number.format(overview.summary.published)}

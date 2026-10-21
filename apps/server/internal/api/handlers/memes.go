@@ -50,6 +50,13 @@ const (
 	memeThumbnailGlobalConcurrency  = 96
 	memeThumbnailPerUserConcurrency = 48
 
+	// Candidate previews stay small; a published meme is rendered at a size
+	// that social feeds and the composer can display without upscaling. GIFs
+	// keep the smaller height because animated frames multiply the byte size.
+	memePreviewRenderHeight = 600
+	memePublishRenderHeight = 1080
+	memeGIFRenderHeight     = 600
+
 	defaultMemeTemplateLimit             = 40
 	maxMemeTemplateLimit                 = 250
 	maxMemeSearchCharacters              = 120
@@ -684,6 +691,7 @@ func (h *MemeHandler) previewMeme(ctx context.Context, input *PreviewMemeInput) 
 	rendered, _, _, err := h.render(ctx, memeRenderParameters{
 		WorkspaceID: input.Body.WorkspaceID, TemplateID: input.Body.TemplateID,
 		Captions: input.Body.Captions, OverlayMediaIDs: input.Body.OverlayMediaIDs, Format: input.Body.Format,
+		Height: memePreviewRenderHeight,
 	})
 	if err != nil {
 		return nil, err
@@ -728,6 +736,7 @@ func (h *MemeHandler) renderMeme(ctx context.Context, input *RenderMemeInput) (*
 	rendered, template, catalog, err := h.render(ctx, memeRenderParameters{
 		WorkspaceID: input.Body.WorkspaceID, TemplateID: input.Body.TemplateID,
 		Captions: input.Body.Captions, OverlayMediaIDs: input.Body.OverlayMediaIDs, Format: input.Body.Format,
+		Height: memePublishHeight(input.Body.Format),
 	})
 	if err != nil {
 		return nil, err
@@ -853,6 +862,7 @@ type memeRenderParameters struct {
 	Captions        []string
 	OverlayMediaIDs []string
 	Format          string
+	Height          int
 }
 
 func (h *MemeHandler) render(ctx context.Context, input memeRenderParameters) (memes.RenderedImage, memes.Template, memes.Catalog, error) {
@@ -878,6 +888,7 @@ func (h *MemeHandler) render(ctx context.Context, input memeRenderParameters) (m
 	rendered, err := h.provider.Render(ctx, memes.RenderRequest{
 		TemplateID: template.ID, Text: append([]string(nil), input.Captions...),
 		OverlayImages: overlayImages, Extension: normalizedMemeExtension(input.Format),
+		Height: input.Height,
 	})
 	if err != nil {
 		return memes.RenderedImage{}, memes.Template{}, memes.Catalog{}, memeProviderError(err)
@@ -1320,6 +1331,13 @@ func normalizedMemeExtension(value string) string {
 		return "jpg"
 	}
 	return value
+}
+
+func memePublishHeight(format string) int {
+	if normalizedMemeExtension(format) == "gif" {
+		return memeGIFRenderHeight
+	}
+	return memePublishRenderHeight
 }
 
 func (h *MemeHandler) requireWorkspaceAccess(ctx context.Context, workspaceID string, edit bool) error {

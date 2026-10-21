@@ -23,9 +23,9 @@ import {
 	type OutputFormat
 } from 'mediabunny';
 import type { MediaOutputFormat } from '@openpost/social-images';
+import { MEDIA_MAX_BYTES, OUTPUT_MAX_BYTES, mediaLimitLabel } from './local-media-limits';
 
-export const MEDIA_MAX_BYTES = 250 * 1024 * 1024;
-export const OUTPUT_MAX_BYTES = 500 * 1024 * 1024;
+export { MEDIA_MAX_BYTES, OUTPUT_MAX_BYTES, mediaLimitLabel };
 export type VideoChoice = 'auto' | 'copy' | VideoCodec;
 export type AudioChoice = 'auto' | 'copy' | 'mute' | AudioCodec;
 export interface MediaSettings {
@@ -286,10 +286,4 @@ export function mediaCodecLabel(codec: string): string {
 }
 export function mediaBytes(bytes: number): string {
 	return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-}
-
-// Whole-MB labels for authored limits. Formatting from the byte value keeps the
-// displayed copy in step when a limit changes.
-export function mediaLimitLabel(bytes: number): string {
-	return `${bytes / 1024 / 1024} MB`;
 }

@@ -302,7 +302,7 @@
     },
     "packages/sdk": {
       "name": "@getopenpost/sdk",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "devDependencies": {
         "typescript": "5.9.3",
         "vitest": "4.1.11",
@@ -405,6 +405,7 @@
     "devalue": "5.9.4",
     "dompurify": "3.4.16",
     "fast-uri": "3.1.7",
+    "follow-redirects": "1.16.1",
     "handlebars": "4.7.10",
     "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
@@ -2411,7 +2412,7 @@
 
     "fn.name": ["fn.name@1.1.0", "", {}, "sha512-GRnmB5gPyJpAhTQdSZTSp9uaPSvl09KoYcMQtsB9rQoOmzs9dH6ffeccH+Z+cv6P68Hu5bC6JjRh4Ah/mHSNRw=="],
 
-    "follow-redirects": ["follow-redirects@1.16.0", "", {}, "sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw=="],
+    "follow-redirects": ["follow-redirects@1.16.1", "", {}, "sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg=="],
 
     "for-each": ["for-each@0.3.5", "", { "dependencies": { "is-callable": "1.2.7" } }, "sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg=="],
 

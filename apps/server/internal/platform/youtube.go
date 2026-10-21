@@ -212,6 +212,18 @@ func (y *YouTubeAdapter) ListDestinationOptions(ctx context.Context, accessToken
 	}, nil
 }
 
+func (y *YouTubeAdapter) AccountCapabilityKeyInput(input AccountCapabilityInput) string {
+	regionCode := strings.ToUpper(strings.TrimSpace(input.RegionCode))
+	if len(regionCode) != 2 {
+		regionCode = "US"
+	}
+	language := strings.TrimSpace(localeLanguageCode(input.Locale))
+	if language == "" {
+		language = "en"
+	}
+	return language + "\x1f" + regionCode
+}
+
 func (y *YouTubeAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
 	options, err := y.ListDestinationOptions(ctx, accessToken, DestinationOptionsInput{
 		RegionCode: input.RegionCode,

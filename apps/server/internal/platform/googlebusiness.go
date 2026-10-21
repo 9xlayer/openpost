@@ -465,6 +465,8 @@ func paginateGoogleBusinessOptions(options []DestinationOption, search, cursor s
 	return page
 }
 
+func (g *GoogleBusinessAdapter) AccountCapabilityKeyInput(AccountCapabilityInput) string { return "" }
+
 func (g *GoogleBusinessAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
 	options, err := g.ListDestinationOptions(ctx, accessToken, DestinationOptionsInput{
 		RegionCode: input.RegionCode,

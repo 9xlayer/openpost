@@ -175,9 +175,9 @@
 	}
 	figure img {
 		display: block;
-		width: 100%;
+		width: auto;
 		height: auto;
-		max-width: 1100px;
+		max-width: min(1100px, 100%);
 		border-radius: 10px;
 	}
 	.screenshot-caption {

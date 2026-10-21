@@ -4043,28 +4043,51 @@ func (h *MediaHandler) processImage(ctx context.Context, content []byte, mediaID
 	height := bounds.Dy()
 
 	thumbnails := Thumbnails{}
+	thumbFormat := imaging.JPEG
+	thumbExtension := ".jpg"
+	thumbContentType := "image/jpeg"
+	if imageHasTransparency(img) {
+		thumbFormat = imaging.PNG
+		thumbExtension = ".png"
+		thumbContentType = "image/png"
+	}
 
 	smThumb := imaging.Thumbnail(img, ThumbnailSizeSM, ThumbnailSizeSM, imaging.Lanczos)
-	smFilename := "sm_" + mediaID + ".jpg"
-	if err := h.saveThumbnail(ctx, smFilename, smThumb, imaging.JPEG); err == nil {
+	smFilename := "sm_" + mediaID + thumbExtension
+	if err := h.saveThumbnail(ctx, smFilename, smThumb, thumbFormat, thumbContentType); err == nil {
 		thumbnails.SM = smFilename
 	}
 
 	mdThumb := imaging.Thumbnail(img, ThumbnailSizeMD, ThumbnailSizeMD, imaging.Lanczos)
-	mdFilename := "md_" + mediaID + ".jpg"
-	if err := h.saveThumbnail(ctx, mdFilename, mdThumb, imaging.JPEG); err == nil {
+	mdFilename := "md_" + mediaID + thumbExtension
+	if err := h.saveThumbnail(ctx, mdFilename, mdThumb, thumbFormat, thumbContentType); err == nil {
 		thumbnails.MD = mdFilename
 	}
 
 	return width, height, thumbnails, nil
 }
 
-func (h *MediaHandler) saveThumbnail(ctx context.Context, filename string, img image.Image, format imaging.Format) error {
+// imageHasTransparency decides whether a thumbnail needs PNG encoding. JPEG
+// would flatten transparent uploads onto black, so transparency has to survive
+// into every derived size.
+func imageHasTransparency(img image.Image) bool {
+	opaque, ok := img.(interface{ Opaque() bool })
+	return ok && !opaque.Opaque()
+}
+
+func thumbnailContentType(filename string) string {
+	if strings.EqualFold(filepath.Ext(filename), ".png") {
+		return "image/png"
+	}
+	return "image/jpeg"
+}
+
+func (h *MediaHandler) saveThumbnail(ctx context.Context, filename string, img image.Image, format imaging.Format, contentType string) error {
 	var buf bytes.Buffer
 	if err := imaging.Encode(&buf, img, format); err != nil {
 		return err
 	}
-	if _, err := mediastore.SaveWithContentType(ctx, h.storage, filename, &buf, "image/jpeg"); err != nil {
+	if _, err := mediastore.SaveWithContentType(ctx, h.storage, filename, &buf, contentType); err != nil {
 		_ = mediastore.DeleteForCleanup(ctx, h.storage, filename)
 		return err
 	}
@@ -4172,8 +4195,9 @@ func (h *MediaHandler) serveThumbnailSize(c echo.Context) error {
 		}
 	}
 
-	setMediaResponseHeaders(c.Response().Header(), "image/jpeg", "")
-	return c.Stream(http.StatusOK, "image/jpeg", file)
+	contentType := thumbnailContentType(thumbFilename)
+	setMediaResponseHeaders(c.Response().Header(), contentType, "")
+	return c.Stream(http.StatusOK, contentType, file)
 }
 
 func (h *MediaHandler) serveVideoPoster(c echo.Context) error {

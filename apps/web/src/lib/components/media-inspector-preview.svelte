@@ -53,6 +53,7 @@
 		{#if isImage(media.mime_type)}
 			<MediaThumbnail
 				item={media}
+				still={media.url}
 				fallbackAlt={media.original_filename}
 				class="aspect-[4/3] size-full object-contain"
 			/>

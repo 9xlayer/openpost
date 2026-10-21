@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -289,9 +290,26 @@ func PublicationContract(
 	}, nil
 }
 
+type cachedOutputDigest struct {
+	capability capabilities.Capability
+	digest     string
+}
+
+// The catalog has a fixed set of output profiles, so this stays bounded to one
+// canonical entry per profile. Account-adjusted capabilities are verified by
+// value and never stored.
+var outputDigestCache sync.Map
+
 // A certification subject names an output profile, which can support several
 // authoring formats. Bind all of their constraints to the same evidence.
 func publicationOutputDigest(capability capabilities.Capability) (string, error) {
+	key := capability.Provider + "\x00" + capability.OutputProfile + "\x00" + capability.Profile
+	if cached, ok := outputDigestCache.Load(key); ok {
+		entry := cached.(cachedOutputDigest)
+		if reflect.DeepEqual(entry.capability, capability) {
+			return entry.digest, nil
+		}
+	}
 	formats := []capabilities.Capability{capability}
 	for _, registered := range capabilities.All() {
 		if registered.Provider != capability.Provider || registered.OutputProfile != capability.OutputProfile || registered.Profile == capability.Profile {
@@ -300,7 +318,16 @@ func publicationOutputDigest(capability capabilities.Capability) (string, error)
 		formats = append(formats, registered)
 	}
 	slices.SortFunc(formats, func(a, b capabilities.Capability) int { return strings.Compare(a.Profile, b.Profile) })
-	return digestJSON(formats)
+	digest, err := digestJSON(formats)
+	if err != nil {
+		return "", err
+	}
+	if canonical, found := capabilities.Find(capability.Provider, capability.Profile); found &&
+		canonical.OutputProfile == capability.OutputProfile &&
+		reflect.DeepEqual(canonical, capability) {
+		outputDigestCache.Store(key, cachedOutputDigest{capability: capability, digest: digest})
+	}
+	return digest, nil
 }
 
 // OperationContract binds each non-publishing provider operation to independent

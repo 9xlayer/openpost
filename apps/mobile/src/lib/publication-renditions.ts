@@ -52,7 +52,15 @@ function withAttachments(
   media: readonly MediaInput[],
   attachments: readonly Attachment[],
 ): MediaInput[] {
-  const result = [...media];
+  const capturedAltText = new Map<string, string>();
+  for (const attachment of attachments) {
+    if (attachment.mediaId && attachment.altText !== undefined)
+      capturedAltText.set(attachment.mediaId, attachment.altText);
+  }
+  const result = media.map((item) => {
+    const altText = capturedAltText.get(item.media_id);
+    return altText === undefined ? item : { ...item, alt_text: altText };
+  });
   for (const attachment of attachments) {
     if (attachment.mediaId && !result.some((item) => item.media_id === attachment.mediaId))
       result.push({

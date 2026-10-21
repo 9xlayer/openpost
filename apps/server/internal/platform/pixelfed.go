@@ -84,6 +84,8 @@ func (p *PixelfedAdapter) GetProfile(ctx context.Context, accessToken string) (*
 	return compatUserProfile(profile, FediverseSoftwarePixelfed), nil
 }
 
+func (p *PixelfedAdapter) AccountCapabilityKeyInput(AccountCapabilityInput) string { return "" }
+
 func (p *PixelfedAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, _ AccountCapabilityInput) (AccountCapabilityResult, error) {
 	return compatPublishingCapabilities(ctx, p.compat.instanceURL, accessToken, "Pixelfed", "pixelfed", false)
 }

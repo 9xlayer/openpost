@@ -33,6 +33,10 @@ func TextCardSettings() []SettingDefinition {
 // projectTextCards plans the exact generated media count without creating files.
 // It joins source posts before laying out their text, as delivery does.
 func projectTextCards(provider, outputProfile string, segments []ResolveSegment, settings map[string]any) ([]ResolveSegment, bool, []ValidationIssue) {
+	// Joining and card projection rewrite media on the first segment. Keep the
+	// caller's slice untouched so destinations can resolve from shared input
+	// concurrently.
+	segments = slices.Clone(segments)
 	if !textcards.Supported(provider, outputProfile) {
 		return segments, false, nil
 	}

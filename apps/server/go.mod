@@ -1,6 +1,6 @@
 module github.com/openpost/backend
 
-go 1.26.9
+go 1.26.10
 
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.2
@@ -81,7 +81,7 @@ require (
 	github.com/itlightning/dateparse v0.2.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.4 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/labstack/gommon v0.5.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect

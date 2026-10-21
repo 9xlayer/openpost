@@ -1738,6 +1738,7 @@
 									{:else if isVideo(media.mime_type) || isImage(media.mime_type)}
 										<MediaThumbnail
 											item={media}
+											still={isImage(media.mime_type) ? `/media/${media.id}/thumb/md` : undefined}
 											fallbackAlt={m.media_library_title()}
 											class="size-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
 										>

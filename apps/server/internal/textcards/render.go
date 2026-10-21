@@ -43,7 +43,10 @@ func Render(ctx context.Context, body, outputProfile string, style Style, identi
 		canvas := image.NewNRGBA(image.Rect(0, 0, Width, page.Height))
 		paintBackground(canvas, style)
 		contentHeight := len(page.lines) * lineHeight(page.size)
-		cardHeight := max(380, contentHeight+244)
+		// The 276px footer reserve keeps the last text baseline clear of the
+		// footer arrow and page counter. 244px left the arrow's head inside the
+		// descender band of a full page of text.
+		cardHeight := max(380, contentHeight+276)
 		top := (page.Height - cardHeight) / 2
 		card := image.Rect(80, top, 1000, top+cardHeight)
 		radius := 0

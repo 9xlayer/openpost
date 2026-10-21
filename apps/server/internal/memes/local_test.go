@@ -122,6 +122,25 @@ func TestBuiltinProviderRendersLocallyWithoutWatermark(t *testing.T) {
 	require.Equal(t, expectedBlank.Pix, imaging.Clone(actualBlank).Pix, "blank output must not add a watermark")
 }
 
+func TestBuiltinProviderHonorsRequestedRenderHeight(t *testing.T) {
+	t.Parallel()
+
+	provider, err := NewBuiltinProvider()
+	require.NoError(t, err)
+
+	rendered, err := provider.Render(context.Background(), RenderRequest{
+		TemplateID: "drake",
+		Text:       []string{"", ""},
+		Extension:  "png",
+		Height:     900,
+	})
+	require.NoError(t, err)
+	config, _, err := image.DecodeConfig(bytes.NewReader(rendered.Data))
+	require.NoError(t, err)
+	require.Equal(t, 900, config.Height)
+	require.Positive(t, config.Width)
+}
+
 func TestBuiltinProviderReturnsSmallCacheableTemplateImages(t *testing.T) {
 	t.Parallel()
 

@@ -125,3 +125,109 @@ func TestRequestMapsProviderFailures(t *testing.T) {
 	}
 	require.ErrorIs(t, err, ErrRateLimited)
 }
+
+func TestPixabayPhotoDownloadPrefersTheOriginalAndReportsDeliveredSize(t *testing.T) {
+	base := pixabayImage{
+		ImageWidth: 4000, ImageHeight: 3000,
+		ImageURL:      "https://cdn.pixabay.com/photo/original.jpg",
+		FullHDURL:     "https://cdn.pixabay.com/photo/fullhd.jpg",
+		LargeImageURL: "https://cdn.pixabay.com/photo/large.jpg",
+	}
+
+	tests := []struct {
+		name     string
+		item     pixabayImage
+		download string
+		width    int
+		height   int
+		mimeType string
+	}{
+		{
+			name:     "prefers the original",
+			item:     base,
+			download: "https://cdn.pixabay.com/photo/original.jpg",
+			width:    4000, height: 3000, mimeType: "image/jpeg",
+		},
+		{
+			name: "falls back to full HD and scales its dimensions",
+			item: pixabayImage{
+				ImageWidth: 4000, ImageHeight: 3000,
+				FullHDURL:     "https://cdn.pixabay.com/photo/fullhd.jpg",
+				LargeImageURL: "https://cdn.pixabay.com/photo/large.jpg",
+			},
+			download: "https://cdn.pixabay.com/photo/fullhd.jpg",
+			width:    1920, height: 1440, mimeType: "image/jpeg",
+		},
+		{
+			name: "falls back to the large copy",
+			item: pixabayImage{
+				ImageWidth: 4000, ImageHeight: 3000,
+				LargeImageURL: "https://cdn.pixabay.com/photo/large.jpg",
+			},
+			download: "https://cdn.pixabay.com/photo/large.jpg",
+			width:    1280, height: 960, mimeType: "image/jpeg",
+		},
+		{
+			name: "skips an original beyond the media pixel budget",
+			item: pixabayImage{
+				ImageWidth: 10000, ImageHeight: 8000,
+				ImageURL:  "https://cdn.pixabay.com/photo/original.jpg",
+				FullHDURL: "https://cdn.pixabay.com/photo/fullhd.jpg",
+			},
+			download: "https://cdn.pixabay.com/photo/fullhd.jpg",
+			width:    1920, height: 1536, mimeType: "image/jpeg",
+		},
+		{
+			name: "reports a transparent original as PNG",
+			item: pixabayImage{
+				ImageWidth: 1200, ImageHeight: 800,
+				ImageURL: "https://cdn.pixabay.com/photo/original.png",
+			},
+			download: "https://cdn.pixabay.com/photo/original.png",
+			width:    1200, height: 800, mimeType: "image/png",
+		},
+		{
+			name:     "returns nothing when no download is available",
+			item:     pixabayImage{ImageWidth: 1200, ImageHeight: 800},
+			download: "",
+		},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			download, width, height, mimeType := pixabayPhotoDownload(testCase.item)
+			require.Equal(t, testCase.download, download)
+			require.Equal(t, testCase.width, width)
+			require.Equal(t, testCase.height, height)
+			require.Equal(t, testCase.mimeType, mimeType)
+		})
+	}
+}
+
+func TestPixabayResolveReturnsTheOriginalPhoto(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		require.Equal(t, "pixabay.com", request.URL.Host)
+		require.Equal(t, "42", request.URL.Query().Get("id"))
+		return response(http.StatusOK, `{"hits":[{
+			"id":42,
+			"pageURL":"https://pixabay.com/photos/example-42/",
+			"tags":"example",
+			"webformatURL":"https://cdn.pixabay.com/photo/web.jpg",
+			"largeImageURL":"https://cdn.pixabay.com/photo/large.jpg",
+			"fullHDURL":"https://cdn.pixabay.com/photo/fullhd.jpg",
+			"imageURL":"https://cdn.pixabay.com/photo/original.png",
+			"imageWidth":4000,
+			"imageHeight":3000,
+			"user":"A Creator",
+			"user_id":7
+		}]}`), nil
+	})}
+
+	resolved, err := NewPixabay("key", client).Resolve(context.Background(), "photo:42")
+	require.NoError(t, err)
+	require.Equal(t, "https://cdn.pixabay.com/photo/original.png", resolved.DownloadURL)
+	require.Equal(t, "image/png", resolved.MIMEType)
+	require.Equal(t, "photo:42", resolved.ExternalID)
+	require.Equal(t, 4000, resolved.Width)
+	require.Equal(t, 3000, resolved.Height)
+}

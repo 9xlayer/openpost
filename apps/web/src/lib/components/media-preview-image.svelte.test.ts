@@ -17,4 +17,17 @@ describe('media preview image', () => {
 		expect(element.src).toContain('/media/brand-logo');
 		expect(element.src).not.toContain('/thumb/');
 	});
+
+	it('skips the thumbnail tier when asked for the original', async () => {
+		await render(MediaPreviewImage, {
+			mediaId: 'brand-logo',
+			alt: 'Brand logo',
+			thumbnailSize: 'original'
+		});
+
+		const element = document.querySelector('img');
+		if (!(element instanceof HTMLImageElement)) throw new Error('Expected an image element.');
+		expect(element.src).toContain('/media/brand-logo');
+		expect(element.src).not.toContain('/thumb/');
+	});
 });

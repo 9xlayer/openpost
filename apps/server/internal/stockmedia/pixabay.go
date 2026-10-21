@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -14,6 +16,13 @@ const (
 	pixabayAPIBase     = "https://pixabay.com/api/"
 	pixabayProviderURL = "https://pixabay.com"
 	pixabayLicenseURL  = "https://pixabay.com/service/license-summary/"
+
+	// Pixabay serves the original through imageURL when the API key has full
+	// access, then a 1920px fullHD copy, then the 1280px large copy. Report the
+	// dimensions of the file that will actually be imported.
+	pixabayFullHDMaxSide        = 1920
+	pixabayLargeMaxSide         = 1280
+	pixabayMaxPhotoPixels int64 = 64_000_000
 )
 
 type PixabayAdapter struct {
@@ -40,6 +49,8 @@ type pixabayImage struct {
 	Tags          string `json:"tags"`
 	WebformatURL  string `json:"webformatURL"`
 	LargeImageURL string `json:"largeImageURL"`
+	FullHDURL     string `json:"fullHDURL"`
+	ImageURL      string `json:"imageURL"`
 	ImageWidth    int    `json:"imageWidth"`
 	ImageHeight   int    `json:"imageHeight"`
 	User          string `json:"user"`
@@ -178,8 +189,13 @@ func (a *PixabayAdapter) Resolve(ctx context.Context, externalID string) (Resolv
 			return ResolvedAsset{}, ErrNotFound
 		}
 		item := payload.Hits[0]
+		downloadURL, width, height, mimeType := pixabayPhotoDownload(item)
+		asset := normalizePixabayImage(item)
+		if width > 0 && height > 0 {
+			asset.Width, asset.Height = width, height
+		}
 		return ResolvedAsset{
-			Asset: normalizePixabayImage(item), DownloadURL: SafeHTTPSURL(item.LargeImageURL), MIMEType: "image/jpeg",
+			Asset: asset, DownloadURL: downloadURL, MIMEType: mimeType,
 		}, nil
 	}
 	if kind == "video" {
@@ -217,14 +233,81 @@ func (a *PixabayAdapter) get(ctx context.Context, rawURL string, destination any
 }
 
 func normalizePixabayImage(item pixabayImage) Asset {
+	_, width, height, _ := pixabayPhotoDownload(item)
+	if width <= 0 || height <= 0 {
+		width, height = item.ImageWidth, item.ImageHeight
+	}
 	return Asset{
 		ExternalID: "photo:" + strconv.Itoa(item.ID), Kind: "photo", Title: strings.TrimSpace(item.Tags),
-		Width: item.ImageWidth, Height: item.ImageHeight, ThumbnailURL: SafeHTTPSURL(item.WebformatURL),
+		Width: width, Height: height, ThumbnailURL: SafeHTTPSURL(item.WebformatURL),
 		PreviewURL: SafeHTTPSURL(item.LargeImageURL), SourceURL: SafeHTTPSURL(item.PageURL),
 		CreatorName: strings.TrimSpace(item.User), CreatorURL: pixabayCreatorURL(item.UserID),
 		Provider: "pixabay", ProviderURL: pixabayProviderURL,
 		AttributionText: "Image by " + strings.TrimSpace(item.User) + " on Pixabay",
 		LicenseName:     "Pixabay Content License", LicenseURL: pixabayLicenseURL,
+	}
+}
+
+// pixabayPhotoDownload selects the largest file the API key can serve and
+// returns the dimensions of that exact file. Originals larger than the media
+// pipeline's pixel budget fall back to a smaller copy instead of failing after
+// download.
+func pixabayPhotoDownload(item pixabayImage) (string, int, int, string) {
+	for _, candidate := range []struct {
+		raw     string
+		maxSide int
+	}{
+		{raw: item.ImageURL},
+		{raw: item.FullHDURL, maxSide: pixabayFullHDMaxSide},
+		{raw: item.LargeImageURL, maxSide: pixabayLargeMaxSide},
+	} {
+		downloadURL := SafeHTTPSURL(candidate.raw)
+		if downloadURL == "" {
+			continue
+		}
+		width, height := item.ImageWidth, item.ImageHeight
+		if candidate.maxSide > 0 {
+			width, height = pixabayDimensionsWithin(width, height, candidate.maxSide)
+		}
+		if width > 0 && height > 0 && int64(width)*int64(height) > pixabayMaxPhotoPixels {
+			continue
+		}
+		return downloadURL, width, height, pixabayPhotoMIMEType(downloadURL)
+	}
+	return "", 0, 0, ""
+}
+
+func pixabayDimensionsWithin(width, height, maxSide int) (int, int) {
+	if width <= 0 || height <= 0 {
+		return 0, 0
+	}
+	if width <= maxSide && height <= maxSide {
+		return width, height
+	}
+	if width >= height {
+		scaled := int(math.Round(float64(height) * float64(maxSide) / float64(width)))
+		return maxSide, max(scaled, 1)
+	}
+	scaled := int(math.Round(float64(width) * float64(maxSide) / float64(height)))
+	return max(scaled, 1), maxSide
+}
+
+func pixabayPhotoMIMEType(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "image/jpeg"
+	}
+	switch strings.ToLower(path.Ext(parsed.Path)) {
+	case ".png":
+		return "image/png"
+	case ".webp":
+		return "image/webp"
+	case ".gif":
+		return "image/gif"
+	case ".avif":
+		return "image/avif"
+	default:
+		return "image/jpeg"
 	}
 }
 

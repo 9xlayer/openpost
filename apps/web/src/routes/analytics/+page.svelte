@@ -196,13 +196,6 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				unit: 'destination' as const
 			},
 			{
-				key: 'impressions',
-				label: m.analytics_impressions(),
-				metric: summary.impressions,
-				denominator: destinationCount,
-				unit: 'destination' as const
-			},
-			{
 				key: 'reach',
 				label: m.analytics_reach(),
 				metric: summary.reach,
@@ -215,9 +208,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 		summaryMetrics.filter((item) => ['followers', 'engagement', 'views'].includes(item.key))
 	);
 	const secondarySummaryMetrics = $derived(
-		summaryMetrics.filter(
-			(item) => ['impressions', 'reach'].includes(item.key) && item.metric.measured > 0
-		)
+		summaryMetrics.filter((item) => item.key === 'reach' && item.metric.measured > 0)
 	);
 	const unavailableSummaryMetrics = $derived(
 		summaryMetrics.filter((item) => item.metric.measured === 0)

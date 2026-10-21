@@ -14,6 +14,7 @@
 		fallbackAlt = '',
 		class: className = '',
 		loading = 'lazy',
+		still,
 		onMissing,
 		noStill
 	}: {
@@ -21,14 +22,23 @@
 		fallbackAlt?: string;
 		class?: string;
 		loading?: 'lazy' | 'eager';
+		/**
+		 * Override the still image. Use a larger tier or the original where the
+		 * tile is bigger than the item's default thumbnail tier.
+		 */
+		still?: string | null;
 		onMissing?: () => void;
 		noStill?: Snippet;
 	} = $props();
 
 	const kind = $derived(mediaThumbKind(item.mime_type));
+	const thumbnailURL = $derived.by(() => {
+		const selected = mediaThumbnailURL(item);
+		return selected ? getAuthenticatedMediaURL(selected) : '';
+	});
 	const stillURL = $derived.by(() => {
 		if (kind !== 'image' && kind !== 'video') return '';
-		const selected = mediaThumbnailURL(item);
+		const selected = still || mediaThumbnailURL(item);
 		return selected ? getAuthenticatedMediaURL(selected) : '';
 	});
 	const originalURL = $derived(getAuthenticatedMediaURL(item.url));
@@ -52,6 +62,12 @@
 	function handleError(event: Event): void {
 		const image = event.currentTarget;
 		if (!(image instanceof HTMLImageElement)) return;
+		if (shownURL && shownURL !== thumbnailURL && shownURL !== originalURL) {
+			// The tier override (e.g. a larger still) is missing; fall back to the
+			// item's own thumbnail before the full original.
+			shownURL = thumbnailURL || originalURL;
+			return;
+		}
 		if (!retriedOriginal && shownURL && shownURL !== originalURL) {
 			retriedOriginal = true;
 			shownURL = originalURL;

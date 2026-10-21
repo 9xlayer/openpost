@@ -154,6 +154,59 @@ func TestAvatarPlaceholderContrastsAgainstPaperInBothAppearances(t *testing.T) {
 		})
 	}
 }
+
+func TestFooterStaysClearOfBodyText(t *testing.T) {
+	// A page filled with text used to put the footer arrow inside the descender
+	// band of the last line. Measure the rendered gap instead of the constants
+	// that produce it, so the layout can change without losing the guarantee.
+	style, err := Parse(map[string]any{"text_card": "always", "text_card_shadow": false})
+	require.NoError(t, err)
+	body := strings.Repeat("Publishing should feel like writing, not filling in a form. ", 12) + "Done."
+	images, err := Render(t.Context(), body, "instagram.feed", style, Identity{Name: "Founder", Handle: "founder"}, nil, 1)
+	require.NoError(t, err)
+	require.NotEmpty(t, images)
+	photo, err := jpeg.Decode(bytes.NewReader(images[0].JPEG))
+	require.NoError(t, err)
+
+	luminance := func(x, y int) float64 {
+		r, g, b, _ := photo.At(x, y).RGBA()
+		return testLuminance(int(r>>8), int(g>>8), int(b>>8))
+	}
+
+	// The lowest dark pixel is the last line's descender; the muted arrow is
+	// lighter than body ink, so it cannot be mistaken for text.
+	textBottom := 0
+	for y := 0; y < photo.Bounds().Dy(); y++ {
+		for x := 136; x < 944; x++ {
+			if luminance(x, y) < 0.12 {
+				textBottom = y
+				break
+			}
+		}
+	}
+	require.Greater(t, textBottom, 0, "the body must contain visible text")
+
+	arrowTop := 0
+	for y := textBottom + 5; y < photo.Bounds().Dy() && arrowTop == 0; y++ {
+		for x := 896; x < 974; x++ {
+			r, g, b, _ := photo.At(x, y).RGBA()
+			if abs(int(r>>8)-0x6b) < 18 && abs(int(g>>8)-0x72) < 18 && abs(int(b>>8)-0x80) < 18 {
+				arrowTop = y
+				break
+			}
+		}
+	}
+	require.Greater(t, arrowTop, 0, "the card must draw its footer arrow")
+	require.GreaterOrEqual(t, arrowTop-textBottom, 15, "footer arrow must not touch the last text line")
+}
+
+func abs(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
 func TestLayoutPaginatesWithoutDroppingTextAndBoundsWork(t *testing.T) {
 	body := strings.Repeat("We shipped a smaller, faster editor. ", 55)
 	pages, err := Layout(body, "instagram.feed")

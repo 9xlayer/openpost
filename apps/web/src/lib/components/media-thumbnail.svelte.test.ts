@@ -46,6 +46,28 @@ describe('media thumbnail', () => {
 		expect(element.src).toContain(THUMB_SRC);
 	});
 
+	it('can render a larger still than the item thumbnail', async () => {
+		const screen = await render(MediaThumbnail, {
+			props: {
+				item: imageItem,
+				fallbackAlt: 'Media',
+				still: '/assets/brand/pwa-512.png'
+			}
+		});
+
+		const element = imageElement(screen, 'The team after a successful release.');
+		expect(element.src).toContain('/assets/brand/pwa-512.png');
+		expect(element.src).not.toContain(THUMB_SRC);
+
+		element.dispatchEvent(new Event('error'));
+		await tick();
+		expect(element.src).toContain(THUMB_SRC);
+
+		element.dispatchEvent(new Event('error'));
+		await tick();
+		expect(element.src).toContain(ORIGINAL_SRC);
+	});
+
 	it('falls back to the filename and then the caller label for alt text', async () => {
 		const withoutAlt = await render(MediaThumbnail, {
 			props: {

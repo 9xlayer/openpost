@@ -115,11 +115,16 @@ type fakeLedger struct {
 	live                  *CertificationEvidence
 	liveErr               error
 	reads                 int
+	approvalReads         int
+	localReads            int
+	liveReads             int
+	controlReads          int
 	appendedCertification *CertificationEvidence
 }
 
 func (f *fakeLedger) LatestApprovalReview(context.Context, Subject) (*ApprovalReview, error) {
 	f.reads++
+	f.approvalReads++
 	return f.approval, f.approvalErr
 }
 
@@ -130,13 +135,16 @@ func (f *fakeLedger) ApprovalReviewByID(context.Context, string) (*ApprovalRevie
 func (f *fakeLedger) LatestCertification(_ context.Context, _ Subject, kind EvidenceKind, _ string) (*CertificationEvidence, error) {
 	f.reads++
 	if kind == EvidenceKindLocal {
+		f.localReads++
 		return f.local, f.localErr
 	}
+	f.liveReads++
 	return f.live, f.liveErr
 }
 
 func (f *fakeLedger) EffectiveRuntimeControl(_ context.Context, subject Subject, _ time.Time) (RuntimeControl, error) {
 	f.reads++
+	f.controlReads++
 	if control, ok := f.controls[subject.Operation]; ok {
 		return control, f.controlErr
 	}

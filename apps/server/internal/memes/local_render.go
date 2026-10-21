@@ -32,12 +32,23 @@ import (
 
 const (
 	builtinRenderHeight       = 600
+	builtinRenderMaxHeight    = 2160
 	builtinMaxGIFFrames       = 20
 	builtinPILLineHeightScale = 1.15
 	builtinPILDefaultSpacing  = 4
 )
 
 var standaloneIRegexp = regexp.MustCompile(`\bi\b`)
+
+func clampBuiltinRenderHeight(height int) int {
+	if height <= 0 {
+		return builtinRenderHeight
+	}
+	if height > builtinRenderMaxHeight {
+		return builtinRenderMaxHeight
+	}
+	return height
+}
 
 func (p *BuiltinProvider) Render(ctx context.Context, request RenderRequest) (RenderedImage, error) {
 	if !p.Available() {
@@ -63,6 +74,7 @@ func (p *BuiltinProvider) Render(ctx context.Context, request RenderRequest) (Re
 	if err != nil {
 		return RenderedImage{}, err
 	}
+	height := clampBuiltinRenderHeight(request.Height)
 	extension := normalizeBuiltinExtension(request.Extension)
 	asset := selectBuiltinAsset(template, request.Styles, extension == "gif")
 	data, err := fs.ReadFile(p.files, "catalog/templates/"+template.ID+"/"+asset)
@@ -81,7 +93,7 @@ func (p *BuiltinProvider) Render(ctx context.Context, request RenderRequest) (Re
 		if decodeErr != nil {
 			return RenderedImage{}, &ProviderError{Kind: ErrorKindInvalidResponse, Operation: "render", Cause: decodeErr}
 		}
-		frame, renderErr := p.renderBuiltinFrame(ctx, template, background, request.Text, overlays, 1)
+		frame, renderErr := p.renderBuiltinFrame(ctx, template, background, request.Text, overlays, 1, height)
 		if renderErr != nil {
 			return RenderedImage{}, renderErr
 		}
@@ -149,11 +161,15 @@ func (p *BuiltinProvider) renderBuiltinFrame(
 	lines []string,
 	overlays []image.Image,
 	percent float64,
+	height int,
 ) (*image.NRGBA, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	frame := imaging.Resize(background, 0, builtinRenderHeight, imaging.Lanczos)
+	if height <= 0 {
+		height = builtinRenderHeight
+	}
+	frame := imaging.Resize(background, 0, height, imaging.Lanczos)
 	canvas := imaging.Clone(frame)
 	for index, foreground := range overlays {
 		if index >= len(template.Overlay) {
@@ -674,7 +690,7 @@ func (p *BuiltinProvider) renderBuiltinGIF(
 		if len(source.Image) > 1 {
 			percent = float64(index) / float64(len(source.Image))
 		}
-		rendered, renderErr := p.renderBuiltinFrame(ctx, template, canvas, lines, overlays, percent)
+		rendered, renderErr := p.renderBuiltinFrame(ctx, template, canvas, lines, overlays, percent, height)
 		if renderErr != nil {
 			return nil, renderErr
 		}

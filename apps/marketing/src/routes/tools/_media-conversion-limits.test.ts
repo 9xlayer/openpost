@@ -50,6 +50,7 @@ describe('browser media tool byte limits', () => {
 	it('states no tool limit as a literal', () => {
 		const sources = [
 			readSource('../_components/tools/local-media.ts'),
+			readSource('../_components/tools/local-media-limits.ts'),
 			readSource('../_components/tools/MediaConverter.svelte'),
 			readSource('./_media-conversion-guides.ts')
 		];

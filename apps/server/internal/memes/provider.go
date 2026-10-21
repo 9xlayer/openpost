@@ -143,6 +143,10 @@ type RenderRequest struct {
 	Extension     string         `json:"extension,omitempty"`
 	Layout        string         `json:"layout,omitempty"`
 	Font          string         `json:"font,omitempty"`
+	// Height is the rendered image height in pixels. Zero uses the provider
+	// default. Saving a meme requests a larger height than a candidate
+	// preview so published output is not upscaled by the composer or provider.
+	Height int `json:"height,omitempty"`
 }
 
 // OverlayImage keeps workspace media inside OpenPost's process. The built-in
