@@ -1,12 +1,65 @@
 package analytics
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBuildExportDailyPreservesMeasuredZeroChanges(t *testing.T) {
+	for _, backend := range []string{"sqlite", "postgres"} {
+		t.Run(backend, func(t *testing.T) {
+			db := analyticsSnapshotTestDB(t, backend,
+				(*models.Publication)(nil), (*models.Rendition)(nil), (*models.SocialAccount)(nil),
+				(*models.AnalyticsSyncState)(nil), (*models.AnalyticsAccountSnapshot)(nil))
+			now := time.Date(2026, 10, 14, 13, 0, 0, 0, time.UTC)
+			for _, row := range []any{
+				&models.SocialAccount{ID: "account", WorkspaceID: "workspace", Platform: "test", AccountUsername: "person", IsActive: true, AccessTokenEnc: []byte("fixture-token")},
+				&models.Publication{ID: "post", WorkspaceID: "workspace", CreatedByID: "user", Status: models.PublicationStatusPublished, ActualRunAt: now.AddDate(0, 0, -30)},
+				&models.Rendition{ID: "rendition", PublicationID: "post", SocialAccountID: "account", Platform: "test", Status: models.RenditionStatusPublished},
+			} {
+				_, err := db.NewInsert().Model(row).Exec(t.Context())
+				require.NoError(t, err)
+			}
+			const compatible = `{"likes":{"unit":"count","aggregation":"lifetime_total"},"views":{"unit":"count","aggregation":"lifetime_total"}}`
+			for i, snapshot := range []struct{ values, metadata string }{
+				{`{"likes":3,"views":10}`, compatible},
+				{`{"likes":3,"views":10}`, compatible},
+				{`{"views":10}`, compatible},
+				{`{"likes":0,"views":20}`, `{"likes":{"unit":"count","aggregation":"lifetime_total"},"views":{"unit":"milliseconds","aggregation":"lifetime_total"}}`},
+				{`{"likes":0,"views":20}`, compatible},
+			} {
+				at := time.Date(2026, 10, 10+i, 12, 0, 0, 0, time.UTC)
+				_, err := db.NewInsert().Model(&models.AnalyticsRenditionSnapshot{
+					ID: fmt.Sprintf("content-%d", i), WorkspaceID: "workspace", PublicationID: "post", RenditionID: "rendition", SocialAccountID: "account", Platform: "test",
+					CapturedAt: at, MetricsJSON: snapshot.values, MetricMetadataJSON: snapshot.metadata,
+				}).Exec(t.Context())
+				require.NoError(t, err)
+				if i == 0 || i == 1 || i == 3 {
+					_, err = db.NewInsert().Model(&models.AnalyticsAccountSnapshot{
+						ID: fmt.Sprintf("account-%d", i), WorkspaceID: "workspace", SocialAccountID: "account", Platform: "test", CapturedAt: at,
+						MetricsJSON: `{"followers":100}`, MetricMetadataJSON: `{"followers":{"unit":"count","aggregation":"current_snapshot"}}`,
+					}).Exec(t.Context())
+					require.NoError(t, err)
+				}
+			}
+			service := NewService(db, nil)
+			service.now = func() time.Time { return now }
+			export, err := service.BuildExport(t.Context(), "workspace", ExportOptions{Days: 7})
+			require.NoError(t, err)
+			require.Equal(t, [][]any{
+				{"2026-10-11", int64(0), int64(0), int64(0)},
+				{"2026-10-12", nil, nil, int64(0)},
+				{"2026-10-13", int64(0), nil, nil},
+				{"2026-10-14", nil, int64(0), nil},
+			}, export.Daily.Rows, "unchanged measured counts are zero; absent or incomparable measurements stay blank")
+		})
+	}
+}
 
 func TestExportGroupKeyFollowsTimezone(t *testing.T) {
 	rome, err := time.LoadLocation("Europe/Rome")
