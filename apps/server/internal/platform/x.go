@@ -335,6 +335,8 @@ func (x *XAdapter) getAuthenticatedUser(ctx context.Context, accessToken string,
 	return userResp.Data, nil
 }
 
+func (x *XAdapter) AccountCapabilityKeyInput(AccountCapabilityInput) string { return "" }
+
 func (x *XAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, _ AccountCapabilityInput) (AccountCapabilityResult, error) {
 	user, err := x.getAuthenticatedUser(ctx, accessToken, true)
 	if err != nil {

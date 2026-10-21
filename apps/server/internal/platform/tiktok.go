@@ -656,6 +656,13 @@ func (t *TikTokAdapter) loadCreatorInfo(ctx context.Context, accessToken string)
 	return creatorResp.Data, nil
 }
 
+func (t *TikTokAdapter) AccountCapabilityKeyInput(input AccountCapabilityInput) string {
+	if isTikTokUploadMode(input.Settings) {
+		return "upload"
+	}
+	return "direct"
+}
+
 func (t *TikTokAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
 	if isTikTokUploadMode(input.Settings) {
 		return AccountCapabilityResult{

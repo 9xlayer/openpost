@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
@@ -289,7 +290,17 @@ func Profiles() []Profile {
 	}
 }
 
+// All returns the process-wide publishing capability catalog. The catalog is
+// built once and must be treated as immutable: do not assign to a returned
+// Capability's fields and do not mutate its nested slices or metadata. Resolve
+// and FindOutput copy the fields that callers modify.
 func All() []Capability {
+	return buildCatalogOnce()
+}
+
+var buildCatalogOnce = sync.OnceValue(buildCatalog)
+
+func buildCatalog() []Capability {
 	text := MediaConstraint{MinCount: 0, MaxCount: 0}
 	linkedinImage := MediaConstraint{MinCount: 1, MaxCount: 1, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/gif"}}
 	feedImages := MediaConstraint{MinCount: 1, MaxCount: 10, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp"}}

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -83,6 +84,92 @@ func TestDynamicCapabilityFailureOnlyBlocksRequiredActiveChoice(t *testing.T) {
 	require.NotEqual(t, cacheUpload, accountCapabilitySettingsKey(map[string]any{"content_posting_method": "DIRECT_POST", "community_id": "one"}))
 }
 
+func TestAccountCapabilityTenantKeyTracksIdentityOnly(t *testing.T) {
+	account := models.SocialAccount{
+		ID: "account-1", WorkspaceID: "workspace-1", Platform: capabilities.ProviderX,
+		OAuthGrantID: "grant-1", GrantedScopes: "tweet.read", InstanceURL: "",
+	}
+	key := accountCapabilityTenantKey(account)
+	withState := account
+	withState.CapabilityState = `{"subscription_type":"premium"}`
+	require.Equal(t, key, accountCapabilityTenantKey(withState), "persisting state must not invalidate the entry")
+
+	reconnected := account
+	reconnected.OAuthGrantID = "grant-2"
+	require.NotEqual(t, key, accountCapabilityTenantKey(reconnected))
+	scoped := account
+	scoped.GrantedScopes = "tweet.read users.read"
+	require.NotEqual(t, key, accountCapabilityTenantKey(scoped))
+	moved := account
+	moved.InstanceURL = "https://social.example"
+	require.NotEqual(t, key, accountCapabilityTenantKey(moved))
+
+	discord := models.SocialAccount{
+		ID: "discord-1", WorkspaceID: "workspace-1", Platform: capabilities.ProviderDiscord,
+	}
+	bot := discord
+	bot.CapabilityState = `{"connection_type":"bot"}`
+	webhook := discord
+	webhook.CapabilityState = `{"connection_type":"webhook"}`
+	require.NotEqual(t, accountCapabilityTenantKey(bot), accountCapabilityTenantKey(webhook))
+}
+
+func TestAccountCapabilityCacheEvictsOldestEntry(t *testing.T) {
+	handler := NewCapabilityResolverHandler(nil, nil, nil, nil)
+	result := platform.AccountCapabilityResult{Revision: "revision-1"}
+	now := time.Now().UTC()
+	handler.storeAccountCapability("oldest", result, now.Add(time.Hour))
+	// Tight-loop inserts can share a timestamp, which makes victim selection
+	// fall back to map order. Pin "oldest" deterministically instead.
+	oldest := handler.cache["oldest"]
+	oldest.storedAt = now.Add(-time.Minute)
+	handler.cache["oldest"] = oldest
+	for index := 0; index < accountCapabilityCacheLimit-1; index++ {
+		handler.storeAccountCapability(
+			"account-"+strconv.Itoa(index),
+			result,
+			now.Add(time.Hour),
+		)
+	}
+	handler.storeAccountCapability("new", result, now.Add(time.Hour))
+
+	require.LessOrEqual(t, len(handler.cache), accountCapabilityCacheLimit)
+	_, _, ok := handler.cachedAccountCapability("oldest")
+	require.False(t, ok, "the oldest entry is evicted first")
+	_, _, ok = handler.cachedAccountCapability("new")
+	require.True(t, ok)
+}
+
+func TestCapabilityCacheWriteFailureKeepsVerifiedDestinationCompatible(t *testing.T) {
+	// Removing the table makes persisting capability state fail.
+	db := createHandlerTestDB(t, (*models.SocialAccount)(nil))
+	_, err := db.ExecContext(t.Context(), "DROP TABLE social_accounts")
+	require.NoError(t, err)
+	handler := NewCapabilityResolverHandler(db, nil, map[string]platform.Adapter{
+		capabilities.ProviderX: &keyedCapabilityAdapter{
+			result: platform.AccountCapabilityResult{
+				State: map[string]string{"subscription_type": "premium"},
+			},
+		},
+	}, capabilityResolverTokenSource{})
+	account := models.SocialAccount{
+		ID: "account-1", WorkspaceID: "workspace-1", Platform: capabilities.ProviderX,
+	}
+	segments := []capabilities.ResolveSegment{{ID: "segment-1", Body: "A normal update"}}
+	resolved := capabilities.Resolve(capabilities.ProviderX, capabilities.ResolveInput{Segments: segments})
+
+	handler.mergeAccountCapability(t.Context(), account, "en-US", "US", nil, segments, &resolved)
+
+	require.True(t, resolved.Compatible)
+	codes := capabilityIssueCodes(resolved.Issues)
+	require.Contains(t, codes, "account_capability_cache_failed")
+	for _, issue := range resolved.Issues {
+		if issue.Code == "account_capability_cache_failed" {
+			require.Equal(t, "warning", issue.Severity)
+		}
+	}
+}
+
 func TestXAccountCapabilityResolutionFailsClosedAndUpgradesVerifiedPremium(t *testing.T) {
 	segments := []capabilities.ResolveSegment{{
 		ID:   "segment-1",
@@ -149,7 +236,7 @@ func TestDynamicDiscordCapabilityKeepsSavedChannelAndCanonicalReadinessContract(
 	expected := readiness.DecideAccountPublication(
 		t.Context(), account, canonical, operation, providerreadiness.ExecutionIntentProduction, policyMode,
 	)
-	actual := handler.publicationReadiness(t.Context(), account, resolved.Capability, operation, settings)
+	actual := handler.publicationReadiness(t.Context(), handler.readiness, account, resolved.Capability, operation, settings)
 	require.NotEmpty(t, expected.ContractDigest)
 	require.Equal(t, expected.ContractDigest, actual.ContractDigest)
 	require.Equal(t, expected.State, actual.State)

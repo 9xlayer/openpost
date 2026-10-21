@@ -159,6 +159,12 @@
 	import { editorAccountIdAfterVariantLoad } from './compose/editor-target';
 	import { isActionableAccountIssue } from './compose/account-attention';
 	import {
+		capabilityResolutionIsFresh,
+		capabilityResponseApplies,
+		hasUsableCapabilities
+	} from './compose/capability-readiness';
+	import { accountNeedsSegmentCopy } from './compose/segment-overrides';
+	import {
 		composerIssues,
 		isAccountSpecificIssue,
 		issueMatchesProvider,
@@ -564,11 +570,13 @@
 	let destinationOptionCursorsByAccount = $state<Record<string, Record<string, string>>>({});
 	let destinationOptionSearchByAccount = $state<Record<string, Record<string, string>>>({});
 	let destinationOptionsErrors = $state<Record<string, string>>({});
-	let destinationOptionsLoadingAccountId = $state('');
+	const destinationOptionsLoadingAccountIds = new SvelteSet<string>();
+	const destinationOptionsLoadingCounts = new Map<string, number>();
 	let capabilityResolveTimer: ReturnType<typeof setTimeout> | null = null;
 	let capabilityResolveAbortController: AbortController | null = null;
-	let lastResolvedCapabilityInputSnapshot = '';
-	let destinationOptionsRequestSequence = 0;
+	let lastResolvedCapabilityInputSnapshot = $state('');
+	let lastResolvedCapabilityStructureSnapshot = $state('');
+	const destinationOptionsRequestSequences = new Map<string, number>();
 	let capabilityResolveRequestSequence = 0;
 
 	let autoSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -974,13 +982,41 @@
 			})),
 			settingsByAccount,
 			segmentSettingsByPost,
-			mediaSettingsByAccount
+			mediaSettingsByAccount,
+			attachmentRequirements: aiAttachmentRequirements
 		})
 	);
 	const capabilityReadinessCurrent = $derived(
 		!capabilityResolveLoading &&
 			lastResolvedCapabilityInputSnapshot === capabilityInputSnapshot &&
 			selectedAccountIds.every((accountID) => Boolean(resolvedCapabilities[accountID]))
+	);
+	// Content edits keep the previous answer usable. Structural edits (accounts,
+	// formats, media shape, destination settings) must wait for the next answer.
+	const capabilityStructureSnapshot = $derived(
+		JSON.stringify({
+			workspace: selectedWorkspaceId,
+			accounts: selectedAccountIds,
+			mode: textComposerMode,
+			requestedOutputProfiles,
+			posts: posts.map((post) => ({ mediaIds: post.mediaIds, poll: Boolean(post.poll) })),
+			variants: Array.from(variants.entries()).map(([accountID, values]) => [
+				accountID,
+				Object.fromEntries(
+					Object.entries(values).map(([key, value]) => [
+						key,
+						{ mediaIds: value.mediaIds, contentInherited: value.contentInherited }
+					])
+				)
+			]),
+			settingsByAccount,
+			segmentSettingsByPost,
+			attachmentRequirements: aiAttachmentRequirements
+		})
+	);
+	const capabilityReadinessKnown = $derived(
+		hasUsableCapabilities(selectedAccountIds, resolvedCapabilities, capabilityResolveError) &&
+			lastResolvedCapabilityStructureSnapshot === capabilityStructureSnapshot
 	);
 	const settingsDialogEmptyHint = $derived(
 		capabilityReadinessCurrent &&
@@ -1043,12 +1079,12 @@
 	);
 	const canPublishNow = $derived(
 		canSubmitPublication &&
-			capabilityReadinessCurrent &&
+			capabilityReadinessKnown &&
 			selectedAccounts.every((account) => accountReadiness(account, 'publish_immediate').canProceed)
 	);
 	const canSchedulePublication = $derived(
 		canSubmitPublication &&
-			capabilityReadinessCurrent &&
+			capabilityReadinessKnown &&
 			selectedAccounts.every((account) => accountReadiness(account, 'publish_scheduled').canProceed)
 	);
 	const canSaveEditedPost = $derived(
@@ -1947,7 +1983,7 @@
 	}
 
 	function accountReadinessMessages(account: SocialAccount): string[] {
-		if (!capabilityReadinessCurrent) return [];
+		if (!capabilityReadinessKnown) return [];
 		const immediate = accountReadiness(account, 'publish_immediate');
 		const scheduled = accountReadiness(account, 'publish_scheduled');
 		return uniqueIssueMessages([
@@ -1963,7 +1999,7 @@
 	function operationReadinessBlocker(
 		operation: Extract<ProviderReadinessOperation, 'publish_immediate' | 'publish_scheduled'>
 	): string {
-		if (!capabilityReadinessCurrent) return m.compose_load_readiness_failed();
+		if (!capabilityReadinessKnown) return m.compose_load_readiness_failed();
 		for (const account of selectedAccounts) {
 			const presentation = accountReadiness(account, operation);
 			if (presentation.canProceed) continue;
@@ -2399,10 +2435,12 @@
 					if (media.thumbnail_timestamp_ms) {
 						mediaSettings.thumbnail_timestamp_ms = media.thumbnail_timestamp_ms;
 					}
-					nextMediaSettings[media.id] = {
-						...(nextMediaSettings[media.id] ?? {}),
-						[rendition.social_account_id]: mediaSettings
-					};
+					if (Object.keys(mediaSettings).length > 0) {
+						nextMediaSettings[media.id] = {
+							...(nextMediaSettings[media.id] ?? {}),
+							[rendition.social_account_id]: mediaSettings
+						};
+					}
 				}
 			}
 		}
@@ -2410,9 +2448,20 @@
 		mediaSettingsByAccount = nextMediaSettings;
 	}
 
+	function accountNeedsOwnSegmentCopy(accountID: string): boolean {
+		return accountNeedsSegmentCopy(
+			accountID,
+			variants,
+			aiAttachmentRequirements,
+			posts.some((post) => post.poll),
+			mediaSettingsByAccount
+		);
+	}
+
 	function scheduleCapabilityResolve() {
 		if (capabilityResolveTimer) clearTimeout(capabilityResolveTimer);
-		capabilityResolveAbortController?.abort();
+		// Let the in-flight resolve finish so its provider work can populate the
+		// cache. The next request aborts it only once the debounce elapses.
 		capabilityResolveTimer = setTimeout(() => {
 			capabilityResolveTimer = null;
 			void resolveCapabilities();
@@ -2420,11 +2469,21 @@
 	}
 
 	async function resolveCapabilities() {
+		if (capabilityResolveTimer) {
+			clearTimeout(capabilityResolveTimer);
+			capabilityResolveTimer = null;
+		}
 		const inputSnapshot = capabilityInputSnapshot;
 		if (!selectedWorkspaceId || selectedAccountIds.length === 0) {
+			capabilityResolveAbortController?.abort();
+			capabilityResolveAbortController = null;
+			capabilityResolveRequestSequence++;
+			capabilityResolveLoading = false;
 			resolvedCapabilities = {};
+			validationIssues = [];
 			capabilityResolveError = '';
 			lastResolvedCapabilityInputSnapshot = inputSnapshot;
+			lastResolvedCapabilityStructureSnapshot = capabilityStructureSnapshot;
 			return;
 		}
 		capabilityResolveAbortController?.abort();
@@ -2432,7 +2491,6 @@
 		capabilityResolveAbortController = abortController;
 		const requestSequence = ++capabilityResolveRequestSequence;
 		capabilityResolveLoading = true;
-		capabilityResolveError = '';
 		const [, region = 'US'] = getLocaleTag().split('-');
 		try {
 			const { data, error: resolveError } = await client.POST('/capabilities/resolve', {
@@ -2452,27 +2510,26 @@
 						selectedAccounts.map((account) => [account.id, settingsForAccount(account)])
 					),
 					account_segments: Object.fromEntries(
-						selectedAccountIds.map((accountId) => [
-							accountId,
-							posts.map((post) => ({
-								id: post.key,
-								content: pollProjection(
-									post,
-									selectedAccounts.find((account) => account.id === accountId)!
-								).body,
-								url: post === posts[0] ? linkUrl : '',
-								settings:
-									post === posts[0] && aiAttachmentRequirements[accountId]
-										? { attachment_requirement: aiAttachmentRequirements[accountId] }
-										: undefined,
-								media: (getVariantMediaIds(accountId, post.key) ?? post.mediaIds).map(
-									(mediaId) => ({
-										media_id: mediaId,
-										alt_text: mediaAltTextForAccount(mediaId, accountId)
-									})
-								)
-							}))
-						])
+						selectedAccounts
+							.filter((account) => accountNeedsOwnSegmentCopy(account.id))
+							.map((account) => [
+								account.id,
+								posts.map((post) => ({
+									id: post.key,
+									content: pollProjection(post, account).body,
+									url: post === posts[0] ? linkUrl : '',
+									settings:
+										post === posts[0] && aiAttachmentRequirements[account.id]
+											? { attachment_requirement: aiAttachmentRequirements[account.id] }
+											: undefined,
+									media: (getVariantMediaIds(account.id, post.key) ?? post.mediaIds).map(
+										(mediaId) => ({
+											media_id: mediaId,
+											alt_text: mediaAltTextForAccount(mediaId, account.id)
+										})
+									)
+								}))
+							])
 					),
 					segments: posts.map((post) => ({
 						id: post.key,
@@ -2488,22 +2545,20 @@
 			if (resolveError) {
 				throw new Error(resolveError.detail || m.compose_load_capabilities_failed());
 			}
-			if (requestSequence !== capabilityResolveRequestSequence) return;
+			if (
+				!capabilityResponseApplies({
+					requestSequence,
+					currentRequestSequence: capabilityResolveRequestSequence,
+					requestedSnapshot: inputSnapshot,
+					currentSnapshot: capabilityInputSnapshot
+				})
+			)
+				return;
+			capabilityResolveError = '';
 			const resolvedAccounts = data?.accounts ?? [];
 			resolvedCapabilities = Object.fromEntries(
 				resolvedAccounts.map((capability) => [capability.account_id, capability])
 			);
-			if (
-				resolvedAccounts.some(
-					(capability) =>
-						presentProviderReadiness(capability.immediate_readiness, 'publish_immediate').action ===
-							'retry' ||
-						presentProviderReadiness(capability.scheduled_readiness, 'publish_scheduled').action ===
-							'retry'
-				)
-			) {
-				capabilityResolveError = m.compose_load_readiness_failed();
-			}
 			for (const capability of resolvedAccounts) {
 				const dynamic = capability.dynamic_options ?? {};
 				if (Object.keys(dynamic).length === 0) continue;
@@ -2525,6 +2580,7 @@
 			}
 			validationIssues = resolvedAccounts.flatMap((capability) => capability.issues ?? []);
 			lastResolvedCapabilityInputSnapshot = inputSnapshot;
+			lastResolvedCapabilityStructureSnapshot = capabilityStructureSnapshot;
 			refreshSavedTextCardPreviews();
 			void loadRequiredDestinationOptions();
 		} catch (resolveError) {
@@ -2542,16 +2598,48 @@
 		}
 	}
 
-	async function loadRequiredDestinationOptions() {
-		for (const account of selectedAccounts) {
-			const requiredSources = visibleSettings(account)
-				.filter((setting) => setting.required && Boolean(setting.options_source))
-				.map((setting) => setting.options_source!)
-				.filter((source) => destinationOptionsByAccount[account.id]?.[source] === undefined);
-			for (const source of new Set(requiredSources)) {
-				await loadDestinationOptions(account, false, source);
+	async function resolveCapabilitiesCurrent(): Promise<boolean> {
+		// Edits can land while a request is in flight. Resolve again so a submit
+		// decision never relies on an answer for a superseded state.
+		for (let attempt = 0; attempt < 3; attempt++) {
+			await resolveCapabilities();
+			if (
+				capabilityResolutionIsFresh(
+					lastResolvedCapabilityInputSnapshot,
+					capabilityInputSnapshot,
+					capabilityResolveError
+				)
+			) {
+				return true;
 			}
+			if (capabilityResolveError) return false;
 		}
+		return false;
+	}
+
+	async function loadRequiredDestinationOptions() {
+		const accountsWithSources = selectedAccounts
+			.map((account) => ({
+				account,
+				sources: visibleSettings(account)
+					.filter((setting) => setting.required && Boolean(setting.options_source))
+					.map((setting) => setting.options_source!)
+					.filter((source) => destinationOptionsByAccount[account.id]?.[source] === undefined)
+			}))
+			.filter(({ sources }) => sources.length > 0);
+		// Accounts are independent, but a large composer should not open one
+		// provider request per destination at once.
+		const queue = [...accountsWithSources];
+		const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+			for (;;) {
+				const next = queue.shift();
+				if (!next) return;
+				for (const source of new Set(next.sources)) {
+					await loadDestinationOptions(next.account, false, source);
+				}
+			}
+		});
+		await Promise.allSettled(workers);
 	}
 
 	function openDestinationSettings(account: SocialAccount) {
@@ -2576,14 +2664,21 @@
 			onlySource,
 			settingsForAccount(account)
 		);
+		const requestWorkspaceId = selectedWorkspaceId;
 		if (!force && !search) {
 			sources = sources.filter(
 				(source) => destinationOptionsByAccount[account.id]?.[source] === undefined
 			);
 		}
 		if (sources.length === 0) return;
-		const requestSequence = ++destinationOptionsRequestSequence;
-		destinationOptionsLoadingAccountId = account.id;
+		const requestSequences = new Map<string, number>();
+		for (const source of sources) {
+			const key = destinationOptionsSequenceKey(account.id, source);
+			const sequence = (destinationOptionsRequestSequences.get(key) ?? 0) + 1;
+			destinationOptionsRequestSequences.set(key, sequence);
+			requestSequences.set(source, sequence);
+		}
+		markDestinationOptionsLoading(account.id, 1);
 		destinationOptionsErrors = { ...destinationOptionsErrors, [account.id]: '' };
 		const [, region = 'US'] = getLocaleTag().split('-');
 		const accountSearches = destinationOptionSearchByAccount[account.id] ?? {};
@@ -2618,13 +2713,19 @@
 					return [source, data?.options ?? [], data?.next_cursor ?? ''] as const;
 				})
 			);
-			if (requestSequence !== destinationOptionsRequestSequence) return;
+			const applied = results.filter(
+				([source]) =>
+					destinationOptionsRequestSequences.get(
+						destinationOptionsSequenceKey(account.id, source)
+					) === requestSequences.get(source)
+			);
+			if (applied.length === 0) return;
 			destinationOptionsByAccount = {
 				...destinationOptionsByAccount,
 				[account.id]: {
 					...(destinationOptionsByAccount[account.id] ?? {}),
 					...Object.fromEntries(
-						results.map(([source, options]) => [
+						applied.map(([source, options]) => [
 							source,
 							append
 								? mergeDestinationOptions(
@@ -2640,11 +2741,17 @@
 				...destinationOptionCursorsByAccount,
 				[account.id]: {
 					...(destinationOptionCursorsByAccount[account.id] ?? {}),
-					...Object.fromEntries(results.map(([source, , cursor]) => [source, cursor]))
+					...Object.fromEntries(applied.map(([source, , cursor]) => [source, cursor]))
 				}
 			};
 		} catch (optionsError) {
-			if (requestSequence !== destinationOptionsRequestSequence) return;
+			const current = sources.some(
+				(source) =>
+					destinationOptionsRequestSequences.get(
+						destinationOptionsSequenceKey(account.id, source)
+					) === requestSequences.get(source)
+			);
+			if (!current) return;
 			destinationOptionsErrors = {
 				...destinationOptionsErrors,
 				[account.id]:
@@ -2653,10 +2760,25 @@
 						: m.compose_load_provider_options_failed()
 			};
 		} finally {
-			if (requestSequence === destinationOptionsRequestSequence) {
-				destinationOptionsLoadingAccountId = '';
+			if (requestWorkspaceId === selectedWorkspaceId) {
+				markDestinationOptionsLoading(account.id, -1);
 			}
 		}
+	}
+
+	function destinationOptionsSequenceKey(accountID: string, source: string): string {
+		return `${accountID}\u001f${source}`;
+	}
+
+	function markDestinationOptionsLoading(accountID: string, delta: 1 | -1) {
+		const next = (destinationOptionsLoadingCounts.get(accountID) ?? 0) + delta;
+		if (next > 0) {
+			destinationOptionsLoadingCounts.set(accountID, next);
+			destinationOptionsLoadingAccountIds.add(accountID);
+			return;
+		}
+		destinationOptionsLoadingCounts.delete(accountID);
+		destinationOptionsLoadingAccountIds.delete(accountID);
 	}
 
 	function getVariantPost(accountId: string, postKey: string): VariantPost | null {
@@ -3414,7 +3536,6 @@
 		workspaceRequestSequence++;
 		accountRequestSequence++;
 		nextSlotRequestSequence++;
-		destinationOptionsRequestSequence++;
 		capabilityResolveRequestSequence++;
 	}
 
@@ -3900,6 +4021,12 @@
 		destinationOptionCursorsByAccount = {};
 		destinationOptionSearchByAccount = {};
 		destinationOptionsErrors = {};
+		destinationOptionsRequestSequences.clear();
+		destinationOptionsLoadingCounts.clear();
+		destinationOptionsLoadingAccountIds.clear();
+		lastResolvedCapabilityInputSnapshot = '';
+		lastResolvedCapabilityStructureSnapshot = '';
+		capabilityResolveError = '';
 		selectedWorkspaceId = value;
 		accounts = [];
 		selectedAccountIds = [];
@@ -4361,10 +4488,10 @@
 				try {
 					await (await sessionFor(selectedWorkspaceId, targetPublicationID)).schedule();
 				} catch (scheduleError) {
-					await resolveCapabilities();
-					const readinessFailure = capabilityResolveError
-						? ''
-						: operationReadinessBlocker('publish_scheduled');
+					const resolvedCurrent = await resolveCapabilitiesCurrent();
+					const readinessFailure = resolvedCurrent
+						? operationReadinessBlocker('publish_scheduled')
+						: capabilityResolveError || m.compose_load_readiness_failed();
 					if (readinessFailure) {
 						const blockingIssue =
 							globalIssues.find((candidate) => candidate.severity === 'error') ?? null;
@@ -4477,8 +4604,9 @@
 					throw new Error(m.compose_thread_minimum());
 				}
 			}
-			await resolveCapabilities();
-			if (capabilityResolveError) throw new Error(capabilityResolveError);
+			if (!(await resolveCapabilitiesCurrent())) {
+				throw new Error(capabilityResolveError || m.compose_load_readiness_failed());
+			}
 			const readinessBlocker = operationReadinessBlocker(
 				publishNow ? 'publish_immediate' : 'publish_scheduled'
 			);
@@ -4501,10 +4629,10 @@
 			} catch (actionError) {
 				const blocker = validationIssues.find((issue) => issue.severity === 'error');
 				if (blocker) issueToFocusAfterSubmit = firstValidationIssue();
-				await resolveCapabilities();
-				const readinessFailure = capabilityResolveError
-					? ''
-					: operationReadinessBlocker(publishNow ? 'publish_immediate' : 'publish_scheduled');
+				const resolvedCurrent = await resolveCapabilitiesCurrent();
+				const readinessFailure = resolvedCurrent
+					? operationReadinessBlocker(publishNow ? 'publish_immediate' : 'publish_scheduled')
+					: capabilityResolveError || m.compose_load_readiness_failed();
 				if (readinessFailure) {
 					issueToFocusAfterSubmit =
 						globalIssues.find((candidate) => candidate.severity === 'error') ?? null;
@@ -6965,7 +7093,7 @@
 						valuesByAccount={requiredValuesByAccount}
 						optionGroupsByAccount={destinationOptionsByAccount}
 						optionErrorsByAccount={destinationOptionsErrors}
-						optionsLoadingAccountId={destinationOptionsLoadingAccountId}
+						optionsLoadingAccountIds={destinationOptionsLoadingAccountIds}
 						onChange={updateAccountSetting}
 						onFormatChange={selectDestinationFormat}
 						onAddMedia={() => openMediaPicker(activePostIndex)}
@@ -7791,7 +7919,9 @@
 	optionNextCursors={settingsAccount
 		? (destinationOptionCursorsByAccount[settingsAccount.id] ?? {})
 		: {}}
-	optionsLoading={settingsAccount?.id === destinationOptionsLoadingAccountId}
+	optionsLoading={settingsAccount
+		? destinationOptionsLoadingAccountIds.has(settingsAccount.id)
+		: false}
 	optionsError={settingsAccount ? (destinationOptionsErrors[settingsAccount.id] ?? '') : ''}
 	scopeLabel={isThread ? m.compose_thread_post({ number: activePostIndex + 1 }) : ''}
 	formatValue={settingsAccount

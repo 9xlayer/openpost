@@ -311,6 +311,10 @@ func (d *DiscordBotAdapter) searchDiscordMembers(ctx context.Context, guildID st
 	return PublishingOptionsPage{Options: options}, nil
 }
 
+func (d *DiscordBotAdapter) AccountCapabilityKeyInput(input AccountCapabilityInput) string {
+	return strings.TrimSpace(stringSetting(input.Settings, "channel_id"))
+}
+
 func (d *DiscordBotAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, credential string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
 	guildID, err := discordGuildIDFromCredential(credential)
 	if err != nil {

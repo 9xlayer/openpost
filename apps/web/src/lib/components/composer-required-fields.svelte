@@ -27,6 +27,7 @@
 		optionGroupsByAccount: Record<string, Record<string, DestinationOption[]>>;
 		optionErrorsByAccount?: Record<string, string>;
 		optionsLoadingAccountId?: string;
+		optionsLoadingAccountIds?: ReadonlySet<string>;
 		onChange: (account: SocialAccount, key: string, value: ComposerSettingValue) => void;
 		onFormatChange: (account: SocialAccount, outputProfile: string) => void;
 		onAddMedia: () => void;
@@ -40,6 +41,7 @@
 		optionGroupsByAccount,
 		optionErrorsByAccount = {},
 		optionsLoadingAccountId = '',
+		optionsLoadingAccountIds,
 		onChange,
 		onFormatChange,
 		onAddMedia,
@@ -204,7 +206,8 @@
 									ariaLabel={`${settingLabel(setting)} · ${accountContextLabel(account)}`}
 									class={singleRequiredField ? 'h-11 w-auto shrink-0' : 'mt-1 h-11'}
 									disabled={setting.control === 'remote_picker' &&
-										optionsLoadingAccountId === account.id}
+										(optionsLoadingAccountId === account.id ||
+											optionsLoadingAccountIds?.has(account.id))}
 									onValueChange={(value) => onChange(account, setting.key, value)}
 								/>
 								{#if setting.control === 'remote_picker' && optionErrorsByAccount[account.id]}

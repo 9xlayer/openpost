@@ -38,6 +38,7 @@ type Service struct {
 	currentRevision      string
 	deployment           DeploymentEnvironment
 	providerEnv          ProviderEnvironment
+	cache                *readCache
 }
 
 func NewService(ledger Ledger, options ServiceOptions) *Service {
@@ -100,6 +101,8 @@ func (s *Service) WithLedger(ledger Ledger) *Service {
 	clone := *s
 	clone.ledger = ledger
 	clone.authorizations, _ = ledger.(AuthorizationSource)
+	// Facts read through another ledger boundary must never be reused.
+	clone.cache = nil
 	return &clone
 }
 
@@ -179,7 +182,7 @@ func (s *Service) ResolveCertificationContext(
 	if err != nil {
 		return CertificationContext{}, err
 	}
-	authorization, err := s.authorizations.AuthorizationForAccount(ctx, account, s.currentTime())
+	authorization, err := s.authorizationForAccount(ctx, account, s.decisionTime())
 	if err != nil {
 		return CertificationContext{}, err
 	}
@@ -258,7 +261,7 @@ func (s *Service) DecideAccountPublication(
 			CurrentAccountReferenceHash: accountReferenceHash,
 		}, errors.Join(errors.New("provider authorization source is unavailable"), referenceErr))
 	}
-	authorization, err := s.authorizations.AuthorizationForAccount(ctx, account, s.currentTime())
+	authorization, err := s.authorizationForAccount(ctx, account, s.decisionTime())
 	err = errors.Join(err, referenceErr)
 	return s.decidePublication(ctx, PublicationDecisionInput{
 		Provider: account.Platform, InstanceURL: accountConfigurationRef(account),
@@ -298,7 +301,7 @@ func (s *Service) DecideAccountOperation(ctx context.Context, account models.Soc
 		if s == nil || s.authorizations == nil {
 			return unavailableDecision(request, s.currentTime())
 		}
-		authorization, err := s.authorizations.AuthorizationForAccount(ctx, account, s.currentTime())
+		authorization, err := s.authorizationForAccount(ctx, account, s.decisionTime())
 		if err != nil {
 			return unavailableDecision(request, s.currentTime())
 		}
@@ -499,7 +502,7 @@ func (s *Service) revision() string {
 // an explicit blocked decision; callers never need to choose between an error
 // path and a safe result.
 func (s *Service) Decide(ctx context.Context, request DecisionRequest) Decision {
-	now := s.currentTime()
+	now := s.decisionTime()
 	if s == nil || s.ledger == nil {
 		return unavailableDecision(request, now)
 	}
@@ -511,7 +514,7 @@ func (s *Service) Decide(ctx context.Context, request DecisionRequest) Decision 
 			ReasonCode: "environment_disabled",
 		}, nil, nil))
 	}
-	approval, err := s.ledger.LatestApprovalReview(ctx, request.Subject)
+	approval, err := s.approvalFor(ctx, request.Subject)
 	if err != nil && !errors.Is(err, ErrLedgerFactNotFound) {
 		return unavailableDecision(request, now)
 	}
@@ -520,7 +523,7 @@ func (s *Service) Decide(ctx context.Context, request DecisionRequest) Decision 
 		approvalEvidence = approval.Evidence
 	}
 
-	control, err := s.ledger.EffectiveRuntimeControl(ctx, request.Subject, now)
+	control, err := s.controlFor(ctx, request.Subject, now)
 	if err != nil {
 		if !errors.Is(err, ErrLedgerFactNotFound) {
 			return unavailableDecision(request, now)
@@ -530,14 +533,14 @@ func (s *Service) Decide(ctx context.Context, request DecisionRequest) Decision 
 
 	var local *CertificationEvidence
 	if request.Contract.Requirements.RequireLocalEvidence {
-		local, err = s.ledger.LatestCertification(ctx, request.Subject, EvidenceKindLocal, "")
+		local, err = s.certificationFor(ctx, request.Subject, EvidenceKindLocal, "")
 		if err != nil && !errors.Is(err, ErrLedgerFactNotFound) {
 			return unavailableDecision(request, now)
 		}
 	}
 	var live *CertificationEvidence
 	if request.Contract.Requirements.RequireLiveEvidence {
-		live, err = s.ledger.LatestCertification(
+		live, err = s.certificationFor(
 			ctx, request.Subject, EvidenceKindLive, request.CurrentAccountReferenceHash,
 		)
 		if err != nil && !errors.Is(err, ErrLedgerFactNotFound) {

@@ -1423,6 +1423,10 @@ func normalizeBlueskyVideoError(err error) error {
 	}
 	return err
 }
+func (b *BlueskyAdapter) AccountCapabilityKeyInput(input AccountCapabilityInput) string {
+	return strings.Join([]string{input.OutputProfile, input.Intent, input.MediaShape}, "\x1f")
+}
+
 func (b *BlueskyAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, token string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
 	result := AccountCapabilityResult{Revision: "bluesky-video-email-v1"}
 	if !strings.Contains(input.MediaShape, "video") && input.Intent != "short_video" && input.OutputProfile != "bluesky.video" {
