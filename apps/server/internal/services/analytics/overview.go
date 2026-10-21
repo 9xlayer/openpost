@@ -168,6 +168,9 @@ type OverviewOptions struct {
 	Sort      string
 	Cursor    string
 	Limit     int
+	// Unpaged returns every matching content row in one pass, with no cursor.
+	// Exports use it so a large workspace is not recomputed once per page.
+	Unpaged bool
 }
 
 var ErrInvalidOverviewCursor = errors.New("invalid analytics overview cursor")
@@ -237,6 +240,10 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 	contentSummary := summarizeWholeAccountContent(allContent)
 	result.Summary = mergeOverviewContentSummary(result.Summary, contentSummary, result.Accounts, options.AccountID)
 
+	if options.Unpaged {
+		result.Content = allContent
+		return result, nil
+	}
 	populationRevision := overviewPopulationRevision(allContent)
 	offset, err := s.decodeOverviewOffset(workspaceID, options, days, len(allContent), populationRevision)
 	if err != nil {

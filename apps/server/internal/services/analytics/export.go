@@ -106,28 +106,15 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 		return ExportDataset{}, err
 	}
 
-	overviewOptions := OverviewOptions{AccountID: options.AccountID, Sort: "newest", Limit: 100}
-	overview, err := s.OverviewWithOptions(ctx, workspaceID, options.Days, overviewOptions)
+	// One unpaged pass keeps the export complete without rebuilding the
+	// overview for every page of a large workspace.
+	overview, err := s.OverviewWithOptions(ctx, workspaceID, options.Days, OverviewOptions{
+		AccountID: options.AccountID, Sort: "newest", Unpaged: true,
+	})
 	if err != nil {
 		return ExportDataset{}, err
 	}
-	content := append([]ContentOverview(nil), overview.Content...)
-	cursor := overview.ContentNextCursor
-	// Follow the cursor to the end so the export is never silently partial. A
-	// cursor that repeats would loop forever, so it is reported as an error.
-	for cursor != "" {
-		if cursor == overviewOptions.Cursor {
-			return ExportDataset{}, errors.New("analytics export pagination did not advance")
-		}
-		overviewOptions.Cursor = cursor
-		next, err := s.OverviewWithOptions(ctx, workspaceID, options.Days, overviewOptions)
-		if err != nil {
-			return ExportDataset{}, err
-		}
-		content = append(content, next.Content...)
-		cursor = next.ContentNextCursor
-	}
-	content = filterExportContent(content, platforms)
+	content := filterExportContent(append([]ContentOverview(nil), overview.Content...), platforms)
 	sort.SliceStable(content, func(i, j int) bool { return content[i].PublishedAt.Before(content[j].PublishedAt) })
 
 	metrics := requested
