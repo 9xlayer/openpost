@@ -16,7 +16,6 @@ test("Quick Cut protects unsaved work and offers a project backup after an expor
   await page.goto("/quick-cut");
   await expect(page.getByRole("button", { name: "Open videos", exact: true })).toBeVisible();
   await page.waitForLoadState("networkidle");
-  await page.route("**/*.js", (route) => route.abort("failed"));
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: "Import project", exact: true }).click();
   await (
@@ -65,13 +64,27 @@ test("Quick Cut protects unsaved work and offers a project backup after an expor
             audioStreams: [],
           },
         ],
-        segments: [{ id: "cut", sourceId: "source", start: 2, end: 4, name: "Chosen section" }],
+        segments: [
+          {
+            id: "cut",
+            sourceId: "source",
+            start: 2,
+            end: 4,
+            name: "Chosen section",
+            enabled: false,
+          },
+        ],
       }),
     ),
   });
   await expect(page.getByRole("textbox", { name: "Project name", exact: true })).toHaveValue(
     "Saved cuts",
   );
+  // Import uses its own lazy modules. Fail downloads only once the project is
+  // open; enabling the saved cut then requests the export runtime for preflight.
+  await page.route("**/*.js", (route) => route.abort("failed"));
+  await page.getByRole("button", { name: "Segment 1", exact: true }).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Enable segment", exact: true }).click();
   await page
     .locator("header.editor-header")
     .getByRole("button", { name: "Export", exact: true })
