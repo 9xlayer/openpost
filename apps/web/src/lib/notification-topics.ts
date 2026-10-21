@@ -27,6 +27,11 @@ const notificationPresentation = {
 		description: m.notifications_event_account_needs_attention_description,
 		icon: { kind: 'theme', role: 'user' }
 	},
+	workflow_approval: {
+		label: m.notifications_event_workflow_approval,
+		description: m.notifications_event_workflow_approval_description,
+		icon: { kind: 'theme', role: 'feedback' }
+	},
 	new_engagement: {
 		label: m.notifications_event_new_engagement,
 		description: m.notifications_event_new_engagement_description,

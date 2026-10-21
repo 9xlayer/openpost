@@ -3934,6 +3934,8 @@
 	"notifications_event_post_published_description": "Una publicación termina en cada destino seleccionado.",
 	"notifications_event_publish_failed_description": "Uno o varios destinos no pudieron publicar.",
 	"notifications_event_account_needs_attention_description": "Hay que volver a conectar o arreglar una cuenta conectada.",
+	"notifications_event_workflow_approval": "Aprobación de flujo de trabajo",
+	"notifications_event_workflow_approval_description": "Un borrador espera una decisión. Te avisamos antes de que venza el plazo.",
 	"notifications_event_new_engagement_description": "Alguien comenta o responde a una publicación publicada.",
 	"notifications_event_new_message_description": "Una bandeja de entrada conectada recibe un mensaje nuevo.",
 	"notifications_event_reply_failed_description": "OpenPost no ha podido enviar una respuesta o una acción de interacción.",
