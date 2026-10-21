@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/api/middleware"
@@ -189,7 +190,8 @@ func neutralizeSpreadsheetFormula(value string) string {
 	if analyticsExportHandle.MatchString(value) {
 		return value
 	}
-	if value != "" && strings.ContainsRune("=+-@\t\r", rune(value[0])) {
+	first, _ := utf8.DecodeRuneInString(value)
+	if strings.ContainsRune("=+-@\t\r\n＝＋－＠", first) {
 		return "'" + value
 	}
 	return value

@@ -87,7 +87,7 @@ func exportRequest(t *testing.T, e *echo.Echo, query string) *httptest.ResponseR
 }
 
 func TestAnalyticsExportCSVGroupsByPlatformAndNeutralizesFormulas(t *testing.T) {
-	e := newAnalyticsExportServer(t)
+	e, db := newAnalyticsExportServerWithDB(t)
 
 	grouped := exportRequest(t, e, "format=csv&group_by=platform&timezone=Europe/Rome")
 	require.Equal(t, http.StatusOK, grouped.Code, grouped.Body.String())
@@ -108,6 +108,19 @@ func TestAnalyticsExportCSVGroupsByPlatformAndNeutralizesFormulas(t *testing.T) 
 	require.Equal(t, http.StatusOK, filtered.Code, filtered.Body.String())
 	require.NotContains(t, filtered.Body.String(), "HYPERLINK")
 	require.Contains(t, filtered.Body.String(), "Second post")
+	for _, prefix := range []string{"\n", "＝", "＋", "－", "＠"} {
+		t.Run(fmt.Sprintf("prefix_%U", []rune(prefix)[0]), func(t *testing.T) {
+			title := prefix + "=1+1"
+			_, err := db.NewUpdate().Model((*models.Publication)(nil)).Set("title = ?", title).Where("id = ?", "publication-a").Exec(t.Context())
+			require.NoError(t, err)
+			response := exportRequest(t, e, "format=csv&dataset=posts&account_id=account-x")
+			require.Equal(t, http.StatusOK, response.Code)
+			rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(response.Body.String(), string([]byte{0xEF, 0xBB, 0xBF})))).ReadAll()
+			require.NoError(t, err)
+			require.Len(t, rows, 2)
+			require.Equal(t, "'"+title, rows[1][1], "formula-triggering Unicode and control prefixes remain literal text")
+		})
+	}
 }
 
 func TestAnalyticsExportWorkbookHasSheetsAndCharts(t *testing.T) {
