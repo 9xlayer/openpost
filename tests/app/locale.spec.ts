@@ -29,7 +29,7 @@ test("Russian login recovery fits a narrow phone", async ({ page }) => {
     route.fulfill({ status: 503, contentType: "application/json", body: "{}" }),
   );
   await page.goto("/login");
-  await expect(page.getByRole("status")).toContainText("Unable to load authentication settings", {
+  await expect(page.getByRole("status")).toContainText("Не удалось загрузить настройки аккаунта.", {
     timeout: 30_000,
   });
   await expect(page.getByRole("status").getByRole("button")).toBeVisible();
