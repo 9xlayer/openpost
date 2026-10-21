@@ -1127,6 +1127,36 @@ func parseCursor(cursor string) (time.Time, string, error) {
 	return createdAt, parts[1], nil
 }
 
+// ResolveByDedupKeys retires stored notices for their original recipients.
+// Preserve read timestamps and payload facts, but remove obsolete actions.
+func (s *Service) ResolveByDedupKeys(ctx context.Context, db bun.IDB, userIDs, dedupKeys []string, title, body string) error {
+	if len(userIDs) == 0 || len(dedupKeys) == 0 {
+		return nil
+	}
+	rows := []models.UserNotification{}
+	if err := db.NewSelect().Model(&rows).Column("id", "payload_json").
+		Where("user_id IN (?)", bun.List(userIDs)).Where("dedup_key IN (?)", bun.List(dedupKeys)).Scan(ctx); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		var payload map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(row.PayloadJSON), &payload); err != nil {
+			return err
+		}
+		delete(payload, "actions")
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		if _, err := db.NewUpdate().Model((*models.UserNotification)(nil)).
+			Set("read_at = COALESCE(read_at, ?), title = ?, body = ?, payload_json = ?", s.now(), strings.TrimSpace(title), strings.TrimSpace(body), string(encoded)).
+			Where("id = ?", row.ID).Exec(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Service) MarkRead(ctx context.Context, userID, workspaceID string, ids []string, all bool) error {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
