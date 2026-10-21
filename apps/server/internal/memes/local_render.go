@@ -40,6 +40,16 @@ const (
 
 var standaloneIRegexp = regexp.MustCompile(`\bi\b`)
 
+func clampBuiltinRenderHeight(height int) int {
+	if height <= 0 {
+		return builtinRenderHeight
+	}
+	if height > builtinRenderMaxHeight {
+		return builtinRenderMaxHeight
+	}
+	return height
+}
+
 func (p *BuiltinProvider) Render(ctx context.Context, request RenderRequest) (RenderedImage, error) {
 	if !p.Available() {
 		return RenderedImage{}, ErrDisabled
@@ -64,13 +74,7 @@ func (p *BuiltinProvider) Render(ctx context.Context, request RenderRequest) (Re
 	if err != nil {
 		return RenderedImage{}, err
 	}
-	height := request.Height
-	if height <= 0 {
-		height = builtinRenderHeight
-	}
-	if height > builtinRenderMaxHeight {
-		height = builtinRenderMaxHeight
-	}
+	height := clampBuiltinRenderHeight(request.Height)
 	extension := normalizeBuiltinExtension(request.Extension)
 	asset := selectBuiltinAsset(template, request.Styles, extension == "gif")
 	data, err := fs.ReadFile(p.files, "catalog/templates/"+template.ID+"/"+asset)
@@ -82,7 +86,7 @@ func (p *BuiltinProvider) Render(ctx context.Context, request RenderRequest) (Re
 	var mimeType string
 	var renderedExtension string
 	if extension == "gif" && strings.HasSuffix(strings.ToLower(asset), ".gif") {
-		rendered, err = p.renderBuiltinGIF(ctx, template, data, request.Text, overlays, height)
+		rendered, err = p.renderBuiltinGIF(ctx, template, data, request.Text, overlays)
 		mimeType, renderedExtension = "image/gif", "gif"
 	} else {
 		background, decodeErr := imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
@@ -654,7 +658,6 @@ func (p *BuiltinProvider) renderBuiltinGIF(
 	data []byte,
 	lines []string,
 	overlays []image.Image,
-	height int,
 ) ([]byte, error) {
 	source, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil {
