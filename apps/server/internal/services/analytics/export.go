@@ -38,8 +38,6 @@ var (
 	}
 )
 
-const exportMaxContentPages = 500
-
 // ExportOptions selects what an export contains. The zero value exports every
 // account and metric for 30 days, one row per post, in UTC.
 type ExportOptions struct {
@@ -115,7 +113,12 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 	}
 	content := append([]ContentOverview(nil), overview.Content...)
 	cursor := overview.ContentNextCursor
-	for page := 0; cursor != "" && page < exportMaxContentPages; page++ {
+	// Follow the cursor to the end so the export is never silently partial. A
+	// cursor that repeats would loop forever, so it is reported as an error.
+	for cursor != "" {
+		if cursor == overviewOptions.Cursor {
+			return ExportDataset{}, errors.New("analytics export pagination did not advance")
+		}
 		overviewOptions.Cursor = cursor
 		next, err := s.OverviewWithOptions(ctx, workspaceID, options.Days, overviewOptions)
 		if err != nil {
@@ -241,7 +244,7 @@ func exportPostsTable(content []ContentOverview, metrics []string, location *tim
 }
 
 func exportEngagement(item ContentOverview) any {
-	if item.MetricAvailability != "available" {
+	if item.MetricAvailability != "available" || !platform.HasEngagementMetric(item.Metrics) {
 		return nil
 	}
 	return item.Engagement
@@ -272,7 +275,7 @@ func exportGroupedTable(content []ContentOverview, metrics []string, groupBy str
 			buckets[key] = bucket
 		}
 		bucket.posts++
-		if item.MetricAvailability == "available" {
+		if item.MetricAvailability == "available" && platform.HasEngagementMetric(item.Metrics) {
 			bucket.engagement += item.Engagement
 			bucket.measuredEng = true
 		}

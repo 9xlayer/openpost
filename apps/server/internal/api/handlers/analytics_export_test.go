@@ -3,6 +3,8 @@ package handlers
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/csv"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,10 +17,16 @@ import (
 	"github.com/openpost/backend/internal/models"
 	analyticsservice "github.com/openpost/backend/internal/services/analytics"
 	"github.com/stretchr/testify/require"
+	"github.com/uptrace/bun"
 	"github.com/xuri/excelize/v2"
 )
 
 func newAnalyticsExportServer(t *testing.T) *echo.Echo {
+	e, _ := newAnalyticsExportServerWithDB(t)
+	return e
+}
+
+func newAnalyticsExportServerWithDB(t *testing.T) (*echo.Echo, *bun.DB) {
 	t.Helper()
 	db := createHandlerTestDB(
 		t,
@@ -65,7 +73,7 @@ func newAnalyticsExportServer(t *testing.T) *echo.Echo {
 	e := echo.New()
 	api := humaecho.NewWithGroup(e, e.Group("/api/v1"), huma.DefaultConfig("Test", "1.0.0"))
 	NewAnalyticsHandler(db, testAuthenticator{}, service).RegisterRoutes(api)
-	return e
+	return e, db
 }
 
 func exportRequest(t *testing.T, e *echo.Echo, query string) *httptest.ResponseRecorder {
@@ -136,4 +144,25 @@ func TestAnalyticsExportRejectsInvalidInput(t *testing.T) {
 		response := exportRequest(t, e, query)
 		require.Contains(t, []int{http.StatusBadRequest, http.StatusUnprocessableEntity}, response.Code, query+": "+response.Body.String())
 	}
+}
+
+func TestAnalyticsExportIncludesEveryPageOfContent(t *testing.T) {
+	e, db := newAnalyticsExportServerWithDB(t)
+	now := time.Now().UTC()
+	extra := make([]models.Rendition, 0, 130)
+	for index := range 130 {
+		extra = append(extra, models.Rendition{
+			ID: fmt.Sprintf("extra-%03d", index), PublicationID: "publication-a", TargetKey: fmt.Sprintf("extra-%d", index),
+			SocialAccountID: "account-x", Platform: "x", Profile: "short_text",
+			Status: models.RenditionStatusPublished, CreatedAt: now, UpdatedAt: now,
+		})
+	}
+	_, err := db.NewInsert().Model(&extra).Exec(t.Context())
+	require.NoError(t, err)
+
+	response := exportRequest(t, e, "format=csv&dataset=posts")
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	rows, err := csv.NewReader(strings.NewReader(strings.TrimPrefix(response.Body.String(), string([]byte{0xEF, 0xBB, 0xBF})))).ReadAll()
+	require.NoError(t, err)
+	require.Len(t, rows, 1+2+130, "header, the two seeded posts, and every extra output past the first 100-row page")
 }

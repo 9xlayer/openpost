@@ -34,6 +34,7 @@ func TestExportGroupedTableKeepsUnmeasuredMetricsEmpty(t *testing.T) {
 		{Platform: "x", PublishedAt: published, MetricAvailability: "available", Engagement: 10, Metrics: platform.AnalyticsValues{"views": 100, "likes": 0}},
 		{Platform: "x", PublishedAt: published, MetricAvailability: "available", Engagement: 5, Metrics: platform.AnalyticsValues{"views": 50, "likes": 0}},
 		{Platform: "bluesky", PublishedAt: published, MetricAvailability: "pending"},
+		{Platform: "threads", PublishedAt: published, MetricAvailability: "available", Metrics: platform.AnalyticsValues{"views": 7}},
 	}
 
 	table := exportGroupedTable(content, []string{"views", "likes"}, ExportGroupPlatform, time.UTC)
@@ -42,6 +43,7 @@ func TestExportGroupedTableKeepsUnmeasuredMetricsEmpty(t *testing.T) {
 	require.Equal(t, [][]any{
 		{"x", 2, int64(15), int64(150), int64(0)},
 		{"bluesky", 1, nil, nil, nil},
+		{"threads", 1, nil, int64(7), nil},
 	}, table.Rows, "a measured zero stays 0 and an unmeasured value stays empty")
 }
 
