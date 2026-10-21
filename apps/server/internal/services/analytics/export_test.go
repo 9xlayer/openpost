@@ -54,3 +54,8 @@ func TestNormalizeExportGroupBy(t *testing.T) {
 	_, err = NormalizeExportGroupBy("hour")
 	require.ErrorIs(t, err, ErrInvalidExportOptions)
 }
+
+func TestUnpagedOverviewRejectsCursor(t *testing.T) {
+	_, err := (&Service{}).OverviewWithOptions(t.Context(), "ws-1", 30, OverviewOptions{Unpaged: true, Cursor: "stale"})
+	require.ErrorIs(t, err, ErrInvalidOverviewCursor)
+}

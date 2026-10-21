@@ -178,6 +178,9 @@ var ErrInvalidOverviewCursor = errors.New("invalid analytics overview cursor")
 func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, days int, options OverviewOptions) (Overview, error) {
 	days = normalizeOverviewDays(days)
 	options = normalizeOverviewOptions(options)
+	if options.Unpaged && options.Cursor != "" {
+		return Overview{}, ErrInvalidOverviewCursor
+	}
 	now := s.now()
 	if options.Cursor != "" {
 		cursor, err := s.decodeSignedOverviewCursor(workspaceID, options, days)
