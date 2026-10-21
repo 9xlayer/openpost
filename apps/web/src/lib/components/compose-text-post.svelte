@@ -7165,6 +7165,8 @@
 					<TextCardPreview
 						request={cardRequestForAccount(account)}
 						savedPreview={savedCardPreviews[account.id]}
+						identity={textCardIdentityForAccount(account)}
+						defaults={textCardDefaultsForAccount(account)}
 						showImages={false}
 						onResult={(result) => textCardResults.set(account.id, result)}
 					/>

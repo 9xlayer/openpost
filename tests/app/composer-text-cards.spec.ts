@@ -30,6 +30,15 @@ test("text cards show a dismissible notice without a missing-image warning", asy
   expect(response.ok(), await response.text()).toBe(true);
   const publication = await response.json();
   expect(publication.renditions[0].segments[0].output_media[0].role).toBe("text_card");
+  // Reopening a saved card must work even while fresh rendering is unavailable.
+  let previewRequests = 0;
+  await page.route("**/api/v1/publications/preview-text-card", async (route) => {
+    previewRequests++;
+    await route.fulfill({
+      status: 429,
+      json: { detail: "Text card rendering is busy; try again shortly" },
+    });
+  });
   await authenticatePage(page, auth.token);
   await page.goto(`/publications/${publication.id}?workspace_id=${workspace.id}`);
   const customize = page.getByRole("button", { name: "Customize card", exact: true });
@@ -47,6 +56,20 @@ test("text cards show a dismissible notice without a missing-image warning", asy
   await customize.click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("img", { name: "Text card 1", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("img", { name: "Text card 1", exact: true })).toHaveAttribute(
+    "src",
+    publication.renditions[0].segments[0].output_media[0].url,
+  );
+  await expect
+    .poll(() =>
+      dialog
+        .getByRole("img", { name: "Text card 1", exact: true })
+        .evaluate(
+          (image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0,
+        ),
+    )
+    .toBe(true);
+  expect(previewRequests).toBe(0);
   await page.keyboard.press("Escape");
   await expect(customize).toBeFocused();
   await page.getByRole("button", { name: "Dismiss", exact: true }).click();
