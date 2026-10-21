@@ -18,6 +18,12 @@ const rawFetchMutationMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
 
 const imperativeReadAllowlist = [
   {
+    file: "apps/web/src/lib/components/analytics-export-dialog.svelte",
+    endpoint: "/analytics/export",
+    count: 1,
+    reason: "user-triggered analytics file download, not render-path state",
+  },
+  {
     file: "apps/web/src/lib/components/account-data-card.svelte",
     endpoint: "/auth/account/deletion-impact",
     count: 1,
