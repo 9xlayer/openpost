@@ -222,7 +222,7 @@ func analyticsExportWorkbook(dataset analyticsservice.ExportDataset) ([]byte, er
 		{"OpenPost analytics export"},
 		{"Generated", dataset.GeneratedAt.Format("2006-01-02 15:04")},
 		{"Timezone", dataset.Timezone},
-		{"Period", dataset.From + " to " + dataset.To},
+		{"Period (UTC days)", dataset.From + " to " + dataset.To},
 		{"Range (days)", dataset.RangeDays},
 		{"Grouped by", dataset.GroupBy},
 		{"Posts exported", len(dataset.Posts.Rows)},

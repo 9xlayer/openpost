@@ -60,6 +60,8 @@ type ExportTable struct {
 	Rows    [][]any  `json:"rows"`
 }
 
+// ExportDataset From and To are UTC calendar days, matching the daily trend
+// rows; only publish times and day, week and month groups follow Timezone.
 type ExportDataset struct {
 	GeneratedAt time.Time `json:"generated_at"`
 	Timezone    string    `json:"timezone"`
@@ -134,8 +136,8 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 		GeneratedAt: overview.GeneratedAt.In(location),
 		Timezone:    location.String(),
 		RangeDays:   overview.RangeDays,
-		From:        overview.GeneratedAt.AddDate(0, 0, -overview.RangeDays).In(location).Format("2006-01-02"),
-		To:          overview.GeneratedAt.In(location).Format("2006-01-02"),
+		From:        overview.GeneratedAt.AddDate(0, 0, -overview.RangeDays).UTC().Format("2006-01-02"),
+		To:          overview.GeneratedAt.UTC().Format("2006-01-02"),
 		GroupBy:     groupBy,
 		Metrics:     metrics,
 		Posts:       exportPostsTable(content, metrics, location),

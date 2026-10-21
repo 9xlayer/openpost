@@ -141,7 +141,8 @@
 				link.download = filenameFrom(result.response);
 				link.click();
 			} finally {
-				URL.revokeObjectURL(href);
+				// Firefox and Safari start the download asynchronously.
+				setTimeout(() => URL.revokeObjectURL(href), 60_000);
 			}
 			open = false;
 			onExported?.();
