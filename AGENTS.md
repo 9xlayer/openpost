@@ -202,7 +202,7 @@ Free-tool draft transfer uses `@openpost/draft-transfer`. Keep content and files
 
 ## Delivery
 
-- Commit directly to `main` with Conventional Commits, one concern per commit. Stage only files owned by the current work.
+- Commit completed implementation work after relevant verification passes, without waiting for a separate commit request. Commit directly to `main` with Conventional Commits. Group independent concerns into focused commits; use a single commit for one coherent change. Stage only files or hunks owned by the current work.
 - Reference the issue number in every issue-fixing commit title, for example `(#342)`.
 - Release assets are user downloads. Keep scan reports in Actions; use Git SHAs, image digests, OCI labels, and native signatures instead of custom release manifests. Validate workflows with `bun run check -- workflows`.
 - Push only when asked. A push is not a deployment.
