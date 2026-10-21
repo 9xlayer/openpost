@@ -40,7 +40,7 @@ require (
 	github.com/uptrace/bun/driver/sqliteshim v1.2.18
 	github.com/valksor/fal-go v1.0.3
 	github.com/venusliang/go-font v0.0.16
-	github.com/xuri/excelize/v2 v2.11.1-0.20260915055537-22f76f9acb94
+	github.com/xuri/excelize/v2 v2.11.1-0.20261003002531-6258dcebc4e2
 	golang.org/x/crypto v0.57.0
 	golang.org/x/image v0.45.0
 	golang.org/x/net v0.60.0
@@ -111,7 +111,7 @@ require (
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	github.com/xuri/efp v0.0.1 // indirect
+	github.com/xuri/efp v0.0.2 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/trace v1.41.0 // indirect
