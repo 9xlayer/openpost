@@ -785,6 +785,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/analytics/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export stored analytics as CSV, Excel, or JSON
+         * @description Exports the same stored measurements shown in Analytics. Missing provider metrics stay empty instead of becoming zero.
+         */
+        get: operations["export-analytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/analytics/refresh": {
         parameters: {
             query?: never;
@@ -20347,6 +20367,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Overview"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "export-analytics": {
+        parameters: {
+            query: {
+                /** @description Workspace ID */
+                workspace_id: string;
+                /** @description Reporting window in days (7, 30, or 90) */
+                days?: number;
+                /** @description Optional social account ID to export */
+                account_id?: string;
+                /** @description Optional comma-separated platform filter, for example x,bluesky */
+                platforms?: string;
+                /** @description File format. xlsx contains every table plus charts. */
+                format?: "csv" | "xlsx" | "json";
+                /** @description IANA timezone used for publish times and day, week and month grouping */
+                timezone?: string;
+                /** @description Row grouping for the report */
+                group_by?: "post" | "day" | "week" | "month" | "platform" | "account";
+                /** @description Table to export for csv and json. report follows group_by; xlsx always includes all tables. */
+                dataset?: "report" | "posts" | "daily" | "accounts";
+                /** @description Optional comma-separated metric keys. Defaults to every measured metric. */
+                metrics?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Analytics export file */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Type"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string;
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                    "text/csv": string;
                 };
             };
             /** @description Bad Request */
