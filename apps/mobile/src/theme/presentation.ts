@@ -60,7 +60,7 @@ export function inputPresentation(manifest: NativeThemeManifest): NativeInputPre
   const recipe = manifest.components.input;
   return {
     backgroundColor: recipe === "filled" ? manifest.colors.surfaceContainerHigh : "transparent",
-    borderBottomWidth: recipe === "underlined" ? 1 : 0,
+    borderBottomWidth: recipe === "filled" ? 0 : 1,
     borderColor: manifest.colors.outline,
     borderRadius: recipe === "underlined" ? 0 : manifest.shape.small,
     borderWidth: recipe === "outlined" ? 1 : 0,

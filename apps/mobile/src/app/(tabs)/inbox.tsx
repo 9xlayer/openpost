@@ -329,7 +329,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
               <View style={{ paddingHorizontal: spacing.large }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.counterpart_name || item.counterpart_handle}, ${item.unread_count} unread, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}`}
+                  accessibilityLabel={`${item.counterpart_name || item.counterpart_handle}, ${item.unread_count} unread, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}, ${item.last_message_preview || "No messages"}`}
                   onPress={() => openChat(item)}
                   style={({ pressed }) => ({
                     flex: 1,
@@ -376,7 +376,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
               <View style={{ paddingHorizontal: spacing.large }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.author_name || item.author_handle}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}`}
+                  accessibilityLabel={`${item.author_name || item.author_handle}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}, ${item.body ? `${item.body}, ` : ""}On: ${item.publication_title || item.publication_excerpt || "Public post"}`}
                   onPress={() => openComment(item)}
                   style={({ pressed }) => ({
                     flexDirection: "row",

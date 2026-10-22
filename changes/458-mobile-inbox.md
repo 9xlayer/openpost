@@ -9,3 +9,5 @@
 - Message retries retain one operation identity, outbound echoes converge with queued sends, and uncertain provider outcomes remain inspectable.
 - New incoming messages reopen archived conversations, unread controls retain a visible indicator, and replies dispatch independently of slow media jobs.
 - Mobile Inbox uses quieter filters, compact conversation rows, grouped timestamps and smaller moderation controls. Swipe to archive with Undo keeps the list focused on conversations.
+- Inbox rows announce their latest message or comment text to screen readers, not just names and read state.
+- Outlined native text fields retain their bottom border with the theme's original subtle color.
