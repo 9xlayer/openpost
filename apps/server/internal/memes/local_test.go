@@ -128,17 +128,18 @@ func TestBuiltinProviderHonorsRequestedRenderHeight(t *testing.T) {
 	provider, err := NewBuiltinProvider()
 	require.NoError(t, err)
 
-	rendered, err := provider.Render(context.Background(), RenderRequest{
-		TemplateID: "drake",
-		Text:       []string{"", ""},
-		Extension:  "png",
-		Height:     900,
-	})
-	require.NoError(t, err)
-	config, _, err := image.DecodeConfig(bytes.NewReader(rendered.Data))
-	require.NoError(t, err)
-	require.Equal(t, 900, config.Height)
-	require.Positive(t, config.Width)
+	for _, fixture := range []struct{ template, extension string }{{"drake", "png"}, {"bongo", "gif"}} {
+		t.Run(fixture.extension, func(t *testing.T) {
+			rendered, err := provider.Render(context.Background(), RenderRequest{
+				TemplateID: fixture.template, Text: []string{"", ""}, Extension: fixture.extension, Height: 900,
+			})
+			require.NoError(t, err)
+			config, _, err := image.DecodeConfig(bytes.NewReader(rendered.Data))
+			require.NoError(t, err)
+			require.Equal(t, 900, config.Height)
+			require.Positive(t, config.Width)
+		})
+	}
 }
 
 func TestBuiltinProviderReturnsSmallCacheableTemplateImages(t *testing.T) {

@@ -667,8 +667,7 @@ func (p *BuiltinProvider) renderBuiltinGIF(
 	if len(source.Image) == 0 {
 		return nil, fmt.Errorf("animated meme template contains no frames")
 	}
-	width, height := source.Config.Width, source.Config.Height
-	canvas := image.NewNRGBA(image.Rect(0, 0, width, height))
+	canvas := image.NewNRGBA(image.Rect(0, 0, source.Config.Width, source.Config.Height))
 	previousBounds := image.Rectangle{}
 	var restore *image.NRGBA
 	selected := selectedBuiltinGIFFrames(len(source.Image))
