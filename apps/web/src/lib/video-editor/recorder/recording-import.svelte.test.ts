@@ -18,12 +18,13 @@ const formats = [
 
 it.each(
 	formats.flatMap((format) => [
-		{ format, camera: true },
-		{ format, camera: false }
+		{ format, camera: true, sharedAudio: true },
+		{ format, camera: false, sharedAudio: true },
+		...(format === 'webm' ? [{ format, camera: false, sharedAudio: false }] : [])
 	])
 )(
-	'inserts combined $format video audio with camera=$camera and retains standalone microphone recording',
-	async ({ format, camera }) => {
+	'inserts combined $format video audio with camera=$camera sharedAudio=$sharedAudio and retains standalone microphone recording',
+	async ({ format, camera, sharedAudio }) => {
 		if (format !== 'native') {
 			const supported = MediaRecorder.isTypeSupported.bind(MediaRecorder);
 			vi.spyOn(MediaRecorder, 'isTypeSupported').mockImplementation(
@@ -58,7 +59,7 @@ it.each(
 		};
 		vi.spyOn(navigator.mediaDevices, 'getDisplayMedia').mockImplementation(async () => {
 			const stream = videoStream();
-			stream.addTrack(systemAudio.stream.getAudioTracks()[0].clone());
+			if (sharedAudio) stream.addTrack(systemAudio.stream.getAudioTracks()[0].clone());
 			return stream;
 		});
 		vi.spyOn(navigator.mediaDevices, 'getUserMedia').mockImplementation(async (constraints) =>
@@ -94,11 +95,19 @@ it.each(
 			// Distinct input tones prove the saved file contains the microphone and,
 			// for screen-only capture, system sound as well.
 			expect(amplitudeAt(440)).toBeGreaterThan(0.1);
-			if (!camera) expect(amplitudeAt(880)).toBeGreaterThan(0.1);
+			if (!camera && sharedAudio) expect(amplitudeAt(880)).toBeGreaterThan(0.1);
 			const result = await insertRecordingArtifacts('test-project', artifacts, 0, undefined, {
 				isCurrent: () => true
 			});
 			expect(result.itemIds).toHaveLength(camera ? 2 : 1);
+			const screenCapture = result.mediaIds
+				.map((id) => mediaPool.get(id)?.capture)
+				.find((capture) => capture?.kind === 'screen');
+			expect(screenCapture?.systemAudio).toEqual({
+				requested: true,
+				active: sharedAudio,
+				status: sharedAudio ? 'active' : 'inactive'
+			});
 			const audioCodec = mediaPool.get(result.mediaIds[0])?.audioCodec;
 			if (format === 'mp4') {
 				// Generic MP4 lets the browser choose its audio codec.

@@ -70,20 +70,9 @@ export function reconcileSystemAudioWithProbe(
 	capture: { requested: boolean; active: boolean; status: RecordingSystemAudioStatus },
 	hasAudio: boolean
 ): ReconciledSystemAudio {
-	const requested = capture.requested;
-	const priorStatus = capture.status;
-	const active = hasAudio;
-	let status: RecordingSystemAudioStatus;
-	if (!requested) {
-		status = active ? 'active' : 'not-requested';
-	} else if (active) {
-		status = 'active';
-	} else if (priorStatus === 'denied') {
-		status = 'denied';
-	} else if (priorStatus === 'unavailable') {
-		status = 'unavailable';
-	} else {
-		status = 'inactive';
-	}
+	// A screen file can contain microphone audio without any shared system audio.
+	// The probe can disprove an observed track, but cannot establish its origin.
+	const active = capture.active && hasAudio;
+	const status = capture.status === 'active' && !hasAudio ? 'inactive' : capture.status;
 	return { active, status } satisfies ReconciledSystemAudio;
 }
