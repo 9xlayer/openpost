@@ -7,6 +7,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 -->
 <script lang="ts">
 	import AnalyticsNumber from '$lib/components/analytics-number.svelte';
+	import AnalyticsExportDialog from '$lib/components/analytics-export-dialog.svelte';
 	import AsyncActionButton from '$lib/components/async-action-button.svelte';
 	import { ProtectedIcon, ThemeIcon } from '$lib/themes/icons';
 	import {
@@ -72,6 +73,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	let expandedContentID = $state('');
 	let refreshing = $state(false);
 	let warningsOpen = $state(false);
+	let exportOpen = $state(false);
 	let refreshSequence = 0;
 	let repurposingReferenceKey = $state('');
 	let toastMessage = $state('');
@@ -119,6 +121,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				: ''
 	);
 	const contentItems = $derived(overview?.content ?? []);
+	const exportMetrics = $derived(overview?.content_metric_keys ?? []);
 	const analyticsInsights = $derived(overview?.insights ?? []);
 	const selectedAccount = $derived(
 		queryAccountID === 'all'
@@ -196,13 +199,6 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				unit: 'destination' as const
 			},
 			{
-				key: 'impressions',
-				label: m.analytics_impressions(),
-				metric: summary.impressions,
-				denominator: destinationCount,
-				unit: 'destination' as const
-			},
-			{
 				key: 'reach',
 				label: m.analytics_reach(),
 				metric: summary.reach,
@@ -215,9 +211,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 		summaryMetrics.filter((item) => ['followers', 'engagement', 'views'].includes(item.key))
 	);
 	const secondarySummaryMetrics = $derived(
-		summaryMetrics.filter(
-			(item) => ['impressions', 'reach'].includes(item.key) && item.metric.measured > 0
-		)
+		summaryMetrics.filter((item) => item.key === 'reach' && item.metric.measured > 0)
 	);
 	const unavailableSummaryMetrics = $derived(
 		summaryMetrics.filter((item) => item.metric.measured === 0)
@@ -631,6 +625,15 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	<title>{m.analytics_title()} · OpenPost</title>
 </svelte:head>
 
+<AnalyticsExportDialog
+	bind:open={exportOpen}
+	workspaceId={currentWorkspaceID}
+	days={rangeDays}
+	accountId={queryAccountID === 'all' ? '' : queryAccountID}
+	{accounts}
+	metrics={exportMetrics}
+/>
+
 {#snippet actions()}
 	<div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
 		<div
@@ -654,6 +657,16 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				</button>
 			{/each}
 		</div>
+		<Button
+			variant="outline"
+			size="sm"
+			disabled={!overview || accounts.length === 0}
+			onclick={() => (exportOpen = true)}
+			data-testid="analytics-export"
+		>
+			<ThemeIcon role="download" class="size-4" />
+			{m.analytics_export()}
+		</Button>
 		<Popover.Root bind:open={warningsOpen}>
 			<Popover.Trigger>
 				{#snippet child({ props })}

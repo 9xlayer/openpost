@@ -433,10 +433,7 @@ function fallbackOutputProfile(
 	if (platform === 'tiktok' && media.every((item) => item.mimeType.startsWith('image/'))) {
 		return 'tiktok.photo';
 	}
-	if (platform === 'devnull') {
-		if (mode === 'thread') return 'devnull.thread';
-		return 'devnull.post';
-	}
+	if (platform === 'devnull') return 'devnull.post';
 	if (media.length > 1) return `${platform}.carousel`;
 	if (platform === 'instagram') return 'instagram.feed';
 	if (platform === 'facebook' && media.length === 1) return 'facebook.photo';

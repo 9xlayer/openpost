@@ -93,7 +93,7 @@ jobs:
           cache-dependency-path: |
             apps/server/go.sum
             apps/cli/go.sum
-      - uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
+      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
@@ -252,7 +252,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: public.ecr.aws/docker/library/postgres:17.9-alpine@sha256:c7526c0f6c3f30260a563d7bcf8ad778effac59a44f8ffa86678c35418338609
+        image: docker.io/library/postgres:17.9-alpine@sha256:c7526c0f6c3f30260a563d7bcf8ad778effac59a44f8ffa86678c35418338609
         env:
           POSTGRES_DB: openpost
           POSTGRES_USER: openpost
@@ -362,7 +362,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -696,13 +696,21 @@ jobs:
       - name: Require a package version increase for publishable changes
         env:
           BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [[ "$BASE_SHA" =~ ^0+$ ]]; then
-            echo "Initial repository push has no version base."
-          else
-            bun scripts/npm-package-release.mjs check-version --package packages/sdk --base "$BASE_SHA" --head "$GITHUB_SHA"
-            bun scripts/npm-package-release.mjs check-version --package packages/cli --base "$BASE_SHA" --head "$GITHUB_SHA"
+            if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+              # A new tag has no previous commit in the push event, so compare
+              # the tagged package sources with the previous published release.
+              BASE_SHA="$(bun scripts/published-release-tag.mjs --exclude "$GITHUB_REF_NAME")"
+              echo "Comparing tagged package versions against $BASE_SHA."
+            else
+              echo "Initial repository push has no version base."
+              exit 0
+            fi
           fi
+          bun scripts/npm-package-release.mjs check-version --package packages/sdk --base "$BASE_SHA" --head "$GITHUB_SHA"
+          bun scripts/npm-package-release.mjs check-version --package packages/cli --base "$BASE_SHA" --head "$GITHUB_SHA"
       - name: Check, test, and build the packages
         run: bun scripts/tasks.mjs check npm-packages
       - name: Inspect the exact SDK npm payload
@@ -818,7 +826,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.19.0"
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           java-version: "21"
           distribution: temurin

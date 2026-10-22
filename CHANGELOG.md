@@ -4,6 +4,166 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.26.0] - 2026-10-22
+
+### Added
+
+- Export Analytics from the web app as CSV, Excel with charts, or JSON. Choose the timezone, group rows by post, day, week, month, platform, or account, filter platforms and metrics, and pick which table to download. Unmeasured provider metrics stay empty instead of becoming zero. The same export is available at `GET /analytics/export`.
+- Select individual connected accounts using their avatar, platform, and handle. Every exported table respects the selection; missing measurements stay empty, and grouped reports exclude averages and reporting-period values that cannot be summed by publication date.
+- Notify the people who can approve when a workflow parks a draft for approval, and notify them and the author when that wait expires. Both transitions were silent before: a draft could sit in the approval queue, and later disappear from it, without anyone being told. The notification links straight to the waiting run, which now opens on that run. The audience is the roles that satisfy the approve level — administrators and clients — derived from the access matrix rather than restated, so a client, who can decide an approval without being able to administer the workspace, is told about the wait that is theirs to resolve. The author is skipped when others can decide, and told when nobody else can.
+- Remind the approvers three days before a wait expires. An expiry notice alone arrives thirty days after anyone last thought about the draft, which is too late to act on; the reminder is the only notice that arrives while the reader can still do something about it.
+- Resolve the approval notices once the wait is decided. Approving or cancelling left every other approver holding an item that said "waiting for your approval" with a button that answered with an error; the row now keeps its place in the history but stops claiming something untrue.
+- Russian interface language, selected from preferences or the browser language, including localized number and date formatting and offline recovery.
+
+### Fixed
+
+- Remove the impressions summary from web and mobile Analytics, and stop the web page from scrolling into empty space below its content.
+- Emit approval notifications after the transaction that changes the run, not inside it. A failed notification write used to roll the park back: a recipient whose stored preferences would not decode, or a workspace lookup that found no row, left the run behind its lease, so the sweep re-enqueued it and the step replayed and failed again — a loop in which the run never parked. Notification failures are now logged and the run keeps its state.
+- Expire stale approvals per run instead of per batch. `expireApprovals` returned on the first error, so one run that could not be expired stopped every other wait in the batch from expiring, once a minute.
+- Restore the revision to the expiry compare-and-set. The guard had been narrowed to the state alone, which still yields one winner but no longer matches the contract that a writer only replaces the row it read.
+- Carry the workspace in the notification link. The run inspector resolves a run against the workspace the viewer is in, so an approver arriving from another workspace landed on an empty inspector.
+- Read the deep link reactively. The requested run was captured once at mount, so clicking a second approval notification while the page was already open did nothing.
+- Persist approval notification intents with the run transition and retry delivery through database jobs. Recheck the current run and recipient permissions under the workspace fence, so delayed requests cannot reopen decided waits.
+- Visit every eligible reminder batch, resolve notices for their original recipients after role changes, preserve read timestamps, and remove obsolete review actions from history. Post links open the post detail directly.
+- Point the npm CLI installer to the current release so new installs receive the patched Go toolchain.
+- A capability cache write failure no longer marks a verified destination as incompatible.
+- Text-card projection no longer rewrites caller-owned segments, which would race when destinations resolve together.
+- Keep images added to a post sharp. The composer tile showed the small library thumbnail stretched across the editor column; it now shows the original image and uses the thumbnail only as a fallback.
+- Explain which stage of a social account connection failed and preserve safe provider error codes and trace IDs in Settings and server logs, without exposing tokens or raw provider responses. (#459)
+- Accept a single wrapped Instagram direct-login profile and keep its professional account ID separate from the authorization subject. Preserve selected destination IDs when saving connections for every provider.
+- Show the media library grid at the 400px thumbnail tier and the inspector and approval preview at the original image, so large previews are no longer stretched from a 150px square crop.
+- Keep saved text-card images visible when a publication stores only sparse card settings, instead of losing them after a save.
+- Clear the media picker grid when the workspace changes, so another workspace's media cannot be selected while the new list loads.
+- Restore the Quick Cut cloud-conflict heading, so the notice is reachable by heading navigation again.
+- Save edited attachment alt text on destination media rows that already exist in the native composer.
+- Request the 400px tier for the native draft attachment thumbnails instead of each full original.
+- Keep the media conversion limits out of the marketing tool route bundle, so tool pages no longer load the conversion engine before hydration.
+- Render saved memes at 1080px so the composer and social feeds no longer upscale the 600px preview size; animated GIFs keep 600px to bound their size.
+- Import the original Pixabay photo when available, then the 1920px full HD and 1280px large copies, and report the delivered file's dimensions and media type.
+- Encode thumbnails as transparent PNG for uploads with alpha and serve the matching content type, so transparent images no longer get a black background.
+- Stop stretching extension screenshots beyond their captured width.
+- Show image tiles in the media picker at the 400px thumbnail tier instead of upscaling the 150px one.
+- Update the Vitest mocker and URI parsing dependencies to their patched releases.
+- Keep generated text card footers clear of the last line of body copy. Long posts no longer draw the page arrow into the text on full pages.
+
+### Changed
+
+- Collapse the two approval notification topics into one `workflow_approval` topic with three states. The preferences page offered two switches for one mechanism, and neither described what actually happened.
+- Composer destination checks keep the previous readiness answer usable while a refresh runs. Readiness warnings and publish actions no longer disappear and reappear during ordinary typing, and submitting still resolves accuracy first.
+- Required destination pickers for multiple accounts now load together instead of one account at a time, and one account's option request can no longer discard another account's result.
+- Capability resolution no longer cancels the in-flight request immediately while typing, so completed provider work can populate the capability cache.
+- Capability resolution sends per-account segment overrides only for accounts that actually customize text, media, alt text, a poll, or an AI attachment requirement.
+- Destination capability resolution runs a bounded number of accounts in parallel, preserving response order and the first error in request order.
+- One resolve request now shares provider-scoped readiness facts across destinations and operations, caches the capability catalog, and reuses certification digests for canonical capabilities.
+- Provider capability cache keys follow the inputs each adapter declares, so unrelated destination settings no longer re-fetch provider state. Entries are bounded.
+- Load camera, stock, and upload tools when the upload dialog opens, keeping Media browsing within its JavaScript budget.
+- Remove the duplicate Send feedback entry from the profile menu; Help & feedback remains.
+
+## [7.23.0] - 2026-10-20
+
+### Added
+
+- Connect Instagram Business and Creator accounts directly without a Facebook Page, or choose the existing Facebook Login connection. Instance administrators can configure both methods independently. The connection dialog explains their requirements and availability.
+- Connect dev/null accounts with an SSH private key and publish commits, replies, and image posts from OpenPost. Publishing signs each commit with the key on your GitHub account, exactly like the official dev/null commit script. New dev/null accounts need approval before posts go public, and dev/null allows 10 commits a minute.
+- Render account and workspace identity in the mobile app, including avatars and labels on drafts, the composer, analytics, and media previews.
+- Show per-destination publishing readiness in the mobile composer before publishing.
+- Publish the enforced media upload limits from the server and validate mobile attachments against them, with the limits guide generated from the same constants.
+
+### Changed
+
+- Give every account picker one shared row and one select-all header: account checkboxes are now named for the account (readiness issues stay linked as descriptions instead of changing the name), and partial destination selections show an indeterminate state. Selection contracts are unchanged.
+- Load mobile media previews as thumbnails and show a placeholder when a preview cannot be loaded.
+- Derive marketing tool limits and provider capability claims from the same catalogues the product enforces.
+
+### Fixed
+
+- Ellipsize long account names and handles on delivered Instagram and Pixelfed text cards instead of clipping them mid-word with no ellipsis, matching the preview. Existing cards re-render on the next save.
+- Fixed a startup crash when publish-now jobs were pending at restart. Authorization recovery now compares timestamps with the original receipt at database precision, preserving retry dispatch times and interrupted provider operations. Jobs with invalid authorization are failed individually instead of blocking startup. No manual database edits are needed for valid pending jobs. (#455)
+- Restore the desktop sidebar's compact spacing: the planner calendar, drafts, and footer navigation sit at their original 8px inset instead of the doubled paddings introduced with the sidebar planning change.
+- Open a workflow step's inspector on the first node click instead of sometimes requiring a second click.
+- Recover LinkedIn Organization Page lookups when the provider rejects optional profile projections.
+- Save mobile posts whose destination account was disconnected.
+- Show the planned time in the web publication detail header.
+- Key text-card previews by account identity and retry failed avatars, and derive the avatar placeholder from the card colour.
+- Name Google Business and fediverse software correctly, and align the mobile and web handle rules on one allowlist.
+- Toggle both directions of the any-source checkbox in repost policies.
+- Keep the calendar's all-accounts filter mode visible and show the account photo on calendar surfaces.
+- Add referrer policy and lazy loading to preview avatars, and show the verified badge in the full-page preview.
+- Render the Inbox counterpart avatar through the shared control and announce the selected account in the account filter label.
+- Show the account photo in the workflow source-account picker.
+- Accept videos up to the server limit on mobile and validate attachments by type.
+- Derive the review fallback plan prices from the catalog.
+- Honour reduced motion in every settings pending spinner.
+- Keep destructive dialogs open while their action is pending.
+- Show the account photo in consent and analytics account lists, and on delivery and history destination rows.
+- Use content-shaped loading for media results and history.
+- Bound provider response bodies through the shared read helper.
+- Make the published SDK response types and the CLI's `--json` output match the served contract.
+- Settle a mutation 401 in the API client instead of at each call site.
+- Make the composer destination row match the control it renders.
+- Derive the mobile analytics account filter from the authorized overview.
+
+### Maintenance
+
+- Prepare the Android package at 0.2.63 (65) for the mobile identity, readiness, and media-preview changes in this release.
+- Consolidate shared web and native controls on one owner per concern, including the badge tone API, form field, section heading, overflow menu, empty state, inline notice, account row and select-all, async action button, clipboard helper, byte-size formatter, monogram rule, color picker and telemetry consent in `@openpost/ui`, and the editor media and audio primitives in `@openpost/editor-shared`.
+- Route shared server behavior through one owner, including the Discord webhook sender, bounded avatar fetch, credentialed-redirect policy, settings-map coercion, server-side text counter, provider feature table, and text-card option values.
+- Gate the hand-written SDK, CLI, and n8n surfaces against the served spec, and guard platform text limits and counting rules across TypeScript and Go.
+- Restore README asset and screenshot refreshes, stabilize native gallery capture, and update the pinned Alpine image and GitHub Actions group.
+
+## [7.22.9] - 2026-10-17
+
+### Fixed
+
+- Opening or editing generated mobile drafts no longer crashes when a destination segment has empty settings.
+- Removed the duplicate Ideate shortcut from the mobile draft header. Ideate remains available beside quick capture.
+- The bottom Ideate button opens the AI workspace even before you enter an idea, preserving the shortcut removed from the header.
+- Drafts remain available in the desktop sidebar across Posts, Inbox, Analytics, Media, and other workspace pages. The list fills the available space and scrolls through all drafts.
+- Changing pages or languages with sidebar drafts no longer causes background composer-import errors.
+
+### Changed
+
+- The sidebar calendar is visible by default, with workspace navigation below the drafts. Turn off Sidebar calendar in Preferences to use the compact layout. Existing saved choices are preserved.
+
+## [7.22.4] - 2026-10-17
+
+### Changed
+
+- Keep Google provider authorization limited to the scopes OpenPost requests instead of merging unrelated grants from a reused OAuth client.
+
+### Fixed
+
+- Enforce verified Instagram collaborator and Trial Reel combinations before publishing, while preserving older Story drafts by omitting their unsupported collaborator values.
+- Reject TikTok photo uploads whose shorter side exceeds 1080 pixels when stored dimensions are available.
+- Recover from Instagram's exact media-container propagation delay without retrying the wider publication flow.
+- Report actionable Instagram collaborator, first-comment, and video-limit failures without exposing provider response text.
+- Collect regular Facebook video views through the supported metric without double-counting Reel plays.
+- Explain YouTube thumbnail failures that require channel phone verification while preserving the already published video.
+
+## [7.22.2] - 2026-10-16
+
+### Fixed
+
+- Publish video posts with a selected cover frame when MCP or API media settings are omitted, including existing posts with null settings.
+- Record destination and post failures after publishing panics, preserving diagnostics and checking saved provider receipts before any retry.
+- Allow deletion of failed posts when no delivery is active or unresolved.
+- Handle null JSON objects in legacy messaging settings and legacy publication-job migration without panicking.
+- Keep joined-source and inherited text-card attachment settings as objects when refreshing existing posts.
+- Protect unsaved scheduled-post edits when navigating away from the composer.
+- Connect and refresh LinkedIn Organization Pages when LinkedIn rejects optional profile projections.
+
+### Maintenance
+
+- Update compatible Expo SDK 57 patches and use the shared app icon for iOS validation.
+- Refresh product screenshots and make automated screenshot and README asset refreshes more reliable.
+- Document the sidebar-calendar browser preference and align navigation checks with the current post and workspace controls.
+- Give the public-site determinism check enough time to build both sites twice and verify their complete outputs on CI.
+
+### Added
+
+- Browse posts in a masonry grid and use the draft gallery to search, select, and schedule drafts.
+- Show or hide the sidebar calendar through personal preferences.
+
 ## [7.21.1] - 2026-10-14
 
 ### Added

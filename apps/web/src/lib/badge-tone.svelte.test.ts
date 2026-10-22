@@ -21,7 +21,7 @@ describe('Badge tone', () => {
 			tone,
 			children: textSnippet(`Badge tone ${tone}`)
 		});
-		const badge = screen.container.querySelector('[data-slot="badge"]');
+		const badge = screen.container.querySelector<HTMLElement>('[data-slot="badge"]');
 
 		expect(badge).not.toBeNull();
 		expect(badge?.getAttribute('data-tone')).toBe(tone);
@@ -35,7 +35,7 @@ describe('Badge tone', () => {
 				tone,
 				children: textSnippet(`Badge distinct ${tone}`)
 			});
-			const badge = screen.container.querySelector('[data-slot="badge"]');
+			const badge = screen.container.querySelector<HTMLElement>('[data-slot="badge"]');
 			expect(badge).not.toBeNull();
 			seen.add(badge!.className);
 		}
@@ -46,7 +46,7 @@ describe('Badge tone', () => {
 		const screen = await render(Badge, {
 			children: textSnippet('Badge default appearance')
 		});
-		const badge = screen.container.querySelector('[data-slot="badge"]');
+		const badge = screen.container.querySelector<HTMLElement>('[data-slot="badge"]');
 
 		expect(badge).not.toBeNull();
 		expect(badge?.getAttribute('data-tone')).toBe('neutral');

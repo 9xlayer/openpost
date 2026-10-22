@@ -188,43 +188,55 @@ func TestSaveAccount_X(t *testing.T) {
 	require.Len(t, jobs, 1)
 }
 
-func TestSaveAccountsFromInputsConnectsLinkedInIdentitiesAtomically(t *testing.T) {
-	db := createTestDB(t)
-	encryptor := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
-	saver := NewAccountSaver(db, encryptor)
-	ctx := context.Background()
-	seedWorkspaceMember(t, db, "workspace-1", "user-1")
-	token := &platform.TokenResult{
-		AccessToken: "member-token",
-		Extra:       map[string]string{"user_id": "member-1", "scope": "w_member_social w_organization_social"},
+func TestSaveAccountsFromInputsKeepsDestinationsDistinctFromGrantSubject(t *testing.T) {
+	for _, tc := range []struct {
+		provider, firstID, secondID, scope    string
+		firstCapabilities, secondCapabilities map[string]string
+	}{
+		{"linkedin", "urn:li:person:member-1", "urn:li:organization:42", "w_member_social w_organization_social", map[string]string{"linkedin_account_type": "person"}, map[string]string{"linkedin_account_type": "organization"}},
+		{"facebook", "page-1", "page-2", "pages_show_list pages_manage_posts", nil, nil},
+		{"youtube", "channel-1", "channel-2", "https://www.googleapis.com/auth/youtube.upload", nil, nil},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			db := createTestDB(t)
+			encryptor := crypto.NewTokenEncryptor("test-secret-key-for-testing-only")
+			saver := NewAccountSaver(db, encryptor)
+			ctx := context.Background()
+			seedWorkspaceMember(t, db, "workspace-1", "user-1")
+			token := &platform.TokenResult{
+				AccessToken: "member-token",
+				Extra:       map[string]string{"user_id": "member-1", "scope": tc.scope},
+			}
+
+			accounts, err := saver.SaveAccountsFromInputs(ctx, []SaveAccountInput{
+				{
+					Actor: accountSaverActor("user-1"), UserID: "user-1", WorkspaceID: "workspace-1", PlatformName: tc.provider,
+					AccountID: tc.firstID, AccountUsername: "Ada", Token: token,
+					CapabilityState: tc.firstCapabilities,
+				},
+				{
+					Actor: accountSaverActor("user-1"), UserID: "user-1", WorkspaceID: "workspace-1", PlatformName: tc.provider,
+					AccountID: tc.secondID, AccountUsername: "OpenPost", Token: token,
+					CapabilityState: tc.secondCapabilities,
+				},
+			})
+			require.NoError(t, err)
+			require.Len(t, accounts, 2)
+			require.Equal(t, tc.firstID, accounts[0].AccountID)
+			require.Equal(t, tc.secondID, accounts[1].AccountID)
+			require.NotEqual(t, accounts[0].Slug, accounts[1].Slug)
+
+			var stored []models.SocialAccount
+			require.NoError(t, db.NewSelect().Model(&stored).Order("created_at ASC").Scan(ctx))
+			require.Len(t, stored, 2)
+			require.Equal(t, stored[0].OAuthGrantID, stored[1].OAuthGrantID)
+			grant := loadAccountGrant(t, db, &stored[0])
+			require.Equal(t, "member-1", grant.ProviderSubject)
+			decrypted, decryptErr := encryptor.Decrypt(grant.AccessTokenEnc)
+			require.NoError(t, decryptErr)
+			require.Equal(t, "member-token", decrypted)
+		})
 	}
-
-	accounts, err := saver.SaveAccountsFromInputs(ctx, []SaveAccountInput{
-		{
-			Actor: accountSaverActor("user-1"), UserID: "user-1", WorkspaceID: "workspace-1", PlatformName: "linkedin",
-			AccountID: "urn:li:person:member-1", AccountUsername: "Ada", Token: token,
-			CapabilityState: map[string]string{"linkedin_account_type": "person"},
-		},
-		{
-			Actor: accountSaverActor("user-1"), UserID: "user-1", WorkspaceID: "workspace-1", PlatformName: "linkedin",
-			AccountID: "urn:li:organization:42", AccountUsername: "OpenPost", Token: token,
-			CapabilityState: map[string]string{"linkedin_account_type": "organization"},
-		},
-	})
-	require.NoError(t, err)
-	require.Len(t, accounts, 2)
-	require.Equal(t, "urn:li:person:member-1", accounts[0].AccountID)
-	require.Equal(t, "urn:li:organization:42", accounts[1].AccountID)
-	require.NotEqual(t, accounts[0].Slug, accounts[1].Slug)
-
-	var stored []models.SocialAccount
-	require.NoError(t, db.NewSelect().Model(&stored).Order("created_at ASC").Scan(ctx))
-	require.Len(t, stored, 2)
-	require.Equal(t, stored[0].OAuthGrantID, stored[1].OAuthGrantID)
-	grant := loadAccountGrant(t, db, &stored[0])
-	decrypted, decryptErr := encryptor.Decrypt(grant.AccessTokenEnc)
-	require.NoError(t, decryptErr)
-	require.Equal(t, "member-token", decrypted)
 }
 
 func TestClientConnectionPersistsGrantAndRejectsRevokedMembership(t *testing.T) {

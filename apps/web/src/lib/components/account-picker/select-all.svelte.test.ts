@@ -27,7 +27,9 @@ describe('account-picker select-all header', () => {
 		await expect.element(checkbox).toHaveAttribute('aria-checked', 'mixed');
 		// The shared checkbox renders its distinct remove glyph for the partial state.
 		await expect
-			.element(screen.container.querySelector('[data-slot="checkbox-indicator"] svg'))
+			.element(
+				screen.container.querySelector<SVGSVGElement>('[data-slot="checkbox-indicator"] svg')
+			)
 			.toBeVisible();
 	});
 

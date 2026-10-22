@@ -18,8 +18,12 @@ const target: PasteMediaUploadTarget = {
 	variantAccountId: null
 };
 
+// Metadata is all the queue reads. Reporting the size without allocating it
+// keeps the large-limit cases cheap to construct.
 function fakeFile(name: string, type: string, size = 128, lastModified = 1): File {
-	return new File([new Uint8Array(size)], name, { type, lastModified });
+	const file = new File([], name, { type, lastModified });
+	Object.defineProperty(file, 'size', { value: size });
+	return file;
 }
 
 function clipboardItem(kind: string, type: string, file: File | null): ClipboardFileItem {

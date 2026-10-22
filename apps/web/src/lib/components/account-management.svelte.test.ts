@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { userProfileDefaults } from '$lib/test-fixtures/user-profile';
 import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
 import { onlineManager, QueryClientProvider } from '@tanstack/svelte-query';
 import { client, type SocialAccount, type Workspace } from '$lib/api/client';
 import { queryClient } from '$lib/query/client';
@@ -113,6 +114,32 @@ describe('account management modes', () => {
 			.toBeVisible();
 		expect(document.body.textContent).toContain('Encrypted XChat is unsupported.');
 		expect(postMock).not.toHaveBeenCalled();
+	});
+
+	it('wraps connection diagnostics inside the notice on narrow screens', async () => {
+		await page.viewport(320, 844);
+		try {
+			const screen = await render(
+				AccountManagement,
+				{
+					workspace,
+					workspaces: [workspace],
+					links,
+					feedback: {
+						tone: 'error',
+						message: 'The provider profile could not be read. HTTP 400; trace=' + 'a'.repeat(96)
+					},
+					onContinue: vi.fn(),
+					onAccountsChanged: vi.fn()
+				},
+				{ wrapper: QueryClientProvider, wrapperProps: { client: queryClient } }
+			);
+			await expect.element(screen.getByRole('alert')).toBeVisible();
+			const notice = screen.getByRole('alert').element();
+			expect(notice.scrollWidth).toBeLessThanOrEqual(notice.clientWidth);
+		} finally {
+			await page.viewport(1280, 900);
+		}
 	});
 
 	it('refreshes stale displayed accounts after reconnect', async () => {

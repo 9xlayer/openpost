@@ -156,6 +156,9 @@ func TestBearerMiddleware_InvalidToken_Returns401(t *testing.T) {
 	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 401 for rejected token, got %d (body=%q)", rec.Code, rec.Body.String())
 	}
+	if got := rec.Header().Get("WWW-Authenticate"); got != invalidTokenChallenge {
+		t.Errorf("expected rejected session challenge, got %q", got)
+	}
 }
 
 func TestBearerMiddlewareCanceledRequestDoesNotReturnInvalidToken(t *testing.T) {
@@ -237,6 +240,7 @@ func TestAuthMiddlewareInvalidTokenStillReturns401(t *testing.T) {
 	require.False(t, called)
 	require.Equal(t, http.StatusUnauthorized, rec.Code)
 	require.Contains(t, rec.Body.String(), "invalid or expired token")
+	require.Equal(t, invalidTokenChallenge, rec.Header().Get("WWW-Authenticate"))
 }
 
 func TestOptionalAuthMiddlewareAuthenticationTimeoutReturns503(t *testing.T) {
@@ -292,6 +296,7 @@ func TestPrincipalCanAccessREST(t *testing.T) {
 	require.True(t, PrincipalCanAccessREST(&Principal{Scope: apitokens.ScopeAPIRead}, "get-provider-readiness"))
 	require.True(t, PrincipalCanAccessREST(&Principal{Scope: apitokens.ScopeAPIRead}, "get-analytics-overview"))
 	for _, operationID := range []string{
+		"export-analytics",
 		"list-jobs",
 		"list-notifications",
 		"list-engagement",

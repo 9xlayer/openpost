@@ -1,12 +1,14 @@
-import { tick } from 'svelte';
+import { createRawSnippet, tick } from 'svelte';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import thumbFixture from '../../../../../assets/brand/pwa-192.png?url&no-inline';
+import originalFixture from '../../../../../assets/brand/icon.svg?url&no-inline';
 import MediaThumbnail from './media-thumbnail.svelte';
 
-// Static assets served by the test dev server, so image loads settle without
-// a network error and each error transition below is driven by the test.
-const THUMB_SRC = '/assets/brand/pwa-192.png';
-const ORIGINAL_SRC = '/assets/brand/icon.svg';
+// Import the authored brand files so image loads settle without depending on
+// generated static assets; each error transition below is driven by the test.
+const THUMB_SRC = thumbFixture;
+const ORIGINAL_SRC = originalFixture;
 
 const imageItem = {
 	mime_type: 'image/png',
@@ -17,12 +19,12 @@ const imageItem = {
 	original_filename: 'team.png'
 };
 
-function imageElement(
-	screen: { getByRole: (role: string, options?: Record<string, unknown>) => unknown },
-	name: string
-): HTMLImageElement {
-	const locator = screen.getByRole('img', { name }) as { element: () => unknown };
-	const element = locator.element();
+interface RoleScreen {
+	getByRole(role: string, options?: { name?: string }): { element(): Element | null };
+}
+
+function imageElement(screen: RoleScreen, name: string): HTMLImageElement {
+	const element = screen.getByRole('img', { name }).element();
 	if (!(element instanceof HTMLImageElement)) throw new Error('Expected an image element.');
 	return element;
 }
@@ -56,6 +58,10 @@ describe('media thumbnail', () => {
 		const element = imageElement(screen, 'The team after a successful release.');
 		expect(element.src).toContain('/assets/brand/pwa-512.png');
 		expect(element.src).not.toContain(THUMB_SRC);
+
+		element.dispatchEvent(new Event('error'));
+		await tick();
+		expect(element.src).toContain(THUMB_SRC);
 
 		element.dispatchEvent(new Event('error'));
 		await tick();
@@ -123,6 +129,33 @@ describe('media thumbnail', () => {
 
 		await expect.element(screen.getByRole('img')).not.toBeInTheDocument();
 		await expect.element(screen.getByRole('presentation')).toBeVisible();
+	});
+
+	it('waits for the poster still instead of rendering the video fallback first', async () => {
+		let fallbackRenders = 0;
+		const noStill = createRawSnippet(() => ({
+			render: () => {
+				fallbackRenders += 1;
+				return '<span data-testid="video-fallback"></span>';
+			}
+		}));
+		const screen = await render(MediaThumbnail, {
+			props: {
+				item: {
+					mime_type: 'video/mp4',
+					thumbnail_url: null,
+					poster_thumbnail_url: ORIGINAL_SRC,
+					url: '/media/original.mp4',
+					alt_text: null,
+					original_filename: 'clip.mp4'
+				},
+				fallbackAlt: 'Media',
+				noStill
+			}
+		});
+
+		await expect.element(screen.getByRole('img', { name: 'clip.mp4' })).toBeVisible();
+		expect(fallbackRenders).toBe(0);
 	});
 
 	it('prefers the poster still for video', async () => {

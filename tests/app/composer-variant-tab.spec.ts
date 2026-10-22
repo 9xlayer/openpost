@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, composerDestinations, createWorkspace, registerUser } from "./helpers";
 
 function capability(accountId: string, platform: string, profile: string, label: string) {
   return {
@@ -97,9 +97,11 @@ for (const width of [1280, 390]) {
 
       await expect(firstTab.getByTestId("composer-destination-custom")).toBeVisible();
       await expect(secondTab.getByTestId("composer-destination-custom")).toHaveCount(0);
-      await expect(page.getByRole("tab", { name: /custom/ })).toBeVisible();
+      await expect(
+        composerDestinations(page).getByRole("button", { name: /custom/ }),
+      ).toBeVisible();
 
-      const tabs = page.getByRole("tablist", { name: "Destinations" });
+      const tabs = composerDestinations(page);
       await tabs.screenshot({ path: testInfo.outputPath("variant-tabs.png") });
     });
   }

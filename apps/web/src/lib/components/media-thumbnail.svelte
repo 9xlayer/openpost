@@ -32,6 +32,10 @@
 	} = $props();
 
 	const kind = $derived(mediaThumbKind(item.mime_type));
+	const thumbnailURL = $derived.by(() => {
+		const selected = mediaThumbnailURL(item);
+		return selected ? getAuthenticatedMediaURL(selected) : '';
+	});
 	const stillURL = $derived.by(() => {
 		if (kind !== 'image' && kind !== 'video') return '';
 		const selected = still || mediaThumbnailURL(item);
@@ -41,21 +45,29 @@
 	const alt = $derived(mediaThumbAlt(item, fallbackAlt));
 
 	let shownURL = $state('');
+	let settled = $state(false);
 	let retriedOriginal = $state(false);
 	let missing = $state(false);
 
 	$effect(() => {
 		// Reset the retry state whenever the still selection changes.
-		stillURL;
-		originalURL;
+		void stillURL;
+		void originalURL;
 		shownURL = stillURL;
 		retriedOriginal = false;
 		missing = false;
+		settled = true;
 	});
 
 	function handleError(event: Event): void {
 		const image = event.currentTarget;
 		if (!(image instanceof HTMLImageElement)) return;
+		if (shownURL && shownURL !== thumbnailURL && shownURL !== originalURL) {
+			// The tier override (e.g. a larger still) is missing; fall back to the
+			// item's own thumbnail before the full original.
+			shownURL = thumbnailURL || originalURL;
+			return;
+		}
 		if (!retriedOriginal && shownURL && shownURL !== originalURL) {
 			retriedOriginal = true;
 			shownURL = originalURL;
@@ -80,7 +92,7 @@
 
 {#if !missing && shownURL}
 	<img src={shownURL} {alt} class={className} {loading} onerror={handleError} />
-{:else if !missing && noStill}
+{:else if !missing && noStill && settled}
 	{@render noStill()}
 {:else}
 	{@render placeholder()}

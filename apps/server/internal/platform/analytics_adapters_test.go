@@ -151,6 +151,13 @@ func TestFacebookContentAnalyticsUsesGraphNodeSpecificInsights(t *testing.T) {
 			want:        AnalyticsValues{MetricViews: 120, MetricReactions: 11, MetricEngagements: 6},
 		},
 		{
+			name: "regular video", externalID: "video-2", profile: "long_video", outputProfile: "facebook.video",
+			wantPath:    "/v25.0/video-2/video_insights",
+			wantMetrics: []string{"total_video_views", "post_video_likes_by_reaction_type", "post_video_social_actions"},
+			response:    `{"data":[{"name":"total_video_views","values":[{"value":95}]},{"name":"post_video_likes_by_reaction_type","values":[{"value":{"LIKE":5}}]},{"name":"post_video_social_actions","values":[{"value":{"COMMENT":2}}]}]}`,
+			want:        AnalyticsValues{MetricViews: 95, MetricReactions: 5, MetricEngagements: 2},
+		},
+		{
 			name: "feed post", externalID: "page-1_post-1", profile: "short_text",
 			wantPath:    "/v25.0/page-1_post-1/insights",
 			wantMetrics: []string{"post_media_view", "post_total_media_view_unique", "post_reactions_like_total", "post_clicks"},

@@ -25,6 +25,11 @@ describe('media-upload-client', () => {
 			direct_upload_supported: true,
 			internal_bytes: 0,
 			limit_bytes: 0,
+			upload_limits: {
+				brand_font_bytes: 10 * 1024 * 1024,
+				default_bytes: 50 * 1024 * 1024,
+				video_bytes: 16 * 1024 * 1024 * 1024
+			},
 			used_bytes: 0
 		} satisfies MediaStorage);
 		let capturedRequest: RequestInit | undefined;
@@ -141,6 +146,11 @@ describe('media-upload-client', () => {
 			direct_upload_supported: true,
 			internal_bytes: 0,
 			limit_bytes: 0,
+			upload_limits: {
+				brand_font_bytes: 10 * 1024 * 1024,
+				default_bytes: 50 * 1024 * 1024,
+				video_bytes: 16 * 1024 * 1024 * 1024
+			},
 			used_bytes: 0
 		} satisfies MediaStorage);
 		const controller = new AbortController();

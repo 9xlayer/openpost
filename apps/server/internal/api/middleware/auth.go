@@ -44,6 +44,12 @@ const (
 	// implementations (AuthMiddleware, JWTMiddleware, BearerMiddleware).
 	bearerPrefix      = "Bearer"
 	sessionCookieName = "openpost_session"
+
+	// invalidTokenChallenge marks a 401 as a rejected session or token. Action
+	// checks such as recent reauthentication also answer 401, so browser clients
+	// clear local session state only for responses that carry this challenge.
+	// RFC 9110 requires a challenge on every 401 response.
+	invalidTokenChallenge = `Bearer error="invalid_token"`
 )
 
 var errAuthenticationUnavailable = errors.New("authentication unavailable")
@@ -295,12 +301,24 @@ func (s *CompositeService) AuthenticateBearer(ctx context.Context, token string)
 	}, nil
 }
 
+// writeUnauthorized reports a rejected credential with the challenge that marks
+// session invalidity, so clients do not treat an action-level 401 as a sign-out.
+func writeUnauthorized(api huma.API, ctx huma.Context, message string) {
+	ctx.SetHeader("WWW-Authenticate", invalidTokenChallenge)
+	_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, message)
+}
+
+func echoUnauthorized(c echo.Context, message string) error {
+	c.Response().Header().Set("WWW-Authenticate", invalidTokenChallenge)
+	return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): message})
+}
+
 func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		authHeader := ctx.Header("Authorization")
 		token, cookieAuth := requestAuthToken(authHeader, ctx.Header("Cookie"))
 		if token == "" {
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "missing authorization header")
+			writeUnauthorized(api, ctx, "missing authorization header")
 			return
 		}
 		if cookieAuth && !cookieRequestAllowed(ctx.Method(), ctx.Header("Origin"), ctx.Host(), requestScheme(ctx)) {
@@ -316,7 +334,7 @@ func AuthMiddleware(api huma.API, authenticator Authenticator) func(ctx huma.Con
 				_ = huma.WriteErr(api, ctx, http.StatusServiceUnavailable, "authentication is temporarily unavailable")
 				return
 			}
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid or expired token")
+			writeUnauthorized(api, ctx, "invalid or expired token")
 			return
 		}
 		if SessionOriginRejected(principal, ctx.Header("Origin"), ctx.Host(), requestScheme(ctx)) {
@@ -506,17 +524,17 @@ func JWTMiddleware(authService *auth.Service) echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "missing authorization header"})
+				return echoUnauthorized(c, "missing authorization header")
 			}
 
 			tokenParts := strings.Split(authHeader, " ")
 			if len(tokenParts) != 2 || tokenParts[0] != bearerPrefix {
-				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid authorization header format"})
+				return echoUnauthorized(c, "invalid authorization header format")
 			}
 
 			claims, err := authService.ValidateToken(tokenParts[1])
 			if err != nil {
-				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid or expired token"})
+				return echoUnauthorized(c, "invalid or expired token")
 			}
 
 			c.Set(string(UserIDKey), claims.UserID)
@@ -541,7 +559,7 @@ func BearerMiddleware(authenticator Authenticator, operationID ...string) echo.M
 			authHeader := c.Request().Header.Get("Authorization")
 			token, cookieAuth := requestAuthToken(authHeader, c.Request().Header.Get("Cookie"))
 			if token == "" {
-				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "missing authorization header"})
+				return echoUnauthorized(c, "missing authorization header")
 			}
 			if cookieAuth && !cookieRequestAllowed(c.Request().Method, c.Request().Header.Get("Origin"), c.Request().Host, c.Scheme()) {
 				return c.JSON(http.StatusForbidden, map[string]string{string(errorKey): "cross-site session request rejected"})
@@ -555,7 +573,7 @@ func BearerMiddleware(authenticator Authenticator, operationID ...string) echo.M
 				if isAuthenticationUnavailable(err) {
 					return c.JSON(http.StatusServiceUnavailable, map[string]string{string(errorKey): "authentication is temporarily unavailable"})
 				}
-				return c.JSON(http.StatusUnauthorized, map[string]string{string(errorKey): "invalid or expired token"})
+				return echoUnauthorized(c, "invalid or expired token")
 			}
 			if SessionOriginRejected(principal, c.Request().Header.Get("Origin"), c.Request().Host, c.Scheme()) {
 				return c.JSON(http.StatusForbidden, map[string]string{string(errorKey): "cross-site session request rejected"})

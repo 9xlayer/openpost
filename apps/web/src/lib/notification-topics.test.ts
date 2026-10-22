@@ -40,4 +40,13 @@ describe('notification topic presentation', () => {
 		expect(notificationTopicLabel(backendDefinition.id)).toBe('Notificação');
 		expect(notificationTopicEmailFrequencies(backendDefinition)).toEqual(['immediate']);
 	});
+
+	it('presents the approval topic with localized copy', () => {
+		setLocale('en', { reload: false });
+		expect(notificationTopicLabel('workflow_approval')).toBe('Workflow approval');
+		expect(notificationTopicDescription('workflow_approval')).not.toBe('Notification');
+
+		setLocale('es', { reload: false });
+		expect(notificationTopicLabel('workflow_approval')).toBe('Aprobación de flujo de trabajo');
+	});
 });

@@ -31,7 +31,7 @@ Load only the branch the task needs:
 | Go HTTP or OpenAPI work                                                 | `huma`; for TypeScript consumers, also use `openapi-typescript`                                     |
 | Server-state reads, cache keys, invalidation, or loading boundaries     | `docs/specs/server-state-query-migration.md`                                                        |
 | Deployment, runtime configuration, release workflows, or revision proof | `docs/agents/deployable-inventory.md`                                                               |
-| n8n package release or package-only recovery                            | `docs/agents/n8n-package-release.md`                                                                |
+| n8n or SDK package release or package-only recovery                     | `docs/agents/n8n-package-release.md`, `docs/agents/sdk-package-release.md`                          |
 | Video Editor, Quick Cut, or Recorder                                    | `docs/specs/video-editors-rebuild.md` and the relevant rows in `docs/specs/freecut-parity-audit.md` |
 
 For reference implementations, read `docs/references/README.md` before inspecting a checkout. Use `postiz` or `shoutrrr` for publishing and durable automation, `miniPaint` for the Image Editor, and the named video references for recording or editing. Keep reference checkouts shallow and Git-ignored. Audit source and license before porting code; OpenPost's architecture, security, accessibility, provider rules, and product language remain authoritative.
@@ -125,7 +125,7 @@ Free-tool draft transfer uses `@openpost/draft-transfer`. Keep content and files
 - `packages/plan-catalog` owns sellable plans, prices, and limits for marketing, signup, billing settings, and the generated Go catalog. Read `docs/development/billing-and-usage.md` before changing pricing, quotas, checkout, or first-Workspace confirmation.
 - API, CLI, MCP, and product surfaces share terms, authorization, and workspace boundaries. For a contract change, edit its source and regenerate every consumer.
 - Maintainer diagnostics send allowlisted error kinds and compiled app stack locations, never raw error messages or concrete browser routes. Preserve opt-out and privacy signals, and deploy receiver schema support before new senders.
-- OpenAPI declares session-cookie authentication for browser sessions and session-only security for admin operations that reject API tokens.
+- OpenAPI declares session-cookie authentication for browser sessions and session-only security for admin operations that reject API tokens. A rejected session challenges with `WWW-Authenticate: Bearer error="invalid_token"`; app clients clear local session state only for that challenge, because action checks such as recent reauthentication also answer 401.
 - Cookie banners use direct Decline (all optional browser analytics off) and Accept (first-party analytics cookies) actions. Keep cookie-free analytics under More options, and public English copy in `@openpost/telemetry`; the app localizes the same choices.
 - Hosted waitlist admission uses `OPENPOST_HOSTED_WAITLIST_ENABLED`. Keep password registration and OIDC provisioning closed while it is enabled, including callbacks started earlier; existing accounts retain sign-in. See `docs/development/billing-and-usage.md` for reopening and notification recovery.
 - Put Huma request size limits on `huma.Operation.MaxBodyBytes`. Do not read and replace an HTTP request body before Huma, because Huma's body-read deadline can then cancel a long-running handler after the body is already buffered.
@@ -202,7 +202,7 @@ Free-tool draft transfer uses `@openpost/draft-transfer`. Keep content and files
 
 ## Delivery
 
-- Commit directly to `main` with Conventional Commits, one concern per commit. Stage only files owned by the current work.
+- Commit completed implementation work after relevant verification passes, without waiting for a separate commit request. Commit directly to `main` with Conventional Commits. Group independent concerns into focused commits; use a single commit for one coherent change. Stage only files or hunks owned by the current work.
 - Reference the issue number in every issue-fixing commit title, for example `(#342)`.
 - Release assets are user downloads. Keep scan reports in Actions; use Git SHAs, image digests, OCI labels, and native signatures instead of custom release manifests. Validate workflows with `bun run check -- workflows`.
 - Push only when asked. A push is not a deployment.

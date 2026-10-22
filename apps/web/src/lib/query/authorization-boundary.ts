@@ -38,6 +38,18 @@ export function settleQueryUnauthorized(identity: QueryAuthorizationIdentity | u
 	boundary?.settleUnauthorized(identity);
 }
 
+/**
+ * A 401 settles session state only when the server rejected the credential
+ * itself. Action checks such as recent reauthentication answer 401 too, and
+ * those must stay with the open form instead of signing the user out.
+ */
+export function isSessionUnauthorized(response: Pick<Response, 'status' | 'headers'>): boolean {
+	return (
+		response.status === 401 &&
+		response.headers.get('WWW-Authenticate')?.includes('invalid_token') === true
+	);
+}
+
 export function captureQueryMutationSession(): QueryMutationSession {
 	return {
 		authorizationIdentity: boundary?.captureIdentity(),

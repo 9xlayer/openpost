@@ -38,11 +38,15 @@ it('previews the rendered color on hover and selects that same color on click', 
 	const picker = screen.getByRole('button', { name: /Choose a color in the preview/ });
 	await expect.element(picker).toBeVisible();
 	await expect
-		.poll(async () => {
-			await userEvent.hover(picker);
-			return screen.container.querySelector('[data-testid="video-editor-eyedropper-magnifier"]')
-				?.textContent;
-		})
+		.poll(
+			async () => {
+				await userEvent.hover(picker);
+				return screen.container.querySelector('[data-testid="video-editor-eyedropper-magnifier"]')
+					?.textContent;
+			},
+			// Rendering and sampling the preview frame follows graphics initialization.
+			{ timeout: 5_000 }
+		)
 		.toContain('#FF0000');
 	expect(result).not.toHaveBeenCalled();
 	await picker.click();

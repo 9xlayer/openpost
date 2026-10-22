@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/openpost/backend/internal/models"
@@ -152,6 +153,7 @@ type MediaConstraint struct {
 	MaxWidth               int      `json:"max_width,omitempty"`
 	MinHeight              int      `json:"min_height,omitempty"`
 	MaxHeight              int      `json:"max_height,omitempty"`
+	MaxShortSide           int      `json:"max_short_side,omitempty" doc:"Maximum image dimension on its shorter side"`
 	AllowedVideoCodecs     []string `json:"allowed_video_codecs,omitempty"`
 	AllowedAudioCodecs     []string `json:"allowed_audio_codecs,omitempty"`
 	MaxFrameRate           float64  `json:"max_frame_rate,omitempty"`
@@ -288,7 +290,17 @@ func Profiles() []Profile {
 	}
 }
 
+// All returns the process-wide publishing capability catalog. The catalog is
+// built once and must be treated as immutable: do not assign to a returned
+// Capability's fields and do not mutate its nested slices or metadata. Resolve
+// and FindOutput copy the fields that callers modify.
 func All() []Capability {
+	return buildCatalogOnce()
+}
+
+var buildCatalogOnce = sync.OnceValue(buildCatalog)
+
+func buildCatalog() []Capability {
 	text := MediaConstraint{MinCount: 0, MaxCount: 0}
 	linkedinImage := MediaConstraint{MinCount: 1, MaxCount: 1, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/gif"}}
 	feedImages := MediaConstraint{MinCount: 1, MaxCount: 10, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp"}}
@@ -364,6 +376,7 @@ func All() []Capability {
 		MaxCount:               35,
 		AllowedMIMEs:           []string{"image/jpeg", "image/webp"},
 		MaxSizeBytes:           20 * 1024 * 1024,
+		MaxShortSide:           providerlimits.TikTokPhotoMaxShortSidePixels,
 		RequiresPublicURL:      true,
 		RequiresHTTPSFetchable: true,
 	}
@@ -462,10 +475,10 @@ func All() []Capability {
 		defaultQueued(Capability{Provider: ProviderFacebook, Profile: models.ContentProfileShortVideo, Label: "Facebook Reel/video", TextLimit: 63206, Media: publicShortVideo, RequiresPublicMedia: true, Settings: facebookSettings()}),
 		defaultQueued(Capability{Provider: ProviderFacebook, Profile: models.ContentProfileLongVideo, Label: "Facebook video", TextLimit: 63206, Media: longVideo, RequiresPublicMedia: true, Settings: facebookSettings()}),
 
-		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileImagePost, Label: "Instagram feed", TextLimit: 2200, Media: publicImage, RequiresPublicMedia: true, Settings: instagramSettings()}),
-		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileCarousel, Label: "Instagram carousel", TextLimit: 2200, Media: publicMediaCarousel, RequiresPublicMedia: true, Settings: instagramSettings()}),
-		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileStory, Label: "Instagram Story", Media: publicStory, RequiresPublicMedia: true, RequiresAppReview: true, Settings: instagramSettings()}),
-		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileShortVideo, Label: "Instagram Reel", TextLimit: 2200, Media: publicShortVideo, RequiresPublicMedia: true, Settings: instagramSettings()}),
+		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileImagePost, Label: "Instagram feed", TextLimit: 2200, Media: publicImage, RequiresPublicMedia: true, Settings: instagramSettings(models.ContentProfileImagePost)}),
+		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileCarousel, Label: "Instagram carousel", TextLimit: 2200, Media: publicMediaCarousel, RequiresPublicMedia: true, Settings: instagramSettings(models.ContentProfileCarousel)}),
+		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileStory, Label: "Instagram Story", Media: publicStory, RequiresPublicMedia: true, RequiresAppReview: true, Settings: instagramSettings(models.ContentProfileStory)}),
+		defaultQueued(Capability{Provider: ProviderInstagram, Profile: models.ContentProfileShortVideo, Label: "Instagram Reel", TextLimit: 2200, Media: publicShortVideo, RequiresPublicMedia: true, Settings: instagramSettings(models.ContentProfileShortVideo)}),
 
 		defaultQueued(Capability{Provider: ProviderYouTube, Profile: models.ContentProfileShortVideo, Label: "YouTube Short", TextLimit: providerlimits.YouTubeDescriptionMaxBytes, TitleRequired: true, DescriptionRequired: false, Media: shortVideo, Settings: youtubeSettings(), Caveats: []string{"Unaudited Google projects can force uploads private."}}),
 		defaultQueued(Capability{Provider: ProviderYouTube, Profile: models.ContentProfileLongVideo, Label: "YouTube video", TextLimit: providerlimits.YouTubeDescriptionMaxBytes, TitleRequired: true, DescriptionRequired: false, Media: longVideo, Settings: youtubeSettings(), Caveats: []string{"Unaudited Google projects can force uploads private."}}),
@@ -2161,7 +2174,7 @@ func validateUnsupportedSettings(capability Capability, settings map[string]any)
 		if _, ok := known[key]; ok {
 			continue
 		}
-		if legacySettingSupported(capability.Provider, key) {
+		if legacySettingSupported(capability.Provider, capability.Profile, key) {
 			continue
 		}
 		if strings.TrimSpace(fmt.Sprint(value)) == "" {
@@ -2179,12 +2192,14 @@ func validateUnsupportedSettings(capability Capability, settings map[string]any)
 	return issues
 }
 
-func legacySettingSupported(provider, key string) bool {
+func legacySettingSupported(provider, profile, key string) bool {
 	switch provider {
 	case ProviderX:
 		return key == "quote_tweet_id"
 	case ProviderBluesky:
 		return key == "quote_uri" || key == "quote_cid" || key == "mention_dids"
+	case ProviderInstagram:
+		return providerlimits.InstagramOmitsCollaborators(profile) && key == "collaborators"
 	default:
 		return false
 	}
@@ -2198,9 +2213,34 @@ func validateProviderSettings(provider, profile string, mediaCount int, settings
 		return validateMastodonSettings(profile, mediaCount, settings)
 	case ProviderTikTok:
 		return validateTikTokSettings(profile, mediaCount, settings)
+	case ProviderInstagram:
+		return validateInstagramSettings(profile, settings)
 	default:
 		return nil
 	}
+}
+
+func validateInstagramSettings(profile string, settings map[string]any) []ValidationIssue {
+	issues := []ValidationIssue{}
+	collaborators := providerlimits.InstagramCollaborators(settingsValue(settings, "collaborators"))
+	if providerlimits.InstagramOmitsCollaborators(profile) && len(collaborators) > 0 {
+		issues = append(issues, ValidationIssue{
+			Severity: "warning", Code: "instagram_story_collaborators_omitted",
+			Message:  "Instagram Stories do not support collaborators. OpenPost will publish the Story without them.",
+			Provider: ProviderInstagram, Profile: profile, Field: "collaborators",
+		})
+	}
+	for _, violation := range providerlimits.ValidateInstagramSettings(profile, settingBooleanValue(settings, "is_trial_reel"), collaborators) {
+		if violation.Code == providerlimits.InstagramCollaboratorLimitExceeded {
+			// The setting constraint exposes and validates this shared limit.
+			continue
+		}
+		issues = append(issues, ValidationIssue{
+			Severity: "error", Code: violation.Code, Message: violation.Message,
+			Provider: ProviderInstagram, Profile: profile, Field: violation.Field,
+		})
+	}
+	return issues
 }
 
 func validateXSettings(profile string, mediaCount int, settings map[string]any) []ValidationIssue {
@@ -2280,6 +2320,7 @@ func validateMediaItem(capability Capability, item MediaItem) []ValidationIssue 
 		{capability.Media.MaxWidth > 0 && item.Width > capability.Media.MaxWidth, "media_width_max", fmt.Sprintf("Media width must be at most %d pixels", capability.Media.MaxWidth)},
 		{capability.Media.MinHeight > 0 && item.Height < capability.Media.MinHeight, "media_height_min", fmt.Sprintf("Media height must be at least %d pixels", capability.Media.MinHeight)},
 		{capability.Media.MaxHeight > 0 && item.Height > capability.Media.MaxHeight, "media_height_max", fmt.Sprintf("Media height must be at most %d pixels", capability.Media.MaxHeight)},
+		{capability.Media.MaxShortSide > 0 && item.Width > 0 && item.Height > 0 && min(item.Width, item.Height) > capability.Media.MaxShortSide, "media_short_side_max", fmt.Sprintf("Media is %dx%d; images support at most %d pixels on the shorter side", item.Width, item.Height, capability.Media.MaxShortSide)},
 	} {
 		if boundary.invalid {
 			issues = append(issues, ValidationIssue{Severity: "error", Code: boundary.code, Message: boundary.message, Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
@@ -2623,19 +2664,27 @@ func facebookSettings() []SettingField {
 	}
 }
 
-func instagramSettings() []SettingField {
-	return []SettingField{
+func instagramSettings(profile string) []SettingField {
+	settings := []SettingField{
 		{Key: "is_trial_reel", Label: "Trial Reel", Type: "boolean", Intents: []string{IntentShortVideo}},
 		{Key: "graduation_strategy", Label: "Trial graduation", Type: "select", Required: true, Intents: []string{IntentShortVideo}, Options: []string{"MANUAL", "SS_PERFORMANCE"}, Dependencies: []SettingCondition{{Key: "is_trial_reel", Operator: "equals", Value: true}}},
-		{Key: "collaborators", Label: "Collaborators", Type: "tags", Control: "user_picker"},
-		{Key: "location_id", Label: "Location", Type: "select", Control: "remote_picker", OptionsSource: "instagram_locations"},
-		{Key: "user_tags", Label: "Tag people", Type: "json", Control: "media_tags", Scope: SettingScopeMediaItem, MediaShapes: []string{MediaShapeSingleImage, MediaShapeMultipleImage}, Constraints: SettingConstraint{MaxItems: 20}},
-		{Key: "product_tags", Label: "Tag products", Type: "json", Control: "media_tags", Scope: SettingScopeMediaItem, MediaShapes: []string{MediaShapeSingleImage, MediaShapeMultipleImage}, Constraints: SettingConstraint{MaxItems: 5}, Capability: "product_tags", UnavailableReason: "Product tags require an eligible Instagram Shopping account."},
-		{Key: "cover_media_id", Label: "Cover image", Type: "media", Control: "media_picker", Intents: []string{IntentShortVideo}},
-		{Key: "thumbnail_timestamp_ms", Label: "Cover frame", Type: "number", Control: "cover_frame", Intents: []string{IntentShortVideo}},
-		{Key: "share_to_feed", Label: "Share Reel to feed", Type: "boolean", Intents: []string{IntentShortVideo}},
-		{Key: "first_comment", Label: "First comment", Type: "textarea", Control: "follow_up", Scope: SettingScopeSegment},
 	}
+	if !providerlimits.InstagramOmitsCollaborators(profile) {
+		settings = append(settings, SettingField{
+			Key: "collaborators", Label: "Collaborators", Type: "tags", Control: "user_picker",
+			Constraints: SettingConstraint{MaxItems: providerlimits.InstagramMaxCollaborators},
+		})
+	}
+	settings = append(settings,
+		SettingField{Key: "location_id", Label: "Location", Type: "select", Control: "remote_picker", OptionsSource: "instagram_locations"},
+		SettingField{Key: "user_tags", Label: "Tag people", Type: "json", Control: "media_tags", Scope: SettingScopeMediaItem, MediaShapes: []string{MediaShapeSingleImage, MediaShapeMultipleImage}, Constraints: SettingConstraint{MaxItems: 20}},
+		SettingField{Key: "product_tags", Label: "Tag products", Type: "json", Control: "media_tags", Scope: SettingScopeMediaItem, MediaShapes: []string{MediaShapeSingleImage, MediaShapeMultipleImage}, Constraints: SettingConstraint{MaxItems: 5}, Capability: "product_tags", UnavailableReason: "Product tags require an eligible Instagram Shopping account."},
+		SettingField{Key: "cover_media_id", Label: "Cover image", Type: "media", Control: "media_picker", Intents: []string{IntentShortVideo}},
+		SettingField{Key: "thumbnail_timestamp_ms", Label: "Cover frame", Type: "number", Control: "cover_frame", Intents: []string{IntentShortVideo}},
+		SettingField{Key: "share_to_feed", Label: "Share Reel to feed", Type: "boolean", Intents: []string{IntentShortVideo}},
+		SettingField{Key: "first_comment", Label: "First comment", Type: "textarea", Control: "follow_up", Scope: SettingScopeSegment},
+	)
+	return settings
 }
 
 func threadsSettings() []SettingField {

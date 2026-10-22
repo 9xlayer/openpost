@@ -22,7 +22,7 @@ export interface PlatformCountDefinition {
 	note: string;
 }
 
-const COUNTER_PLATFORM_DETAILS: Record<PlatformKey, { limit: number; note: string }> = {
+const COUNTER_PLATFORM_DETAILS = {
 	x: {
 		limit: PLATFORM_LIMITS.x.charLimit,
 		note: 'Standard-post estimate: links use 23 characters, with X-style character weighting.'
@@ -71,12 +71,14 @@ const COUNTER_PLATFORM_DETAILS: Record<PlatformKey, { limit: number; note: strin
 		limit: PLATFORM_LIMITS.discord.charLimit,
 		note: 'Message limit for incoming webhooks.'
 	}
-};
+} satisfies Record<PlatformKey, { limit: number; note: string }>;
 
 // The rendered rows follow the shared counter platform list in
 // @openpost/social-images, the same list the public tool description counts,
 // so the advertised number can never disagree with the tool.
 export const COUNTER_PLATFORMS: PlatformCountDefinition[] = counterPlatforms.map((platform) => {
+	// SAFETY: the shared catalogue and COUNTER_PLATFORM_DETAILS cover the same
+	// PlatformKey set; tool-utils.test.ts compares both key lists.
 	const key = platform.key as PlatformKey;
 	return {
 		key,

@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
 import type { components } from "@openpost/api-contract";
-import { mobileRenditionInput, mobileRenditionTextFields } from "./publication-renditions";
+import {
+  attachmentRequirement,
+  mobileRenditionInput,
+  mobileRenditionTextFields,
+} from "./publication-renditions";
 
 const rendition: components["schemas"]["RenditionResponse"] = {
   id: "destination",
@@ -329,3 +333,9 @@ test("adding a required demo retains inherited source images inside a joined des
   expect(input.segments?.[0]?.source_overrides?.[0]?.body_override).toBe("Keep this source");
   expect(input.segments?.[0]?.source_overrides?.[1]?.media_inherited).toBe(true);
 });
+
+for (const settings of [null, undefined, {}]) {
+  test(`opening a generated segment with ${JSON.stringify(settings)} settings has no attachment requirement`, () => {
+    expect(attachmentRequirement(settings)).toBeUndefined();
+  });
+}

@@ -43,6 +43,7 @@ type SeriesPoint struct {
 }
 
 type DailyBreakdownItem struct {
+	AccountID     string `json:"account_id,omitempty"`
 	Key           string `json:"key"`
 	Label         string `json:"label"`
 	Platform      string `json:"platform"`
@@ -136,17 +137,19 @@ type PublicationOverview struct {
 }
 
 type Overview struct {
-	GeneratedAt        time.Time             `json:"generated_at"`
-	LastSyncedAt       time.Time             `json:"last_synced_at,omitempty"`
-	RangeDays          int                   `json:"range_days"`
-	Summary            Summary               `json:"summary"`
-	Accounts           []AccountOverview     `json:"accounts"`
-	FollowerSeries     []SeriesPoint         `json:"follower_series"`
-	Trends             TrendSeries           `json:"trends"`
-	Publications       []PublicationOverview `json:"publications"`
-	Content            []ContentOverview     `json:"content"`
-	Insights           []Insight             `json:"insights"`
-	AccountGrowthScope string                `json:"account_growth_scope" enum:"account_wide"`
+	GeneratedAt    time.Time             `json:"generated_at"`
+	LastSyncedAt   time.Time             `json:"last_synced_at,omitempty"`
+	RangeDays      int                   `json:"range_days"`
+	Summary        Summary               `json:"summary"`
+	Accounts       []AccountOverview     `json:"accounts"`
+	FollowerSeries []SeriesPoint         `json:"follower_series"`
+	Trends         TrendSeries           `json:"trends"`
+	Publications   []PublicationOverview `json:"publications"`
+	Content        []ContentOverview     `json:"content"`
+	// ContentMetricKeys covers the complete filtered population, independent of pagination.
+	ContentMetricKeys  []string  `json:"content_metric_keys,omitempty"`
+	Insights           []Insight `json:"insights"`
+	AccountGrowthScope string    `json:"account_growth_scope" enum:"account_wide"`
 	// PublicationTotal is the distinct-post count behind Content: the number
 	// of publications with at least one published rendition in range. It is
 	// the field to compare against the Posts "Published" tab (after aligning
@@ -168,6 +171,9 @@ type OverviewOptions struct {
 	Sort      string
 	Cursor    string
 	Limit     int
+	// Unpaged returns every matching content row in one pass, with no cursor.
+	// Exports use it so a large workspace is not recomputed once per page.
+	Unpaged bool
 }
 
 var ErrInvalidOverviewCursor = errors.New("invalid analytics overview cursor")
@@ -175,6 +181,9 @@ var ErrInvalidOverviewCursor = errors.New("invalid analytics overview cursor")
 func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, days int, options OverviewOptions) (Overview, error) {
 	days = normalizeOverviewDays(days)
 	options = normalizeOverviewOptions(options)
+	if options.Unpaged && options.Cursor != "" {
+		return Overview{}, ErrInvalidOverviewCursor
+	}
 	now := s.now()
 	if options.Cursor != "" {
 		cursor, err := s.decodeSignedOverviewCursor(workspaceID, options, days)
@@ -232,11 +241,16 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 	}
 	result.Insights = buildOverviewInsights(insightContent, result.Accounts, options.AccountID, start, now)
 	orderContentOverviews(allContent, options.Sort)
+	result.ContentMetricKeys = measuredContentMetrics(allContent)
 	result.ContentTotal = len(allContent)
 	result.PublicationTotal = uniquePublicationCount(allContent)
 	contentSummary := summarizeWholeAccountContent(allContent)
 	result.Summary = mergeOverviewContentSummary(result.Summary, contentSummary, result.Accounts, options.AccountID)
 
+	if options.Unpaged {
+		result.Content = allContent
+		return result, nil
+	}
 	populationRevision := overviewPopulationRevision(allContent)
 	offset, err := s.decodeOverviewOffset(workspaceID, options, days, len(allContent), populationRevision)
 	if err != nil {

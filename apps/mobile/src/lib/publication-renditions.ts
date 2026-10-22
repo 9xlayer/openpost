@@ -82,9 +82,9 @@ function mediaInput(media: Media): MediaInput {
 }
 
 export function attachmentRequirement(
-  settings: Record<string, unknown>,
+  settings: Record<string, unknown> | null | undefined,
 ): { kind: "image" | "video"; brief: string } | undefined {
-  const value = settings.attachment_requirement;
+  const value = settings?.attachment_requirement;
   if (
     !value ||
     typeof value !== "object" ||

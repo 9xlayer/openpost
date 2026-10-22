@@ -150,6 +150,7 @@ func (s *Service) finishRunStep(ctx context.Context, record runRecord, results [
 		return err
 	}
 	committed := false
+	var settled runRecord
 	err = s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		if err := organizationguard.LockWorkspace(ctx, tx, record.WorkspaceID); err != nil {
 			return err
@@ -182,19 +183,37 @@ func (s *Service) finishRunStep(ctx context.Context, record runRecord, results [
 		committed = true
 		current.Revision++
 		current.State = state
-		if state == StateQueued || state == StateWaiting {
-			runAt := time.Now().UTC()
-			if wakeAt != nil {
-				runAt = *wakeAt
+		current.CurrentStepID = currentStep
+		settled = current
+		if state == StateApproval {
+			if err := s.enqueueApprovalNotice(ctx, tx, current, current.CurrentStepID, "waiting"); err != nil {
+				return err
 			}
-			return enqueueRun(ctx, tx, current, runAt)
 		}
-		return nil
+		// Queueing the next attempt is durable work that must not outlive a
+		// rollback, so it stays in the transaction. Notifications do not: see
+		// notifyParkedApproval.
+		return s.enqueueNextAttempt(ctx, tx, current, wakeAt)
 	})
 	if err == nil && committed {
 		s.captureFinishedRun(ctx, record, state, len(results))
+		s.notifyParkedApproval(ctx, settled, results)
 	}
 	return err
+}
+
+// enqueueNextAttempt queues a run that still has steps to execute. It stays in
+// the transaction that wrote the state: a job that survived a rollback would
+// execute a transition that never happened.
+func (s *Service) enqueueNextAttempt(ctx context.Context, db bun.IDB, current runRecord, wakeAt *time.Time) error {
+	if current.State != StateQueued && current.State != StateWaiting {
+		return nil
+	}
+	runAt := time.Now().UTC()
+	if wakeAt != nil {
+		runAt = *wakeAt
+	}
+	return enqueueRun(ctx, db, current, runAt)
 }
 
 func number(value any) (float64, error) {

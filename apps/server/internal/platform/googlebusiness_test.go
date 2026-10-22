@@ -76,6 +76,7 @@ func TestGoogleBusinessOAuthExchangeAndRefresh(t *testing.T) {
 	parsed, err := url.Parse(authURL)
 	require.NoError(t, err)
 	require.Equal(t, "oauth-state", parsed.Query().Get("state"))
+	require.False(t, parsed.Query().Has("include_granted_scopes"), "Google Business connection must request only its current scope set")
 	for _, scope := range googleBusinessOAuthScopes {
 		require.Contains(t, parsed.Query().Get("scope"), scope)
 	}

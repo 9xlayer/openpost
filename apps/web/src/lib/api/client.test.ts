@@ -12,12 +12,18 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-function mockserved(status: number, body: unknown = { detail: 'Session expired' }) {
+const sessionRejected = { 'WWW-Authenticate': 'Bearer error="invalid_token"' };
+
+function mockserved(
+	status: number,
+	body: Record<string, string> = { detail: 'Session expired' },
+	headers: Record<string, string> = {}
+) {
 	const fetchMock: typeof fetch = vi.fn(
 		async () =>
 			new Response(JSON.stringify(body), {
 				status,
-				headers: { 'Content-Type': 'application/json' }
+				headers: { 'Content-Type': 'application/json', ...headers }
 			})
 	);
 	return fetchMock;
@@ -33,7 +39,9 @@ describe('api client authorization settlement', () => {
 		const settleUnauthorized = vi.fn();
 		registerQueryAuthorizationBoundary({ captureIdentity, settleUnauthorized });
 
-		const testClient = createSettlingApiClient(mockserved(401));
+		const testClient = createSettlingApiClient(
+			mockserved(401, { detail: 'invalid or expired token' }, sessionRejected)
+		);
 		const { response } = await testClient.POST('/prompts', {
 			body: { category: 'launch', example: 'We shipped it.', text: 'Write a launch post.' }
 		});
@@ -52,11 +60,33 @@ describe('api client authorization settlement', () => {
 			settleUnauthorized
 		});
 
-		const testClient = createSettlingApiClient(mockserved(401));
+		const testClient = createSettlingApiClient(
+			mockserved(401, { detail: 'missing authorization header' }, sessionRejected)
+		);
 		const { response } = await testClient.GET('/prompts/categories', {});
 
 		expect(response.status).toBe(401);
 		expect(settleUnauthorized).toHaveBeenCalledWith(capturedIdentity);
+	});
+
+	it('leaves an action-level 401, such as recent reauthentication, with its caller', async () => {
+		const settleUnauthorized = vi.fn();
+		registerQueryAuthorizationBoundary({
+			captureIdentity: () => ({ userID: 'user-a', epoch: 4 }),
+			settleUnauthorized
+		});
+
+		const testClient = createSettlingApiClient(
+			mockserved(401, { detail: 'recent reauthentication is required' })
+		);
+		const { error, response } = await testClient.DELETE('/workspaces/{id}', {
+			params: { path: { id: 'workspace-1' } },
+			body: { confirm_name: 'Workspace', current_password: 'wrong-password' }
+		});
+
+		expect(response.status).toBe(401);
+		expect(error).toMatchObject({ detail: 'recent reauthentication is required' });
+		expect(settleUnauthorized).not.toHaveBeenCalled();
 	});
 
 	it('does not settle a successful direct mutation', async () => {

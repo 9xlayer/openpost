@@ -29,8 +29,9 @@ async function runRootTask(root, arguments_, environment = {}) {
 }
 
 let productionBuildPromise;
-// This includes sequential cold marketing and documentation builds on CI.
-const productionBuildTestTimeoutMs = 600_000;
+// Build both sites twice to check cold output and deterministic regeneration.
+// The four forced builds and full-corpus assertions need headroom on CI runners.
+const productionBuildTestTimeoutMs = 900_000;
 
 function ensureProductionBuilds(root) {
   productionBuildPromise ??= (async () => {

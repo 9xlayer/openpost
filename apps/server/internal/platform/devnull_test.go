@@ -53,7 +53,7 @@ func devNullTestServer(t *testing.T, commits http.HandlerFunc) *httptest.Server 
 		}
 		fmt.Fprintln(w, line)
 	})
-	mux.HandleFunc("/api/v1/users/testuser", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/users/testuser", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, `{"data":{"id":"00000000-0000-4000-8000-000000000001","username":"testuser","name":"Test User","avatar_url":"https://example.com/avatar.png"}}`)
 	})
@@ -200,7 +200,7 @@ func TestDevNullSignatureVerifiesWithSSHKeygen(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = pemKey
-	cmd := exec.Command("ssh-keygen", "-Y", "verify", "-f", allowedPath, "-I", "testuser", "-n", devNullNamespace, "-s", sigPath)
+	cmd := exec.CommandContext(t.Context(), "ssh-keygen", "-Y", "verify", "-f", allowedPath, "-I", "testuser", "-n", devNullNamespace, "-s", sigPath)
 	cmd.Stdin = strings.NewReader(payload)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("ssh-keygen verification failed: %v\n%s", err, out)
@@ -220,7 +220,13 @@ func TestDevNullRSASignatureAlgorithm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, keyType, _, _ := devNullSignatureParts(t, armored)
+	namespace, hashAlg, keyType, _, _ := devNullSignatureParts(t, armored)
+	if namespace != devNullNamespace {
+		t.Fatalf("signature namespace = %q, want %q", namespace, devNullNamespace)
+	}
+	if hashAlg != "sha512" {
+		t.Fatalf("signature hash algorithm = %q, want sha512", hashAlg)
+	}
 	if keyType != ssh.KeyAlgoRSASHA512 {
 		t.Fatalf("RSA signature algorithm = %q, want rsa-sha2-512", keyType)
 	}
@@ -289,7 +295,7 @@ func TestDevNullLoginAndTextPublish(t *testing.T) {
 }
 
 func TestDevNullPendingCommitStillSucceeds(t *testing.T) {
-	server := devNullTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+	server := devNullTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusCreated)
 		fmt.Fprintln(w, "Committed: https://dev-null.sh/@testuser/commits/01a14c0f (pending review, only you can see it until it is approved)")
@@ -356,7 +362,7 @@ func TestDevNullPublishMapsProviderErrors(t *testing.T) {
 		http.StatusTooManyRequests:     "devnull:rate_limited",
 	}
 	for status, wantCode := range cases {
-		server := devNullTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		server := devNullTestServer(t, func(w http.ResponseWriter, _ *http.Request) {
 			http.Error(w, "nope", status)
 		})
 		adapter := NewDevNullAdapter(server.URL)

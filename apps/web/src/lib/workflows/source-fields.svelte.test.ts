@@ -18,9 +18,7 @@ function sourceAccount(id: string, username: string): SocialAccount {
 		messaging_supported: false,
 		messages_enabled: false,
 		grant_destination_count: 0,
-		shared_grant: false,
-		workspace_id: 'workspace-a',
-		workspace_name: 'Workspace A'
+		shared_grant: false
 	};
 }
 

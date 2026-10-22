@@ -177,6 +177,56 @@ func (s *Service) RefreshSegment(ctx context.Context, db bun.IDB, account models
 		return err
 	}
 	applies := style.Applies(account.Platform, rendition.OutputProfile, segment.Body, attachments)
+	source := textCardSource(account, rendition, segment.Body, style, attachments)
+	previousSource, previousAvatar := parseReceipt(previous)
+	if applies && len(previous) > 0 && previousSource == source && previousAvatar != avatarFailed {
+		return nil
+	}
+	// A previously failed avatar retries on the next save without requiring
+	// an authored-text edit. The comparison above needs no network; only this
+	// explicit retry path fetches the photo again.
+	if !applies {
+		return clearGeneratedCards(ctx, db, segment.ID)
+	}
+	if _, err := textcards.Layout(segment.Body, rendition.OutputProfile); err != nil {
+		// Keep incomplete drafts editable without a generated card.
+		return clearGeneratedCards(ctx, db, segment.ID)
+	}
+	images, outcome, err := s.renderSegmentCards(ctx, account, rendition, segment, style, attachments)
+	if err != nil {
+		return err
+	}
+	if len(previous) > 0 && previousSource == source && outcome == avatarFailed {
+		return nil
+	} // The retry is still failing; keep the existing fallback without churning media.
+	if err := clearGeneratedCards(ctx, db, segment.ID); err != nil {
+		return err
+	}
+	receipt := string(mustJSON(map[string]string{"text_card_source": source, "text_card_avatar": outcome}))
+	return s.persistGeneratedCards(ctx, db, account, segment, images, receipt)
+}
+
+// renderSegmentCards refuses to render when the service has no storage, then
+// renders one segment with the caller's resolved style and attachments.
+func (s *Service) renderSegmentCards(ctx context.Context, account models.SocialAccount, rendition models.Rendition, segment models.RenditionSegment, style textcards.Style, attachments int) ([]textcards.Image, string, error) {
+	if s == nil || s.storage == nil {
+		return nil, "", errors.New("text card storage is unavailable")
+	}
+	return s.render(ctx, account, segment.Body, rendition.OutputProfile, style, attachments)
+}
+
+// clearGeneratedCards removes the generated text-card relations for one segment.
+func clearGeneratedCards(ctx context.Context, db bun.IDB, segmentID string) error {
+	_, err := db.NewDelete().
+		Model((*models.RenditionSegmentMedia)(nil)).
+		Where("rendition_segment_id = ? AND role = ?", segmentID, textcards.MediaRole).
+		Exec(ctx)
+	return err
+}
+
+// textCardSource hashes everything the renderer reads, so an unchanged hash
+// allows a saved card to be reused without rendering or fetching.
+func textCardSource(account models.SocialAccount, rendition models.Rendition, body string, style textcards.Style, attachments int) string {
 	fingerprint, _ := json.Marshal(struct {
 		Version              int
 		Body, Output, Avatar string
@@ -186,42 +236,12 @@ func (s *Service) RefreshSegment(ctx context.Context, db bun.IDB, account models
 		// Version 2 covers the renderer change that ellipsizes clipped
 		// identity names and handles instead of dropping wrapped lines
 		// silently, so existing cards pick up the fix on the next save.
-	}{2, segment.Body, rendition.OutputProfile, account.AccountAvatarURL, style, Identity(account), attachments})
+	}{2, body, rendition.OutputProfile, account.AccountAvatarURL, style, Identity(account), attachments})
 	hash := sha256.Sum256(fingerprint)
-	source := hex.EncodeToString(hash[:])
-	previousSource, previousAvatar := parseReceipt(previous)
-	if applies && len(previous) > 0 && previousSource == source && previousAvatar != avatarFailed {
-		return nil
-	}
-	// A previously failed avatar retries on the next save without requiring
-	// an authored-text edit. The comparison above needs no network; only this
-	// explicit retry path fetches the photo again.
-	if _, err := textcards.Layout(segment.Body, rendition.OutputProfile); err != nil && applies {
-		if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
-			return err
-		}
-		return nil
-	} // Keep incomplete drafts editable.
-	if !applies {
-		if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
-			return err
-		}
-		return nil
-	}
-	if s == nil || s.storage == nil {
-		return errors.New("text card storage is unavailable")
-	}
-	images, outcome, err := s.render(ctx, account, segment.Body, rendition.OutputProfile, style, attachments)
-	if err != nil {
-		return err
-	}
-	if len(previous) > 0 && previousSource == source && outcome == avatarFailed {
-		return nil
-	} // The retry is still failing; keep the existing fallback without churning media.
-	if _, err := db.NewDelete().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ? AND role = ?", segment.ID, textcards.MediaRole).Exec(ctx); err != nil {
-		return err
-	}
-	receipt := string(mustJSON(map[string]string{"text_card_source": source, "text_card_avatar": outcome}))
+	return hex.EncodeToString(hash[:])
+}
+
+func (s *Service) persistGeneratedCards(ctx context.Context, db bun.IDB, account models.SocialAccount, segment models.RenditionSegment, images []textcards.Image, receipt string) error {
 	for index, img := range images {
 		media, err := s.persist(ctx, db, account.WorkspaceID, segment.Body, img)
 		if err != nil {

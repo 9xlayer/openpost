@@ -5,6 +5,7 @@ import {
 	type AuthQueryAPI
 } from '@openpost/query-catalog';
 import { client } from '$lib/api/client';
+import * as m from '$lib/paraglide/messages.js';
 import { executeQueryCachePlan } from './cache-plan';
 import { queryGET } from './transport';
 
@@ -15,7 +16,7 @@ export function createAuthQueryAPI(transport: QueryTransport): AuthQueryAPI {
 		async getAuthConfiguration(signal) {
 			const { data } = await queryGET({
 				signal,
-				fallback: 'Unable to load authentication settings',
+				fallback: m.auth_config_load_failed(),
 				request: (requestSignal) => transport.GET('/auth/config', { signal: requestSignal })
 			});
 			return data;

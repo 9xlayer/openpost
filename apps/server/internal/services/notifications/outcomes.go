@@ -85,6 +85,15 @@ func NewAccountNeedsAttentionOutcome(facts AccountAttentionFacts) (Outcome, erro
 	})
 }
 
+// putOptionalFact keeps an empty descriptive fact out of the payload entirely.
+// Semantic payloads reject empty strings, and a missing detail must never be
+// able to fail the transition that is reporting it.
+func putOptionalFact(payload map[string]any, key, value string) {
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		payload[key] = trimmed
+	}
+}
+
 type EngagementReceivedFacts struct {
 	RecipientUserID string
 	WorkspaceID     string

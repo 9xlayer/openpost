@@ -15,6 +15,11 @@ describe('Media web Query helpers', () => {
 			direct_upload_supported: false,
 			internal_bytes: 0,
 			limit_bytes: 1024,
+			upload_limits: {
+				brand_font_bytes: 10 * 1024 * 1024,
+				default_bytes: 50 * 1024 * 1024,
+				video_bytes: 16 * 1024 * 1024 * 1024
+			},
 			used_bytes: 512
 		};
 		queryClient.setQueryData(mediaQueryKeys.storage('workspace-1'), storage);
@@ -28,6 +33,11 @@ describe('Media web Query helpers', () => {
 			direct_upload_supported: true,
 			internal_bytes: 0,
 			limit_bytes: 0,
+			upload_limits: {
+				brand_font_bytes: 10 * 1024 * 1024,
+				default_bytes: 50 * 1024 * 1024,
+				video_bytes: 16 * 1024 * 1024 * 1024
+			},
 			used_bytes: 0
 		} satisfies MediaStorage);
 		const controller = new AbortController();

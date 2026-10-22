@@ -5743,6 +5743,9 @@
 			"DailyBreakdownItem": {
 				"additionalProperties": false,
 				"properties": {
+					"account_id": {
+						"type": "string"
+					},
 					"key": {
 						"type": "string"
 					},
@@ -12479,6 +12482,11 @@
 						"format": "int64",
 						"type": "integer"
 					},
+					"max_short_side": {
+						"description": "Maximum image dimension on its shorter side",
+						"format": "int64",
+						"type": "integer"
+					},
 					"max_size_bytes": {
 						"format": "int64",
 						"type": "integer"
@@ -14604,6 +14612,12 @@
 					"content": {
 						"items": {
 							"$ref": "#/components/schemas/ContentOverview"
+						},
+						"type": ["array", "null"]
+					},
+					"content_metric_keys": {
+						"items": {
+							"type": "string"
 						},
 						"type": ["array", "null"]
 					},
@@ -31322,6 +31336,213 @@
 							"value_path": "id"
 						}
 					]
+				}
+			}
+		},
+		"/analytics/export": {
+			"get": {
+				"description": "Exports the same stored measurements shown in Analytics. Missing provider metrics stay empty instead of becoming zero.",
+				"operationId": "export-analytics",
+				"parameters": [
+					{
+						"description": "Workspace ID",
+						"explode": false,
+						"in": "query",
+						"name": "workspace_id",
+						"required": true,
+						"schema": {
+							"description": "Workspace ID",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Reporting window in days (7, 30, or 90)",
+						"explode": false,
+						"in": "query",
+						"name": "days",
+						"schema": {
+							"default": 30,
+							"description": "Reporting window in days (7, 30, or 90)",
+							"format": "int64",
+							"type": "integer"
+						}
+					},
+					{
+						"description": "Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied.",
+						"explode": false,
+						"in": "query",
+						"name": "account_ids",
+						"schema": {
+							"description": "Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied.",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Optional social account ID to export",
+						"explode": false,
+						"in": "query",
+						"name": "account_id",
+						"schema": {
+							"description": "Optional social account ID to export",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Optional comma-separated platform filter, for example x,bluesky",
+						"explode": false,
+						"in": "query",
+						"name": "platforms",
+						"schema": {
+							"description": "Optional comma-separated platform filter, for example x,bluesky",
+							"type": "string"
+						}
+					},
+					{
+						"description": "File format. xlsx contains every table plus charts.",
+						"explode": false,
+						"in": "query",
+						"name": "format",
+						"schema": {
+							"default": "csv",
+							"description": "File format. xlsx contains every table plus charts.",
+							"enum": ["csv", "xlsx", "json"],
+							"type": "string"
+						}
+					},
+					{
+						"description": "IANA timezone used for publish times and day, week and month grouping",
+						"explode": false,
+						"in": "query",
+						"name": "timezone",
+						"schema": {
+							"default": "UTC",
+							"description": "IANA timezone used for publish times and day, week and month grouping",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Row grouping for the report",
+						"explode": false,
+						"in": "query",
+						"name": "group_by",
+						"schema": {
+							"default": "post",
+							"description": "Row grouping for the report",
+							"enum": ["post", "day", "week", "month", "platform", "account"],
+							"type": "string"
+						}
+					},
+					{
+						"description": "Table to export for csv and json. report follows group_by; xlsx always includes all tables.",
+						"explode": false,
+						"in": "query",
+						"name": "dataset",
+						"schema": {
+							"default": "report",
+							"description": "Table to export for csv and json. report follows group_by; xlsx always includes all tables.",
+							"enum": ["report", "posts", "daily", "accounts"],
+							"type": "string"
+						}
+					},
+					{
+						"description": "Optional comma-separated post metric columns for posts and grouped reports. Defaults to every measured metric. Daily and accounts tables retain their fixed columns.",
+						"explode": false,
+						"in": "query",
+						"name": "metrics",
+						"schema": {
+							"description": "Optional comma-separated post metric columns for posts and grouped reports. Defaults to every measured metric. Daily and accounts tables retain their fixed columns.",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"contentMediaType": "application/octet-stream",
+									"format": "binary",
+									"type": "string"
+								}
+							},
+							"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+								"schema": {
+									"contentMediaType": "application/octet-stream",
+									"format": "binary",
+									"type": "string"
+								}
+							},
+							"text/csv": {
+								"schema": {
+									"contentMediaType": "application/octet-stream",
+									"format": "binary",
+									"type": "string"
+								}
+							}
+						},
+						"description": "Analytics export file",
+						"headers": {
+							"Content-Disposition": {
+								"schema": {
+									"type": "string"
+								}
+							},
+							"Content-Type": {
+								"schema": {
+									"type": "string"
+								}
+							}
+						}
+					},
+					"400": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Bad Request"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Export stored analytics as CSV, Excel, or JSON",
+				"tags": ["Analytics"],
+				"x-openpost-automation": {
+					"access": "read",
+					"effect": "query",
+					"exposure": "disabled",
+					"idempotency": "none",
+					"retry": "transient"
 				}
 			}
 		},

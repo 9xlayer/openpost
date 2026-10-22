@@ -114,7 +114,6 @@ func (g *GoogleBusinessAdapter) GenerateAuthURL(state string) (string, map[strin
 	params.Set("state", state)
 	params.Set("access_type", "offline")
 	params.Set("prompt", "consent")
-	params.Set("include_granted_scopes", "true")
 	return googleOAuthURL + "?" + params.Encode(), nil
 }
 
@@ -465,6 +464,8 @@ func paginateGoogleBusinessOptions(options []DestinationOption, search, cursor s
 	}
 	return page
 }
+
+func (g *GoogleBusinessAdapter) AccountCapabilityKeyInput(AccountCapabilityInput) string { return "" }
 
 func (g *GoogleBusinessAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
 	options, err := g.ListDestinationOptions(ctx, accessToken, DestinationOptionsInput{

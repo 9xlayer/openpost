@@ -1,8 +1,15 @@
 import type { components } from '$lib/api/types';
-import type { ComposerSettings } from '$lib/components/compose/modes';
+import type { ComposerSettingValue, ComposerSettings } from '$lib/components/compose/modes';
 import type { PreviewModel } from '@openpost/social-preview';
 
-export type TextCardRequest = components['schemas']['PreviewTextCardInputBody'];
+// The served request body carries a free-form settings bag, but every text-card
+// settings value the composer produces is a ComposerSettingValue. Narrow the
+// generated type so the catalogue defaults and authored settings stay checked
+// at the same boundary as the rest of the composer.
+export type TextCardRequest = Omit<
+	components['schemas']['PreviewTextCardInputBody'],
+	'settings'
+> & { settings?: ComposerSettings };
 export type TextCardImage = components['schemas']['TextCardPreviewImage'];
 export interface TextCardResult {
 	key: string;
@@ -65,6 +72,28 @@ export interface TextCardCatalogueSource {
 		| undefined;
 }
 
+function isCatalogueDefinitionList(
+	source:
+		| TextCardCatalogueSource
+		| readonly (TextCardCatalogueDefinition | null | undefined)[]
+		| null
+		| undefined
+): source is readonly (TextCardCatalogueDefinition | null | undefined)[] {
+	return Array.isArray(source);
+}
+
+function isComposerSettingScalar(value: unknown): value is string | number | boolean {
+	return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean';
+}
+
+// Catalogue defaults arrive as untyped JSON. Only scalar and scalar-array
+// values are composer settings; anything else is ignored rather than stored.
+function isComposerSettingValue(value: unknown): value is ComposerSettingValue {
+	if (value === null) return true;
+	if (isComposerSettingScalar(value)) return true;
+	return Array.isArray(value) && value.every(isComposerSettingScalar);
+}
+
 // textCardDefaultsFrom resolves the text-card defaults once from the capability
 // catalogue (a resolved account capability or a flat setting-definition list).
 // Callers merge the result into authored settings before computing a request
@@ -76,19 +105,19 @@ export function textCardDefaultsFrom(
 		| null
 		| undefined
 ): ComposerSettings {
-	const definitions: readonly (TextCardCatalogueDefinition | null | undefined)[] = Array.isArray(
-		source
-	)
-		? source
-		: [
-				...(source?.settings ?? []),
-				...(source?.setting_groups ?? []).flatMap((group) => group?.settings ?? [])
-			];
+	const definitions: readonly (TextCardCatalogueDefinition | null | undefined)[] =
+		isCatalogueDefinitionList(source)
+			? source
+			: [
+					...(source?.settings ?? []),
+					...(source?.setting_groups ?? []).flatMap((group) => group?.settings ?? [])
+				];
 	const defaults: ComposerSettings = {};
 	for (const definition of definitions) {
 		if (!definition || !definition.key.startsWith('text_card')) continue;
 		if (definition.default === undefined || definition.default === null) continue;
-		defaults[definition.key] = definition.default as ComposerSettings[string];
+		if (!isComposerSettingValue(definition.default)) continue;
+		defaults[definition.key] = definition.default;
 	}
 	return defaults;
 }
@@ -96,7 +125,7 @@ export function textCardDefaultsFrom(
 // withTextCardDefaults merges catalogue defaults under authored settings.
 // Explicit values win; only undefined falls back to the catalogue default.
 export function withTextCardDefaults(
-	settings: ComposerSettings,
+	settings: { [key: string]: ComposerSettingValue | undefined },
 	defaults: ComposerSettings
 ): ComposerSettings {
 	const merged: ComposerSettings = { ...defaults };
@@ -205,7 +234,10 @@ export function savedTextCardPreviews(
 			attachment_count: new Set(
 				segments.flatMap((segment) => (segment.media ?? []).map((media) => media.id))
 			).size,
-			settings: rendition.settings ?? {}
+			// SAFETY: stored rendition settings are authored through the composer,
+			// so their values are ComposerSettingValue; the preview endpoint
+			// revalidates every key it receives.
+			settings: (rendition.settings ?? {}) as ComposerSettings
 		};
 		previews[rendition.social_account_id] = {
 			key: textCardRequestKey(request, identities[rendition.social_account_id], defaults),

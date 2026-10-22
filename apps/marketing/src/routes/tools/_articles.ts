@@ -27,51 +27,52 @@ function previewOnlySection(tool: PreviewTool): ToolArticle['sections'] {
 	];
 }
 
-const previewArticles = Object.fromEntries<ToolArticle>(
-	previewTools.map((tool) => [
-		tool.slug,
-		{
-			title: tool.name,
-			description: tool.description,
-			privacy:
-				'Text and local files stay in your browser until you continue in OpenPost. Public image and video URLs load from their hosts.',
-			steps: [
-				'Write your post and choose a format.',
-				'Add your account details and media through Post details.',
-				'Compare the full page and post card at phone, tablet, or desktop widths.'
-			],
-			sections: [
-				{
-					title: `What to check on ${tool.name.replace(' post preview', '')}`,
-					paragraphs: tool.checks
-				},
-				...previewOnlySection(tool),
-				{
-					title: 'Native layout and publishing availability',
-					paragraphs: [
-						'These previews illustrate native network layouts. They do not publish anything, fetch a live account, or certify that a format can be published through OpenPost. Network apps, account types, and server settings can change the final appearance and limits.'
-					]
-				}
-			],
-			questions: [
-				{
-					question: 'Do I need an account?',
-					answer: 'No. You can edit and preview a post without signing in.'
-				},
-				{
-					question: 'Can I preview the whole page?',
-					answer:
-						'Yes. Choose Full page for the surrounding feed, channel, or watch page. Choose Post card to focus on the content itself.'
-				},
-				{
-					question: 'Will my files upload?',
-					answer:
-						'Previewing does not upload local files. Schedule this post sends your draft to OpenPost, where selected files upload after sign-in. Closing or refreshing this tool clears its draft.'
-				}
-			]
-		}
-	])
-) as Record<PreviewTool['slug'], ToolArticle>;
+function previewArticle(tool: PreviewTool): ToolArticle {
+	return {
+		title: tool.name,
+		description: tool.description,
+		privacy:
+			'Text and local files stay in your browser until you continue in OpenPost. Public image and video URLs load from their hosts.',
+		steps: [
+			'Write your post and choose a format.',
+			'Add your account details and media through Post details.',
+			'Compare the full page and post card at phone, tablet, or desktop widths.'
+		],
+		sections: [
+			{
+				title: `What to check on ${tool.name.replace(' post preview', '')}`,
+				paragraphs: tool.checks
+			},
+			...previewOnlySection(tool),
+			{
+				title: 'Native layout and publishing availability',
+				paragraphs: [
+					'These previews illustrate native network layouts. They do not publish anything, fetch a live account, or certify that a format can be published through OpenPost. Network apps, account types, and server settings can change the final appearance and limits.'
+				]
+			}
+		],
+		questions: [
+			{
+				question: 'Do I need an account?',
+				answer: 'No. You can edit and preview a post without signing in.'
+			},
+			{
+				question: 'Can I preview the whole page?',
+				answer:
+					'Yes. Choose Full page for the surrounding feed, channel, or watch page. Choose Post card to focus on the content itself.'
+			},
+			{
+				question: 'Will my files upload?',
+				answer:
+					'Previewing does not upload local files. Schedule this post sends your draft to OpenPost, where selected files upload after sign-in. Closing or refreshing this tool clears its draft.'
+			}
+		]
+	};
+}
+
+const previewArticles = Object.fromEntries(
+	previewTools.map((tool) => [tool.slug, previewArticle(tool)] satisfies [string, ToolArticle])
+);
 
 const authoredArticles = {
 	'multi-platform-character-counter': {

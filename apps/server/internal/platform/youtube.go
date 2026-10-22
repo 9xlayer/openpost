@@ -63,7 +63,6 @@ func (y *YouTubeAdapter) GenerateAuthURL(state string) (string, map[string]strin
 	params.Set("state", state)
 	params.Set("access_type", "offline")
 	params.Set("prompt", "consent")
-	params.Set("include_granted_scopes", "true")
 	return googleOAuthURL + "?" + params.Encode(), nil
 }
 
@@ -211,6 +210,18 @@ func (y *YouTubeAdapter) ListDestinationOptions(ctx context.Context, accessToken
 		"youtube_playlists":  playlists,
 		"youtube_categories": categories,
 	}, nil
+}
+
+func (y *YouTubeAdapter) AccountCapabilityKeyInput(input AccountCapabilityInput) string {
+	regionCode := strings.ToUpper(strings.TrimSpace(input.RegionCode))
+	if len(regionCode) != 2 {
+		regionCode = "US"
+	}
+	language := strings.TrimSpace(localeLanguageCode(input.Locale))
+	if language == "" {
+		language = "en"
+	}
+	return language + "\x1f" + regionCode
 }
 
 func (y *YouTubeAdapter) ResolveAccountPublishingCapabilities(ctx context.Context, accessToken string, input AccountCapabilityInput) (AccountCapabilityResult, error) {
@@ -781,17 +792,23 @@ func buildYouTubeCaptionRequest(videoID string, req UploadMediaRequest) (*bytes.
 }
 
 func youtubeErrorReason(body []byte) string {
+	reason, _ := youtubeErrorDetail(body)
+	return reason
+}
+
+func youtubeErrorDetail(body []byte) (string, string) {
 	var payload struct {
 		Error struct {
 			Errors []struct {
 				Reason string `json:"reason"`
+				Domain string `json:"domain"`
 			} `json:"errors"`
 		} `json:"error"`
 	}
 	if json.Unmarshal(body, &payload) != nil || len(payload.Error.Errors) == 0 {
-		return ""
+		return "", ""
 	}
-	return strings.TrimSpace(payload.Error.Errors[0].Reason)
+	return strings.TrimSpace(payload.Error.Errors[0].Reason), strings.TrimSpace(payload.Error.Errors[0].Domain)
 }
 
 func (y *YouTubeAdapter) setYouTubeThumbnail(ctx context.Context, accessToken, videoID string, req UploadMediaRequest) error {
@@ -817,6 +834,12 @@ func (y *YouTubeAdapter) setYouTubeThumbnail(ctx context.Context, accessToken, v
 	})
 	if err != nil {
 		return fmt.Errorf("youtube thumbnail upload: %w", err)
+	}
+	if resp.statusCode < 200 || resp.statusCode >= 300 {
+		_, domain := youtubeErrorDetail(resp.body)
+		if domain == "youtube.thumbnail" {
+			return &HTTPError{StatusCode: resp.statusCode, Code: "youtube:thumbnail_channel_verification_required"}
+		}
 	}
 	return youtubeAPIError(resp)
 }

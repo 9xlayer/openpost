@@ -23,7 +23,7 @@ describe('Quick Cut ExportPanel', () => {
 		await expect
 			.element(screen.getByRole('progressbar', { name: 'Export progress' }))
 			.toHaveAttribute('aria-valuenow', '42');
-		await expect.element(screen.getByText('12.0 MB', { exact: true })).toBeVisible();
+		await expect.element(screen.getByText('12 MB', { exact: true })).toBeVisible();
 		await expect.element(screen.getByText('Encoding output', { exact: true })).toBeVisible();
 
 		await screen.getByRole('button', { name: 'Cancel' }).click();

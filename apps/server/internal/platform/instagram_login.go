@@ -3,12 +3,22 @@ package platform
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/openpost/backend/internal/providerlimits"
+)
+
+var instagramLoginUserID = regexp.MustCompile(`^[1-9][0-9]*$`)
+
+var (
+	ErrInstagramLoginInvalidProfile      = errors.New("instagram login profile returned no unambiguous account")
+	ErrInstagramLoginInvalidUserID       = errors.New("instagram login profile returned no valid user_id")
+	ErrInstagramLoginProfessionalAccount = errors.New("instagram login requires a Business or Creator account")
 )
 
 // NewInstagramLoginAdapter uses Instagram's professional-account login without
@@ -159,19 +169,33 @@ func (i *InstagramAdapter) instagramLoginProfile(ctx context.Context, accessToke
 	if err != nil {
 		return nil, fmt.Errorf("instagram login profile: %w", err)
 	}
-	var profile struct {
+	type loginProfile struct {
 		UserID      json.Number `json:"user_id"`
 		Username    string      `json:"username"`
 		Name        string      `json:"name"`
 		Picture     string      `json:"profile_picture_url"`
 		AccountType string      `json:"account_type"`
 	}
-	if err := json.Unmarshal(body, &profile); err != nil {
-		return nil, fmt.Errorf("decoding instagram login profile: %w", err)
+	var response struct {
+		loginProfile
+		Data []loginProfile `json:"data"`
+	}
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInstagramLoginInvalidProfile, err)
+	}
+	profile := response.loginProfile
+	if response.Data != nil {
+		if len(response.Data) != 1 || profile.UserID.String() != "" {
+			return nil, ErrInstagramLoginInvalidProfile
+		}
+		profile = response.Data[0]
+	}
+	if !instagramLoginUserID.MatchString(profile.UserID.String()) {
+		return nil, ErrInstagramLoginInvalidUserID
 	}
 	accountType := strings.ToLower(profile.AccountType)
-	if profile.UserID.String() == "" || (accountType != "business" && accountType != "media_creator" && accountType != "creator") {
-		return nil, fmt.Errorf("instagram login requires a Business or Creator account")
+	if accountType != "business" && accountType != "media_creator" && accountType != "creator" {
+		return nil, ErrInstagramLoginProfessionalAccount
 	}
 	if accountType == "media_creator" {
 		accountType = "creator"

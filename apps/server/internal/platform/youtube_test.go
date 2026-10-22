@@ -37,6 +37,9 @@ func TestYouTubeGenerateAuthURL(t *testing.T) {
 	if query.Get("access_type") != "offline" || query.Get("prompt") != "consent" {
 		t.Fatalf("expected offline consent auth URL, got %s", authURL)
 	}
+	if query.Has("include_granted_scopes") {
+		t.Fatalf("YouTube connection must request only its current scope set: %s", authURL)
+	}
 	if !strings.Contains(query.Get("scope"), "youtube.upload") {
 		t.Fatalf("expected youtube.upload scope, got %q", query.Get("scope"))
 	}
@@ -190,6 +193,21 @@ func TestYouTubeThumbnailRetryDoesNotUploadVideoAgain(t *testing.T) {
 	id, err := adapter.UploadMediaResumable(t.Context(), "token", "channel", request(), saved, checkpoint)
 	if err != nil || id != "live-video" || uploads != 1 || thumbnails != 2 {
 		t.Fatalf("retry: id=%q err=%v uploads=%d thumbnails=%d", id, err, uploads, thumbnails)
+	}
+}
+
+func TestYouTubeThumbnailPhoneVerificationUsesStableError(t *testing.T) {
+	originalClient := httpClient
+	t.Cleanup(func() { httpClient = originalClient })
+	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return jsonResponseWithStatus(req, http.StatusForbidden, `{"error":{"errors":[{"domain":"youtube.thumbnail","reason":"forbidden"}],"message":"private provider detail"}}`), nil
+	})}
+	err := NewYouTubeAdapter("client", "secret", "https://app.example/callback").setYouTubeThumbnail(t.Context(), "token", "video-1", UploadMediaRequest{
+		ThumbnailMimeType: "image/jpeg", ThumbnailSize: 5, ThumbnailReader: strings.NewReader("cover"),
+	})
+	var providerErr *HTTPError
+	if !errors.As(err, &providerErr) || providerErr.Code != "youtube:thumbnail_channel_verification_required" || strings.Contains(err.Error(), "private provider detail") {
+		t.Fatalf("unexpected thumbnail error: %v", err)
 	}
 }
 

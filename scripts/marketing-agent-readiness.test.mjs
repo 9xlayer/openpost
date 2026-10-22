@@ -106,10 +106,21 @@ test("structured data joins each page to the product, site, and real operator", 
 });
 
 test("platform guides link to maintained account documentation", async () => {
+  const accountGuide = "https://openpo.st/docs/guides/accounts";
+  // dev/null connects without a provider app and is documented with the other
+  // self-hosted integrations rather than the shared accounts guide.
+  const providerGuides = new Map([
+    ["devnull", "https://openpo.st/docs/self-hosting/integrations/devnull"],
+  ]);
   for (const platform of platforms) {
-    assert.equal(platform.docsUrl, "https://openpo.st/docs/guides/accounts");
+    assert.equal(platform.docsUrl, providerGuides.get(platform.slug) ?? accountGuide);
   }
-  await readFile(new URL("../apps/docs/content/docs/guides/accounts.mdx", import.meta.url));
+  await Promise.all([
+    readFile(new URL("../apps/docs/content/docs/guides/accounts.mdx", import.meta.url)),
+    readFile(
+      new URL("../apps/docs/content/docs/self-hosting/integrations/devnull.mdx", import.meta.url),
+    ),
+  ]);
 });
 
 test("changelog feed contains only dated stable releases and escaped content", () => {

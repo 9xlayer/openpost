@@ -3,6 +3,7 @@ import type { paths, components } from './types';
 import { feedbackDiagnostics } from '$lib/feedback-diagnostics';
 import {
 	captureQueryAuthorizationIdentity,
+	isSessionUnauthorized,
 	settleQueryUnauthorized
 } from '$lib/query/authorization-boundary';
 import { applyTelemetryRequestHeaders } from '@openpost/telemetry';
@@ -23,11 +24,11 @@ export function applyAPIRequestHeaders(headers: Headers): Headers {
 }
 
 function createApiClient(baseUrl = '/api/v1', fetchImpl?: typeof fetch) {
-	const c = createClient<paths>({
-		baseUrl,
-		credentials: 'include',
-		...(fetchImpl ? { fetch: fetchImpl } : {})
-	});
+	const c = createClient<paths>(
+		fetchImpl
+			? { baseUrl, credentials: 'include', fetch: fetchImpl }
+			: { baseUrl, credentials: 'include' }
+	);
 	c.use({
 		async onRequest({ request }) {
 			feedbackDiagnostics.recordRequestStart(request);
@@ -46,19 +47,25 @@ type APIClient = ReturnType<typeof createApiClient>;
 type APIClientMethods = Pick<APIClient, 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>;
 
 // Settlement is a property of the API client: every request captures the query
-// authorization identity before dispatch and settles a 401 against it, so direct
-// mutations cannot leave the app on a stale authenticated shell. The boundary
-// keeps the "identity captured before the request" guard, so a 401 for a
-// superseded identity is a no-op.
-function withQueryAuthorizationSettlement<TMethod>(invoke: TMethod): TMethod {
-	return (async (...args: unknown[]) => {
+// authorization identity before dispatch and settles a rejected session against
+// it, so direct mutations cannot leave the app on a stale authenticated shell.
+// The boundary keeps the "identity captured before the request" guard, so a 401
+// for a superseded identity is a no-op. Action-level 401s, such as a wrong
+// password for recent reauthentication, stay with their caller.
+type SettledResponseMethod = (...args: never[]) => Promise<{ response: Response }>;
+
+function withQueryAuthorizationSettlement<TMethod extends SettledResponseMethod>(
+	invoke: TMethod
+): TMethod {
+	// SAFETY: the wrapper forwards the original arguments unchanged and returns
+	// the original result, so it satisfies the declared method signature.
+	return (async (...args: Parameters<TMethod>) => {
 		const authorizationIdentity = captureQueryAuthorizationIdentity();
-		const result = await (invoke as (...args: unknown[]) => Promise<{ response: Response }>)(
-			...args
-		);
-		if (result.response?.status === 401) settleQueryUnauthorized(authorizationIdentity);
+		const result = await invoke(...args);
+		if (result.response && isSessionUnauthorized(result.response))
+			settleQueryUnauthorized(authorizationIdentity);
 		return result;
-	}) as unknown as TMethod;
+	}) as TMethod;
 }
 
 function settleClientMethods(raw: APIClient): APIClientMethods {

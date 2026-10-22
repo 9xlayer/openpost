@@ -1,6 +1,6 @@
 import { browser } from '$app/environment';
 
-type PublicationView = 'list' | 'calendar';
+export type PublicationView = 'list' | 'grid' | 'calendar';
 export type PublicationListTab = 'scheduled' | 'published' | 'failed' | 'drafts';
 const storageKey = 'openpost-publication-view';
 const listTabStorageKey = 'openpost-publication-list-tab';
@@ -22,7 +22,8 @@ function savedListTab(): PublicationListTab {
 function savedView(): PublicationView {
 	if (!browser) return 'list';
 	try {
-		return localStorage.getItem(storageKey) === 'calendar' ? 'calendar' : 'list';
+		const value = localStorage.getItem(storageKey);
+		return value === 'calendar' || value === 'grid' ? value : 'list';
 	} catch {
 		return 'list';
 	}
@@ -34,8 +35,15 @@ class PublicationViewPreference {
 	get listHref() {
 		return this.listTab === 'scheduled' ? '/publications' : `/publications?tab=${this.listTab}`;
 	}
+	get gridHref() {
+		return `${this.listHref}${this.listHref.includes('?') ? '&' : '?'}view=grid`;
+	}
 	get href() {
-		return this.current === 'calendar' ? '/calendar' : this.listHref;
+		return this.current === 'calendar'
+			? '/calendar'
+			: this.current === 'grid'
+				? this.gridHref
+				: this.listHref;
 	}
 	rememberListTab(tab: PublicationListTab) {
 		this.listTab = tab;

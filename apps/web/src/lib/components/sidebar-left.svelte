@@ -1,4 +1,6 @@
 <script lang="ts">
+	import SidebarCalendar from '$lib/components/sidebar-calendar.svelte';
+	import { sidebarPreferences } from '$lib/stores/sidebar-preferences.svelte';
 	import { publicationView } from '$lib/stores/publication-view.svelte';
 	import { ideate } from '$lib/post-builder/ideate.svelte';
 	import { page } from '$app/state';
@@ -65,6 +67,8 @@
 		)
 	);
 	const showDesktopPlanner = $derived(!sidebar.isMobile && sidebar.state === 'expanded');
+	const showPlannerCalendar = $derived(showDesktopPlanner && sidebarPreferences.calendarVisible);
+	const showPlannerChrome = $derived(showDesktopPlanner || showPlannerCalendar);
 
 	function navigationIcon(id: PrimaryNavigationItem['id']): ThemeIconRole {
 		switch (id) {
@@ -164,6 +168,28 @@
 	}
 </script>
 
+{#snippet workspaceNavigation()}
+	<Sidebar.Group class="shrink-0 p-0">
+		<Sidebar.GroupContent>
+			<Sidebar.Menu class="gap-0.5" data-testid="sidebar-workspace-navigation">
+				{#each sidebarNavigationItems as item (item.id)}
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton
+							isActive={isSidebarNavigationItemActive(item)}
+							class="h-10 text-sm [@media(pointer:coarse)]:h-11"
+							tooltipContent={item.label}
+							onclick={() => navigate(item.href)}
+						>
+							<ThemeIcon role={item.icon} class="size-4" />
+							<span>{item.label}</span>
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
+				{/each}
+			</Sidebar.Menu>
+		</Sidebar.GroupContent>
+	</Sidebar.Group>
+{/snippet}
+
 <Sidebar.Root collapsible="icon" class="pt-[env(safe-area-inset-top)]">
 	<Sidebar.Header class="gap-2 border-b border-sidebar-border p-2" data-testid="app-sidebar">
 		<div class="flex items-center gap-2 group-data-[collapsible=icon]:flex-col">
@@ -252,49 +278,18 @@
 		{/if}
 	</Sidebar.Header>
 
-	<Sidebar.Content class={showDesktopPlanner ? 'overflow-y-auto pt-2' : 'px-2 py-3'}>
-		{#if showDesktopPlanner}
-			<SidebarPlanner onNavigate={navigate} />
-		{:else}
-			<Sidebar.Group class="p-0">
-				<Sidebar.GroupContent>
-					<Sidebar.Menu class="gap-0.5">
-						{#each sidebarNavigationItems as item (item.id)}
-							<Sidebar.MenuItem>
-								<Sidebar.MenuButton
-									isActive={isSidebarNavigationItemActive(item)}
-									class="h-10 text-sm"
-									tooltipContent={item.label}
-									onclick={() => navigate(item.href)}
-								>
-									<ThemeIcon role={item.icon} class="size-4" />
-									<span>{item.label}</span>
-								</Sidebar.MenuButton>
-							</Sidebar.MenuItem>
-						{/each}
-					</Sidebar.Menu>
-				</Sidebar.GroupContent>
-			</Sidebar.Group>
+	<Sidebar.Content class={showPlannerChrome ? 'overflow-y-auto pt-2' : 'px-2 py-3'}>
+		{#if !showPlannerCalendar}
+			<div class={showPlannerChrome ? 'px-2 pb-3' : ''}>
+				{@render workspaceNavigation()}
+			</div>
 		{/if}
+		{#if showPlannerCalendar}<SidebarCalendar />{/if}
+		{#if showDesktopPlanner}<SidebarPlanner onNavigate={navigate} />{/if}
 	</Sidebar.Content>
 
 	<Sidebar.Footer class="border-t border-sidebar-border p-2" data-testid="sidebar-workspace-footer">
-		{#if showDesktopPlanner}
-			<Sidebar.Menu class="gap-0.5" data-testid="sidebar-workspace-navigation">
-				{#each workspaceNavigationItems as item (item.id)}
-					<Sidebar.MenuItem
-						><Sidebar.MenuButton
-							class="h-9 text-sm [@media(pointer:coarse)]:h-11"
-							tooltipContent={item.label}
-							isActive={isSidebarNavigationItemActive(item)}
-							onclick={() => navigate(item.href)}
-							><ThemeIcon role={item.icon} class="size-4" /><span>{item.label}</span
-							></Sidebar.MenuButton
-						></Sidebar.MenuItem
-					>
-				{/each}
-			</Sidebar.Menu>
-		{/if}
+		{#if showPlannerCalendar}{@render workspaceNavigation()}{/if}
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}<Sidebar.MenuButton
@@ -323,15 +318,6 @@
 			{#if sidebar.state === 'collapsed'}
 				<NotificationBell />
 			{/if}
-			<Sidebar.MenuItem>
-				<Sidebar.MenuButton
-					class="h-9 [@media(pointer:coarse)]:h-11"
-					tooltipContent={m.feedback_open()}
-					onclick={() => ui.openFeedback()}
-					><ThemeIcon role="feedback" class="size-4" /><span>{m.feedback_open()}</span
-					></Sidebar.MenuButton
-				></Sidebar.MenuItem
-			>
 			<Sidebar.MenuItem>
 				<DropdownMenu.Root bind:open={profileMenuOpen}>
 					<DropdownMenu.Trigger>

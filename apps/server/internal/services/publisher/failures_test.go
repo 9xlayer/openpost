@@ -23,6 +23,7 @@ func TestClassifyFailureUsesStableTaxonomyAndRetryPolicy(t *testing.T) {
 		{"expired auth", &platform.HTTPError{StatusCode: 401, Code: "token_expired"}, FailureAuthExpired, false, FailureActionReconnect},
 		{"reconnect", &platform.HTTPError{StatusCode: 401}, FailureReconnectRequired, false, FailureActionReconnect},
 		{"permission", &platform.HTTPError{StatusCode: 403}, FailurePermission, false, FailureActionProvider},
+		{"youtube thumbnail verification", &platform.HTTPError{StatusCode: 403, Code: "youtube:thumbnail_channel_verification_required"}, FailurePermission, false, FailureActionProvider},
 		{"billing", &platform.HTTPError{StatusCode: 402}, FailureBillingRequired, false, FailureActionBilling},
 		{"duplicate", &platform.HTTPError{StatusCode: 409}, FailureDuplicateContent, false, FailureActionEdit},
 		{"rate limit", &platform.HTTPError{StatusCode: 429, RetryAfter: time.Minute}, FailureRateLimited, true, FailureActionRetry},
@@ -43,6 +44,7 @@ func TestClassifyFailureUsesStableTaxonomyAndRetryPolicy(t *testing.T) {
 		})
 	}
 	require.Equal(t, http.StatusTooManyRequests, ClassifyFailure(&platform.HTTPError{StatusCode: 429}).HTTPStatus)
+	require.Contains(t, ClassifyFailure(&platform.HTTPError{StatusCode: 403, Code: "youtube:thumbnail_channel_verification_required"}).Message, "youtube.com/verify")
 }
 
 func TestRetryDelayIsBoundedAndHonorsRetryAfter(t *testing.T) {
@@ -66,6 +68,7 @@ func TestClassifyMetaFailuresUseDistinctRecoveryActions(t *testing.T) {
 		{"lost page role", &platform.HTTPError{StatusCode: 403, Code: "meta:missing_page_role:190:492", Subcode: "492"}, FailurePermission, false, FailureActionReconnect, "role on this Page"},
 		{"missing object never retries", &platform.HTTPError{StatusCode: 400, Code: "meta:nonexistent:100:33", Subcode: "33"}, FailureValidation, false, FailureActionEdit, "no longer exists"},
 		{"silent audio retries", &platform.HTTPError{StatusCode: 400, Code: "meta:media_silent_audio:2207082"}, FailureProviderProcessing, true, FailureActionRetry, "volume to 0"},
+		{"exhausted container propagation retry stays local", &platform.HTTPError{StatusCode: 400, Code: "meta:media_not_ready:9004:2207052"}, FailureProviderProcessing, false, FailureActionRetry, "safe creation step"},
 		{"format rejection", &platform.HTTPError{StatusCode: 400, Code: "meta:media_format:2207085"}, FailureValidation, false, FailureActionEdit, "format, duration"},
 		{"daily limit", &platform.HTTPError{StatusCode: 400, Code: "meta:media_rejected:2207042"}, FailureValidation, false, FailureActionEdit, "25 posts per day"},
 		{"outage retries", &platform.HTTPError{StatusCode: 503, Code: "meta:transient"}, FailureProviderServer, true, FailureActionRetry, "temporarily unavailable"},

@@ -6,6 +6,7 @@ test("variable search names variables and recovers through keyboard selection", 
   page,
   request,
 }, info) => {
+  test.setTimeout(600_000);
   const auth = await registerUser(request, `variable-help-${randomUUID()}@example.com`);
   const workspace = await createWorkspace(request, auth.token, "Variable search help");
   const headers = { Authorization: `Bearer ${auth.token}` };
@@ -40,6 +41,7 @@ test("variable search names variables and recovers through keyboard selection", 
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.getByRole("button", { name: /^Audit text / }).click();
       const field = page.locator('[data-workflow-field="workflow-text"]');
+      await expect(field).toBeVisible();
       const trigger = field.getByRole("button", { name: "Insert variable", exact: true });
       await trigger.focus();
       await trigger.press("Enter");

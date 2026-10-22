@@ -47,7 +47,9 @@ test("publications keeps the main workflow clear across list, search, and calend
   await page.getByRole("textbox", { name: "Search posts" }).fill("launch note");
   await expect(page.getByTestId("publication-list")).toContainText("A clear launch note");
 
-  await page.getByRole("button", { name: /Edit A clear launch note/ }).click();
+  await page
+    .getByRole("link", { name: "A clear launch note for the publication workspace", exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(`/publications/${created.id}$`));
 
   await page.goto("/publications?tab=drafts");
@@ -80,7 +82,7 @@ test("publications keeps the main workflow clear across list, search, and calend
     "true",
   );
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "View all", exact: true }).click();
+  await page.getByRole("tab", { name: "Drafts", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Drafts", exact: true })).toHaveAttribute(
     "aria-selected",
     "true",
@@ -129,6 +131,18 @@ test("publication delivery details keep distinct targets for the same account", 
   await list.locator("summary").click();
   await expect(list.getByText("Target first-channel", { exact: true })).toBeVisible();
   await expect(list.getByText("Target second-channel", { exact: true })).toBeVisible();
+  execFileSync("sqlite3", [
+    "-cmd",
+    ".timeout 5000",
+    `/tmp/openpost-app-e2e-${process.env.OPENPOST_APP_E2E_PORT ?? 18180}.db`,
+    `UPDATE publications SET status='scheduled',scheduled_at='2099-01-01 12:00:00+00:00' WHERE id='${publication.id}';`,
+  ]);
+  await page.goto("/publications?tab=scheduled&view=grid");
+  const grid = page.getByTestId("publication-grid");
+  await expect(grid).toContainText("One account, two destinations");
+  await grid.locator("summary").click();
+  await expect(grid.getByText("Target first-channel", { exact: true })).toBeVisible();
+  await expect(grid.getByText("Target second-channel", { exact: true })).toBeVisible();
 });
 
 test("published records show a confirmed local removal action", async ({

@@ -4,6 +4,7 @@ import type { HandleClientError } from '@sveltejs/kit';
 import { installMaintainerDiagnosticsCapture } from '$lib/diagnostics-report';
 import { installCryptoRandomUUID } from '$lib/crypto-random-uuid';
 import { configureProfiling } from '$lib/performance/profiling';
+import { getLocale, getTextDirection } from '$lib/paraglide/runtime';
 import {
 	captureClientException,
 	createChunkRecovery,
@@ -106,6 +107,9 @@ function diagnosticsFor(error: unknown): ChunkFailureDiagnostics {
 
 async function init() {
 	captureXMessagingCallback();
+	const locale = getLocale();
+	document.documentElement.lang = locale;
+	document.documentElement.dir = getTextDirection(locale);
 	configureProfiling({ enabled: new URLSearchParams(location.search).get('profile') === '1' });
 	installCryptoRandomUUID();
 	initializeClientErrors(installGlobalErrorCapture);

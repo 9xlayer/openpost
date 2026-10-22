@@ -153,9 +153,10 @@ test("workflow editor saves, previews without writes, and approves a native draf
   await page.getByRole("button", { name: "Delete: Release announcement", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByRole("link", { name: /Release announcement/ })).toHaveCount(0);
+  await page.goto("/publications?tab=drafts");
   await expect(
     page
-      .getByTestId("sidebar-draft-list")
+      .getByTestId("publication-list")
       .getByText("Shipping version 2: Smaller daily tasks.", { exact: true }),
   ).toBeVisible();
 });

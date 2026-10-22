@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { SocialAccount } from '$lib/api/client';
 	import type { ComposerSettings, ComposerSettingValue } from './compose/modes';
-	import { textCardSettings, type TextCardResult } from '$lib/text-cards';
+	import {
+		textCardIdentityForAccount,
+		textCardSettings,
+		type TextCardResult
+	} from '$lib/text-cards';
 	import { m } from '$lib/paraglide/messages';
 	import AppSelect from './app-select.svelte';
 	import ColorPicker from './color-picker.svelte';
@@ -63,7 +67,12 @@
 		<p class="text-xs text-muted-foreground">
 			{mode === 'always' ? m.text_card_carousel_hint() : m.text_card_auto_hint()}
 		</p>
-		<TextCardPreview {request} {savedPreview} />
+		<TextCardPreview
+			{request}
+			{savedPreview}
+			{defaults}
+			identity={textCardIdentityForAccount(account)}
+		/>
 		<details class="group">
 			<summary
 				class="cursor-pointer py-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"

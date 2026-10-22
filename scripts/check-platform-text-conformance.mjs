@@ -62,12 +62,22 @@ export function parseGoTextFacts({ capabilities, textLength, youtube, devnull })
     YouTubeDescriptionMaxBytes: undefined,
     DevNullMaxBodyBytes: undefined,
   };
+  // Some capability limits reference another provider-limits constant rather
+  // than a literal (DevNullMaxBodyBytes aliases DevNullMaxBodyCharacters), so
+  // follow one-level identifier references to the numeric literal.
+  const goIntConstant = (source, name, seen = new Set()) => {
+    if (seen.has(name)) return undefined;
+    seen.add(name);
+    const match = source.match(new RegExp(`\\b${name}\\s*=\\s*([\\d_]+|[A-Za-z_]\\w*)`));
+    if (!match) return undefined;
+    const raw = match[1];
+    return /^[\d_]+$/.test(raw) ? parseIntLiteral(raw) : goIntConstant(source, raw, seen);
+  };
   for (const [source, name] of [
     [youtube, "YouTubeDescriptionMaxBytes"],
     [devnull ?? "", "DevNullMaxBodyBytes"],
   ]) {
-    const match = source.match(new RegExp(`${name}\\s*=\\s*([\\d_]+)`));
-    if (match) providerConstants[name] = parseIntLiteral(match[1]);
+    providerConstants[name] = goIntConstant(source, name);
   }
 
   const byProvider = new Map();

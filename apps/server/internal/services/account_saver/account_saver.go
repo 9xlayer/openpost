@@ -726,10 +726,9 @@ func (s *AccountSaver) encryptAccountTokens(token *platform.TokenResult) ([]byte
 }
 
 func accountIDFromToken(fallback string, token *platform.TokenResult) string {
-	// LinkedIn selection stores the complete author URN. The shared member
-	// token may also carry a person user_id, which must not replace an
-	// organization identity.
-	if strings.HasPrefix(strings.TrimSpace(fallback), "urn:li:") {
+	// A verified profile or selected destination is authoritative. Token user_id
+	// identifies the authorizing subject, which can differ from that destination.
+	if strings.TrimSpace(fallback) != "" {
 		return fallback
 	}
 	if token.Extra == nil {

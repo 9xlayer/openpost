@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { tick } from 'svelte';
+	import { goto, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import { tick, untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import {
 		repostAutomationQueryOptions,
@@ -26,14 +27,60 @@
 	import { Button } from '$lib/components/ui/button';
 	import { ThemeIcon } from '$lib/themes/icons';
 	import { m } from '$lib/paraglide/messages';
+	// An approval notification links straight to the run that is waiting, so the
+	// page opens on that run instead of asking the reader to find it again. It is
+	// derived rather than read once: clicking a second notification while this
+	// page is already open is a same-route navigation, and a value captured at
+	// mount would leave the reader on the run they first opened.
+	const requestedRun = $derived(page.url.searchParams.get('run') ?? '');
 	let deleting = $state<Workflow | null>(null),
 		deleteOpen = $state(false);
-	const workspaceID = $derived(workspaceCtx.currentWorkspace?.id ?? '');
+	const requestedWorkspaceID = $derived(page.url.searchParams.get('workspace_id') ?? '');
+	let selectedRunWorkspaceID = $state('');
+	const workspaceLinkHandled = $derived(page.state.workflowApprovalLink === page.url.href);
+	const workspaceLinkPending = $derived(Boolean(requestedWorkspaceID && !workspaceLinkHandled));
+	const workspaceID = $derived(
+		workspaceLinkPending && workspaceCtx.currentWorkspace?.id !== requestedWorkspaceID
+			? ''
+			: (workspaceCtx.currentWorkspace?.id ?? '')
+	);
 	let tab = $state<'workflows' | 'runs' | 'templates'>('workflows'),
 		selectedRun = $state(''),
 		repostHistoryOpen = $state(false),
 		busy = $state(false),
 		error = $state('');
+	// A notification may point outside the currently selected workspace.
+	// Select through the context owner before enabling any workspace-scoped reads.
+	$effect(() => {
+		const targetID = requestedWorkspaceID;
+		const href = page.url.href;
+		const workspaces = workspaceCtx.workspaces;
+		if (!targetID || workspaceLinkHandled || workspaceCtx.loading || workspaces.length === 0)
+			return;
+		const target = workspaces.find((workspace) => workspace.id === targetID);
+		if (!target) {
+			error = m.workflows_load_failed();
+			return;
+		}
+		untrack(() => {
+			// The layout remounts this route when workspace access changes.
+			// History state keeps the link handled across that remount, while a new
+			// notification navigation starts with fresh page state.
+			replaceState(page.url, { ...page.state, workflowApprovalLink: href });
+			if (workspaceCtx.currentWorkspace?.id === targetID) return;
+			void workspaceCtx
+				.setWorkspace(target, () => page.url.href === href)
+				.then((selected) => {
+					if (page.url.href === href) {
+						error = selected ? '' : m.workflows_load_failed();
+					}
+				})
+				.catch((cause) => {
+					if (page.url.href === href)
+						error = cause instanceof Error ? cause.message : m.workflows_load_failed();
+				});
+		});
+	});
 	const accountsQuery = createQuery(() => ({
 		...workspaceAccountsQueryOptions(queryAPI, workspaceID),
 		enabled: Boolean(workspaceID && tab === 'runs' && selectedRun)
@@ -50,9 +97,35 @@
 		...workflowRunSummariesQueryOptions(workflowQueryAPI, workspaceID),
 		enabled: Boolean(workspaceID && tab === 'runs' && !selectedRun)
 	}));
+	$effect(() => {
+		if (!requestedRun) return;
+		if (requestedWorkspaceID && workspaceLinkHandled && workspaceID !== requestedWorkspaceID) {
+			selectedRun = '';
+			return;
+		}
+		selectedRun = requestedRun;
+		selectedRunWorkspaceID =
+			requestedWorkspaceID || untrack(() => workspaceCtx.currentWorkspace?.id ?? '');
+		tab = 'runs';
+	});
+	$effect(() => {
+		if (
+			!workspaceLinkPending &&
+			workspaceID &&
+			selectedRunWorkspaceID &&
+			workspaceID !== selectedRunWorkspaceID
+		) {
+			selectedRun = '';
+			selectedRunWorkspaceID = workspaceID;
+		}
+	});
 	// Start the snapshot alongside accounts, before the inspector can mount.
 	const selectedRunQuery = createQuery(() =>
-		workflowRunQueryOptions(workflowQueryAPI, workspaceID, tab === 'runs' ? selectedRun : '')
+		workflowRunQueryOptions(
+			workflowQueryAPI,
+			workspaceID,
+			tab === 'runs' && selectedRunWorkspaceID === workspaceID ? selectedRun : ''
+		)
 	);
 	const visibleQueries = $derived(
 		tab === 'workflows'
@@ -107,7 +180,7 @@
 	title={m.workflows_title()}
 	description={m.workflows_subtitle()}
 	themeIconRole="repeat"
-	{loading}
+	loading={loading && !error}
 >
 	{#snippet actions()}<Button
 			disabled={busy || !workspaceID || workspaceCtx.currentWorkspace?.role === 'viewer'}
@@ -257,7 +330,10 @@
 						id={`workflow-run-${run.id}`}
 						type="button"
 						class="flex w-full flex-wrap items-center justify-between gap-3 p-4 text-left hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring"
-						onclick={() => (selectedRun = run.id)}
+						onclick={() => {
+							selectedRun = run.id;
+							selectedRunWorkspaceID = workspaceID;
+						}}
 						><span class="hidden w-48 shrink-0 sm:block"
 							><GraphPreview definition={run.definition} {run} /></span
 						><span class="min-w-0 flex-1"

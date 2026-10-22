@@ -65,9 +65,11 @@ for (const section of ["publications", "messages", "engagement"] as const) {
             await expect(page.getByTestId("page-header")).toBeInViewport({ ratio: 1 });
           }
         }
-        await expect(
-          page.locator('[data-slot="page-header-actions"]').getByRole("button").first(),
-        ).toBeVisible();
+        const action =
+          section === "publications"
+            ? page.getByRole("button", { name: "Refresh", exact: true })
+            : page.locator('[data-slot="page-header-actions"]').getByRole("button").first();
+        await expect(action).toBeVisible();
       } finally {
         release();
       }

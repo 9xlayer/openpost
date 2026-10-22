@@ -130,6 +130,7 @@ describe('day posts account avatars', () => {
 
 	function publicationWithDestination(): Publication {
 		const post = publication('2026-09-01');
+		// SAFETY: The fixture carries every rendition field the modal renders.
 		return {
 			...post,
 			renditions: [

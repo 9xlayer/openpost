@@ -39,4 +39,19 @@ describe('UnsavedChangesContext', () => {
 		expect(alert).toHaveBeenCalledWith('Wait for token creation.');
 		expect(confirm).not.toHaveBeenCalled();
 	});
+
+	it('delegates workspace changes to their owner while retaining navigation protection', () => {
+		const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+		const changes = new UnsavedChangesContext();
+		changes.set('composer', true, 'Unsaved post changes', { guardWorkspaceSwitch: false });
+
+		expect(changes.confirmDiscard('workspace-switch')).toBe(true);
+		expect(confirm).not.toHaveBeenCalled();
+		expect(changes.confirmDiscard()).toBe(false);
+		expect(confirm).toHaveBeenLastCalledWith('Unsaved post changes');
+
+		changes.set('settings', true, 'Unsaved settings');
+		expect(changes.confirmDiscard('workspace-switch')).toBe(false);
+		expect(confirm).toHaveBeenLastCalledWith('Unsaved settings');
+	});
 });
