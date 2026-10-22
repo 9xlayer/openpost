@@ -5,12 +5,12 @@ export const marketingGuides = [
   {
     slug: "best-social-media-tools-for-solo-founders",
     thumbnail: "post-preview-generator",
-    reviewedAt: "2026-09-05",
+    reviewedAt: "2026-10-22",
     question: "What are the best social media tools for solo founders?",
     socialDescription:
-      "Compare Buffer, OpenPost, and Postiz against your publishing workflow, account needs, plan limits, and self-hosting costs.",
+      "Compare Buffer, OpenPost, Postiz, and FeedHive against your publishing workflow, account needs, plan limits, and self-hosting costs.",
     answer:
-      "Start with the work you need to finish. Buffer is worth comparing for scheduling and adapting drafts. OpenPost is worth evaluating when you want drafts, media editing, destination-specific versions, and automation together. Postiz is another option to compare if self-hosting matters. Test your actual accounts before choosing.",
+      "Start with the work you need to finish. Buffer is worth comparing for scheduling and adapting drafts. OpenPost is worth evaluating when you want drafts, media editing, destination-specific versions, and automation together. Postiz is another option to compare if self-hosting matters. FeedHive is worth comparing when you want AI drafting, approvals, and automation in the tool you publish from. Test your actual accounts before choosing.",
     sections: [
       {
         title: "Choose for your weekly workflow",
@@ -19,6 +19,17 @@ export const marketingGuides = [
           "Mostly scheduling finished posts: try the queue, calendar, and per-channel preview in Buffer.",
           "Creating content from product work: evaluate OpenPost's composer, media tools, and separate versions for each destination.",
           "Running the service on your own infrastructure: compare OpenPost and Postiz, including maintenance and provider setup.",
+          "Reviewing drafts with other people, or starting from AI drafts: compare FeedHive's approval workflow, AI credits, and automation.",
+        ],
+      },
+      {
+        title: "Where FeedHive fits",
+        text: "FeedHive combines AI writing and image generation with posting plans, approval workflows, and automation. Compare it when someone else reviews your content, or when you want AI drafts and publishing in one tool. Its plans are priced in euros and depend on how many accounts, scheduled posts, and AI credits you need.",
+        items: [
+          "The Creator plan is €15/month on yearly billing (€180/year) with 4 social accounts, 30 scheduled posts, a 14-day scheduling window, and 2.5K AI credits per month before temporary promotions. Larger plans raise those limits.",
+          "Its feature list includes AI performance prediction, approval workflows, workflow automations, webhooks, and a REST API. Check which plan includes each one before choosing.",
+          "Agent access is documented for MCP clients such as Claude and ChatGPT, plus a CLI. Confirm the plan and the account permissions you need before connecting accounts.",
+          "Use the 7-day free trial to prepare a real update and check whether the credits and scheduling window cover a normal week.",
         ],
       },
       {
@@ -27,7 +38,7 @@ export const marketingGuides = [
       },
       {
         title: "Compare the total cost",
-        text: "Count the accounts and people you need, then check current plan limits. For self-hosting, include the server, backups, media storage, provider access, and your maintenance time. Source access does not make operation free.",
+        text: "Count the accounts and people you need, then check current plan limits. For self-hosting, include the server, backups, media storage, provider access, and your maintenance time. Source access does not make operation free. Tools that meter AI usage in credits, such as FeedHive, also tie drafting volume to the plan you buy.",
       },
     ],
     sources: [
@@ -38,6 +49,19 @@ export const marketingGuides = [
       {
         label: "Postiz introduction",
         href: "https://docs.postiz.com/general/introduction",
+      },
+      {
+        label: "FeedHive plans, prices, and limits",
+        href: "https://www.feedhive.com/pricing",
+      },
+      {
+        label: "FeedHive MCP server",
+        href: "https://docs.feedhive.com/mcp",
+      },
+      { label: "FeedHive CLI", href: "https://docs.feedhive.com/cli" },
+      {
+        label: "FeedHive approval workflow",
+        href: "https://docs.feedhive.com/workspace-management/approval-workflow-for-feedhive-teams",
       },
     ],
     next: { label: "Explore OpenPost features", href: "/#features" },
