@@ -9,15 +9,34 @@ import { existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, searchForWorkspaceRoot, type Plugin, type PluginOption } from 'vite';
 import { postHogSourceMaps } from '../../scripts/posthog-source-maps.ts';
+import { paraglideFastDeclarationsPlugin } from '../../scripts/paraglide-declarations.mjs';
 import { phonemizerRuntimePlugin } from './src/lib/build/phonemizer-runtime.ts';
 
+// FMT-03 (#393): src/lib/paraglide has one writer and one declared option set.
+// The Vite plugin must pass identical options to the `generate:i18n` script:
+// `preferredLanguage` keeps first-visit Accept-Language detection,
+// `locale-modules` keeps generated declarations small for svelte-check, and
+// `isServer` matches the shipped bundle. scripts/check-i18n.mjs asserts the
+// two stay in sync.
+//
+// The upstream `emitTsDeclarations` path is slow on this catalog
+// (see scripts/paraglide-declarations.mjs), so it stays off here and in
+// `generate:i18n`. The companion plugin below regenerates the same fast
+// `.d.ts` siblings after the paraglide plugin writes the `.js` output.
 const rawParaglidePlugin = paraglideVitePlugin({
 	project: './project.inlang',
 	outdir: './src/lib/paraglide',
-	strategy: ['cookie', 'globalVariable', 'preferredLanguage', 'baseLocale']
+	strategy: ['cookie', 'globalVariable', 'preferredLanguage', 'baseLocale'],
+	outputStructure: 'locale-modules',
+	isServer: "import.meta.env?.SSR ?? typeof window === 'undefined'",
+	emitTsDeclarations: false
 });
 // SAFETY: paraglideVitePlugin returns a Vite-compatible plugin, but its package type is not assignable to this Vite version.
 const paraglidePlugin = rawParaglidePlugin as PluginOption;
+// SAFETY: same as above; the companion plugin is a plain Vite plugin object.
+const paraglideDeclarationsPlugin = paraglideFastDeclarationsPlugin({
+	outdir: './src/lib/paraglide'
+}) as PluginOption;
 const usesPrecompiledParaglide = process.env.OPENPOST_PARAGLIDE_PRECOMPILED === '1';
 const isVitest = process.env.VITEST === 'true';
 const apiProxyTimeoutMs = 120_000;
@@ -63,7 +82,7 @@ export default defineConfig({
 		...(isVitest ? [testMediaStubPlugin] : []),
 		tailwindcss(),
 		...appFrameworkPlugins,
-		...(!usesPrecompiledParaglide ? [paraglidePlugin] : []),
+		...(!usesPrecompiledParaglide ? [paraglidePlugin, paraglideDeclarationsPlugin] : []),
 		SvelteKitPWA({
 			base: '/',
 			scope: '/',

@@ -58,6 +58,7 @@ const checks = {
       "scripts/build-telemetry-env.test.mjs",
       "scripts/frontend-vite-build.test.mjs",
       "scripts/paraglide-offline.test.mjs",
+      "scripts/paraglide-declarations.test.mjs",
       "scripts/package-frontend.test.mjs",
       "scripts/precompress-static.test.mjs",
     ),

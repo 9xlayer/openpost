@@ -8,7 +8,7 @@
 		"build": "bun run assets:sync && bun run generate:i18n:build && node ../../scripts/frontend-vite-build.mjs && bun ../../scripts/generate-app-route-manifest.mjs --output-directory build && bun ../../scripts/precompress-static.mjs --directory build && bun ../../scripts/immutable-frontend-assets.mjs web",
 		"package": "bun ../../scripts/package-frontend.mjs",
 		"preview": "vite preview",
-		"generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy cookie globalVariable preferredLanguage baseLocale --output-structure locale-modules --is-server \"import.meta.env?.SSR ?? typeof window === 'undefined'\" --emit-ts-declarations",
+		"generate:i18n": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy cookie globalVariable preferredLanguage baseLocale --output-structure locale-modules --is-server \"import.meta.env?.SSR ?? typeof window === 'undefined'\" && bun ../../scripts/paraglide-declarations.mjs --outdir ./src/lib/paraglide",
 		"generate:i18n:build": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy cookie globalVariable preferredLanguage baseLocale --output-structure message-modules --is-server \"import.meta.env?.SSR ?? typeof window === 'undefined'\"",
 		"generate:theme-icons": "bun ../../scripts/generate-theme-icon-packs.mjs",
 		"check:i18n": "bun ../../scripts/check-i18n.mjs",
