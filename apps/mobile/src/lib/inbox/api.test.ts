@@ -5,8 +5,14 @@ mock.module("expo-secure-store", () => ({
   setItemAsync: async () => undefined,
   deleteItemAsync: async () => undefined,
 }));
-const { setConversationState, setCommentState, sendMessage, retryMessage, commentAction } =
-  await import("./api");
+const {
+  setConversationState,
+  setCommentState,
+  sendMessage,
+  retryMessage,
+  commentAction,
+  mobileInboxAPI,
+} = await import("./api");
 const { setServer, clearServer } = await import("../server");
 
 test("viewer read and archive paths never send a write, while editor paths use workspace-scoped state endpoints", async () => {
@@ -74,6 +80,21 @@ test("offline message admission and retries never dispatch HTTP", async () => {
     expect(requests).toBe(1);
   } finally {
     onlineManager.setOnline(wasOnline);
+    network.mockRestore();
+    await clearServer();
+  }
+});
+
+test("Inbox reads reject an empty successful response instead of caching it as summary data", async () => {
+  const network = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(async () => Response.json(null), { preconnect: () => undefined }),
+  );
+  try {
+    await setServer("https://native-inbox-review.invalid");
+    await expect(
+      mobileInboxAPI.getInboxSummary("workspace", new AbortController().signal),
+    ).rejects.toThrow("empty response");
+  } finally {
     network.mockRestore();
     await clearServer();
   }

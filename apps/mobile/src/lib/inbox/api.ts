@@ -24,7 +24,7 @@ export type Comment = components["schemas"]["EngagementItem"];
 export type { InboxView } from "@openpost/query-catalog";
 
 async function result<T>(
-  request: Promise<{ data?: T; error?: unknown; response: Response }>,
+  request: Promise<{ data?: T | null; error?: unknown; response: Response }>,
   identity = captureApiRequestIdentity(),
 ): Promise<T> {
   const response = await request;
@@ -36,7 +36,8 @@ async function result<T>(
       response.error,
       "Could not update Inbox",
     );
-  if (response.data === undefined) throw new Error("The server returned an empty response.");
+  if (response.data === undefined || response.data === null)
+    throw new Error("The server returned an empty response.");
   return response.data;
 }
 
@@ -45,19 +46,27 @@ export const mobileInboxAPI: InboxQueryAPI &
   InboxSummaryQueryAPI &
   JobStatusQueryAPI = {
   async getJob(_workspaceId, jobId, signal) {
-    return result(api().GET("/jobs/{id}", { signal, params: { path: { id: jobId } } }));
+    return result(
+      mobileQueryTransportRequest(signal, (signal) =>
+        api().GET("/jobs/{id}", { signal, params: { path: { id: jobId } } }),
+      ),
+    );
   },
   async getEngagement(workspaceId, itemId, signal) {
     return result(
-      api().GET("/engagement/{item_id}", {
-        signal,
-        params: { path: { item_id: itemId }, query: { workspace_id: workspaceId } },
-      }),
+      mobileQueryTransportRequest(signal, (signal) =>
+        api().GET("/engagement/{item_id}", {
+          signal,
+          params: { path: { item_id: itemId }, query: { workspace_id: workspaceId } },
+        }),
+      ),
     );
   },
   async getInboxSummary(workspaceId, signal) {
     return result(
-      api().GET("/inbox/summary", { signal, params: { query: { workspace_id: workspaceId } } }),
+      mobileQueryTransportRequest(signal, (signal) =>
+        api().GET("/inbox/summary", { signal, params: { query: { workspace_id: workspaceId } } }),
+      ),
     );
   },
   async listConversations(workspaceId, filters, cursor, signal) {
@@ -68,21 +77,23 @@ export const mobileInboxAPI: InboxQueryAPI &
   },
   async listEngagement(workspaceId, filters, cursor, signal) {
     return result(
-      api().GET("/engagement", {
-        signal,
-        params: {
-          query: {
-            workspace_id: workspaceId,
-            platform: filters.platform || undefined,
-            account_id: filters.accountId || undefined,
-            publication_id: filters.publicationId || undefined,
-            unread_only: filters.unreadOnly,
-            archived: filters.archived,
-            limit: filters.limit,
-            cursor: cursor || undefined,
+      mobileQueryTransportRequest(signal, (signal) =>
+        api().GET("/engagement", {
+          signal,
+          params: {
+            query: {
+              workspace_id: workspaceId,
+              platform: filters.platform || undefined,
+              account_id: filters.accountId || undefined,
+              publication_id: filters.publicationId || undefined,
+              unread_only: filters.unreadOnly,
+              archived: filters.archived,
+              limit: filters.limit,
+              cursor: cursor || undefined,
+            },
           },
-        },
-      }),
+        }),
+      ),
     );
   },
   async listPublications(workspaceId, filters, cursor, signal) {
@@ -113,10 +124,12 @@ export const mobileInboxAPI: InboxQueryAPI &
   async listAccountFeatures(workspaceId, accountIds, signal) {
     return (
       (await result(
-        api().GET("/account-features", {
-          signal,
-          params: { query: { workspace_id: workspaceId, account_ids: accountIds.join(",") } },
-        }),
+        mobileQueryTransportRequest(signal, (signal) =>
+          api().GET("/account-features", {
+            signal,
+            params: { query: { workspace_id: workspaceId, account_ids: accountIds.join(",") } },
+          }),
+        ),
       )) ?? []
     );
   },
@@ -135,32 +148,36 @@ function listConversations(
   signal: AbortSignal,
 ) {
   return result(
-    api().GET("/messages", {
-      signal,
-      params: {
-        query: {
-          workspace_id: workspaceId,
-          account_id: filters.accountId || undefined,
-          archived: filters.archived ?? false,
-          unread_only: filters.unreadOnly ?? false,
-          search: filters.search?.trim() ?? "",
-          limit: filters.limit ?? 50,
-          cursor: cursor || undefined,
+    mobileQueryTransportRequest(signal, (signal) =>
+      api().GET("/messages", {
+        signal,
+        params: {
+          query: {
+            workspace_id: workspaceId,
+            account_id: filters.accountId || undefined,
+            archived: filters.archived ?? false,
+            unread_only: filters.unreadOnly ?? false,
+            search: filters.search?.trim() ?? "",
+            limit: filters.limit ?? 50,
+            cursor: cursor || undefined,
+          },
         },
-      },
-    }),
+      }),
+    ),
   );
 }
 
 export const nativeInboxTransport = {
   async inboxChanges(workspaceId: string, cursor: string, signal: AbortSignal) {
     const page = await result(
-      api().GET("/inbox/changes", {
-        signal,
-        params: {
-          query: { workspace_id: workspaceId, cursor: cursor || undefined, wait_seconds: 25 },
-        },
-      }),
+      mobileQueryTransportRequest(signal, (signal) =>
+        api().GET("/inbox/changes", {
+          signal,
+          params: {
+            query: { workspace_id: workspaceId, cursor: cursor || undefined, wait_seconds: 25 },
+          },
+        }),
+      ),
     );
     return { ...page, changes: page.changes ?? [] };
   },
@@ -277,20 +294,22 @@ export async function commentAction(
 export const mobileMediaAPI: Pick<MediaQueryAPI, "listMedia"> = {
   async listMedia(workspaceId, filters, signal) {
     return result(
-      api().GET("/media", {
-        signal,
-        params: {
-          query: {
-            workspace_id: workspaceId,
-            lifecycle: filters.lifecycle,
-            search: filters.search,
-            type: filters.type || undefined,
-            limit: filters.limit,
-            offset: filters.offset,
-            sort: filters.sort || undefined,
+      mobileQueryTransportRequest(signal, (signal) =>
+        api().GET("/media", {
+          signal,
+          params: {
+            query: {
+              workspace_id: workspaceId,
+              lifecycle: filters.lifecycle,
+              search: filters.search,
+              type: filters.type || undefined,
+              limit: filters.limit,
+              offset: filters.offset,
+              sort: filters.sort || undefined,
+            },
           },
-        },
-      }),
+        }),
+      ),
     );
   },
 };
@@ -303,13 +322,15 @@ export function listConversationMessages(
   signal: AbortSignal,
 ): Promise<MessagePage> {
   return result(
-    api().GET("/messages/{conversation_id}", {
-      signal,
-      params: {
-        path: { conversation_id: conversationId },
-        query: { workspace_id: workspaceId, limit, cursor: cursor || undefined },
-      },
-    }),
+    mobileQueryTransportRequest(signal, (signal) =>
+      api().GET("/messages/{conversation_id}", {
+        signal,
+        params: {
+          path: { conversation_id: conversationId },
+          query: { workspace_id: workspaceId, limit, cursor: cursor || undefined },
+        },
+      }),
+    ),
   );
 }
 export function retryMessage(workspaceId: string, conversationId: string, messageId: string) {

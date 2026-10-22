@@ -20,6 +20,12 @@ const imperativeQueryMethods = new Set(["query", "fetchQuery", "prefetchQuery"])
 // the render path must never grow new effect-driven reads silently.
 const effectReadAllowlist = [
   {
+    file: "apps/web/src/routes/oauth/x-messaging/+page.svelte",
+    kind: "transport.POST",
+    reason:
+      "single-use authorization callback completion after the initiating actor is restored; consumes actor-bound state, cancels on identity change and invalidates Query readiness rather than reading render-path state",
+  },
+  {
     file: "apps/web/src/lib/video-editor/components/preview-layer.svelte",
     kind: "transport.fetch",
     reason:

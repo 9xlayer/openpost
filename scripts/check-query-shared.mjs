@@ -6,6 +6,7 @@ export const webQueryAdapterPrefix = "apps/web/src/lib/query/";
 export const mobileQueryAdapters = new Set([
   "apps/mobile/src/lib/app-bootstrap.ts",
   "apps/mobile/src/lib/query-api.ts",
+  "apps/mobile/src/lib/inbox/api.ts",
 ]);
 
 export function sourceFiles(directory, options = {}) {
