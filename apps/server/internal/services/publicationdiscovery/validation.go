@@ -42,13 +42,17 @@ const (
 	maxSignalAgeDays           = 30
 )
 
-var nativePlatforms = map[string]struct{}{
-	capabilities.ProviderLinkedIn: {},
-	capabilities.ProviderX:        {},
-	capabilities.ProviderMastodon: {},
-	capabilities.ProviderBluesky:  {},
-	capabilities.ProviderThreads:  {},
-}
+// Discovery plans content for the same destinations as publishing. DevNull is
+// an operator test sink, not a content audience.
+var nativePlatforms = func() map[string]struct{} {
+	platforms := make(map[string]struct{})
+	for _, capability := range capabilities.All() {
+		if capability.Provider != capabilities.ProviderDevNull {
+			platforms[capability.Provider] = struct{}{}
+		}
+	}
+	return platforms
+}()
 
 //nolint:gocyclo // Discovery input has independent privacy, freshness, and platform bounds.
 func validateAndNormalizeInput(input Input, now time.Time) (Input, error) {
@@ -80,8 +84,8 @@ func validateAndNormalizeInput(input Input, now time.Time) (Input, error) {
 	if input.Limit < 1 || input.Limit > maxResultLimit {
 		return Input{}, invalidInput("limit must be between 1 and 8")
 	}
-	if len(input.Platforms) == 0 || len(input.Platforms) > len(nativePlatforms) {
-		return Input{}, invalidInput("platforms must contain 1 to 5 native destinations")
+	if len(input.Platforms) == 0 || len(input.Platforms) > MaxPlatforms {
+		return Input{}, invalidInput("platforms must contain 1 to 32 supported destinations")
 	}
 	seenPlatforms := make(map[string]struct{}, len(input.Platforms))
 	for index, platform := range input.Platforms {

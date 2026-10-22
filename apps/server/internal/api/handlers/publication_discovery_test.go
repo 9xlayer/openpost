@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,6 +80,43 @@ func TestPublicationDiscoveryHandlerReturnsPlanningCardsForWorkspaceEditors(t *t
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &result))
 	require.Len(t, result.Opportunities, 1)
 	require.Equal(t, "opportunity-1", result.Opportunities[0].ID)
+}
+
+func TestPublicationDiscoveryHandlerAcceptsSocialSetPlatforms(t *testing.T) {
+	for _, test := range []struct {
+		platforms []string
+		status    int
+	}{
+		{[]string{"pixelfed"}, http.StatusBadGateway},
+		{[]string{"threads", "x", "mastodon", "bluesky", "linkedin", "pixelfed", "facebook"}, http.StatusBadGateway},
+		{[]string{"unknown"}, http.StatusBadRequest},
+		{[]string{"devnull"}, http.StatusBadRequest},
+		{[]string{"x", "x"}, http.StatusUnprocessableEntity},
+	} {
+		t.Run(strings.Join(test.platforms, ","), func(t *testing.T) {
+			platforms := test.platforms
+			generated := false
+			generator := editorUsageGenerator(func(_ context.Context, request ai.GenerateRequest) (ai.GenerateResult, error) {
+				generated = true
+				for _, platform := range platforms {
+					require.Contains(t, request.UserPrompt, platform)
+				}
+				return ai.GenerateResult{}, errors.New("test provider reached")
+			})
+			loader, err := sourcecontext.New(sourcecontext.Config{})
+			require.NoError(t, err)
+			service, err := publicationdiscovery.New(generator, publicationdiscovery.Config{Model: "test-model", SourceLoader: loader})
+			require.NoError(t, err)
+			server := newPublicationDiscoveryTestServer(t, service)
+			body := publicationDiscoveryRequestBody()
+			body["platforms"] = platforms
+
+			response := publicationDiscoveryRequest(t, server.echo, "web-token", body)
+
+			require.Equal(t, test.status, response.Code, response.Body.String())
+			require.Equal(t, test.status == http.StatusBadGateway, generated, "only supported, unique Social Set destinations should reach discovery generation")
+		})
+	}
 }
 
 func TestPublicationDiscoveryHandlerKeepsScheduledPostsInRecentContext(t *testing.T) {

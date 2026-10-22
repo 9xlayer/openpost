@@ -10,6 +10,9 @@ import (
 	"github.com/openpost/backend/internal/services/voiceprofiles"
 )
 
+// MaxPlatforms bounds discovery context independently of the growing provider catalogue.
+const MaxPlatforms = 32
+
 var (
 	ErrInvalidInput  = errors.New("invalid publication discovery input")
 	ErrInvalidOutput = errors.New("invalid publication discovery output")
@@ -33,7 +36,7 @@ type VoiceContext struct {
 type RecentPublicationSummary struct {
 	PublishedAt time.Time `json:"published_at" doc:"When this recent Publication was published or created"`
 	Summary     string    `json:"summary" maxLength:"800" doc:"Short factual summary of what the Publication said"`
-	Platforms   []string  `json:"platforms,omitempty" maxItems:"5" uniqueItems:"true" doc:"Platforms that received the Publication"`
+	Platforms   []string  `json:"platforms,omitempty" maxItems:"32" uniqueItems:"true" doc:"Platforms that received the Publication"`
 	Topics      []string  `json:"topics,omitempty" maxItems:"12" uniqueItems:"true" doc:"Topics already covered"`
 }
 
@@ -41,7 +44,7 @@ type Input struct {
 	Focus              string                     `json:"focus,omitempty" maxLength:"1000" doc:"Optional subject, project, niche, or current objective"`
 	Audience           string                     `json:"audience,omitempty" maxLength:"500" doc:"People the opportunities should matter to"`
 	Voice              VoiceContext               `json:"voice" doc:"Authorized Voice Profile context without entity IDs"`
-	Platforms          []string                   `json:"platforms" minItems:"1" maxItems:"5" uniqueItems:"true" doc:"Selected native destination platforms"`
+	Platforms          []string                   `json:"platforms" minItems:"1" maxItems:"32" uniqueItems:"true" doc:"Selected native destination platforms"`
 	RecentPublications []RecentPublicationSummary `json:"recent_publications,omitempty" maxItems:"30" doc:"Recent work used only to avoid repetition"`
 	Limit              int                        `json:"limit,omitempty" minimum:"1" maximum:"8" default:"6" doc:"Maximum opportunity cards to return"`
 }

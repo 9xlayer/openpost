@@ -12,10 +12,12 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import {
 		workspaceAccountsQueryOptions,
-		voiceProfilesQueryOptions
+		voiceProfilesQueryOptions,
+		mediaMetadataQueryOptions
 	} from '@openpost/query-catalog';
 	import { queryAPI } from '$lib/query/api';
 	import { voiceProfileQueryAPI } from '$lib/query/voice-profiles';
+	import { mediaQueryAPI } from '$lib/query/media';
 	import {
 		captureQueryMutationSession,
 		queryMutationSessionIsCurrent
@@ -29,6 +31,8 @@
 	import AppSelect from '$lib/components/app-select.svelte';
 	import SocialSetControl from '$lib/components/social-set-control.svelte';
 	import InlineNotice from '$lib/components/inline-notice.svelte';
+	import MediaPicker from '$lib/components/media-picker.svelte';
+	import MediaThumbnail from '$lib/components/media-thumbnail.svelte';
 	import SeriesResults from './series-results.svelte';
 	import PostOptions from '$lib/components/post-builder/post-options.svelte';
 	import { ThemeIcon } from '$lib/themes/icons';
@@ -64,8 +68,17 @@
 	let notes = $state('');
 	let links = $state('');
 	let direction = $state('');
-	let assets = $state<Array<{ id: string; name: string; mayPublish: boolean }>>([]);
-	let inputElement = $state<HTMLInputElement | null>(null);
+	let assets = $state<IdeateDraft['assets']>([]);
+	let availableAssets = $state<IdeateDraft['availableAssets']>([]);
+	let mediaPickerOpen = $state(false);
+	let mediaPickerCurrent: (() => boolean) | undefined;
+	const assetMetadata = createQuery(() =>
+		mediaMetadataQueryOptions(
+			mediaQueryAPI,
+			workspaceId,
+			assets.map((asset) => asset.id)
+		)
+	);
 	let uploading = $state(false);
 	let build = $state.raw<PublicationBuild>();
 	let options = $state.raw<PublicationPostOption[]>([]);
@@ -93,6 +106,7 @@
 	let separateDraft = $state(false);
 	let opportunities = $state<PublicationOpportunity[]>([]);
 	let discovering = $state(false);
+	let discoveryError = $state('');
 	const storageKey = $derived(
 		`openpost:ideate:${$auth.user?.id ?? ''}:${workspaceId}:${ideate.entry?.contextKey ?? 'navigation'}`
 	);
@@ -107,6 +121,18 @@
 	const selectedAccounts = $derived(
 		(accounts.data ?? []).filter((account) => accountIds.includes(account.id))
 	);
+	const missingAssets = $derived(
+		availableAssets.filter((source) => !assets.some((asset) => asset.id === source.id))
+	);
+	const discoveryInput = $derived({
+		workspace_id: workspaceId,
+		focus: Array.from(idea.trim()).slice(0, 1000).join('') || undefined,
+		voice_profile_id: voiceId || undefined,
+		platforms: [...new Set(selectedAccounts.map((account) => account.platform))],
+		limit: 4
+	});
+	const discoveryFingerprint = $derived(JSON.stringify([idea, discoveryInput]));
+
 	const progress = $derived(
 		build?.phase === 'sources'
 			? m.ideate_loading_sources()
@@ -210,6 +236,7 @@
 			using ||
 			saving ||
 			uploading ||
+			discovering ||
 			!(idea.trim() || notes.trim() || links.trim() || assets.length) ||
 			accountIds.length === 0
 		)
@@ -286,7 +313,7 @@
 			for (const file of files.slice(0, 10 - assets.length)) {
 				const media = await uploadMediaFile({ workspaceId: workspace, file, source: 'upload' });
 				if (!current()) return;
-				assets = [...assets, { id: media.id, name: file.name, mayPublish: false }];
+				setAssets([...assets, { id: media.id, name: file.name, mayPublish: false }]);
 			}
 		} catch (cause) {
 			if (current()) error = cause instanceof Error ? cause.message : m.compose_ai_build_failed();
@@ -364,22 +391,34 @@
 			if (current()) error = cause instanceof Error ? cause.message : m.compose_ai_build_failed();
 		}
 	}
+	function openAttachments() {
+		mediaPickerCurrent = scope();
+		mediaPickerOpen = true;
+	}
+
+	function setAssets(next: typeof assets) {
+		availableAssets = Array.from(
+			new Map([...availableAssets, ...assets, ...next].map((asset) => [asset.id, asset])).values()
+		);
+		assets = next;
+	}
+
 	async function discover() {
-		if (discovering || active) return;
+		if (discovering || active || using || !selectedAccounts.length) return;
 		const current = scope();
+		const fingerprint = discoveryFingerprint;
+		const input = discoveryInput;
 		discovering = true;
-		error = '';
+		discoveryError = '';
 		try {
-			const result = await discoverPublicationOpportunities({
-				workspace_id: workspaceId,
-				focus: idea.trim() || undefined,
-				voice_profile_id: voiceId || undefined,
-				platforms: [...new Set(selectedAccounts.map((account) => account.platform))],
-				limit: 4
-			});
-			if (current()) opportunities = result.opportunities;
+			const result = await discoverPublicationOpportunities(input);
+			if (current() && fingerprint === discoveryFingerprint) {
+				opportunities = result.opportunities;
+				if (!opportunities.length) discoveryError = m.ideate_no_ideas();
+			}
 		} catch (cause) {
-			if (current()) error = cause instanceof Error ? cause.message : m.compose_ai_build_failed();
+			if (current() && fingerprint === discoveryFingerprint)
+				discoveryError = cause instanceof Error ? cause.message : m.compose_ai_find_ideas_failed();
 		} finally {
 			if (current()) discovering = false;
 		}
@@ -404,6 +443,7 @@
 				asset.media_id,
 			mayPublish: asset.may_publish
 		}));
+		availableAssets = assets;
 	}
 
 	$effect(() => {
@@ -423,11 +463,13 @@
 			pendingEdits.clear();
 			savedVisuals.clear();
 			busy = using = uploading = discovering = saving = seriesWorking = false;
+			mediaPickerOpen = false;
 			recovery = [];
 			creationKey = requestFingerprint = '';
 			build = undefined;
 			options = [];
 			opportunities = [];
+			discoveryError = '';
 			error = '';
 			editingIdea = true;
 			separateDraft = false;
@@ -448,6 +490,7 @@
 					name: asset.media_id,
 					mayPublish: asset.may_publish
 				})) ?? [];
+			availableAssets = assets;
 			if (savedMatches) {
 				({
 					idea,
@@ -464,6 +507,14 @@
 					creationKey,
 					requestFingerprint
 				} = saved);
+				availableAssets = Array.from(
+					new Map(
+						[...availableAssets, ...saved.availableAssets, ...assets].map((asset) => [
+							asset.id,
+							asset
+						])
+					).values()
+				);
 				recovery = saved.pending;
 			}
 			initialized = true;
@@ -487,6 +538,12 @@
 			}
 		});
 	});
+	$effect(() => {
+		void discoveryFingerprint;
+		opportunities = [];
+		discoveryError = '';
+	});
+
 	$effect(() => {
 		ideate.status = active || seriesWorking ? 'working' : hasResults ? 'ready' : 'idle';
 	});
@@ -525,6 +582,7 @@
 				links,
 				direction,
 				assets,
+				availableAssets,
 				lockedDirection: lockedDirection ?? {},
 				contextMayPublish,
 				creationKey,
@@ -580,7 +638,18 @@
 	}
 
 	$effect(() => {
-		void [idea, seriesMode, accountIds, voiceId, setId, notes, links, direction, assets];
+		void [
+			idea,
+			seriesMode,
+			accountIds,
+			voiceId,
+			setId,
+			notes,
+			links,
+			direction,
+			assets,
+			availableAssets
+		];
 		untrack(persist);
 	});
 	onDestroy(() => {
@@ -601,8 +670,8 @@
 	>
 		<Dialog.Header class="shrink-0 border-b px-4 py-4 pr-14 sm:px-6">
 			<Dialog.Title>{m.compose_ai_ideate()}</Dialog.Title>
-			<Dialog.Description class="sr-only"
-				>{seriesMode ? m.series_description() : m.ideate_idea_label()}</Dialog.Description
+			<Dialog.Description class="mt-1 text-sm text-muted-foreground"
+				>{seriesMode ? m.series_description() : m.ideate_description()}</Dialog.Description
 			>
 		</Dialog.Header>
 		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6">
@@ -612,16 +681,16 @@
 						message={m.compose_ai_destinations_required()}
 					/>{/if}
 				{#if editingIdea || !hasResults}<form
-						class="mx-auto grid w-full max-w-2xl gap-3"
+						class="mx-auto grid w-full max-w-2xl gap-4"
 						onsubmit={(event) => {
 							event.preventDefault();
 							void generate();
 						}}
 					>
-						<label class="grid gap-2 text-base font-medium"
+						<label class="grid gap-2 text-sm font-medium"
 							>{m.ideate_idea_label()}<Textarea
 								bind:value={idea}
-								rows={5}
+								rows={4}
 								maxlength={20000}
 								placeholder={m.ideate_idea_placeholder()}
 								disabled={active || using}
@@ -634,81 +703,147 @@
 								}}
 							/></label
 						>
-						<Input
-							bind:ref={inputElement}
-							type="file"
-							multiple
-							accept="image/*,video/*,audio/*,application/pdf"
-							hidden
-							onchange={(event) => {
-								void upload(Array.from(event.currentTarget.files ?? []));
-								event.currentTarget.value = '';
-							}}
-						/>
 						<div class="flex flex-wrap items-center gap-2">
 							<Button
 								type="button"
 								variant="outline"
 								size="sm"
-								onclick={() => inputElement?.click()}
+								onclick={openAttachments}
 								disabled={active || using || uploading || assets.length >= 10}
-								><ThemeIcon role="upload" class="size-4" />{uploading
-									? m.ideate_uploading()
-									: m.ideate_attach()}</Button
 							>
-							<div class="min-w-0 flex-1">
-								<SocialSetControl
-									{workspaceId}
-									accounts={accounts.data ?? []}
-									selectedAccountIds={accountIds}
-									bind:selectedSetId={setId}
-									disabled={active || using}
-									autoApplyDefault={!build && !ideate.entry?.buildId && !ideate.entry?.input}
-									onApply={(set) =>
-										(accountIds = (set?.accounts ?? []).map((item) => item.social_account_id))}
-									onToggle={(account) => {
-										setId = '';
-										accountIds = accountIds.includes(account.id)
-											? accountIds.filter((id) => id !== account.id)
-											: [...accountIds, account.id];
+								<ThemeIcon role="image-add" class="size-4" />{uploading
+									? m.ideate_uploading()
+									: m.ideate_attach()}
+							</Button>
+							{#if missingAssets.length}
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									disabled={active || using || uploading || assets.length >= 10}
+									onclick={() => {
+										setAssets([...assets, ...missingAssets.slice(0, 10 - assets.length)]);
 									}}
-									onSelectAll={() => {
-										setId = '';
-										accountIds = (accounts.data ?? []).map((account) => account.id);
-									}}
-									onClearAll={() => {
-										setId = '';
-										accountIds = [];
-									}}
-								/>
+									><ThemeIcon role="undo" class="size-4" />{m.compose_ai_media_use_source()}</Button
+								>
+							{/if}
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								class="ml-auto"
+								disabled={active || using || discovering || !selectedAccounts.length}
+								title={m.ideate_suggest_description()}
+								onclick={() => void discover()}
+							>
+								<ThemeIcon role="search" class="size-4" />{discovering
+									? m.compose_ai_finding_ideas()
+									: m.ideate_suggest()}
+							</Button>
+						</div>
+						{#if discoveryError}<InlineNotice tone="error" message={discoveryError} />{/if}
+						{#if discovering}<p class="text-sm text-muted-foreground" role="status">
+								{m.ideate_suggest_description()}
+							</p>{/if}
+						{#if opportunities.length}
+							<div class="grid gap-2" role="group" aria-label={m.ideate_suggest()}>
+								{#each opportunities as opportunity (opportunity.id)}
+									<Button
+										type="button"
+										variant="outline"
+										class="h-auto min-h-11 flex-col items-start gap-1 p-3 text-left whitespace-normal"
+										onclick={() => {
+											idea = [opportunity.title, opportunity.hook].filter(Boolean).join('\n\n');
+											opportunities = [];
+										}}
+									>
+										<span class="font-medium">{opportunity.title}</span>
+										<span class="text-sm font-normal text-muted-foreground"
+											>{opportunity.why_it_fits}</span
+										>
+									</Button>
+								{/each}
 							</div>
+						{/if}
+						{#if assets.length}
+							<ul class="grid gap-2" aria-label={m.compose_ai_media()}>
+								{#each assets as asset (asset.id)}
+									{@const metadata = assetMetadata.data?.media.find((item) => item.id === asset.id)}
+									{@const name = metadata?.original_filename || asset.name}
+									<li class="flex min-w-0 items-center gap-3 rounded-lg border p-2">
+										<MediaThumbnail
+											item={{
+												mime_type: metadata?.mime_type ?? '',
+												url: metadata?.url ?? '',
+												thumbnail_url: metadata?.thumbnail_url,
+												poster_thumbnail_url: metadata?.poster_thumbnail_url,
+												original_filename: name,
+												alt_text: metadata?.alt_text
+											}}
+											class="size-14 shrink-0 rounded-md object-cover"
+										/>
+										<div class="min-w-0 flex-1">
+											<p class="truncate text-sm font-medium" title={name}>{name}</p>
+											<label class="flex min-h-11 items-center gap-2 text-xs text-muted-foreground">
+												<Checkbox
+													checked={asset.mayPublish}
+													disabled={active || using}
+													onCheckedChange={(checked) =>
+														(assets = assets.map((item) =>
+															item.id === asset.id
+																? { ...item, mayPublish: checked === true }
+																: item
+														))}
+												/>
+												{m.ideate_attachment_publishable()}
+											</label>
+										</div>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											class="shrink-0"
+											onclick={() => setAssets(assets.filter((item) => item.id !== asset.id))}
+											disabled={active || using}
+											aria-label={m.ideate_remove_attachment({ name })}
+										>
+											<ThemeIcon role="close" class="size-4" />
+										</Button>
+									</li>
+								{/each}
+							</ul>
+						{/if}
+						<div class="grid min-w-0 gap-2">
+							<p class="text-sm font-medium">{m.compose_destinations()}</p>
+							<SocialSetControl
+								{workspaceId}
+								accounts={accounts.data ?? []}
+								selectedAccountIds={accountIds}
+								bind:selectedSetId={setId}
+								disabled={active || using}
+								autoApplyDefault={!build && !ideate.entry?.buildId && !ideate.entry?.input}
+								onApply={(set) =>
+									(accountIds = (set?.accounts ?? []).map((item) => item.social_account_id))}
+								onToggle={(account) => {
+									setId = '';
+									accountIds = accountIds.includes(account.id)
+										? accountIds.filter((id) => id !== account.id)
+										: [...accountIds, account.id];
+								}}
+								onSelectAll={() => {
+									setId = '';
+									accountIds = (accounts.data ?? []).map((account) => account.id);
+								}}
+								onClearAll={() => {
+									setId = '';
+									accountIds = [];
+								}}
+							/>
 						</div>
 						{#if !accountIds.length && !accounts.isPending}
 							<p class="text-sm text-muted-foreground">{m.compose_select_account()}</p>
 						{/if}
-						{#if assets.length}<ul class="flex flex-wrap gap-2">
-								{#each assets as asset (asset.id)}<li class="grid gap-1">
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											onclick={() => (assets = assets.filter((item) => item.id !== asset.id))}
-											disabled={active || using}
-											aria-label={m.ideate_remove_attachment({ name: asset.name })}
-											>{asset.name}<ThemeIcon role="close" class="size-3" /></Button
-										><label class="flex min-h-11 items-center gap-2 text-xs"
-											><Checkbox
-												checked={asset.mayPublish}
-												disabled={active || using}
-												onCheckedChange={(checked) =>
-													(assets = assets.map((item) =>
-														item.id === asset.id ? { ...item, mayPublish: checked === true } : item
-													))}
-											/>{m.ideate_attachment_publishable()}</label
-										>
-									</li>{/each}
-							</ul>{/if}
-						<details>
+						<details class="border-t">
 							<summary class="min-h-11 cursor-pointer py-3 text-sm text-muted-foreground"
 								>{m.ideate_options()}</summary
 							>
@@ -749,46 +884,32 @@
 								>
 							</div>
 						</details>
-						<Button
-							type="button"
-							variant="ghost"
-							class="justify-self-start"
-							disabled={active || discovering}
-							onclick={() => void discover()}
-							>{discovering ? m.compose_ai_finding_ideas() : m.ideate_suggest()}</Button
+						<div
+							class="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-center sm:justify-between"
 						>
-						{#each opportunities as opportunity (opportunity.id)}
-							<Button
-								type="button"
-								variant="outline"
-								class="h-auto justify-start text-left whitespace-normal"
-								onclick={() => {
-									idea = [opportunity.title, opportunity.hook].filter(Boolean).join('\n\n');
-									opportunities = [];
-								}}>{opportunity.title}</Button
+							<label class="flex min-h-11 items-center gap-2 text-sm"
+								><Checkbox
+									bind:checked={seriesMode}
+									disabled={active || using}
+								/>{m.series_create()}</label
 							>
-						{/each}
-						<label class="flex min-h-11 items-center gap-2 text-sm"
-							><Checkbox
-								bind:checked={seriesMode}
-								disabled={active || using}
-							/>{m.series_create()}</label
-						>
-						<Button
-							type="submit"
-							class="min-h-11"
-							disabled={active ||
-								using ||
-								saving ||
-								uploading ||
-								!(idea.trim() || notes.trim() || links.trim() || assets.length) ||
-								!accountIds.length}
-							>{active
-								? m.ideate_generating()
-								: seriesMode
-									? m.series_plan()
-									: m.ideate_generate()}</Button
-						>
+							<Button
+								type="submit"
+								class="min-h-11 sm:min-w-40"
+								disabled={active ||
+									using ||
+									saving ||
+									uploading ||
+									discovering ||
+									!(idea.trim() || notes.trim() || links.trim() || assets.length) ||
+									!accountIds.length}
+								>{active
+									? m.ideate_generating()
+									: seriesMode
+										? m.series_plan()
+										: m.ideate_generate()}</Button
+							>
+						</div>
 					</form>{:else}<div class="flex items-start justify-between gap-3">
 						<p class="line-clamp-2 text-sm text-muted-foreground">{idea}</p>
 						{#if !build?.series_origin}<Button
@@ -896,3 +1017,31 @@
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
+
+<MediaPicker
+	bind:open={mediaPickerOpen}
+	{workspaceId}
+	currentSelection={assets.map((asset) => asset.id)}
+	currentMediaMimeTypes={Object.fromEntries(
+		(assetMetadata.data?.media ?? []).map((item) => [item.id, item.mime_type ?? ''])
+	)}
+	accept={['image/*', 'video/*', 'audio/*', 'application/pdf']}
+	maxSelection={10}
+	showCreate={false}
+	compactNavigation
+	purpose="ideate_context"
+	onConfirm={(ids, media) => {
+		if (!mediaPickerCurrent?.()) return false;
+		setAssets(
+			ids.slice(0, 10).map(
+				(id) =>
+					assets.find((asset) => asset.id === id) ??
+					availableAssets.find((asset) => asset.id === id) ?? {
+						id,
+						name: media.find((item) => item.id === id)?.original_filename || id,
+						mayPublish: false
+					}
+			)
+		);
+	}}
+/>

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+const assetSchema = z.object({ id: z.string(), name: z.string(), mayPublish: z.boolean() });
+
 const draftSchema = z.object({
 	idea: z.string(),
 	seriesMode: z.boolean().default(false),
@@ -9,7 +11,8 @@ const draftSchema = z.object({
 	notes: z.string(),
 	links: z.string(),
 	direction: z.string(),
-	assets: z.array(z.object({ id: z.string(), name: z.string(), mayPublish: z.boolean() })),
+	assets: z.array(assetSchema),
+	availableAssets: z.array(assetSchema).default([]),
 	lockedDirection: z.object({
 		outcome: z.string().optional(),
 		audience: z.string().optional(),

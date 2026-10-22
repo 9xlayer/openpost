@@ -48,7 +48,7 @@ type DiscoverPublicationOpportunitiesInput struct {
 		Focus              string                                          `json:"focus,omitempty" maxLength:"1000" doc:"Optional subject, project, niche, or current objective"`
 		Audience           string                                          `json:"audience,omitempty" maxLength:"500" doc:"People the opportunities should matter to"`
 		VoiceProfileID     string                                          `json:"voice_profile_id,omitempty" doc:"Optional Workspace Voice Profile; defaults to the Workspace identity"`
-		Platforms          []string                                        `json:"platforms" minItems:"1" maxItems:"5" uniqueItems:"true" doc:"Selected native destination platforms"`
+		Platforms          []string                                        `json:"platforms" minItems:"1" maxItems:"32" uniqueItems:"true" doc:"Selected native destination platforms"`
 		RecentPublications []publicationdiscovery.RecentPublicationSummary `json:"recent_publications,omitempty" maxItems:"30" doc:"Recent Publications used only to avoid repetition"`
 		Limit              int                                             `json:"limit,omitempty" minimum:"1" maximum:"8" default:"6" doc:"Maximum opportunity cards to return"`
 	}
