@@ -8,6 +8,7 @@ import { queryClient } from '$lib/query/client';
 import { auth } from '$lib/stores/auth';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
 import { userProfileDefaults } from '$lib/test-fixtures/user-profile';
+import { pendingInboxChanges } from '$lib/test-fixtures/inbox';
 import EngagementPage from './+page.svelte';
 import '../../layout.css';
 
@@ -42,7 +43,8 @@ const account: SocialAccount = {
 };
 
 function mockEngagement() {
-	getMock.mockImplementation(async (path) => {
+	getMock.mockImplementation(async (path, options?: { signal?: AbortSignal | null }) => {
+		if (path === '/inbox/changes') return pendingInboxChanges(options?.signal);
 		if (path === '/engagement') {
 			return { data: { items: [], total: 0, sync_states: [], next_cursor: '' } };
 		}
@@ -66,6 +68,7 @@ describe('engagement account filter accessible name', () => {
 		initializeMock.mockResolvedValue();
 		getMock.mockReset();
 		postMock.mockReset();
+		postMock.mockResolvedValue({ response: new Response(null, { status: 204 }) });
 		putMock.mockReset();
 	});
 

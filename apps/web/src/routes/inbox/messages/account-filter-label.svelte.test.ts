@@ -8,6 +8,7 @@ import { queryClient } from '$lib/query/client';
 import { auth } from '$lib/stores/auth';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
 import { userProfileDefaults } from '$lib/test-fixtures/user-profile';
+import { pendingInboxChanges } from '$lib/test-fixtures/inbox';
 import MessagesPage from './+page.svelte';
 import '../../layout.css';
 
@@ -42,7 +43,8 @@ const account: SocialAccount = {
 };
 
 function mockMessages() {
-	getMock.mockImplementation(async (path) => {
+	getMock.mockImplementation(async (path, options?: { signal?: AbortSignal | null }) => {
+		if (path === '/inbox/changes') return pendingInboxChanges(options?.signal);
 		if (path === '/messages') {
 			return { data: { items: [], total: 0, sync_states: [], next_cursor: '' } };
 		}
@@ -66,28 +68,35 @@ describe('messages account filter accessible name', () => {
 		initializeMock.mockResolvedValue();
 		getMock.mockReset();
 		postMock.mockReset();
+		postMock.mockResolvedValue({ response: new Response(null, { status: 204 }) });
 		putMock.mockReset();
 	});
 
-	it('announces "All accounts" with nothing selected and the selected account otherwise', async () => {
-		mockMessages();
-		const screen = await render(
-			MessagesPage,
-			{},
-			{
-				wrapper: QueryClientProvider,
-				wrapperProps: { client: queryClient }
-			}
-		);
-		const trigger = screen.getByRole('button', { name: 'All accounts' });
-		await expect.element(trigger).toHaveAttribute('aria-label', 'All accounts');
-		await trigger.click();
-		await page.getByRole('option', { name: /launch/ }).click();
-		const selected = screen.getByRole('button', { name: 'Account filter' });
-		await expect.element(selected).toHaveAttribute('aria-label', 'Account filter: @launch, X');
-		await expect
-			.element(screen.getByRole('button', { name: 'All accounts' }))
-			.not.toBeInTheDocument();
+	it('announces the selected account inside mobile filters', async () => {
+		await page.viewport(390, 844);
+		try {
+			mockMessages();
+			const screen = await render(
+				MessagesPage,
+				{},
+				{
+					wrapper: QueryClientProvider,
+					wrapperProps: { client: queryClient }
+				}
+			);
+			await screen.getByRole('button', { name: 'Filters', exact: true }).click();
+			const trigger = screen.getByRole('button', { name: 'All accounts' });
+			await expect.element(trigger).toHaveAttribute('aria-label', 'All accounts');
+			await trigger.click();
+			await page.getByRole('option', { name: /launch/ }).click();
+			const selected = screen.getByRole('button', { name: 'Account filter' });
+			await expect.element(selected).toHaveAttribute('aria-label', 'Account filter: @launch, X');
+			await expect
+				.element(screen.getByRole('button', { name: 'All accounts' }))
+				.not.toBeInTheDocument();
+		} finally {
+			await page.viewport(1280, 900);
+		}
 	});
 });
 

@@ -7,6 +7,7 @@ import { queryClient } from '$lib/query/client';
 import { auth } from '$lib/stores/auth';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
 import { userProfileDefaults } from '$lib/test-fixtures/user-profile';
+import { pendingInboxChanges } from '$lib/test-fixtures/inbox';
 import MessagesPage from './+page.svelte';
 import '../../layout.css';
 
@@ -34,7 +35,8 @@ function renderMessages() {
 }
 
 function mockInbox(items: ReturnType<typeof conversation>[]) {
-	getMock.mockImplementation(async (path) => {
+	getMock.mockImplementation(async (path, options?: { signal?: AbortSignal | null }) => {
+		if (path === '/inbox/changes') return pendingInboxChanges(options?.signal);
 		if (path === '/messages') {
 			return { data: { items, total: items.length, sync_states: [], next_cursor: '' } };
 		}
