@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Button } from '$lib/components/ui/button';
-	import MediaAcquisitionPanel from '$lib/components/media-acquisition-panel.svelte';
+	import InlineNotice from '$lib/components/inline-notice.svelte';
 	import type { MediaUploadResult } from '$lib/media-upload-client';
 	import { ThemeIcon } from '$lib/themes/icons';
 	import type { VideoConstraint } from '$lib/video/types';
@@ -137,18 +137,30 @@
 
 		<div class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
 			{#key source}
-				<MediaAcquisitionPanel
-					mode={source}
-					{workspaceId}
-					{accept}
-					{maxFiles}
-					{retentionClass}
-					{tagId}
-					{videoConstraints}
-					{initialFiles}
-					{onInitialFilesConsumed}
-					onUploaded={completeUpload}
-				/>
+				{#await import('$lib/components/media-acquisition-panel.svelte')}
+					<p class="text-sm text-muted-foreground" role="status">{m.common_loading()}</p>
+				{:then module}
+					<module.default
+						mode={source}
+						{workspaceId}
+						{accept}
+						{maxFiles}
+						{retentionClass}
+						{tagId}
+						{videoConstraints}
+						{initialFiles}
+						{onInitialFilesConsumed}
+						onUploaded={completeUpload}
+					/>
+				{:catch}
+					<InlineNotice tone="error" message={m.media_picker_load_failed()}>
+						{#snippet actions()}
+							<Button variant="outline" onclick={() => window.location.reload()}
+								>{m.common_refresh()}</Button
+							>
+						{/snippet}
+					</InlineNotice>
+				{/await}
 			{/key}
 		</div>
 	</Dialog.Content>

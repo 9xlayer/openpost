@@ -18,5 +18,6 @@ describe('media upload dialog source switcher', () => {
 		await expect
 			.element(sourceGroup.getByRole('button', { name: m.media_upload_device() }))
 			.toBeVisible();
+		await expect.element(screen.getByText(m.media_upload_drop_title())).toBeVisible();
 	});
 });
