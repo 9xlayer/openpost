@@ -4,6 +4,56 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.27.2] - 2026-10-22
+
+### Fixed
+
+- Give generated Paraglide output a single writer: marketing no longer regenerates `apps/web/src/lib/paraglide`, web's Vite plugin passes the same options as `generate:i18n`, and `check-i18n` fails when the two drift apart. The web locale strategy keeps `preferredLanguage`, so first-time visitors still get `Accept-Language` detection.
+- Generate translation declarations without the upstream TypeScript emit that dominates `check -- frontend-marketing` on the full catalog. `generate:i18n` and the Vite plugin now share the fast declarations in `scripts/paraglide-declarations.mjs`; typed message inputs, locale options, and plural variants are unchanged.
+- Show the destination account photo on delivery cards, publication history rows, and workflow approval rows from the server-projected destination identity, with the platform badge preserved. Destinations whose account is unavailable retain their delivery details with a platform fallback.
+- Preserve the recorder's observed system-audio status when a screen recording contains microphone audio. An encoded audio track no longer implies that system sound was shared.
+- Message retries retain one operation identity, outbound echoes converge with queued sends, and uncertain provider outcomes remain inspectable.
+- New incoming messages reopen archived conversations, unread controls retain a visible indicator, and replies dispatch independently of slow media jobs.
+- Mobile Inbox uses quieter filters, compact conversation rows, grouped timestamps and smaller moderation controls. Swipe to archive with Undo keeps the list focused on conversations.
+- Inbox rows announce their latest message or comment text to screen readers, not just names and read state.
+- Outlined native text fields retain their bottom border with the theme's original subtle color.
+- X messaging now shares durable REST quota admission across OAuth1 and OAuth2 and rejects send responses that lack a message ID.
+- Animated memes honor the requested output height, matching static meme rendering.
+- Prepare the application TypeScript configuration before marketing builds import shared application modules, so fresh checkouts build reliably without regenerating application translations.
+- Keep images added to a post sharp. The composer tile showed the small library thumbnail stretched across the editor column; it now shows the original image and uses the thumbnail only as a fallback.
+- Let Ideate find topic ideas for every supported publishing platform, including Social Sets with more than five platforms.
+- Reattach files from the media library and restore removed attachments after a reload, including temporary files. Preserve each attachment's publishing permission.
+- Discard topic-search results when the idea, accounts, or voice has changed during the search.
+- Show the media library grid at the 400px thumbnail tier and the inspector and approval preview at the original image, so large previews are no longer stretched from a 150px square crop.
+- Keep saved text-card images visible when a publication stores only sparse card settings, instead of losing them after a save.
+- Clear the media picker grid when the workspace changes, so another workspace's media cannot be selected while the new list loads.
+- Restore the Quick Cut cloud-conflict heading, so the notice is reachable by heading navigation again.
+- Save edited attachment alt text on destination media rows that already exist in the native composer.
+- Request the 400px tier for the native draft attachment thumbnails instead of each full original.
+- Keep the media conversion limits out of the marketing tool route bundle, so tool pages no longer load the conversion engine before hydration.
+- Render saved memes at 1080px so the composer and social feeds no longer upscale the 600px preview size; animated GIFs keep 600px to bound their size.
+- Import the original Pixabay photo when available, then the 1920px full HD and 1280px large copies, and report the delivered file's dimensions and media type.
+- Encode thumbnails as transparent PNG for uploads with alpha and serve the matching content type, so transparent images no longer get a black background.
+- Stop stretching extension screenshots beyond their captured width.
+- Show image tiles in the media picker at the 400px thumbnail tier instead of upscaling the 150px one.
+- Keep generated text card footers clear of the last line of body copy. Long posts no longer draw the page arrow into the text on full pages.
+
+### Added
+
+- Mobile Inbox with separate Chats and Comments, existing-chat replies, account filters, search, archive recovery, saved drafts, public thread context, and safe retry receipts.
+- Native Posts, Inbox, Analytics, Media and More navigation, with Calendar and Queue retained under Posts.
+- Foreground Inbox updates shared by web and mobile, incremental Bluesky chat logs, signed Meta message intake, leased Mastodon streams, and lazy network message history.
+- Separate X OAuth2 authorization for legacy direct messages, preserving OAuth1 publishing, with signed event receipts and explicit operator budget controls for paid X Activity subscriptions.
+
+### Security
+
+- Update DOMPurify and the documentation framework to patched releases covering the latest upstream security advisories.
+
+### Changed
+
+- Add FeedHive to the "best social media tools for solo founders" guide with its verified plan limits, agent access, and pricing source.
+- Simplify the Ideate dialog with attachment previews, clearer topic-search controls, and grouped generation actions.
+
 ## [7.26.0] - 2026-10-22
 
 ### Added
