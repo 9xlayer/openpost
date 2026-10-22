@@ -7,6 +7,8 @@ import { openPostQueryKeys } from '@openpost/query-catalog';
 import { client, type User, type Workspace } from '$lib/api/client';
 import type { components } from '$lib/api/types';
 import { queryClient } from '$lib/query/client';
+import { inboxUpdateAPI } from '$lib/query/inbox';
+import { pendingInboxChanges } from '$lib/test-fixtures/inbox';
 import { auth } from '$lib/stores/auth';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
 import CalendarPage from './calendar/+page.svelte';
@@ -26,6 +28,8 @@ const getMock = vi.spyOn(client, 'GET');
 const postMock = vi.spyOn(client, 'POST');
 const putMock = vi.spyOn(client, 'PUT');
 const initializeMock = vi.spyOn(workspaceCtx, 'initialize');
+const updatesMock = vi.spyOn(inboxUpdateAPI, 'inboxChanges');
+const activityMock = vi.spyOn(inboxUpdateAPI, 'inboxActivity');
 
 function deferred<T>() {
 	let resolve!: (value: T) => void;
@@ -75,6 +79,9 @@ describe('route mutation sessions', () => {
 	});
 
 	beforeEach(() => {
+		// These cases control authored mutations, not the realtime transport.
+		updatesMock.mockImplementation((_workspaceId, _cursor, signal) => pendingInboxChanges(signal));
+		activityMock.mockResolvedValue();
 		queryClient.clear();
 		auth.setUser(user('user-a'));
 		workspaceCtx.currentWorkspace = workspace;
