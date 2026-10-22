@@ -35,9 +35,19 @@ const productionBuildTestTimeoutMs = 900_000;
 
 function ensureProductionBuilds(root) {
   productionBuildPromise ??= (async () => {
-    await runRootTask(root, ["build", "--", "marketing"], {
-      TURBO_FORCE: "true",
+    // Policy CI builds marketing without preparing the application first.
+    // Cross-app imports must work with no generated application tsconfig.
+    const appConfig = path.join(root, "apps/web/.svelte-kit/tsconfig.json");
+    const previousConfig = await readFile(appConfig).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
     });
+    await rm(appConfig, { force: true });
+    try {
+      await runRootTask(root, ["build", "--", "marketing"], { TURBO_FORCE: "true" });
+    } catch (error) {
+      if (previousConfig) await writeFile(appConfig, previousConfig);
+      throw error;
+    }
     await runRootTask(root, ["build", "--", "docs"], { TURBO_FORCE: "true" });
   })();
   return productionBuildPromise;
