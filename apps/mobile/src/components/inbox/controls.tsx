@@ -1,6 +1,5 @@
 import { Pressable, ScrollView, View } from "react-native";
 import { NativeText as Text } from "@/components/native-text";
-import { BodyText } from "../ui";
 import { useNativeTheme } from "@/theme";
 import type { MobileAccount } from "@/lib/queries";
 import { platformLabel } from "@/lib/format";
@@ -174,7 +173,4 @@ export function AccountFilter({
 export function InboxDivider() {
   const { colors } = useNativeTheme().manifest;
   return <View style={{ height: 1, backgroundColor: colors.outlineVariant }} />;
-}
-export function InboxError({ message }: { message: string }) {
-  return <BodyText accessibilityRole="alert">{message}</BodyText>;
 }

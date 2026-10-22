@@ -1,4 +1,4 @@
-import { NativeModule, requireOptionalNativeModule } from "expo-modules-core";
+import { NativeModule, requireOptionalNativeModule } from "expo";
 import { findNodeHandle, Platform, TextInput } from "react-native";
 import { useEffect, useRef, type RefObject } from "react";
 

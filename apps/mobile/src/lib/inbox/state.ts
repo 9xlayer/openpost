@@ -29,7 +29,7 @@ export function reconcileSends(
   );
 }
 
-export function recoverDraft(draft: ConversationDraft): ConversationDraft {
+function recoverDraft(draft: ConversationDraft): ConversationDraft {
   return {
     text: draft.text,
     ...(draft.replyHistory?.length ? { replyHistory: draft.replyHistory } : {}),

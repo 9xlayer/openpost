@@ -122,7 +122,7 @@ export const mobileInboxAPI: InboxQueryAPI &
   },
 };
 
-export function listConversations(
+function listConversations(
   workspaceId: string,
   filters: {
     accountId?: string;

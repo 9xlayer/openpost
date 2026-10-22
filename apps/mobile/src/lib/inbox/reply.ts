@@ -34,6 +34,8 @@ export class PublicReplySession {
   }
   constructor(private readonly dependencies: ReplyDependencies) {}
   snapshot = () => this.value;
+  // Passed to useSyncExternalStore by the public-reply hook.
+  // fallow-ignore-next-line unused-class-member
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
