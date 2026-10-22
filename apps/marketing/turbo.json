@@ -22,6 +22,8 @@
 				"!$TURBO_ROOT$/assets/social/**",
 				"$TURBO_ROOT$/apps/server/internal/api/handlers/mcp_server_card_base.json",
 				"$TURBO_ROOT$/CHANGELOG.md",
+				"$TURBO_ROOT$/apps/web/messages/**",
+				"$TURBO_ROOT$/apps/web/project.inlang/settings.json",
 				"$TURBO_ROOT$/apps/web/src/lib/**",
 				"!$TURBO_ROOT$/apps/web/src/lib/paraglide/**",
 				"$TURBO_ROOT$/config/public-brand.json",

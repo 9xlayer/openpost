@@ -60,6 +60,7 @@
         "@iconify-json/ph",
         "@iconify-json/tabler",
         "@iconify/utils",
+        "@inlang/paraglide-js",
         "@napi-rs/canvas",
         "js-yaml",
         "parse5",
