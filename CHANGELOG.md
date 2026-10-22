@@ -4,6 +4,61 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.26.0] - 2026-10-22
+
+### Added
+
+- Export Analytics from the web app as CSV, Excel with charts, or JSON. Choose the timezone, group rows by post, day, week, month, platform, or account, filter platforms and metrics, and pick which table to download. Unmeasured provider metrics stay empty instead of becoming zero. The same export is available at `GET /analytics/export`.
+- Select individual connected accounts using their avatar, platform, and handle. Every exported table respects the selection; missing measurements stay empty, and grouped reports exclude averages and reporting-period values that cannot be summed by publication date.
+- Notify the people who can approve when a workflow parks a draft for approval, and notify them and the author when that wait expires. Both transitions were silent before: a draft could sit in the approval queue, and later disappear from it, without anyone being told. The notification links straight to the waiting run, which now opens on that run. The audience is the roles that satisfy the approve level — administrators and clients — derived from the access matrix rather than restated, so a client, who can decide an approval without being able to administer the workspace, is told about the wait that is theirs to resolve. The author is skipped when others can decide, and told when nobody else can.
+- Remind the approvers three days before a wait expires. An expiry notice alone arrives thirty days after anyone last thought about the draft, which is too late to act on; the reminder is the only notice that arrives while the reader can still do something about it.
+- Resolve the approval notices once the wait is decided. Approving or cancelling left every other approver holding an item that said "waiting for your approval" with a button that answered with an error; the row now keeps its place in the history but stops claiming something untrue.
+- Russian interface language, selected from preferences or the browser language, including localized number and date formatting and offline recovery.
+
+### Fixed
+
+- Remove the impressions summary from web and mobile Analytics, and stop the web page from scrolling into empty space below its content.
+- Emit approval notifications after the transaction that changes the run, not inside it. A failed notification write used to roll the park back: a recipient whose stored preferences would not decode, or a workspace lookup that found no row, left the run behind its lease, so the sweep re-enqueued it and the step replayed and failed again — a loop in which the run never parked. Notification failures are now logged and the run keeps its state.
+- Expire stale approvals per run instead of per batch. `expireApprovals` returned on the first error, so one run that could not be expired stopped every other wait in the batch from expiring, once a minute.
+- Restore the revision to the expiry compare-and-set. The guard had been narrowed to the state alone, which still yields one winner but no longer matches the contract that a writer only replaces the row it read.
+- Carry the workspace in the notification link. The run inspector resolves a run against the workspace the viewer is in, so an approver arriving from another workspace landed on an empty inspector.
+- Read the deep link reactively. The requested run was captured once at mount, so clicking a second approval notification while the page was already open did nothing.
+- Persist approval notification intents with the run transition and retry delivery through database jobs. Recheck the current run and recipient permissions under the workspace fence, so delayed requests cannot reopen decided waits.
+- Visit every eligible reminder batch, resolve notices for their original recipients after role changes, preserve read timestamps, and remove obsolete review actions from history. Post links open the post detail directly.
+- Point the npm CLI installer to the current release so new installs receive the patched Go toolchain.
+- A capability cache write failure no longer marks a verified destination as incompatible.
+- Text-card projection no longer rewrites caller-owned segments, which would race when destinations resolve together.
+- Keep images added to a post sharp. The composer tile showed the small library thumbnail stretched across the editor column; it now shows the original image and uses the thumbnail only as a fallback.
+- Explain which stage of a social account connection failed and preserve safe provider error codes and trace IDs in Settings and server logs, without exposing tokens or raw provider responses. (#459)
+- Accept a single wrapped Instagram direct-login profile and keep its professional account ID separate from the authorization subject. Preserve selected destination IDs when saving connections for every provider.
+- Show the media library grid at the 400px thumbnail tier and the inspector and approval preview at the original image, so large previews are no longer stretched from a 150px square crop.
+- Keep saved text-card images visible when a publication stores only sparse card settings, instead of losing them after a save.
+- Clear the media picker grid when the workspace changes, so another workspace's media cannot be selected while the new list loads.
+- Restore the Quick Cut cloud-conflict heading, so the notice is reachable by heading navigation again.
+- Save edited attachment alt text on destination media rows that already exist in the native composer.
+- Request the 400px tier for the native draft attachment thumbnails instead of each full original.
+- Keep the media conversion limits out of the marketing tool route bundle, so tool pages no longer load the conversion engine before hydration.
+- Render saved memes at 1080px so the composer and social feeds no longer upscale the 600px preview size; animated GIFs keep 600px to bound their size.
+- Import the original Pixabay photo when available, then the 1920px full HD and 1280px large copies, and report the delivered file's dimensions and media type.
+- Encode thumbnails as transparent PNG for uploads with alpha and serve the matching content type, so transparent images no longer get a black background.
+- Stop stretching extension screenshots beyond their captured width.
+- Show image tiles in the media picker at the 400px thumbnail tier instead of upscaling the 150px one.
+- Update the Vitest mocker and URI parsing dependencies to their patched releases.
+- Keep generated text card footers clear of the last line of body copy. Long posts no longer draw the page arrow into the text on full pages.
+
+### Changed
+
+- Collapse the two approval notification topics into one `workflow_approval` topic with three states. The preferences page offered two switches for one mechanism, and neither described what actually happened.
+- Composer destination checks keep the previous readiness answer usable while a refresh runs. Readiness warnings and publish actions no longer disappear and reappear during ordinary typing, and submitting still resolves accuracy first.
+- Required destination pickers for multiple accounts now load together instead of one account at a time, and one account's option request can no longer discard another account's result.
+- Capability resolution no longer cancels the in-flight request immediately while typing, so completed provider work can populate the capability cache.
+- Capability resolution sends per-account segment overrides only for accounts that actually customize text, media, alt text, a poll, or an AI attachment requirement.
+- Destination capability resolution runs a bounded number of accounts in parallel, preserving response order and the first error in request order.
+- One resolve request now shares provider-scoped readiness facts across destinations and operations, caches the capability catalog, and reuses certification digests for canonical capabilities.
+- Provider capability cache keys follow the inputs each adapter declares, so unrelated destination settings no longer re-fetch provider state. Entries are bounded.
+- Load camera, stock, and upload tools when the upload dialog opens, keeping Media browsing within its JavaScript budget.
+- Remove the duplicate Send feedback entry from the profile menu; Help & feedback remains.
+
 ## [7.23.0] - 2026-10-20
 
 ### Added
