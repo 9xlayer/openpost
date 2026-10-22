@@ -15,10 +15,11 @@ async function pendingReview(request: APIRequestContext) {
   const accounts = ["bluesky", "threads"].map((platform) => ({
     id: randomUUID(),
     platform,
+    slug: `review-${platform}`,
   }));
   for (const account of accounts)
     execute(
-      `INSERT INTO social_accounts (id,workspace_id,slug,platform,account_id,account_username,access_token_encrypted,is_active) VALUES (${sql(account.id)},${sql(workspace.id)},${sql(account.id)},${sql(account.platform)},${sql(account.id)},'review-founder',X'00',1);`,
+      `INSERT INTO social_accounts (id,workspace_id,slug,platform,account_id,account_username,access_token_encrypted,is_active) VALUES (${sql(account.id)},${sql(workspace.id)},${sql(account.slug)},${sql(account.platform)},${sql(account.id)},'review-founder',X'00',1);`,
     );
   const createdPost = await request.post("/api/v1/publications", {
     headers,
@@ -170,10 +171,10 @@ test("review destinations show resolved account names and each distinct content 
       const destinations = approval.locator("article");
       await expect(destinations).toHaveCount(2);
       await expect(destinations.nth(0).getByRole("heading", { level: 5 })).toHaveAccessibleName(
-        "@review-founder · Bluesky",
+        "review-bluesky",
       );
       await expect(destinations.nth(1).getByRole("heading", { level: 5 })).toHaveAccessibleName(
-        "@review-founder · Threads",
+        "review-threads",
       );
       for (const destination of await destinations.all())
         await expect(destination.getByText("Review duplicate 東京", { exact: true })).toHaveCount(
