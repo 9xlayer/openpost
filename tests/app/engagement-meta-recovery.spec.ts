@@ -35,7 +35,11 @@ test("persisted Meta permission outcomes offer account recovery and disappear af
   await page.goto("/inbox/engagement");
   const writes: string[] = [];
   page.on("request", (req) => {
-    if (req.url().includes("/api/v1/") && !["GET", "HEAD"].includes(req.method()))
+    if (
+      req.url().includes("/api/v1/") &&
+      !["GET", "HEAD"].includes(req.method()) &&
+      new URL(req.url()).pathname !== "/api/v1/inbox/activity"
+    )
       writes.push(req.method() + " " + new URL(req.url()).pathname);
   });
   for (const width of [1280, 390, 320])

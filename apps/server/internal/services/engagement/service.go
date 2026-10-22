@@ -206,8 +206,6 @@ func (s *Service) RefreshWorkspace(ctx context.Context, actor Actor, workspaceID
 
 // ActiveRefreshJobIDs returns the durable collection receipts a manual refresh
 // can wait on. Admission coalesces callers onto the same account/post job.
-//
-//nolint:gocyclo // Scheduling keeps capability, scope, cadence, backoff, budget, and fairness gates in one pass.
 func (s *Service) ActiveRefreshJobIDs(ctx context.Context, actor Actor, workspaceID string) ([]string, error) {
 	if err := s.authorize(ctx, workspaceID, actor, workspaceaccess.LevelEdit); err != nil {
 		return nil, err
@@ -219,6 +217,7 @@ func (s *Service) ActiveRefreshJobIDs(ctx context.Context, actor Actor, workspac
 	return ids, err
 }
 
+//nolint:gocyclo // Scheduling keeps capability, scope, cadence, backoff, budget, and fairness gates in one pass.
 func (s *Service) refreshWorkspace(ctx context.Context, workspaceID string, force bool) (int, error) {
 	now := s.now()
 	queued := 0

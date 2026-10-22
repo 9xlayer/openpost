@@ -41,7 +41,11 @@ test("Messages distinguishes archived filters from account setup and clears them
     if (message.type() === "error") errors.push(message.text());
   });
   page.on("request", (req) => {
-    if (req.url().includes("/api/v1/") && !["GET", "HEAD"].includes(req.method()))
+    if (
+      req.url().includes("/api/v1/") &&
+      !["GET", "HEAD"].includes(req.method()) &&
+      new URL(req.url()).pathname !== "/api/v1/inbox/activity"
+    )
       writes.push(`${req.method()} ${new URL(req.url()).pathname}`);
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -56,6 +60,7 @@ test("Messages distinguishes archived filters from account setup and clears them
       await page.evaluate((value) => localStorage.setItem("mode-watcher-mode", value), scheme);
       await page.reload();
       await expect(page.locator("html")).toHaveCSS("color-scheme", scheme);
+      if (width < 640) await page.getByRole("button", { name: "Filters", exact: true }).click();
       await page.getByRole("button", { name: "All platforms", exact: true }).focus();
       await page.keyboard.press("Enter");
       await page.getByRole("option", { name: "Bluesky", exact: true }).click();
@@ -70,6 +75,7 @@ test("Messages distinguishes archived filters from account setup and clears them
       await expect(
         page.getByRole("heading", { name: "No archived conversations", exact: true }),
       ).toBeVisible();
+      if (width < 640) await page.keyboard.press("Escape");
       const reset = page.getByRole("button", { name: "Clear filters", exact: true });
       await reset.focus();
       await expect(reset).toBeFocused();
@@ -80,6 +86,7 @@ test("Messages distinguishes archived filters from account setup and clears them
       }
       await page.screenshot({ path: testInfo.outputPath(`archived-${width}-${scheme}.png`) });
       await page.keyboard.press("Enter");
+      if (width < 640) await page.getByRole("button", { name: "Filters", exact: true }).click();
       await expect(page.getByRole("checkbox", { name: "Archived", exact: true })).not.toBeChecked();
       await expect(page.getByRole("button", { name: "All accounts", exact: true })).toBeVisible();
       await expect(
@@ -107,6 +114,7 @@ test("Messages distinguishes archived filters from account setup and clears them
   await expect(
     page.getByRole("heading", { name: "Direct messages are off", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
   await page.getByRole("button", { name: "All accounts", exact: true }).click();
   await page.getByRole("option", { name: /Audit messages/ }).click();
   const archivedRead = page.waitForResponse((response) => {
@@ -115,6 +123,7 @@ test("Messages distinguishes archived filters from account setup and clears them
   });
   await page.getByRole("checkbox", { name: "Archived", exact: true }).check();
   expect((await archivedRead).ok()).toBe(true);
+  await page.keyboard.press("Escape");
   await expect(
     page.getByRole("heading", { name: "Direct messages are off", exact: true }),
   ).toBeVisible();

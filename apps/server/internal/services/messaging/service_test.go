@@ -68,6 +68,8 @@ func messagingFixture(t *testing.T) (*Service, *bun.DB, models.SocialAccount, Ac
 // The admitted local ID must survive so clients can reconcile their optimistic bubble.
 func TestSendReconcilesEchoBeforeAcceptance(t *testing.T) {
 	s, db, account, actor := messagingFixture(t)
+	createdAt := time.Now().UTC().Truncate(time.Microsecond)
+	s.now = func() time.Time { return createdAt }
 	sentAt := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
 	readAt := sentAt.Add(time.Minute)
 	echo := platform.FetchMessageEventsResult{

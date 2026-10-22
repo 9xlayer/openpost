@@ -29,15 +29,26 @@ for (const section of ["publications", "messages", "engagement"] as const) {
         "aria-busy",
         "false",
       );
-      await page.waitForLoadState("networkidle");
+      // Inbox keeps an authorized long-poll pending after its visible data settles.
+      if (section === "publications") await page.waitForLoadState("networkidle");
+      if (section === "messages" && width < 640) {
+        await page.getByRole("button", { name: "Filters", exact: true }).click();
+      }
       let release!: () => void;
       const response = new Promise<void>((resolve) => {
         release = resolve;
       });
-      await page.route("**/api/v1/**", async (route) => {
-        await response;
-        await route.continue();
-      });
+      await page.route(
+        section === "publications"
+          ? "**/api/v1/publications?**"
+          : section === "messages"
+            ? "**/api/v1/messages?**"
+            : "**/api/v1/engagement?**",
+        async (route) => {
+          await response;
+          await route.continue();
+        },
+      );
       const control =
         section === "publications"
           ? page.getByRole("tab", { name: "Published", exact: true })

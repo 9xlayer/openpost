@@ -29,7 +29,11 @@ test("Inbox platform filter announces its selected platform and keyboard reset",
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("request", (req) => {
-    if (new URL(req.url()).pathname.startsWith("/api/") && !["GET", "HEAD"].includes(req.method()))
+    if (
+      new URL(req.url()).pathname.startsWith("/api/") &&
+      !["GET", "HEAD"].includes(req.method()) &&
+      new URL(req.url()).pathname !== "/api/v1/inbox/activity"
+    )
       writes.push(`${req.method()} ${new URL(req.url()).pathname}`);
   });
   await page.goto("/inbox/engagement");

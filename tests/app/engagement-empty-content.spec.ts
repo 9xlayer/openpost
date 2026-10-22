@@ -75,7 +75,11 @@ test("stored empty replies explain missing content without claiming deletion or 
     if (message.type() === "error") errors.push(message.text());
   });
   page.on("request", (req) => {
-    if (req.url().includes("/api/v1/") && !["GET", "HEAD"].includes(req.method()))
+    if (
+      req.url().includes("/api/v1/") &&
+      !["GET", "HEAD"].includes(req.method()) &&
+      new URL(req.url()).pathname !== "/api/v1/inbox/activity"
+    )
       writes.push(`${req.method()} ${new URL(req.url()).pathname}`);
   });
   await page.emulateMedia({ reducedMotion: "reduce" });
