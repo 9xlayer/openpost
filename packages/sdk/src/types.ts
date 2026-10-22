@@ -202,7 +202,14 @@ export interface RepostOverride {
   rule?: Record<string, unknown>;
 }
 
+export interface RenditionAccountIdentity {
+  platform: string;
+  display_name: string;
+  avatar_url?: string;
+}
+
 export interface Rendition {
+  account?: RenditionAccountIdentity;
   id: string;
   social_account_id: string;
   platform: string;

@@ -277,6 +277,7 @@ type ActionOutput struct {
 type PublicationResponse = publicationservice.PublicationResponse
 type PublicationSegmentResponse = publicationservice.PublicationSegmentResponse
 type RenditionResponse = publicationservice.RenditionResponse
+type RenditionAccountIdentity = publicationservice.RenditionAccountIdentity
 type ProviderDeliveryResponse = publicationservice.ProviderDeliveryResponse
 type RenditionActionOutcome = publicationservice.RenditionActionOutcome
 type RenditionSegmentResponse = publicationservice.RenditionSegmentResponse

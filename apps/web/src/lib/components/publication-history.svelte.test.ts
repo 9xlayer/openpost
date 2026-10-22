@@ -30,6 +30,8 @@ it('places the latest effective outcome at its attempt or reconciliation time', 
 					target_key: 'x',
 					platform: 'x',
 					label: '@openpost',
+					avatar_url:
+						'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="blue"/%3E%3C/svg%3E',
 					status: 'failed'
 				},
 				delivery: {
@@ -53,11 +55,7 @@ it('places the latest effective outcome at its attempt or reconciliation time', 
 		PublicationHistory,
 		{
 			publicationId: 'publication-1',
-			workspaceId: 'workspace-1',
-			accountAvatars: {
-				'account-1':
-					'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="blue"/%3E%3C/svg%3E'
-			}
+			workspaceId: 'workspace-1'
 		},
 		{
 			wrapper: QueryClientProvider,

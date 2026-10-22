@@ -16301,6 +16301,10 @@
 			"PublicationLifecycleDestination": {
 				"additionalProperties": false,
 				"properties": {
+					"avatar_url": {
+						"description": "Stored account avatar URL, empty when the account has no photo",
+						"type": "string"
+					},
 					"label": {
 						"type": "string"
 					},
@@ -17979,6 +17983,25 @@
 				"required": ["social_account_id", "body"],
 				"type": "object"
 			},
+			"RenditionAccountIdentity": {
+				"additionalProperties": false,
+				"properties": {
+					"avatar_url": {
+						"description": "Stored account avatar URL, empty when the account has no photo",
+						"type": "string"
+					},
+					"display_name": {
+						"description": "Account slug, @username, or platform fallback",
+						"type": "string"
+					},
+					"platform": {
+						"description": "Destination platform",
+						"type": "string"
+					}
+				},
+				"required": ["platform", "display_name"],
+				"type": "object"
+			},
 			"RenditionActionOutcome": {
 				"additionalProperties": false,
 				"properties": {
@@ -18074,6 +18097,10 @@
 			"RenditionResponse": {
 				"additionalProperties": false,
 				"properties": {
+					"account": {
+						"$ref": "#/components/schemas/RenditionAccountIdentity",
+						"description": "Bounded destination account identity resolved from stored account state; no provider I/O"
+					},
 					"body": {
 						"type": "string"
 					},

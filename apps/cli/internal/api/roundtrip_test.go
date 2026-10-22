@@ -251,6 +251,7 @@ const fullPublicationFixture = `{
 			"id": "rend_1",
 			"publication_id": "pub_1",
 			"social_account_id": "acc_1",
+ "account": {"platform": "x", "display_name": "@founder", "avatar_url": "https://cdn.example/founder.jpg"},
 			"target_key": "x:handle",
 			"platform": "x",
 			"profile": "post",
@@ -372,6 +373,7 @@ func TestPublicationJSONProjectionMatchesOpenAPI(t *testing.T) {
 
 	rendition := nestedArrayItem(t, out, "renditions")
 	assertKeysPresent(t, "RenditionResponse", rendition, "publication.renditions[0]")
+	assertKeysPresent(t, "RenditionAccountIdentity", nestedObject(t, rendition, "account"), "publication.renditions[0].account")
 	assertKeysPresent(t, "ProviderDeliveryResponse",
 		nestedObject(t, rendition, "delivery"), "publication.renditions[0].delivery")
 

@@ -165,6 +165,7 @@ type RenditionResponse struct {
 	ID               string                     `json:"id"`
 	PublicationID    string                     `json:"publication_id"`
 	SocialAccountID  string                     `json:"social_account_id"`
+	Account          *RenditionAccountIdentity  `json:"account,omitempty" doc:"Bounded destination account identity resolved from stored account state; no provider I/O"`
 	TargetKey        string                     `json:"target_key"`
 	Platform         string                     `json:"platform"`
 	Profile          string                     `json:"profile"`
@@ -188,6 +189,15 @@ type RenditionResponse struct {
 	Delivery         *ProviderDeliveryResponse  `json:"delivery,omitempty"`
 	Segments         []RenditionSegmentResponse `json:"segments"`
 	Media            []MediaSummary             `json:"media"`
+}
+
+// RenditionAccountIdentity is the bounded destination account identity
+// projected into rendition reads from stored account state. The avatar URL is
+// the live stored photo URL; reads never fetch provider content.
+type RenditionAccountIdentity struct {
+	Platform    string `json:"platform" doc:"Destination platform"`
+	DisplayName string `json:"display_name" doc:"Account slug, @username, or platform fallback"`
+	AvatarURL   string `json:"avatar_url,omitempty" doc:"Stored account avatar URL, empty when the account has no photo"`
 }
 
 type ProviderDeliveryResponse struct {
@@ -298,6 +308,7 @@ type PublicationLifecycleDestination struct {
 	TargetKey       string `json:"target_key"`
 	Platform        string `json:"platform"`
 	Label           string `json:"label"`
+	AvatarURL       string `json:"avatar_url,omitempty" doc:"Stored account avatar URL, empty when the account has no photo"`
 	Status          string `json:"status"`
 }
 

@@ -43,7 +43,8 @@ func TestListPublicationEventsIdentifiesExactDestinationAndMarksOlderOutcomesSup
 	require.NoError(t, err)
 	_, err = db.NewInsert().Model(&models.SocialAccount{
 		ID: "account-1", WorkspaceID: "ws-1", Slug: "launch-team", Platform: "x", AccountID: "provider-account-1",
-		AccessTokenEnc: []byte("encrypted-token"),
+		AccessTokenEnc:   []byte("encrypted-token"),
+		AccountAvatarURL: "https://cdn.example/launch-team.jpg",
 	}).Exec(ctx)
 	require.NoError(t, err)
 	_, err = db.NewInsert().Model(&models.Rendition{
@@ -86,6 +87,7 @@ func TestListPublicationEventsIdentifiesExactDestinationAndMarksOlderOutcomesSup
 	require.Equal(t, "account-1", failed.Destination.SocialAccountID)
 	require.Equal(t, "x:community:founders", failed.Destination.TargetKey)
 	require.Equal(t, "launch-team", failed.Destination.Label)
+	require.Equal(t, "https://cdn.example/launch-team.jpg", failed.Destination.AvatarURL)
 	require.Equal(t, models.RenditionStatusFailed, failed.Destination.Status)
 	require.NotNil(t, failed.Delivery)
 	require.Equal(t, "rejected", failed.Delivery.State)
@@ -96,6 +98,27 @@ func TestListPublicationEventsIdentifiesExactDestinationAndMarksOlderOutcomesSup
 	require.Equal(t, "rate_limited", failed.Error.Code)
 	require.Empty(t, failed.Error.Message)
 	require.Empty(t, failed.Error.Action)
+
+	// The audit keeps destination identity when its account becomes unavailable,
+	// without exposing an account from another workspace.
+	for _, state := range []string{"foreign", "deleted"} {
+		if state == "foreign" {
+			_, err = db.NewUpdate().Model((*models.SocialAccount)(nil)).Set("workspace_id = ?", "ws-other").Where("id = ?", "account-1").Exec(ctx)
+		} else {
+			_, err = db.NewDelete().Model((*models.SocialAccount)(nil)).Where("id = ?", "account-1").Exec(ctx)
+		}
+		require.NoError(t, err)
+		request := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/v1/publications/publication-1/events", nil)
+		request.Header.Set("Authorization", "Bearer web-token")
+		response := httptest.NewRecorder()
+		e.ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		events = nil
+		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &events))
+		require.Equal(t, "account-1", events[0].Destination.SocialAccountID, state)
+		require.Equal(t, "x", events[0].Destination.Label, state)
+		require.Empty(t, events[0].Destination.AvatarURL, state)
+	}
 }
 
 func TestListPublicationEventsPaginatesSafeActorAttributedHistory(t *testing.T) {

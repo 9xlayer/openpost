@@ -15,7 +15,7 @@
 	type ApiRendition = components['schemas']['RenditionResponse'];
 	type Rendition = Pick<
 		ApiRendition,
-		'id' | 'platform' | 'target_key' | 'status' | 'external_url' | 'delivery'
+		'id' | 'platform' | 'target_key' | 'status' | 'external_url' | 'delivery' | 'account'
 	>;
 
 	let {
@@ -40,6 +40,14 @@
 	const externalURL = $derived(delivery?.external_url || rendition.external_url);
 	const presentedState = $derived(delivery?.state || rendition.status);
 	const recoveryAction = $derived(deliveryRecoveryAction(delivery, rendition.status));
+	// Prefer the canonical server-projected destination identity; the explicit
+	// avatar prop remains only as a fallback for callers whose rendition type
+	// carries no projection (action outcomes) or cached pages read before it.
+	const projectedPlatform = $derived(rendition.account?.platform || rendition.platform);
+	const projectedName = $derived(
+		rendition.account?.display_name || destinationLabel || getPlatformName(projectedPlatform)
+	);
+	const projectedAvatarUrl = $derived(rendition.account?.avatar_url ?? accountAvatarUrl ?? '');
 
 	function formatAttempt(value: string) {
 		return new Intl.DateTimeFormat(getLocaleTag(), {
@@ -56,16 +64,16 @@
 	]}
 >
 	<SocialAccountAvatar
-		name={destinationLabel || getPlatformName(rendition.platform)}
-		platform={rendition.platform}
-		avatarUrl={accountAvatarUrl ?? ''}
+		name={projectedName}
+		platform={projectedPlatform}
+		avatarUrl={projectedAvatarUrl}
 		size="sm"
 		class="mt-0.5 shrink-0"
 	/>
 	<div class="min-w-0 flex-1">
-		<p class="font-medium">{destinationLabel || getPlatformName(rendition.platform)}</p>
-		{#if destinationLabel}
-			<p class="mt-0.5 text-xs text-muted-foreground">{getPlatformName(rendition.platform)}</p>
+		<p class="font-medium">{projectedName}</p>
+		{#if destinationLabel || rendition.account?.display_name}
+			<p class="mt-0.5 text-xs text-muted-foreground">{getPlatformName(projectedPlatform)}</p>
 		{/if}
 		<p class={['mt-0.5 text-sm', deliveryStatusClass(presentedState)]}>
 			{deliveryStateLabel(presentedState)}

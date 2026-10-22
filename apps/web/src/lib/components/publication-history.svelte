@@ -27,7 +27,6 @@
 		workspaceId,
 		headingLevel = 2,
 		showHeading = true,
-		accountAvatars = {},
 		retryingRenditionID = '',
 		onRetry,
 		onManualResolution
@@ -36,7 +35,6 @@
 		workspaceId: string;
 		headingLevel?: 2 | 3;
 		showHeading?: boolean;
-		accountAvatars?: Record<string, string | null | undefined>;
 		retryingRenditionID?: string;
 		onRetry?: (renditionID: string) => void | Promise<void>;
 		onManualResolution?: (renditionID: string) => void | Promise<void>;
@@ -235,7 +233,7 @@
 								delivery: event.delivery
 							}}
 							destinationLabel={event.destination.label}
-							accountAvatarUrl={accountAvatars[event.destination.social_account_id] ?? ''}
+							accountAvatarUrl={event.destination.avatar_url ?? ''}
 							variant="compact"
 							retrying={retryingRenditionID === event.destination.rendition_id}
 							onRetry={onRetry ? retryCurrentDestination : undefined}
@@ -266,7 +264,7 @@
 									<SocialAccountAvatar
 										name={event.destination.label}
 										platform={event.destination.platform}
-										avatarUrl={accountAvatars[event.destination.social_account_id] ?? ''}
+										avatarUrl={event.destination.avatar_url ?? ''}
 										size="sm"
 									/>
 									{event.destination.label} · {getPlatformName(event.destination.platform)}

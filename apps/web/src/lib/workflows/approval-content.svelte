@@ -2,7 +2,7 @@
 	import type { SocialAccount } from '$lib/api/client';
 	import { accountContextLabel } from '$lib/components/account-presentation';
 	import type { components } from '$lib/api/types';
-	import PlatformIcon from '$lib/components/platform-icon.svelte';
+	import SocialAccountAvatar from '$lib/components/social-account-avatar.svelte';
 	import MediaPreviewImage from '$lib/components/media-preview-image.svelte';
 	import { getAuthenticatedMediaURL } from '$lib/media-url';
 	import { getPlatformName } from '$lib/utils';
@@ -76,11 +76,18 @@
 			{@const account = accounts.find((account) => account.id === rendition.social_account_id)}
 			<article class="space-y-3 border-t pt-3">
 				<h5 class="flex items-center gap-2 text-sm font-medium">
-					<PlatformIcon platform={rendition.platform} class="size-4 shrink-0" /><span
-						class="min-w-0 break-words"
-						>{account
-							? accountContextLabel(account, [])
-							: getPlatformName(rendition.platform)}</span
+					<SocialAccountAvatar
+						name={rendition.account?.display_name ??
+							account?.account_username ??
+							rendition.platform}
+						platform={rendition.account?.platform ?? rendition.platform}
+						avatarUrl={rendition.account?.avatar_url ?? account?.account_avatar_url ?? ''}
+						size="sm"
+					/><span class="min-w-0 break-words"
+						>{rendition.account?.display_name ??
+							(account
+								? accountContextLabel(account, [])
+								: getPlatformName(rendition.platform))}</span
 					>
 				</h5>
 				{#if rendition.segments?.length}

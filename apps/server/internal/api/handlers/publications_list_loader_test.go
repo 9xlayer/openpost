@@ -37,6 +37,7 @@ func TestLoadPublicationResponsesUsesFixedQueryCount(t *testing.T) {
 		(*models.MediaAttachment)(nil),
 		(*models.WorkspaceMember)(nil),
 		(*models.ProviderDelivery)(nil),
+		(*models.SocialAccount)(nil),
 	)
 	ctx := context.Background()
 	now := time.Date(2026, time.July, 27, 12, 0, 0, 0, time.UTC)
@@ -147,7 +148,7 @@ func TestLoadPublicationResponsesUsesFixedQueryCount(t *testing.T) {
 	db.AddQueryHook(counter)
 	responses, err := (&PublicationHandler{db: db}).loadPublicationResponses(ctx, publications)
 	require.NoError(t, err)
-	require.Equal(t, int64(7), counter.count.Load())
+	require.Equal(t, int64(8), counter.count.Load())
 	require.Len(t, responses, 2)
 	require.Equal(t, "segment-1", responses[0].Segments[0].ID)
 	require.Equal(t, "media-1", responses[0].Segments[0].Media[0].ID)
@@ -164,7 +165,7 @@ func TestLoadPublicationResponsesUsesFixedQueryCount(t *testing.T) {
 	detail, err := (&PublicationHandler{db: db}).loadPublicationResponse(ctx, "publication-1", "user-1")
 	require.NoError(t, err)
 	// Workspace authorization includes one constant identity-policy lookup.
-	require.Equal(t, int64(10), counter.count.Load())
+	require.Equal(t, int64(11), counter.count.Load())
 	require.Equal(t, "publication-1", detail.ID)
 	require.Equal(t, "rendition-segment-1", detail.Renditions[0].Segments[0].ID)
 }

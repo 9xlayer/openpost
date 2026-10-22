@@ -23,6 +23,51 @@ it('renders the account photo with its platform badge instead of a bare platform
 	expect(image?.getAttribute('src')).toBe(avatarUrl);
 });
 
+it('prefers the projected destination photo over the explicit avatar fallback', async () => {
+	const projectedUrl =
+		'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="green"/%3E%3C/svg%3E';
+	const fallbackUrl =
+		'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="red"/%3E%3C/svg%3E';
+	const screen = await render(PublicationDeliveryCard, {
+		rendition: {
+			...baseRendition,
+			account: { platform: 'x', display_name: '@projected', avatar_url: projectedUrl }
+		},
+		destinationLabel: '@stale',
+		accountAvatarUrl: fallbackUrl
+	});
+
+	const image = screen.container.querySelector('img');
+	expect(image?.getAttribute('src')).toBe(projectedUrl);
+	await expect.element(screen.getByText('@projected', { exact: true })).toBeVisible();
+	await expect.element(screen.getByText('@stale', { exact: true })).not.toBeInTheDocument();
+});
+
+it('renders the projected destination photo without an explicit avatar prop', async () => {
+	const projectedUrl =
+		'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="green"/%3E%3C/svg%3E';
+	const screen = await render(PublicationDeliveryCard, {
+		rendition: {
+			...baseRendition,
+			account: { platform: 'x', display_name: '@projected', avatar_url: projectedUrl }
+		},
+		destinationLabel: '@projected'
+	});
+
+	const image = screen.container.querySelector('img');
+	expect(image?.getAttribute('src')).toBe(projectedUrl);
+});
+
+it('keeps its audit identity without a photo for an unavailable account', async () => {
+	const screen = await render(PublicationDeliveryCard, {
+		rendition: { ...baseRendition },
+		destinationLabel: '@gone'
+	});
+
+	await expect.element(screen.getByText('@gone')).toBeVisible();
+	expect(screen.container.querySelector('img')).toBeNull();
+});
+
 it('attaches retryable failure evidence and retry to the exact destination', async () => {
 	const onRetry = vi.fn();
 	const screen = await render(PublicationDeliveryCard, {

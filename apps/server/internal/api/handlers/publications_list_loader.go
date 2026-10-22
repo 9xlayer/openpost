@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sort"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/models"
@@ -84,6 +85,10 @@ func (h *PublicationHandler) loadPublicationResponsesWithDB(
 	if err != nil {
 		return nil, err
 	}
+	accountsByID, err := h.loadRenditionAccounts(ctx, db, publications, renditionsByPublication)
+	if err != nil {
+		return nil, err
+	}
 
 	body := make([]PublicationResponse, 0, len(publications))
 	for index := range publications {
@@ -101,6 +106,10 @@ func (h *PublicationHandler) loadPublicationResponsesWithDB(
 		response.Renditions = make([]RenditionResponse, 0, len(renditionsByPublication[publication.ID]))
 		for _, rendition := range renditionsByPublication[publication.ID] {
 			output := renditionResponse(rendition, mediaByRendition[rendition.ID])
+			if account, ok := accountsByID[rendition.SocialAccountID]; ok &&
+				account.WorkspaceID == publication.WorkspaceID {
+				output.Account = renditionAccountIdentity(account, rendition)
+			}
 			if delivery, ok := deliveryByRendition[rendition.ID]; ok {
 				output.Delivery = providerDeliveryResponse(delivery)
 			}
@@ -114,6 +123,70 @@ func (h *PublicationHandler) loadPublicationResponsesWithDB(
 		body = append(body, response)
 	}
 	return body, nil
+}
+
+// loadRenditionAccounts resolves destination account identity for publication
+// reads in one bounded query scoped to the loaded publications' workspaces.
+// It reads stored account state only and never touches provider APIs.
+func (h *PublicationHandler) loadRenditionAccounts(
+	ctx context.Context,
+	db bun.IDB,
+	publications []models.Publication,
+	renditionsByPublication map[string][]models.Rendition,
+) (map[string]models.SocialAccount, error) {
+	workspaceSet := make(map[string]struct{}, len(publications))
+	for _, publication := range publications {
+		if publication.WorkspaceID != "" {
+			workspaceSet[publication.WorkspaceID] = struct{}{}
+		}
+	}
+	accountSet := make(map[string]struct{})
+	for _, renditions := range renditionsByPublication {
+		for _, rendition := range renditions {
+			if strings.TrimSpace(rendition.SocialAccountID) != "" {
+				accountSet[rendition.SocialAccountID] = struct{}{}
+			}
+		}
+	}
+	if len(workspaceSet) == 0 || len(accountSet) == 0 {
+		return map[string]models.SocialAccount{}, nil
+	}
+	workspaceIDs := make([]string, 0, len(workspaceSet))
+	for workspaceID := range workspaceSet {
+		workspaceIDs = append(workspaceIDs, workspaceID)
+	}
+	accountIDs := make([]string, 0, len(accountSet))
+	for accountID := range accountSet {
+		accountIDs = append(accountIDs, accountID)
+	}
+	var accounts []models.SocialAccount
+	if err := db.NewSelect().
+		Model(&accounts).
+		Column("id", "workspace_id", "platform", "slug", "account_username", "account_avatar_url").
+		Where("workspace_id IN (?)", bun.List(workspaceIDs)).
+		Where("id IN (?)", bun.List(accountIDs)).
+		Scan(ctx); err != nil {
+		return nil, huma.Error500InternalServerError("failed to load rendition accounts")
+	}
+	out := make(map[string]models.SocialAccount, len(accounts))
+	for _, account := range accounts {
+		out[account.ID] = account
+	}
+	return out, nil
+}
+
+// renditionAccountIdentity projects the bounded destination identity carried
+// by rendition reads. Display naming reuses the history destination label so
+// delivery, history, and list surfaces cannot disagree about an account.
+func renditionAccountIdentity(account models.SocialAccount, rendition models.Rendition) *RenditionAccountIdentity {
+	if strings.TrimSpace(account.ID) == "" {
+		return nil
+	}
+	return &RenditionAccountIdentity{
+		Platform:    publicationFirstNonEmpty(rendition.Platform, account.Platform),
+		DisplayName: historyDestinationLabel(account, rendition),
+		AvatarURL:   strings.TrimSpace(account.AccountAvatarURL),
+	}
 }
 
 func (h *PublicationHandler) loadPublicationListSegments(

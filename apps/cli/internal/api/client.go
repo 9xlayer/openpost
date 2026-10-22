@@ -1081,33 +1081,40 @@ type RenditionSegment struct {
 	SourceOverrides      []RenditionSourceOverride `json:"source_overrides,omitempty"`
 }
 
+type RenditionAccountIdentity struct {
+	Platform    string `json:"platform"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+}
+
 type Rendition struct {
-	ID               string                 `json:"id"`
-	PublicationID    string                 `json:"publication_id"`
-	SocialAccountID  string                 `json:"social_account_id"`
-	TargetKey        string                 `json:"target_key"`
-	Platform         string                 `json:"platform"`
-	Profile          string                 `json:"profile"`
-	OutputProfile    string                 `json:"output_profile"`
-	FormatLocked     bool                   `json:"format_locked"`
-	Body             string                 `json:"body"`
-	Title            string                 `json:"title"`
-	Description      string                 `json:"description"`
-	Settings         map[string]interface{} `json:"settings"`
-	Status           string                 `json:"status"`
-	ScheduleOverride string                 `json:"schedule_override,omitempty"`
-	Delivery         *ProviderDelivery      `json:"delivery,omitempty"`
-	Segments         []RenditionSegment     `json:"segments"`
-	Media            []MediaSummary         `json:"media"`
-	ExternalID       string                 `json:"external_id,omitempty"`
-	ExternalURL      string                 `json:"external_url,omitempty"`
-	ErrorMessage     string                 `json:"error_message,omitempty"`
-	ErrorKind        string                 `json:"error_kind,omitempty"`
-	ErrorCode        string                 `json:"error_code,omitempty"`
-	ErrorHTTPStatus  int                    `json:"error_http_status,omitempty"`
-	ErrorRetryable   bool                   `json:"error_retryable"`
-	ErrorRetryAt     string                 `json:"error_retry_at,omitempty"`
-	ErrorAction      string                 `json:"error_action,omitempty"`
+	Account          *RenditionAccountIdentity `json:"account,omitempty"`
+	ID               string                    `json:"id"`
+	PublicationID    string                    `json:"publication_id"`
+	SocialAccountID  string                    `json:"social_account_id"`
+	TargetKey        string                    `json:"target_key"`
+	Platform         string                    `json:"platform"`
+	Profile          string                    `json:"profile"`
+	OutputProfile    string                    `json:"output_profile"`
+	FormatLocked     bool                      `json:"format_locked"`
+	Body             string                    `json:"body"`
+	Title            string                    `json:"title"`
+	Description      string                    `json:"description"`
+	Settings         map[string]interface{}    `json:"settings"`
+	Status           string                    `json:"status"`
+	ScheduleOverride string                    `json:"schedule_override,omitempty"`
+	Delivery         *ProviderDelivery         `json:"delivery,omitempty"`
+	Segments         []RenditionSegment        `json:"segments"`
+	Media            []MediaSummary            `json:"media"`
+	ExternalID       string                    `json:"external_id,omitempty"`
+	ExternalURL      string                    `json:"external_url,omitempty"`
+	ErrorMessage     string                    `json:"error_message,omitempty"`
+	ErrorKind        string                    `json:"error_kind,omitempty"`
+	ErrorCode        string                    `json:"error_code,omitempty"`
+	ErrorHTTPStatus  int                       `json:"error_http_status,omitempty"`
+	ErrorRetryable   bool                      `json:"error_retryable"`
+	ErrorRetryAt     string                    `json:"error_retry_at,omitempty"`
+	ErrorAction      string                    `json:"error_action,omitempty"`
 }
 
 type ListPublicationsInput struct {

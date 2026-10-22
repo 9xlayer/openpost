@@ -181,7 +181,7 @@ func (h *PublicationHandler) loadLifecycleHistoryItems(
 	if err != nil {
 		return nil, err
 	}
-	accounts, err := h.loadHistoryAccounts(ctx, renditions)
+	accounts, err := h.loadHistoryAccounts(ctx, publication.WorkspaceID, renditions)
 	if err != nil {
 		return nil, err
 	}
@@ -307,6 +307,7 @@ func sanitizedLifecycleEvent(
 			RenditionID: rendition.ID, SocialAccountID: rendition.SocialAccountID,
 			TargetKey: rendition.TargetKey, Platform: rendition.Platform,
 			Label: historyDestinationLabel(account, rendition), Status: rendition.Status,
+			AvatarURL: strings.TrimSpace(account.AccountAvatarURL),
 		}
 	}
 	if delivery.ID != "" {
@@ -486,6 +487,7 @@ func (h *PublicationHandler) loadHistoryRenditions(
 
 func (h *PublicationHandler) loadHistoryAccounts(
 	ctx context.Context,
+	workspaceID string,
 	renditions map[string]models.Rendition,
 ) (map[string]models.SocialAccount, error) {
 	ids := make([]string, 0, len(renditions))
@@ -499,7 +501,9 @@ func (h *PublicationHandler) loadHistoryAccounts(
 		return map[string]models.SocialAccount{}, nil
 	}
 	var rows []models.SocialAccount
-	if err := h.db.NewSelect().Model(&rows).Where("id IN (?)", bun.List(ids)).Scan(ctx); err != nil {
+	if err := h.db.NewSelect().Model(&rows).
+		Where("workspace_id = ?", workspaceID).
+		Where("id IN (?)", bun.List(ids)).Scan(ctx); err != nil {
 		if isMissingPublicationHistoryTable(err) {
 			return map[string]models.SocialAccount{}, nil
 		}

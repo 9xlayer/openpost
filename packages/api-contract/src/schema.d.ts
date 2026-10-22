@@ -13514,6 +13514,8 @@ export interface components {
             origin?: string;
         };
         PublicationLifecycleDestination: {
+            /** @description Stored account avatar URL, empty when the account has no photo */
+            avatar_url?: string;
             label: string;
             platform: string;
             rendition_id: string;
@@ -14262,6 +14264,14 @@ export interface components {
             body: string;
             social_account_id: string;
         };
+        RenditionAccountIdentity: {
+            /** @description Stored account avatar URL, empty when the account has no photo */
+            avatar_url?: string;
+            /** @description Account slug, @username, or platform fallback */
+            display_name: string;
+            /** @description Destination platform */
+            platform: string;
+        };
         RenditionActionOutcome: {
             delivery?: components["schemas"]["ProviderDeliveryResponse"];
             id: string;
@@ -14304,6 +14314,8 @@ export interface components {
             title?: string;
         };
         RenditionResponse: {
+            /** @description Bounded destination account identity resolved from stored account state; no provider I/O */
+            account?: components["schemas"]["RenditionAccountIdentity"];
             body: string;
             delivery?: components["schemas"]["ProviderDeliveryResponse"];
             description: string;
