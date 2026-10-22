@@ -2,6 +2,12 @@ appId: com.openpost.app
 ---
 # Uses only tests/screenshots/entry.js sample data, never a live provider.
 - openLink: openpost:///inbox
+- runFlow:
+    when:
+      visible: "Open in.*OpenPost.*"
+    commands:
+      - tapOn: Open
+- runFlow: settings-guard.yaml
 - extendedWaitUntil:
     visible: Chats
     timeout: 20000
@@ -12,14 +18,19 @@ appId: com.openpost.app
 - takeScreenshot: inbox-${SCHEME}
 - tapOn: Alex Morgan.*
 - extendedWaitUntil:
-    visible: alex.bsky.social
+    visible: ".*alex.bsky.social.*"
     timeout: 20000
 - tapOn: ".*Message.*"
 - inputText: The launch update is ready.
 - assertVisible: Send
+- assertVisible: The launch update is ready.
 - takeScreenshot: chat-keyboard-${SCHEME}
 - tapOn: Send
-- assertVisible: The launch update is ready.
+- hideKeyboard
+- runFlow: settings-guard.yaml
+- extendedWaitUntil:
+    visible: The launch update is ready.
+    timeout: 20000
 - assertVisible: ".*Queued.*"
 - waitForAnimationToEnd
 - takeScreenshot: chat-${SCHEME}

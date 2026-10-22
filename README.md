@@ -72,8 +72,8 @@
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/mobile-inbox-gallery-dark.png">
-    <img src="./assets/screenshots/mobile-inbox-gallery-light.png" alt="OpenPost on iOS with sample data: Chats, a conversation, Comments, a public reply, and Media" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/mobile-gallery-dark.png">
+    <img src="./assets/screenshots/mobile-gallery-light.png" alt="OpenPost on iOS: Drafts, Inbox, Ideate, Calendar, and Analytics, each shown in a labelled phone mockup" width="100%">
   </picture>
 </p>
 
@@ -86,7 +86,7 @@
 - <img src="./assets/brand/features/repost.svg" alt="" width="24" height="24" align="top"> **Auto repost.** Set delays and engagement rules for native reposts on supported networks. Override the defaults for individual posts.
 - <img src="./assets/brand/features/media.svg" alt="" width="24" height="24" align="top"> **[Media library](https://openpo.st/docs/guides/media-library).** Keep reusable images, videos, fonts, and brand assets in your workspace. Organize files with tags, collections, and favorites. Attach saved media without uploading it again.
 - <img src="./assets/brand/features/memes.svg" alt="" width="24" height="24" align="top"> **[Meme maker](https://openpo.st/docs/guides/media-library#add-media-to-a-post).** Pick a template, edit its captions, and replace its images. Save the result to your media library or attach it to a post.
-- <img src="./assets/brand/features/inbox.svg" alt="" width="24" height="24" align="top"> **[Inbox and messages](https://openpo.st/docs/guides/inbox).** Read and reply to supported comments and direct messages without switching between social apps.
+- <img src="./assets/brand/features/inbox.svg" alt="" width="24" height="24" align="top"> **[Inbox and messages](https://openpo.st/docs/guides/inbox).** Read and reply to supported comments and direct messages without switching between social apps. [View the mobile Inbox screens](./assets/screenshots/mobile-inbox-gallery-light.png).
 - <img src="./assets/brand/features/analytics.svg" alt="" width="24" height="24" align="top"> **[Analytics and repurposing](https://openpo.st/docs/guides/analytics).** Compare post results and track audience changes across your accounts. Use a previous post as the starting point for a new draft.
 - <img src="./assets/brand/features/grow.svg" alt="" width="24" height="24" align="top"> **Find people.** Find accounts to follow on Bluesky and Mastodon. Review the suggestions and choose who to follow.
 - <img src="./assets/brand/features/ideas.svg" alt="" width="24" height="24" align="top"> **AI writing and ideas.** Generate ideas, compare draft directions, and adapt posts for your selected platforms. You review the result before publishing. AI writing is optional. [Self-hosted AI setup](https://openpo.st/docs/self-hosting/ai).

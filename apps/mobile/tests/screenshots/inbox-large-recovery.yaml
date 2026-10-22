@@ -2,6 +2,12 @@ appId: com.openpost.app
 ---
 # Run with accessibility-large text and the isolated screenshot entry.
 - openLink: openpost:///inbox/comment/comment-provider-failure-large-${CASE_ID}
+- runFlow:
+    when:
+      visible: "Open in.*OpenPost.*"
+    commands:
+      - tapOn: Open
+- runFlow: settings-guard.yaml
 - extendedWaitUntil:
     visible: Original post
     timeout: 20000

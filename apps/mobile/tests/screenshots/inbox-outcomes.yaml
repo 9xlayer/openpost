@@ -3,6 +3,12 @@ appId: com.openpost.app
 # Optional sample-only outcome capture after the standard screenshot launch.
 # Pass a unique CASE_ID for each run so retained failed drafts remain untouched.
 - openLink: openpost:///inbox/comment/comment-one
+- runFlow:
+    when:
+      visible: "Open in.*OpenPost.*"
+    commands:
+      - tapOn: Open
+- runFlow: settings-guard.yaml
 - extendedWaitUntil:
     visible: Original post
     timeout: 20000

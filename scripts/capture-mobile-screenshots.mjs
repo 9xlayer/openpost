@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { rmSync } from "node:fs";
 import { writeFile, mkdir, readdir, stat, copyFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,10 +11,17 @@ const mobile = resolve(root, "apps/mobile");
 const output = resolve(mobile, "artifacts/screenshots");
 const port = "8081";
 const maestro = process.env.MAESTRO_BIN ?? "maestro";
+const appBundleId = "com.openpost.app";
 const metroConfig = resolve(root, "apps/mobile/tests/screenshots/metro.config.cjs");
 let simulator;
 let metro;
 let activeChild;
+const env = {
+  ...process.env,
+  EXPO_OVERRIDE_METRO_CONFIG: metroConfig,
+  CI: "1",
+  MAESTRO_CLI_NO_ANALYTICS: "1",
+};
 function cleanup() {
   activeChild?.kill("SIGTERM");
   metro?.kill("SIGTERM");
@@ -65,22 +73,7 @@ try {
   command("xcrun", ["simctl", "boot", simulator]);
   command("xcrun", ["simctl", "bootstatus", simulator, "-b"]);
   command("xcrun", ["simctl", "ui", simulator, "content_size", "large"]);
-  command("xcrun", [
-    "simctl",
-    "status_bar",
-    simulator,
-    "override",
-    "--time",
-    "9:41",
-    "--batteryState",
-    "discharging",
-    "--batteryLevel",
-    "100",
-    "--wifiBars",
-    "3",
-    "--cellularBars",
-    "4",
-  ]);
+  overrideStatusBar(simulator);
   try {
     const existing = await fetch(`http://localhost:${port}/status`, {
       signal: AbortSignal.timeout(1000),
@@ -91,12 +84,6 @@ try {
     if (error instanceof Error && error.message.startsWith("Stop the existing")) throw error;
   }
   await writeFile(resolve(output, "entry.js"), 'require("../../tests/screenshots/entry.js");\n');
-  const env = {
-    ...process.env,
-    EXPO_OVERRIDE_METRO_CONFIG: metroConfig,
-    CI: "1",
-    MAESTRO_CLI_NO_ANALYTICS: "1",
-  };
   metro = spawn("bunx", ["expo", "start", "--localhost", "--port", port], {
     cwd: mobile,
     env,
@@ -129,45 +116,22 @@ try {
     command("xcrun", ["simctl", "ui", simulator, "appearance", scheme]);
     const startedAt = Date.now();
     for (const flow of ["gallery", "inbox"])
-      await run(
-        maestro,
-        [
-          "--udid",
-          simulator,
-          "test",
-          "--test-output-dir",
-          output,
-          "-e",
-          `SCHEME=${scheme}`,
-          `apps/mobile/tests/screenshots/${flow}.yaml`,
-        ],
-        { env },
-      );
+      await runFlow(flow, { SCHEME: scheme }, scheme, "large");
     await collectScreenshots(output, scheme, startedAt);
   }
   command("xcrun", ["simctl", "ui", simulator, "appearance", "light"]);
   command("xcrun", ["simctl", "ui", simulator, "content_size", "accessibility-large"]);
   const largeStartedAt = Date.now();
-  await run(
-    maestro,
-    [
-      "--udid",
-      simulator,
-      "test",
-      "--test-output-dir",
-      output,
-      "-e",
-      "SCHEME=light",
-      "-e",
-      `CASE_ID=${largeStartedAt}`,
-      "apps/mobile/tests/screenshots/inbox-large-recovery.yaml",
-    ],
-    { env },
+  await runFlow(
+    "inbox-large-recovery",
+    { SCHEME: "light", CASE_ID: String(largeStartedAt) },
+    "light",
+    "accessibility-large",
   );
   await collectScreenshots(output, "light", largeStartedAt);
   command("xcrun", ["simctl", "ui", simulator, "content_size", "large"]);
-  await run("bun", ["scripts/render-mobile-gallery.mjs", output]);
   await run("bun", ["scripts/render-mobile-gallery.mjs", output, "--inbox"]);
+  await run("bun", ["scripts/render-mobile-gallery.mjs", output]);
 } finally {
   cleanup();
 }
@@ -183,5 +147,79 @@ async function collectScreenshots(directory, scheme, startedAt) {
       const target = resolve(output, entry.name);
       if (file !== target && (await stat(file)).mtimeMs >= startedAt) await copyFile(file, target);
     }
+  }
+}
+
+// Fixture data resets with each app relaunch, but local admissions (sent chat
+// messages, read states) persist in the app data container and leak into later
+// captures, such as the second scheme's chat showing the first scheme's queued
+// message a second time. Terminate the app and clear its data container so
+// every flow starts from seeded sample data only.
+function resetAppData(device) {
+  spawnSync("xcrun", ["simctl", "terminate", device, appBundleId]); // The app may not be running yet.
+  const container = command("xcrun", ["simctl", "get_app_container", device, appBundleId, "data"]);
+  for (const folder of ["Library", "Documents", "tmp"])
+    rmSync(resolve(container, folder), { recursive: true, force: true });
+}
+
+function overrideStatusBar(device) {
+  command("xcrun", [
+    "simctl",
+    "status_bar",
+    device,
+    "override",
+    "--time",
+    "9:41",
+    "--batteryState",
+    "discharging",
+    "--batteryLevel",
+    "100",
+    "--wifiBars",
+    "3",
+    "--cellularBars",
+    "4",
+  ]);
+}
+
+// The Apple Intelligence takeover page and iOS 26 sim SpringBoard restarts can
+// interrupt an invocation. Boot the device again and run the same flow once
+// more so a transient system event does not fail the whole capture.
+async function restoreSimulator(device) {
+  spawnSync("xcrun", ["simctl", "shutdown", device]); // The device may already be down.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const booted = spawnSync("xcrun", ["simctl", "boot", device]);
+    if (booted.status === 0) break;
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+  }
+  command("xcrun", ["simctl", "bootstatus", device, "-b"]);
+  overrideStatusBar(device);
+}
+
+async function runFlow(flow, extraEnv, scheme, contentSize) {
+  const attempt = () =>
+    run(
+      maestro,
+      [
+        "--udid",
+        simulator,
+        "test",
+        "--test-output-dir",
+        output,
+        ...Object.entries(extraEnv).flatMap(([key, value]) => ["-e", `${key}=${value}`]),
+        `apps/mobile/tests/screenshots/${flow}.yaml`,
+      ],
+      { env },
+    );
+
+  resetAppData(simulator);
+  try {
+    await attempt();
+  } catch (error) {
+    console.warn(`Retrying ${flow} after a simulator restore (${error.message}).`);
+    await restoreSimulator(simulator);
+    command("xcrun", ["simctl", "ui", simulator, "appearance", scheme]);
+    command("xcrun", ["simctl", "ui", simulator, "content_size", contentSize]);
+    resetAppData(simulator);
+    await attempt();
   }
 }

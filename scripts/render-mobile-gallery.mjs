@@ -18,7 +18,7 @@ const screens = inbox
     ]
   : [
       ["drafts", "Drafts"],
-      ["composer", "Post"],
+      ["inbox-preview", "Inbox"],
       ["ideate", "Ideate"],
       ["calendar", "Calendar"],
       ["analytics", "Analytics"],
@@ -46,11 +46,6 @@ for (const scheme of ["light", "dark"]) {
   const height = phoneHeight + labelHeight + gutter * 2;
   const layers = [];
   for (const [index, [name, label]] of screens.entries()) {
-    const capture = resolve(input, `${name}-${scheme}.png`);
-    const size = await sharp(capture).metadata();
-    if (size.width !== metadata.width || size.height !== metadata.height) {
-      throw new Error(`Inconsistent iOS viewport: ${name}-${scheme}`);
-    }
     const left = gutter + index * (phoneWidth + gutter);
     const top = gutter;
     const labelCanvas = createCanvas(phoneWidth, labelHeight);
@@ -62,6 +57,21 @@ for (const scheme of ["light", "dark"]) {
     if (inbox) {
       labelContext.font = "12px OpenPostGallery";
       labelContext.fillText("Sample data", phoneWidth / 2, 42);
+    }
+    if (name === "inbox-preview") {
+      const inboxGallery = resolve(output, `mobile-inbox-gallery-${scheme}.png`);
+      const phone = await sharp(inboxGallery)
+        .extract({ left: gutter, top: gutter + 64, width: phoneWidth, height: phoneHeight })
+        .png()
+        .toBuffer();
+      layers.push({ input: Buffer.from(labelCanvas.toBuffer("image/png")), left, top });
+      layers.push({ input: phone, left, top: top + labelHeight });
+      continue;
+    }
+    const capture = resolve(input, `${name}-${scheme}.png`);
+    const size = await sharp(capture).metadata();
+    if (size.width !== metadata.width || size.height !== metadata.height) {
+      throw new Error(`Inconsistent iOS viewport: ${name}-${scheme}`);
     }
     const frameSvg = `<svg width="${phoneWidth}" height="${phoneHeight}"><rect x="1" y="1" width="${phoneWidth - 2}" height="${phoneHeight - 2}" rx="${radius}" fill="#090909" stroke="#57514d" stroke-width="2"/><rect x="5" y="5" width="${phoneWidth - 10}" height="${phoneHeight - 10}" rx="${radius - 4}" fill="none" stroke="#282624"/></svg>`;
     const mask = Buffer.from(
