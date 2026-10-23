@@ -5037,6 +5037,8 @@
 						"enum": [
 							"upload",
 							"media_copy",
+							"image_optimization",
+							"image_fit",
 							"camera",
 							"image_editor_export",
 							"image_editor_edit",
@@ -14124,6 +14126,27 @@
 					"angles",
 					"platform_treatments"
 				],
+				"type": "object"
+			},
+			"OptimizeMediaImageOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/api/v1/schemas/OptimizeMediaImageOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"media": {
+						"$ref": "#/components/schemas/MediaUploadResult"
+					},
+					"optimized": {
+						"description": "True only when a smaller lossless copy was created or reused",
+						"type": "boolean"
+					}
+				},
+				"required": ["media", "optimized"],
 				"type": "object"
 			},
 			"Option": {
@@ -44648,6 +44671,94 @@
 					}
 				},
 				"summary": "Toggle favorite status of a media attachment",
+				"tags": ["Media"],
+				"x-openpost-automation": {
+					"access": "write",
+					"effect": "local-mutation",
+					"exposure": "disabled",
+					"idempotency": "none",
+					"retry": "never"
+				}
+			}
+		},
+		"/media/{id}/optimize-image": {
+			"post": {
+				"operationId": "optimize-media-image",
+				"parameters": [
+					{
+						"description": "Original image ID",
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": {
+							"description": "Original image ID",
+							"type": "string"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/OptimizeMediaImageOutputBody"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"413": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Request Entity Too Large"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					}
+				},
+				"summary": "Create a smaller lossless image copy while retaining the original",
 				"tags": ["Media"],
 				"x-openpost-automation": {
 					"access": "write",

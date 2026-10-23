@@ -2311,7 +2311,12 @@ func validateMediaItem(capability Capability, item MediaItem) []ValidationIssue 
 		issues = append(issues, ValidationIssue{Severity: "error", Code: "media_size", Message: "Media file is too large", Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
 	}
 	if strings.HasPrefix(item.MimeType, "image/") && capability.Media.MaxImageSizeBytes > 0 && item.Size > capability.Media.MaxImageSizeBytes {
-		issues = append(issues, ValidationIssue{Severity: "error", Code: "media_size", Message: fmt.Sprintf("Image is %d bytes; the maximum is %d bytes", item.Size, capability.Media.MaxImageSizeBytes), Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
+		issues = append(issues, ValidationIssue{
+			Severity: "error", Code: "media_size",
+			Message:    fmt.Sprintf("Image is %.2f MB; the maximum is %.2f MB. Resize or replace this image.", float64(item.Size)/1_000_000, float64(capability.Media.MaxImageSizeBytes)/1_000_000),
+			Parameters: map[string]any{"size_bytes": item.Size, "max_size_bytes": capability.Media.MaxImageSizeBytes},
+			Provider:   capability.Provider, Profile: capability.Profile, MediaID: item.ID,
+		})
 	}
 	for _, boundary := range []struct {
 		invalid bool

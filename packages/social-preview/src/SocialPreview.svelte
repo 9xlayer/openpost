@@ -13,6 +13,7 @@
   import TelegramPreview from "./TelegramPreview.svelte";
   import YouTubePreview from "./YouTubePreview.svelte";
 
+  import PreviewMediaView from "./PreviewMedia.svelte";
   import { providePreviewEditing, type PreviewEditing } from "./editing";
 
   interface Props {
@@ -52,8 +53,9 @@
     {#if editor}
       <div class="fallback-editor">
         <p role="status">We cannot show a preview for this account yet.</p>
-        {#each model.segments as segment (segment.id)}
+        {#each model.segments as segment, index (segment.id)}
           {@render editor.text(segment)}
+          <PreviewMediaView media={segment.media ?? (index === 0 ? model.media : [])} {segment} />
         {/each}
       </div>
     {:else}

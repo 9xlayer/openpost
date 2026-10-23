@@ -13,6 +13,8 @@ export type StockProviderList = components["schemas"]["ListStockProvidersOutputB
 export type StockSearchPage = components["schemas"]["SearchPage"];
 
 export interface MediaMetadataItem {
+  readonly source?: string;
+  readonly parent_media_id?: string;
   readonly original_filename?: string;
   readonly id: string;
   readonly mime_type?: string;

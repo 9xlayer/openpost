@@ -1,3 +1,7 @@
+import { z } from 'zod';
+import { m } from '$lib/paraglide/messages';
+import { getLocaleTag } from '$lib/i18n';
+import { formatBytes } from '$lib/byte-size';
 import type { components } from '$lib/api/types';
 
 export type ValidationIssue = components['schemas']['ValidationIssue'];
@@ -52,6 +56,25 @@ export function uniqueIssueMessages(messages: Array<string | null | undefined>):
 	return Array.from(new Set(normalized));
 }
 
+const imageSizeParameters = z.object({
+	size_bytes: z.number().finite().nonnegative(),
+	max_size_bytes: z.number().finite().positive()
+});
+
+function issueMessage(issue: ValidationIssue): string {
+	if (issue.code !== 'media_size') return issue.message;
+	const parameters = imageSizeParameters.safeParse(issue.parameters);
+	if (!parameters.success) return issue.message;
+	const options = {
+		base: 'si',
+		locale: getLocaleTag(),
+		maximumFractionDigits: 2
+	} satisfies Parameters<typeof formatBytes>[1];
+	const size = formatBytes(parameters.data.size_bytes, options);
+	const limit = formatBytes(parameters.data.max_size_bytes, options);
+	return size && limit ? m.compose_image_size_limit({ size, limit }) : issue.message;
+}
+
 export function composerIssues(
 	localErrors: string[],
 	validationIssues: ValidationIssue[],
@@ -88,7 +111,7 @@ export function composerIssues(
 		for (const target of targets) {
 			issues.push({
 				id: `${issue.code}-${target.accountId}-${issue.segment_id ?? ''}-${issue.scope_id ?? ''}-${issue.field ?? ''}-${issue.media_id ?? ''}-${issue.message}`,
-				message: issue.message,
+				message: issueMessage(issue),
 				severity: issue.severity === 'warning' ? 'warning' : 'error',
 				accountId: target.accountId || undefined,
 				targetLabel: target.label || undefined,

@@ -83,6 +83,8 @@ export function isAudio(mimeType: string): boolean {
 
 export function mediaSourceLabel(value: string): string {
 	switch (value) {
+		case 'image_optimization':
+		case 'image_fit':
 		case 'media_copy':
 			return m.media_copies();
 		case 'camera':

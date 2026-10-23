@@ -1,8 +1,9 @@
 import { getContext, setContext, type Snippet } from "svelte";
-import type { PreviewCard, PreviewPoll, PreviewSegment } from "./model";
+import type { PreviewCard, PreviewMedia, PreviewPoll, PreviewSegment } from "./model";
 
 export interface PreviewEditing {
   text: Snippet<[PreviewSegment]>;
+  media?: Snippet<[PreviewMedia, Snippet, PreviewSegment | undefined]>;
   title?: Snippet<[string, PreviewSegment]>;
   card?: Snippet<[PreviewCard, PreviewSegment, Snippet]>;
   poll?: Snippet<[PreviewPoll, PreviewSegment, Snippet]>;

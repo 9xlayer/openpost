@@ -68,7 +68,7 @@
     {/if}
     {#if !warningHidden}
       {#if media.length > 0}
-        <PreviewMedia {media} layout="carousel" />
+        <PreviewMedia {media} segment={primary} layout="carousel" />
       {:else}
         <div class="empty-feed-media">
           <span aria-hidden="true">▧</span>

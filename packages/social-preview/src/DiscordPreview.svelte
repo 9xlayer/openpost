@@ -39,7 +39,7 @@
             platform="discord"
           />{/if}
         {#if media.length > 0}
-          <PreviewMedia {media} layout="discord" />
+          <PreviewMedia {media} {segment} layout="discord" />
         {:else if index === 0 && model.format === "video"}
           <PreviewMedia
             media={[]}

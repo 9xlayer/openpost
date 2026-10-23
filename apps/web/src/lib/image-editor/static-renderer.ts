@@ -1,3 +1,4 @@
+import { encodeImageCanvas } from '$lib/media/image-encode';
 import { abortable } from '$lib/abortable';
 import { startProfileSpan } from '$lib/performance/profiling';
 import { strToU8, Zip, ZipPassThrough } from 'fflate';
@@ -88,18 +89,12 @@ export async function renderImageEditorPage(
 				: imageEditorDocument.export_defaults.format === 'webp'
 					? 'image/webp'
 					: 'image/png';
-		const outputCanvas =
-			format === 'image/jpeg'
-				? flattenCanvas(canvas, imageEditorDocument.export_defaults.matte_color || '#ffffff')
-				: canvas;
-		const blob = await new Promise<Blob>((resolve, reject) => {
-			outputCanvas.toBlob(
-				(result) =>
-					result ? resolve(result) : reject(new Error(m.image_editor_page_render_failed())),
-				format,
-				imageEditorDocument.export_defaults.quality
-			);
-		});
+		const blob = await encodeImageCanvas(
+			canvas,
+			format,
+			imageEditorDocument.export_defaults.quality,
+			imageEditorDocument.export_defaults.matte_color || '#ffffff'
+		);
 		signal?.throwIfAborted();
 		return {
 			page,
@@ -142,18 +137,6 @@ async function yieldExport(signal?: AbortSignal): Promise<void> {
 	}
 }
 
-function flattenCanvas(source: HTMLCanvasElement, matteColor: string): HTMLCanvasElement {
-	const flattened = globalThis.document.createElement('canvas');
-	flattened.width = source.width;
-	flattened.height = source.height;
-	const context = flattened.getContext('2d');
-	if (!context) return source;
-	context.fillStyle = matteColor;
-	context.fillRect(0, 0, flattened.width, flattened.height);
-	context.drawImage(source, 0, 0);
-	return flattened;
-}
-
 export async function renderImageEditorPreview(
 	imageEditorDocument: ImageEditorDocument,
 	page: ImageEditorPage,
@@ -182,14 +165,7 @@ export async function renderImageEditorPreview(
 		signal?.throwIfAborted();
 		await adapter.mount();
 		signal?.throwIfAborted();
-		const blob = await new Promise<Blob>((resolve, reject) => {
-			canvas.toBlob(
-				(result) =>
-					result ? resolve(result) : reject(new Error(m.image_editor_page_render_failed())),
-				'image/webp',
-				0.82
-			);
-		});
+		const blob = await encodeImageCanvas(canvas, 'image/webp', 0.82);
 		signal?.throwIfAborted();
 		return blob;
 	} finally {

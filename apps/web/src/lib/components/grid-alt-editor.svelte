@@ -54,8 +54,10 @@
 		{/if}
 		{#if onDone}
 			<div class="mt-1 flex justify-end gap-1">
-				<button type="button" class="text-xs text-white/70 hover:text-white" onclick={onDone}
-					>{m.common_done()}</button
+				<button
+					type="button"
+					class="min-h-11 px-3 text-sm text-white/80 hover:text-white focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none md:min-h-7 md:text-xs [@media(pointer:coarse)]:min-h-11"
+					onclick={onDone}>{m.common_done()}</button
 				>
 			</div>
 		{/if}

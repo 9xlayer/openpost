@@ -11,7 +11,12 @@
 	import { settingLabel } from '$lib/setting-label';
 	import PreviewLinkEditor from './compose/preview-link-editor.svelte';
 	import PreviewPollEditor from './compose/preview-poll-editor.svelte';
-	import type { PreviewCard, PreviewPoll, PreviewSegment } from '@openpost/social-preview';
+	import type {
+		PreviewCard,
+		PreviewMedia,
+		PreviewPoll,
+		PreviewSegment
+	} from '@openpost/social-preview';
 	import type { Snippet } from 'svelte';
 	import type { PreparedToolDraft } from '$lib/composer/tool-draft-storage';
 	import SharedPollEditor from './compose/shared-poll-editor.svelte';
@@ -89,6 +94,8 @@
 	} from '$lib/meme-generator/api';
 	import type { MemeSuggestionCandidate } from '$lib/meme-generator/types';
 	import { getAuthenticatedMediaByID } from '$lib/media-url';
+	import { fittedImageSettings } from './compose/image-settings';
+	import { optimizeStoredImage, fitStoredImage } from '$lib/media/image-preparation';
 	import {
 		MAX_COMPOSER_DRAFT_MEDIA,
 		mediaCapabilityItemsFromIds,
@@ -114,6 +121,8 @@
 	import ComposerVariantToolbar from './composer-variant-toolbar.svelte';
 	import ComposerCharCounter from './composer-char-counter.svelte';
 	import ComposerMediaGrid from './composer-media-grid.svelte';
+	import ComposerMediaActions from './composer-media-actions.svelte';
+	import PasteUploadList from './paste-upload-list.svelte';
 	import SaveIndicator from './save-indicator.svelte';
 	import ComposerScheduleDialog from './composer-schedule-dialog.svelte';
 	import ComposerRepostControl from './composer-repost-control.svelte';
@@ -515,22 +524,41 @@
 	let isDraggingFile = $state(false);
 
 	let mediaAltTexts = $state<Map<string, string>>(new Map());
-	let mediaPreviewMetadata = new SvelteMap<string, { aspectRatio?: number; poster?: string }>();
+	let mediaPreviewMetadata = new SvelteMap<
+		string,
+		{ aspectRatio?: number; poster?: string; width?: number; height?: number }
+	>();
 	let mediaMimeTypes = $state<Map<string, string>>(new Map());
 	let mediaSizes = $state<Map<string, number>>(new Map());
 	let pasteMediaUploads = $state.raw<PasteMediaUploadItem[]>([]);
 	let pasteMediaFeedback = $state.raw<{ targetKey: string; messages: string[] } | null>(null);
 	let pasteMediaAnnouncement = $state('');
+	let imagePreparationNotice = $state('');
+	let fittingImageId = $state('');
+	const imagePreparationSources = new SvelteMap<string, string>();
+	const losslessPreparedImageIds = new Set<string>();
+	const imagePreparationRequests = new Set<AbortController>();
+	let pendingImagePreparationContext = $state<string | null>(null);
+
 	const pasteMediaUploadQueue = new ComposerSessionMediaQueue<MediaUploadResult>({
-		upload: ({ file, target, signal, onProgress }) =>
-			uploadMediaFile({
+		upload: async ({ file, target, signal, onProgress }) => {
+			const uploaded = await uploadMediaFile({
 				workspaceId: target.workspaceId,
 				file,
 				source: 'upload',
 				retentionClass: 'temporary',
 				signal,
 				onProgress: (progress) => onProgress(progress.fraction)
-			}),
+			});
+			if (uploaded.mime_type !== 'image/png') return uploaded;
+			try {
+				const optimized = await optimizeStoredImage(uploaded.id, signal);
+				return optimized ?? uploaded;
+			} catch {
+				signal.throwIfAborted();
+				return uploaded;
+			}
+		},
 		onComplete: completePastedMediaUpload,
 		onChange: (items) => (pasteMediaUploads = items),
 		errorMessage: (cause) =>
@@ -541,9 +569,12 @@
 	const failedCaptionMediaIds = new SvelteSet<string>();
 	const suppressedCaptionMediaIds = new SvelteSet<string>();
 	const captionRequests = new SvelteMap<string, AbortController>();
+	const pendingCaptionResults = new Map<string, ReturnType<typeof generateImageAltText>>();
+	const accountCaptionSuppressions = new Map<string, Set<string>>();
 	const captionPostContexts = new SvelteMap<string, string>();
 	let captionGenerationError = $state('');
 	let editingAltMediaId = $state<string | null>(null);
+	let previewMediaOpen = $state(false);
 	let settingsByAccount = $state<Record<string, ComposerSettings>>({});
 	const textCardResults = new SvelteMap<string, TextCardResult>();
 	let textCardNoticeDismissed = $state(false);
@@ -553,6 +584,35 @@
 	let savedCardRenditions: Publication['renditions'] | undefined;
 	let segmentSettingsByPost = $state<Record<string, Record<string, ComposerSettings>>>({});
 	let mediaSettingsByAccount = $state<Record<string, Record<string, ComposerSettings>>>({});
+	const imagePreparationContext = $derived(
+		JSON.stringify({
+			accounts: selectedAccountIds,
+			profiles: requestedOutputProfiles,
+			locked: formatLockedByAccount,
+			settings: settingsByAccount,
+			segments: segmentSettingsByPost,
+			media: posts.map((post) => ({
+				key: post.key,
+				ids: post.mediaIds,
+				accounts: selectedAccountIds.map((id) => {
+					const variant = variants.get(id)?.[post.key];
+					return {
+						id,
+						inherited: variant?.mediaInherited ?? true,
+						ids: variant?.mediaInherited === false ? variant.mediaIds : post.mediaIds
+					};
+				})
+			}))
+		})
+	);
+	$effect(() => {
+		if (
+			pendingImagePreparationContext !== null &&
+			imagePreparationContext !== pendingImagePreparationContext
+		) {
+			for (const controller of imagePreparationRequests) controller.abort();
+		}
+	});
 	let mediaPickerOpen = $state(false);
 	let mediaPickerPostIndex = $state(0);
 	let mediaPickerInitialFiles = $state.raw<File[]>([]);
@@ -586,7 +646,6 @@
 	let lastSavedScheduleAt = '';
 	let appliedInitialContextKey = $state('');
 	const previewSessions = new SvelteMap<string, PreviewWindowSession>();
-	let previewMediaOpen = $state(false);
 	let pollCreationAccountID = $state<string | undefined>();
 	let previewPollEditingKeys = new SvelteSet<string>();
 	const textareaRefs = new SvelteMap<number, HTMLTextAreaElement>();
@@ -1663,10 +1722,18 @@
 					);
 				}
 			}
+			const seenMediaIds = new SvelteSet<string>();
+			const joinedMedia = segments
+				.flatMap((segment) => segment.media)
+				.filter((item) => {
+					if (seenMediaIds.has(item.id)) return false;
+					seenMediaIds.add(item.id);
+					return true;
+				});
 			segments.splice(0, segments.length, {
 				...segments[0],
 				text: projection.body,
-				media: segments.flatMap((segment) => segment.media),
+				media: joinedMedia,
 				url: joinedPreviewLinkURL(account),
 				settings: resolveLinkPreview(
 					posts[0].link,
@@ -1842,6 +1909,10 @@
 		key: string,
 		value: ProviderSettingValue
 	) {
+		for (let index = 0; index < posts.length; index++) {
+			const ids = getVariantMediaIds(account.id, posts[index].key) ?? posts[index].mediaIds;
+			if (ids.includes(mediaID)) setVariantMediaIds(account.id, index, [...ids]);
+		}
 		mediaSettingsByAccount = {
 			...mediaSettingsByAccount,
 			[mediaID]: {
@@ -1934,6 +2005,7 @@
 		const pasteUploadIssue = pasteMediaUploadIssue();
 		if (pasteUploadIssue) blockers.push(pasteUploadIssue);
 		if (capabilityResolveError) blockers.push(capabilityResolveError);
+		if (fittingImageId) blockers.push(m.compose_image_preparing());
 		return uniqueIssueMessages(blockers);
 	}
 
@@ -2064,6 +2136,8 @@
 	}
 
 	async function focusComposerIssue(issue: ComposerIssue) {
+		if (issue.mediaId) previewMediaOpen = true;
+
 		const postIndex = composerIssuePostIndex(issue);
 		if (postIndex >= 0) activePostIndex = postIndex;
 
@@ -2092,14 +2166,17 @@
 			target = document.getElementById(`destination-setting-${destinationSetting.key}`);
 		} else if (issue.mediaId) {
 			target = document.querySelector<HTMLElement>(
-				`[data-composer-media-id="${CSS.escape(issue.mediaId)}"]`
+				`${previewMediaOpen && activeVariantAccountId ? '[data-testid="composer-media-editor"] ' : ''}[data-composer-media-id="${CSS.escape(issue.mediaId)}"]`
 			);
 		} else if (postIndex >= 0) {
 			target = document.getElementById(`post-textarea-${postIndex}`);
 		} else if (account) {
 			target = document.getElementById(`composer-destination-${account.id}`);
 		}
-		target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		target?.scrollIntoView({
+			block: 'center',
+			behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth'
+		});
 		target?.focus({ preventScroll: true });
 	}
 
@@ -2221,7 +2298,7 @@
 						media_id: item.id,
 						role: item.role || 'attachment'
 					};
-					if (altText) mediaPayload.alt_text = altText;
+					if (altText !== undefined) mediaPayload.alt_text = altText;
 					if (Object.keys(settings).length > 0) mediaPayload.settings = settings;
 					return mediaPayload;
 				});
@@ -2429,7 +2506,12 @@
 				};
 				for (const media of segment.media ?? []) {
 					const mediaSettings = parseComposerSettingsRecord(media.settings ?? {});
-					if ((media.alt_text ?? '') !== (mediaAltTexts.get(media.id) ?? '')) {
+					if (
+						posts.some((source) =>
+							getVariantMediaIds(rendition.social_account_id, source.key)?.includes(media.id)
+						) ||
+						(media.alt_text ?? '') !== (mediaAltTexts.get(media.id) ?? '')
+					) {
 						mediaSettings.alt_text = media.alt_text ?? '';
 					}
 					if (media.thumbnail_timestamp_ms) {
@@ -2860,7 +2942,7 @@
 		if (!post) return;
 		const next = mergeMediaIds([], mediaIds);
 		if (next.length > 0) void startFirstComposition('media');
-		if (activeVariantAccountId && activeVariantIsUnsynced) {
+		if (activeVariantAccountId) {
 			setVariantMediaIds(activeVariantAccountId, postIndex, next);
 		} else {
 			posts = posts.map((item, index) =>
@@ -2895,9 +2977,14 @@
 			error = m.media_upload_too_many({ maximum: composerMediaLimit });
 		}
 		if (added.length > 0) {
-			setEditorMediaIds(targetIndex, next);
-			await hydrateMediaMetadata(selectedWorkspaceId, added, true);
-			void generateMissingMediaAltText(added, getEditorContentForPost(targetPost));
+			const context = imagePreparationContext,
+				target = pasteMediaTargetForPost(targetPost);
+			const postContext = getEditorContentForPost(targetPost);
+			if (!target) return;
+			const prepared = await prepareNewImageIds(added, selectedWorkspaceId);
+			if (!prepared || context !== imagePreparationContext) return;
+			setPasteTargetMediaIds(target, [...current, ...prepared]);
+			void generateMissingMediaAltText(prepared, postContext);
 		}
 		finishVideoEditorMediaHandoff();
 	}
@@ -3210,15 +3297,15 @@
 					Math.max(0, posts.length - 1)
 				)
 			);
-			setEditorMediaIds(targetIndex, [
-				...getEditorMediaIdsForPost(posts[targetIndex]),
-				...result.media_ids
-			]);
-			await hydrateMediaMetadata(result.workspace_id, result.media_ids, true);
-			void generateMissingMediaAltText(
-				result.media_ids,
-				getEditorContentForPost(posts[targetIndex])
-			);
+			const context = imagePreparationContext,
+				target = pasteMediaTargetForPost(posts[targetIndex]);
+			const postContext = getEditorContentForPost(posts[targetIndex]);
+			if (!target) return;
+			const current = [...mediaIdsForPasteTarget(target)];
+			const prepared = await prepareNewImageIds(result.media_ids, result.workspace_id);
+			if (!prepared || context !== imagePreparationContext) return;
+			setPasteTargetMediaIds(target, [...current, ...prepared]);
+			void generateMissingMediaAltText(prepared, postContext);
 			scheduleAutoSave();
 			finishEditorHandoff(token);
 			notifyImageEditorReturn(result.media_ids.length);
@@ -3533,6 +3620,10 @@
 	});
 
 	function invalidatePendingComposerRequests() {
+		imagePreparationSources.clear();
+		losslessPreparedImageIds.clear();
+		imagePreparationNotice = '';
+		for (const controller of imagePreparationRequests) controller.abort();
 		workspaceRequestSequence++;
 		accountRequestSequence++;
 		nextSlotRequestSequence++;
@@ -3554,8 +3645,10 @@
 		aiRequestController?.abort();
 		aiVoiceRequestController?.abort();
 		capabilityResolveAbortController?.abort();
+		for (const controller of imagePreparationRequests) controller.abort();
 		for (const controller of captionRequests.values()) controller.abort();
 		captionRequests.clear();
+		pendingCaptionResults.clear();
 		captionPostContexts.clear();
 		for (const session of previewSessions.values()) session.close();
 		previewSessions.clear();
@@ -3771,12 +3864,20 @@
 			const nextAltTexts = new SvelteMap(mediaAltTexts);
 			const nextSizes = new SvelteMap(mediaSizes);
 			for (const media of mediaData) {
+				if (
+					media.parent_media_id &&
+					['image_optimization', 'image_fit'].includes(media.source ?? '')
+				)
+					imagePreparationSources.set(media.id, media.parent_media_id);
+				if (media.source === 'image_optimization') losslessPreparedImageIds.add(media.id);
 				const ratio =
 					media.mime_type?.startsWith('image/') && (media.width ?? 0) > 0 && (media.height ?? 0) > 0
 						? media.width! / media.height!
 						: undefined;
 				mediaPreviewMetadata.set(media.id, {
 					aspectRatio: ratio,
+					width: media.width,
+					height: media.height,
 					poster: media.poster_thumbnail_url || undefined
 				});
 				if (media.mime_type) {
@@ -3785,10 +3886,8 @@
 				if (media.size !== undefined) {
 					nextSizes.set(media.id, media.size);
 				}
-				if (media.alt_text) {
+				if (!nextAltTexts.has(media.id) && media.alt_text) {
 					nextAltTexts.set(media.id, media.alt_text);
-				} else {
-					nextAltTexts.delete(media.id);
 				}
 			}
 			mediaMimeTypes = nextMimeTypes;
@@ -3833,12 +3932,14 @@
 		failedCaptionMediaIds.delete(mediaId);
 
 		try {
-			const result = await generateImageAltText(mediaId, {
+			const pending = generateImageAltText(mediaId, {
 				locale: getLocaleTag(),
 				postContext,
 				signal: controller.signal
 			});
-			if (!result || suppressedCaptionMediaIds.has(mediaId)) return;
+			pendingCaptionResults.set(mediaId, pending);
+			const result = await pending;
+			if (!result || controller.signal.aborted || suppressedCaptionMediaIds.has(mediaId)) return;
 			if (!mediaAltTexts.get(mediaId)?.trim()) {
 				const nextAltTexts = new SvelteMap(mediaAltTexts);
 				nextAltTexts.set(mediaId, result.alt_text);
@@ -3850,7 +3951,10 @@
 			failedCaptionMediaIds.add(mediaId);
 			captionGenerationError = m.compose_alt_text_generation_failed();
 		} finally {
-			if (captionRequests.get(mediaId) === controller) captionRequests.delete(mediaId);
+			if (captionRequests.get(mediaId) === controller) {
+				captionRequests.delete(mediaId);
+				pendingCaptionResults.delete(mediaId);
+			}
 			captioningMediaIds.delete(mediaId);
 		}
 	}
@@ -4797,8 +4901,7 @@
 		return {
 			workspaceId: selectedWorkspaceId,
 			postKey: post.key,
-			variantAccountId:
-				activeVariantAccountId && activeVariantIsUnsynced ? activeVariantAccountId : null
+			variantAccountId: activeVariantAccountId
 		};
 	}
 
@@ -4884,6 +4987,9 @@
 			setPasteTargetMediaIds(upload.target, nextMediaIds);
 		}
 
+		if (result.parent_media_id && ['image_optimization', 'image_fit'].includes(result.source ?? ''))
+			imagePreparationSources.set(result.id, result.parent_media_id);
+		if (result.source === 'image_optimization') losslessPreparedImageIds.add(result.id);
 		const nextMimeTypes = new SvelteMap(mediaMimeTypes);
 		nextMimeTypes.set(
 			result.id,
@@ -4908,6 +5014,312 @@
 		return true;
 	}
 
+	async function prepareNewImageIds(ids: string[], workspaceId: string): Promise<string[] | null> {
+		const generation = saveGeneration,
+			session = captureQueryMutationSession();
+		const controller = new AbortController();
+		imagePreparationRequests.add(controller);
+		const prepared = [...ids];
+		try {
+			await hydrateMediaMetadata(workspaceId, ids, true);
+			for (const [index, id] of ids.entries()) {
+				if (
+					!saveMutationViewIsCurrent(session, generation, workspaceId) ||
+					controller.signal.aborted
+				)
+					return null;
+				if (mediaMimeTypes.get(id) !== 'image/png') continue;
+				try {
+					const result = await optimizeStoredImage(id, controller.signal);
+					if (
+						!saveMutationViewIsCurrent(session, generation, workspaceId) ||
+						controller.signal.aborted
+					)
+						return null;
+					if (result) {
+						prepared[index] = result.id;
+						imagePreparationSources.set(result.id, id);
+						losslessPreparedImageIds.add(result.id);
+						if (mediaAltTexts.has(id))
+							mediaAltTexts = new SvelteMap(mediaAltTexts).set(result.id, mediaAltTexts.get(id)!);
+						imagePreparationNotice = m.compose_image_optimized();
+					}
+				} catch {
+					if (controller.signal.aborted) return null;
+				}
+			}
+			await hydrateMediaMetadata(workspaceId, prepared, true);
+			return saveMutationViewIsCurrent(session, generation, workspaceId) &&
+				!controller.signal.aborted
+				? prepared
+				: null;
+		} finally {
+			imagePreparationRequests.delete(controller);
+		}
+	}
+
+	function imageFitCandidates(account: SocialAccount): string[] {
+		const resolved = resolvedCapabilities[account.id];
+		if (!resolved) return [];
+		const ids = [
+			...new Set(posts.flatMap((post) => getVariantMediaIds(account.id, post.key) ?? post.mediaIds))
+		];
+		return ids.filter(
+			(id) =>
+				mediaMimeTypes.get(id)?.startsWith('image/') &&
+				((resolved.issues ?? []).some(
+					(issue) => issue.media_id === id && issue.code.startsWith('media_')
+				) ||
+					((resolved.media.max_image_size_bytes || resolved.media.max_size_bytes) &&
+						(mediaSizes.get(id) ?? 0) >
+							Math.min(
+								...[resolved.media.max_image_size_bytes, resolved.media.max_size_bytes].filter(
+									(n): n is number => !!n && n > 0
+								)
+							)))
+		);
+	}
+
+	function imagePreparationInput(mediaId: string): string {
+		const seen = new Set<string>();
+		while (losslessPreparedImageIds.has(mediaId) && !seen.has(mediaId)) {
+			seen.add(mediaId);
+			const parent = imagePreparationSources.get(mediaId);
+			if (!parent) break;
+			mediaId = parent;
+		}
+		return mediaId;
+	}
+
+	async function fitAccountImage(account: SocialAccount, mediaId: string) {
+		if (fittingImageId) return;
+		const resolved = resolvedCapabilities[account.id];
+		if (!resolved) return;
+		const workspaceId = selectedWorkspaceId,
+			generation = saveGeneration;
+		const session = captureQueryMutationSession();
+		const sources = posts.flatMap((post) =>
+			(getVariantMediaIds(account.id, post.key) ?? post.mediaIds).includes(mediaId)
+				? [{ key: post.key, ids: [...(getVariantMediaIds(account.id, post.key) ?? post.mediaIds)] }]
+				: []
+		);
+		const alt = mediaAltTextForAccount(mediaId, account.id);
+		const authoredContext = imagePreparationContext;
+		pendingImagePreparationContext = authoredContext;
+		const controller = new AbortController();
+		imagePreparationRequests.add(controller);
+		fittingImageId = mediaId;
+		error = '';
+		try {
+			let optimized: MediaUploadResult | null = null;
+			if (mediaMimeTypes.get(mediaId) === 'image/png') {
+				try {
+					optimized = await optimizeStoredImage(mediaId, controller.signal);
+				} catch {
+					controller.signal.throwIfAborted();
+				}
+			}
+			const maxBytes = Math.min(
+				...[resolved.media.max_image_size_bytes, resolved.media.max_size_bytes].filter(
+					(n): n is number => !!n && n > 0
+				)
+			);
+			// Lossless preparation can fix a size-only issue without a browser re-encode.
+			const sizeOnly = (resolved.issues ?? [])
+				.filter((issue) => issue.media_id === mediaId && issue.code.startsWith('media_'))
+				.every((issue) => issue.code === 'media_size');
+			const result =
+				optimized && optimized.size <= maxBytes && sizeOnly
+					? optimized
+					: await fitStoredImage({
+							workspaceId,
+							mediaId: optimized?.id ?? mediaId,
+							originalId: imagePreparationInput(mediaId),
+							altText: alt,
+							limits: resolved.media,
+							signal: controller.signal
+						});
+			await hydrateMediaMetadata(workspaceId, [result.id], true);
+			if (
+				!saveMutationViewIsCurrent(session, generation, workspaceId) ||
+				controller.signal.aborted ||
+				imagePreparationContext !== authoredContext ||
+				!selectedAccountIds.includes(account.id) ||
+				resolvedCapabilities[account.id]?.output_profile !== resolved.output_profile ||
+				sources.some((source) => {
+					const post = posts.find((post) => post.key === source.key);
+					return (
+						!post ||
+						!arraysEqual(getVariantMediaIds(account.id, source.key) ?? post.mediaIds, source.ids)
+					);
+				})
+			)
+				return;
+			// End the fence before applying our own authored mutation.
+			pendingImagePreparationContext = null;
+			imagePreparationSources.set(result.id, imagePreparationInput(mediaId));
+			const preparedSize = mediaPreviewMetadata.get(result.id);
+			transferPreparedImageSettings(
+				mediaId,
+				result.id,
+				account.id,
+				preparedSize?.width,
+				preparedSize?.height
+			);
+			mediaAltTexts = new SvelteMap(mediaAltTexts).set(
+				result.id,
+				mediaAltTextForAccount(mediaId, account.id)
+			);
+			for (const source of sources) {
+				const index = posts.findIndex((post) => post.key === source.key);
+				setVariantMediaIds(
+					account.id,
+					index,
+					source.ids.map((id) => (id === mediaId ? result.id : id))
+				);
+			}
+			followPreparedImageCaption(mediaId, result.id, account.id);
+			validationIssues = [];
+			scheduleAutoSave();
+			scheduleCapabilityResolve();
+			imagePreparationNotice =
+				activeVariantAccountId === account.id ? m.compose_image_fit_success() : '';
+		} catch (cause) {
+			if (saveMutationViewIsCurrent(session, generation, workspaceId) && !controller.signal.aborted)
+				error = cause instanceof Error ? cause.message : m.compose_image_fit_failed();
+		} finally {
+			imagePreparationRequests.delete(controller);
+			fittingImageId = '';
+			pendingImagePreparationContext = null;
+			if (saveMutationViewIsCurrent(session, generation, workspaceId)) scheduleAutoSave();
+		}
+	}
+
+	// Reuse the in-flight caption request across preparation, retaining explicit edits.
+	function followPreparedImageCaption(from: string, to: string, accountId: string | null) {
+		const pending = pendingCaptionResults.get(from);
+		if (
+			!pending ||
+			suppressedCaptionMediaIds.has(from) ||
+			(accountId && accountCaptionSuppressions.get(from)?.has(accountId))
+		)
+			return;
+		const workspaceId = selectedWorkspaceId,
+			generation = saveGeneration,
+			session = captureQueryMutationSession();
+		if (!pendingCaptionResults.has(to)) pendingCaptionResults.set(to, pending);
+		captioningMediaIds.add(to);
+		const clear = () => {
+			if (pendingCaptionResults.get(to) === pending) {
+				pendingCaptionResults.delete(to);
+				captioningMediaIds.delete(to);
+			}
+		};
+		void pending.then((result) => {
+			clear();
+			if (
+				!result ||
+				!saveMutationViewIsCurrent(session, generation, workspaceId) ||
+				suppressedCaptionMediaIds.has(to) ||
+				(accountId && accountCaptionSuppressions.get(to)?.has(accountId))
+			)
+				return;
+			const attached = accountId
+				? selectedAccountIds.includes(accountId) &&
+					posts.some((post) =>
+						(getVariantMediaIds(accountId, post.key) ?? post.mediaIds).includes(to)
+					)
+				: posts.some((post) => post.mediaIds.includes(to));
+			if (!attached) return;
+			if (accountId) {
+				if (mediaAltTextForAccount(to, accountId).trim()) return;
+				mediaSettingsByAccount = {
+					...mediaSettingsByAccount,
+					[to]: {
+						...mediaSettingsByAccount[to],
+						[accountId]: { ...mediaSettingsByAccount[to]?.[accountId], alt_text: result.alt_text }
+					}
+				};
+			} else {
+				if (mediaAltTexts.get(to)?.trim()) return;
+				mediaAltTexts = new SvelteMap(mediaAltTexts).set(to, result.alt_text);
+			}
+			scheduleAutoSave();
+		}, clear);
+	}
+
+	function transferPreparedImageSettings(
+		from: string,
+		to: string,
+		accountId: string,
+		width?: number,
+		height?: number,
+		restore = false
+	) {
+		const sourceSize = mediaPreviewMetadata.get(restore ? to : from) ?? {};
+		const fittedSize = restore ? (mediaPreviewMetadata.get(from) ?? {}) : { width, height };
+		mediaSettingsByAccount = {
+			...mediaSettingsByAccount,
+			[to]: {
+				...mediaSettingsByAccount[to],
+				[accountId]: {
+					...fittedImageSettings(
+						mediaSettingsByAccount[from]?.[accountId] ?? {},
+						sourceSize,
+						fittedSize,
+						restore
+					),
+					alt_text: mediaAltTextForAccount(from, accountId)
+				}
+			}
+		};
+	}
+
+	async function restoreOriginalImage(mediaId: string) {
+		const original = imagePreparationSources.get(mediaId);
+		if (!original || fittingImageId) return;
+		const accountId = activeVariantAccountId;
+		const context = imagePreparationContext,
+			workspaceId = selectedWorkspaceId,
+			generation = saveGeneration;
+		const session = captureQueryMutationSession();
+		await hydrateMediaMetadata(workspaceId, [original]);
+		if (
+			!saveMutationViewIsCurrent(session, generation, workspaceId) ||
+			accountId !== activeVariantAccountId ||
+			context !== imagePreparationContext
+		)
+			return;
+		const alt = accountId
+			? mediaAltTextForAccount(mediaId, accountId)
+			: (mediaAltTexts.get(mediaId) ?? '');
+		if (accountId) {
+			transferPreparedImageSettings(mediaId, original, accountId, undefined, undefined, true);
+		} else {
+			for (const id of selectedAccountIds) {
+				if (
+					!posts.some(
+						(post) => post.mediaIds.includes(mediaId) && getVariantMediaIds(id, post.key) === null
+					)
+				)
+					continue;
+				transferPreparedImageSettings(mediaId, original, id, undefined, undefined, true);
+				followPreparedImageCaption(mediaId, original, id);
+			}
+			mediaAltTexts = new SvelteMap(mediaAltTexts).set(original, alt);
+		}
+		followPreparedImageCaption(mediaId, original, accountId);
+		for (let index = 0; index < posts.length; index++) {
+			const ids = getEditorMediaIdsForPost(posts[index]);
+			if (ids.includes(mediaId))
+				setEditorMediaIds(
+					index,
+					ids.map((id) => (id === mediaId ? original : id))
+				);
+		}
+		imagePreparationNotice = '';
+	}
+
 	function queueMediaFiles(files: FileList | File[], targetPostIndex = activePostIndex): void {
 		if (!selectedWorkspaceId || isSubmitting) return;
 		const targetPost = posts[targetPostIndex];
@@ -4929,13 +5341,7 @@
 	function handlePaste(e: ClipboardEvent, postIndex: number = activePostIndex) {
 		const items = e.clipboardData?.items;
 		const post = posts[postIndex];
-		if (
-			!items ||
-			!post ||
-			!selectedWorkspaceId ||
-			isSubmitting ||
-			(activeVariantAccountId !== null && !activeVariantIsUnsynced)
-		) {
+		if (!items || !post || !selectedWorkspaceId || isSubmitting) {
 			return;
 		}
 
@@ -4970,6 +5376,9 @@
 		e.preventDefault();
 		error = '';
 		pasteMediaAnnouncement = '';
+		if (target.variantAccountId) {
+			setVariantMediaIds(target.variantAccountId, postIndex, [...mediaIdsForPasteTarget(target)]);
+		}
 		pasteMediaUploadQueue.enqueue(selection.accepted, target);
 	}
 
@@ -4997,7 +5406,7 @@
 		if (!post) return;
 		const mediaIds = getEditorMediaIdsForPost(post);
 		const mediaId = mediaIds[mediaIndex];
-		if (activeVariantAccountId && activeVariantIsUnsynced) {
+		if (activeVariantAccountId) {
 			setVariantMediaIds(
 				activeVariantAccountId,
 				postIndex,
@@ -5008,7 +5417,14 @@
 				i === postIndex ? { ...p, mediaIds: p.mediaIds.filter((_, mi) => mi !== mediaIndex) } : p
 			);
 		}
-		if (mediaId) {
+		const stillAttached =
+			mediaId &&
+			posts.some(
+				(source) =>
+					source.mediaIds.includes(mediaId) ||
+					[...variants.values()].some((record) => record[source.key]?.mediaIds.includes(mediaId))
+			);
+		if (mediaId && !stillAttached) {
 			captionRequests.get(mediaId)?.abort();
 			captionRequests.delete(mediaId);
 			captioningMediaIds.delete(mediaId);
@@ -5025,13 +5441,15 @@
 			newSizes.delete(mediaId);
 			mediaSizes = newSizes;
 		}
+		validationIssues = [];
 		scheduleAutoSave();
+		scheduleCapabilityResolve();
 	}
 
 	function addMediaToPost(postIndex: number, mediaId: string) {
 		const post = posts[postIndex];
 		if (!post) return;
-		if (activeVariantAccountId && activeVariantIsUnsynced) {
+		if (activeVariantAccountId) {
 			setVariantMediaIds(activeVariantAccountId, postIndex, [
 				...getEditorMediaIdsForPost(post),
 				mediaId
@@ -5043,20 +5461,50 @@
 		);
 	}
 
+	function snapshotAccountMediaAltTexts(accountId: string, mediaIds: string[]) {
+		const next = { ...mediaSettingsByAccount };
+		for (const id of mediaIds) {
+			if (
+				!mediaAltTexts.has(id) &&
+				parseComposerSettingOptionalString(next[id]?.[accountId]?.alt_text) === undefined
+			)
+				continue;
+			next[id] = {
+				...next[id],
+				[accountId]: { ...next[id]?.[accountId], alt_text: mediaAltTextForAccount(id, accountId) }
+			};
+		}
+		mediaSettingsByAccount = next;
+	}
+
+	function resetAccountMediaAltTexts(accountId: string) {
+		for (const suppressed of accountCaptionSuppressions.values()) suppressed.delete(accountId);
+		const next = { ...mediaSettingsByAccount };
+		for (const [id, accounts] of Object.entries(next)) {
+			if (!accounts[accountId]) continue;
+			const settings = { ...accounts[accountId] };
+			delete settings.alt_text;
+			next[id] = { ...accounts, [accountId]: settings };
+		}
+		mediaSettingsByAccount = next;
+	}
+
 	function setVariantMediaIds(accountId: string, index: number, mediaIds: string[]) {
 		const postKey = posts[index]?.key;
 		if (!postKey) return;
+		const previousIds = getVariantMediaIds(accountId, postKey) ?? posts[index].mediaIds;
+		snapshotAccountMediaAltTexts(
+			accountId,
+			mediaIds.filter((id) => previousIds.includes(id))
+		);
 		const newVariants = new SvelteMap(variants);
+		const record = normalizeVariantRecord(
+			newVariants.get(accountId) ?? makeVariantRecord(posts),
+			posts
+		);
 		const current = {
-			...normalizeVariantRecord(newVariants.get(accountId), posts),
-			[postKey]: {
-				...(normalizeVariantRecord(newVariants.get(accountId), posts)[postKey] ?? {
-					content: posts[index].content,
-					mediaIds: [...posts[index].mediaIds]
-				}),
-				mediaIds,
-				mediaInherited: false
-			}
+			...record,
+			[postKey]: { ...record[postKey], mediaIds, mediaInherited: false }
 		};
 		newVariants.set(accountId, current);
 		variants = newVariants;
@@ -5068,10 +5516,21 @@
 	}
 
 	function setMediaAltText(mediaId: string, alt: string) {
-		captionRequests.get(mediaId)?.abort();
-		suppressedCaptionMediaIds.add(mediaId);
+		if (activeVariantAccountId) {
+			const suppressed = accountCaptionSuppressions.get(mediaId) ?? new Set<string>();
+			suppressed.add(activeVariantAccountId);
+			accountCaptionSuppressions.set(mediaId, suppressed);
+		} else {
+			captionRequests.get(mediaId)?.abort();
+			suppressedCaptionMediaIds.add(mediaId);
+		}
 		failedCaptionMediaIds.delete(mediaId);
 		if (activeVariantAccountId) {
+			for (let index = 0; index < posts.length; index++) {
+				const ids =
+					getVariantMediaIds(activeVariantAccountId, posts[index].key) ?? posts[index].mediaIds;
+				if (ids.includes(mediaId)) setVariantMediaIds(activeVariantAccountId, index, [...ids]);
+			}
 			mediaSettingsByAccount = {
 				...mediaSettingsByAccount,
 				[mediaId]: {
@@ -5735,6 +6194,15 @@
 		if (!mediaID || !canAttachAIMemeToTargets(targetAccountIDs, workspaceID, mediaID)) return false;
 		const post = posts[0];
 		if (!post) return false;
+		const context = imagePreparationContext;
+		const prepared = await prepareNewImageIds([mediaID], workspaceID);
+		if (
+			!prepared ||
+			context !== imagePreparationContext ||
+			!canAttachAIMemeToTargets(targetAccountIDs, workspaceID, prepared[0])
+		)
+			return false;
+		mediaID = prepared[0];
 		const nextVariants = new SvelteMap(variants);
 		for (const accountID of targetAccountIDs) {
 			const record = normalizeVariantRecord(nextVariants.get(accountID), posts);
@@ -5945,6 +6413,7 @@
 			variant.mediaIds = [...(getVariantMediaIds(accountId, post.key) ?? post.mediaIds)];
 			variant.contentInherited = false;
 			variant.mediaInherited = false;
+			snapshotAccountMediaAltTexts(accountId, variant.mediaIds);
 		}
 		variants = new SvelteMap(variants).set(accountId, record);
 		scheduleAutoSave();
@@ -5957,6 +6426,7 @@
 	}
 
 	function resyncAccount(accountId: string) {
+		resetAccountMediaAltTexts(accountId);
 		if (!variants.has(accountId)) return;
 		pasteMediaUploadQueue.discardWhere((upload) => upload.target.variantAccountId === accountId);
 		const nextVariants = new SvelteMap(variants);
@@ -5979,6 +6449,7 @@
 		const existing = variants.get(accountId);
 		if (!existing) return;
 		if (field === 'media') {
+			resetAccountMediaAltTexts(accountId);
 			pasteMediaUploadQueue.discardWhere((upload) => upload.target.variantAccountId === accountId);
 		}
 		const nextRecord = normalizeVariantRecord(existing, posts);
@@ -6515,6 +6986,42 @@
 			}
 		}}
 	/>
+{/snippet}
+
+{#snippet nativePostMedia(
+	media: PreviewMedia,
+	display: Snippet,
+	segment: PreviewSegment | undefined
+)}
+	{@const sourceIndexes = posts.flatMap((post, index) =>
+		(resolvedCapabilities[activeVariantAccountId!]?.segment_strategy === 'join' ||
+			post.key === (segment?.id ?? posts[0]?.key)) &&
+		getEditorMediaIdsForPost(post).includes(media.id)
+			? [index]
+			: []
+	)}
+	{#if sourceIndexes.length}
+		<div class="relative h-full w-full" tabindex="-1" data-composer-media-id={media.id}>
+			{@render display()}
+			<ComposerMediaActions
+				mediaId={media.id}
+				altTexts={editorMediaAltTexts}
+				captioningIds={captioningMediaIds}
+				editing={editingAltMediaId === media.id}
+				onRemove={() => {
+					for (const index of sourceIndexes) {
+						const ids = getEditorMediaIdsForPost(posts[index]);
+						removeMedia(index, ids.indexOf(media.id));
+					}
+				}}
+				onAltText={setMediaAltText}
+				onToggleAlt={() => (editingAltMediaId = editingAltMediaId === media.id ? null : media.id)}
+				onDoneAlt={() => (editingAltMediaId = null)}
+			/>
+		</div>
+	{:else}
+		{@render display()}
+	{/if}
 {/snippet}
 
 {#snippet nativePostText(segment: PreviewSegment)}
@@ -7172,6 +7679,22 @@
 					/>
 				{/each}
 
+				{#if imagePreparationNotice}<p class="py-2 text-sm text-muted-foreground" role="status">
+						{imagePreparationNotice}
+					</p>{/if}
+				{#each [...new Set(posts.flatMap( (post) => getEditorMediaIdsForPost(post) ))].filter( (id) => imagePreparationSources.has(id) ) as id, index (id)}
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={!!fittingImageId}
+						onclick={() => restoreOriginalImage(id)}
+						>{m.compose_image_original({
+							number:
+								[...new Set(posts.flatMap((post) => getEditorMediaIdsForPost(post)))].indexOf(id) +
+								1
+						})}</Button
+					>
+				{/each}
 				{#if activeVariantAccount}
 					{@const accountPreview = previewForAccount(activeVariantAccount)}
 					{@const post = activePost}
@@ -7181,11 +7704,43 @@
 								model={previewForAccount(activeVariantAccount)}
 								editor={{
 									text: nativePostText,
+									media: previewMediaOpen ? undefined : nativePostMedia,
 									title: nativePostTitle,
 									card: nativeLinkCard,
 									poll: nativePoll
 								}}
 							/>
+							{#if imageFitCandidates(activeVariantAccount).length}
+								<div class="space-y-2 border-t py-3" data-testid="composer-image-fit">
+									<p class="text-sm text-muted-foreground">{m.compose_image_fit_help()}</p>
+									<div class="flex flex-wrap gap-2">
+										{#each imageFitCandidates(activeVariantAccount) as id (id)}
+											<Button
+												variant="outline"
+												size="sm"
+												disabled={!!fittingImageId}
+												aria-busy={fittingImageId === id}
+												onclick={() => fitAccountImage(activeVariantAccount!, id)}
+												>{fittingImageId === id
+													? m.compose_image_preparing()
+													: m.compose_image_fit_named({
+															number:
+																[
+																	...new Set(
+																		posts.flatMap(
+																			(post) =>
+																				getVariantMediaIds(activeVariantAccount!.id, post.key) ??
+																				post.mediaIds
+																		)
+																	)
+																].indexOf(id) + 1,
+															network: getPlatformName(activeVariantAccount.platform)
+														})}</Button
+											>
+										{/each}
+									</div>
+								</div>
+							{/if}
 							{#if post}
 								{@const pendingMediaUploads = visiblePasteMediaUploads(post)}
 								<div class="flex flex-wrap items-center gap-2 py-2">
@@ -7193,15 +7748,21 @@
 										variant="ghost"
 										size="icon"
 										aria-label={m.media_picker_add_media()}
-										onclick={() => {
-											if (getEditorMediaIdsForPost(post).length)
-												previewMediaOpen = !previewMediaOpen;
-											else {
-												unsyncAccount(activeVariantAccount!.id);
-												openMediaPicker(activePostIndex);
-											}
-										}}><ThemeIcon role="image" class="size-4" /></Button
+										disabled={isSubmitting ||
+											pendingMediaUploads.length > 0 ||
+											getEditorMediaIdsForPost(post).length >= composerMediaLimit}
+										onclick={() => openMediaPicker(activePostIndex)}
+										><ThemeIcon role="image" class="size-4" /></Button
 									>
+									{#if posts.some((source) => getEditorMediaIdsForPost(source).length)}
+										<Button
+											variant="ghost"
+											size="sm"
+											aria-expanded={previewMediaOpen}
+											onclick={() => (previewMediaOpen = !previewMediaOpen)}
+											>{m.compose_edit_media()}</Button
+										>
+									{/if}
 									{#if !post.poll && !accountPreview.poll && supportsNativePoll(visibleSettings(activeVariantAccount))}
 										<Button
 											variant="ghost"
@@ -7219,30 +7780,37 @@
 										content={accountPreview.segments[0]?.text ?? ''}
 										limits={editorPlatformLimits}
 									/>
-									{#if previewMediaOpen}<Button
-											variant="outline"
-											size="sm"
-											onclick={() => {
-												unsyncAccount(activeVariantAccount!.id);
-												openMediaPicker(activePostIndex);
-											}}>{m.media_picker_add_media()}</Button
-										>{/if}
 								</div>
-								{#if previewMediaOpen || pendingMediaUploads.length}
-									<ComposerMediaGrid
-										mediaIds={getEditorMediaIdsForPost(post)}
+								{#if previewMediaOpen}
+									<div data-testid="composer-media-editor">
+										{#each posts as source, index (source.key)}
+											<div
+												role="region"
+												aria-label={m.compose_drop_zone({ number: index + 1 })}
+												onfocusin={() => setActivePost(index)}
+											>
+												<ComposerMediaGrid
+													mediaIds={getEditorMediaIdsForPost(source)}
+													mediaCount={getEditorMediaIdsForPost(source).length +
+														visiblePasteMediaUploads(source).length}
+													altTexts={editorMediaAltTexts}
+													captioningIds={captioningMediaIds}
+													bind:editingAltMediaId
+													pendingUploads={visiblePasteMediaUploads(source)}
+													queue={pasteMediaUploadQueue}
+													{isVideoMedia}
+													onRemoveMedia={(mediaIndex) => removeMedia(index, mediaIndex)}
+													onAltText={setMediaAltText}
+												/>
+											</div>
+										{/each}
+									</div>
+								{:else}
+									<PasteUploadList
+										uploads={pendingMediaUploads}
 										mediaCount={getEditorMediaIdsForPost(post).length + pendingMediaUploads.length}
-										altTexts={editorMediaAltTexts}
-										captioningIds={captioningMediaIds}
-										bind:editingAltMediaId
-										pendingUploads={pendingMediaUploads}
+										baseCount={getEditorMediaIdsForPost(post).length}
 										queue={pasteMediaUploadQueue}
-										{isVideoMedia}
-										onRemoveMedia={(index) => {
-											unsyncAccount(activeVariantAccount!.id);
-											removeMedia(activePostIndex, index);
-										}}
-										onAltText={setMediaAltText}
 									/>
 								{/if}
 							{/if}
@@ -7891,9 +8459,27 @@
 			return true;
 		}
 		const addedIds = ids.filter((id) => !previousIds.includes(id));
-		setEditorMediaIds(mediaPickerPostIndex, ids);
-		await hydrateMediaMetadata(selectedWorkspaceId, addedIds, true);
-		void generateMissingMediaAltText(addedIds, postContext);
+		const post = posts[mediaPickerPostIndex];
+		if (!post) return false;
+		const target = pasteMediaTargetForPost(post);
+		if (!target) return false;
+		const authoredContext = imagePreparationContext;
+		const preparedAdded = await prepareNewImageIds(addedIds, target.workspaceId);
+		if (
+			!preparedAdded ||
+			authoredContext !== imagePreparationContext ||
+			!arraysEqual(mediaIdsForPasteTarget(target), previousIds)
+		)
+			return false;
+		const preparedIds = ids.map((id) => {
+			const index = addedIds.indexOf(id);
+			return index < 0 ? id : preparedAdded[index];
+		});
+		setPasteTargetMediaIds(target, preparedIds);
+		void generateMissingMediaAltText(
+			preparedIds.filter((id) => !previousIds.includes(id)),
+			postContext
+		);
 	}}
 	onCreate={openImageEditorFromComposer}
 	onCreateTemplate={openTemplateEditorFromComposer}

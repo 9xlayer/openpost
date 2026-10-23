@@ -14,6 +14,7 @@
 
 	let { issues, class: className = '', onSelect }: Props = $props();
 	let open = $state(false);
+	let selectingIssue = $state(false);
 	const hasErrors = $derived(issues.some((issue) => issue.severity === 'error'));
 
 	function hasTarget(issue: ComposerIssue): boolean {
@@ -23,6 +24,7 @@
 	}
 
 	function selectIssue(issue: ComposerIssue) {
+		selectingIssue = true;
 		open = false;
 		onSelect?.(issue);
 	}
@@ -52,7 +54,16 @@
 				</Button>
 			{/snippet}
 		</Popover.Trigger>
-		<Popover.Content class="w-80 max-w-[calc(100vw-1rem)] p-0" align="start">
+		<Popover.Content
+			onCloseAutoFocus={(event) => {
+				if (selectingIssue) {
+					event.preventDefault();
+					selectingIssue = false;
+				}
+			}}
+			class="w-80 max-w-[calc(100vw-1rem)] p-0"
+			align="start"
+		>
 			<div class="border-b px-3 py-2.5">
 				<p class="text-sm font-medium">{m.compose_check_before_publishing()}</p>
 				<p class="text-xs text-muted-foreground">
@@ -80,6 +91,10 @@
 									<span class="block text-xs font-semibold">{issue.targetLabel}</span>
 								{/if}
 								<span class="block">{issue.message}</span>
+								{#if issue.mediaId && onSelect}<span
+										class="mt-1 block text-xs font-medium underline underline-offset-2"
+										>{m.compose_edit_media()}</span
+									>{/if}
 							</span>
 						{/snippet}
 						{#if onSelect && hasTarget(issue)}

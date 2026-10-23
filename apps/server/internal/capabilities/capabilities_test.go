@@ -390,6 +390,7 @@ func TestBlueskyImageValidationEnforcesProviderByteLimit(t *testing.T) {
 	}{
 		{name: "at limit", size: 2_000_000},
 		{name: "over limit", size: 2_000_001, wantIssue: true},
+		{name: "screenshot", size: 4_203_031, wantIssue: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			issues := Validate(
@@ -404,6 +405,12 @@ func TestBlueskyImageValidationEnforcesProviderByteLimit(t *testing.T) {
 
 			if test.wantIssue {
 				requireIssueCode(t, issues, "media_size")
+				for _, issue := range issues {
+					if issue.Code == "media_size" {
+						require.Equal(t, map[string]any{"size_bytes": test.size, "max_size_bytes": int64(2_000_000)}, issue.Parameters)
+						require.Contains(t, issue.Message, "MB")
+					}
+				}
 				return
 			}
 			requireNoIssueCode(t, issues, "media_size")

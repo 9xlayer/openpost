@@ -3626,6 +3626,23 @@ export interface paths {
         patch: operations["update-media-favorite"];
         trace?: never;
     };
+    "/media/{id}/optimize-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a smaller lossless image copy while retaining the original */
+        post: operations["optimize-media-image"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/{id}/restore": {
         parameters: {
             query?: never;
@@ -8752,7 +8769,7 @@ export interface components {
              * @description Media provenance
              * @enum {string}
              */
-            source?: "upload" | "media_copy" | "camera" | "image_editor_export" | "image_editor_edit" | "background_removal" | "video_editor_source" | "video_editor_export" | "stock_import" | "meme_generator" | "screenshot_template" | "image_generation";
+            source?: "upload" | "media_copy" | "image_optimization" | "image_fit" | "camera" | "image_editor_export" | "image_editor_edit" | "background_removal" | "video_editor_source" | "video_editor_export" | "stock_import" | "meme_generator" | "screenshot_template" | "image_generation";
             /** @description License and creator provenance for a selected stock asset */
             stock_provenance?: components["schemas"]["StockMediaProvenance"];
             /** @description Optional tag to assign to this upload */
@@ -12616,6 +12633,17 @@ export interface components {
             title: string;
             why_it_fits: string;
             why_now: string;
+        };
+        OptimizeMediaImageOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/OptimizeMediaImageOutputBody.json
+             */
+            readonly $schema?: string;
+            media: components["schemas"]["MediaUploadResult"];
+            /** @description True only when a smaller lossless copy was created or reused */
+            optimized: boolean;
         };
         Option: {
             label: string;
@@ -31371,6 +31399,74 @@ export interface operations {
             };
             /** @description Not Found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "optimize-media-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Original image ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptimizeMediaImageOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };

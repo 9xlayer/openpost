@@ -119,6 +119,7 @@
                 />{/if}
               {#if reply.media?.length}<PreviewMedia
                   media={reply.media}
+                segment={reply}
                   layout="grid"
                 />{/if}
             </div>
