@@ -1,46 +1,42 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const script = fileURLToPath(new URL("./check-security-admissions.mjs", import.meta.url));
+const root = fileURLToPath(new URL("../", import.meta.url));
+const script = path.join(root, "scripts/check-security-admissions.mjs");
 
-test("security admission rejects vulnerable Zod and newly reachable SvelteKit APIs", () => {
+test("security admission rejects changed dependencies, editor configuration and shared helper APIs", () => {
   const fixture = mkdtempSync(path.join(tmpdir(), "openpost-security-admissions-"));
-  const source = path.join(fixture, "apps/web/src/page.svelte");
-  const writeLock = (identity, owner = "zod") =>
-    writeFileSync(
-      path.join(fixture, "bun.lock"),
-      JSON.stringify({ packages: { [owner]: [identity] } }),
-    );
-  const run = () => {
-    const child = spawnSync(process.execPath, [script], {
-      cwd: fixture,
-      encoding: "utf8",
-    });
-    return { code: child.status, stderr: child.stderr };
-  };
+  const worker = "apps/web/src/lib/image-editor/background-removal.worker.ts";
+  const run = () => spawnSync(process.execPath, [script], { cwd: fixture }).status;
   try {
-    for (const directory of ["apps/web/src", "apps/marketing/src", "packages/ui/src"]) {
+    for (const directory of [path.dirname(worker), "apps/marketing/src", "packages/shared/src"]) {
       mkdirSync(path.join(fixture, directory), { recursive: true });
-      writeFileSync(path.join(fixture, directory, "page.svelte"), "<p>Static page</p>");
     }
-    writeLock("zod@4.6.7");
-    expect(run().code).toBe(0);
-    for (const identity of ["zod@4.6.5", "zod@4.4.3", "zod@3.25.76"]) {
-      writeLock(identity);
-      const rejected = run();
-      expect(rejected.code).toBe(1);
+    copyFileSync(path.join(root, "bun.lock"), path.join(fixture, "bun.lock"));
+    copyFileSync(path.join(root, worker), path.join(fixture, worker));
+    expect(run()).toBe(0);
+    writeFileSync(path.join(fixture, "bun.lock"), '{"packages":{"zod":["zod@4.4.3"]}}');
+    expect(run()).toBe(1);
+    copyFileSync(path.join(root, "bun.lock"), path.join(fixture, "bun.lock"));
+    writeFileSync(path.join(fixture, worker), "removeBackground(image, event.data.configuration)");
+    expect(run()).toBe(1);
+    copyFileSync(path.join(root, worker), path.join(fixture, worker));
+    const helper = path.join(fixture, "packages/shared/src/imported-helper.mjs");
+    for (const api of [
+      "import { enhance } from '$app/forms'",
+      "setHeaders({})",
+      "use:enhance",
+      "import { schema } from '@n8n/config'",
+    ]) {
+      writeFileSync(helper, api);
+      expect(run()).toBe(1);
     }
-    writeLock("zod@3.25.76", "@imgly/background-removal/zod");
-    expect(run().code).toBe(0);
-    for (const api of ["import { enhance } from '$app/forms'", "setHeaders({})", "use:enhance"]) {
-      writeFileSync(source, api);
-      const rejected = run();
-      expect(rejected.code).toBe(1);
-    }
+    writeFileSync(helper, "export const value = 1;");
+    expect(run()).toBe(0);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
   }

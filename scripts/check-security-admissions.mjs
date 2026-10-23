@@ -1,56 +1,61 @@
-import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-// These are compatibility admissions, not a general advisory suppression.
-// GHSA-mrhx-c7xc-m3w5: all Zod 4 consumers must have the patched release.
-// Legacy Zod 3 is confined to IMG.LY's local editor configuration and the
-// n8n development toolchain. The published n8n node has no runtime dependencies.
-// GHSA-pfhg-q3qv-9q6r and GHSA-27mw-82g8-phjj: neither static SvelteKit
-// consumer uses enhanced form actions or prerender setHeaders. Reject their
-// introduction until Kit is upgraded and these admissions are removed.
-try {
-  const lock = Bun.JSONC.parse(readFileSync("bun.lock", "utf8"));
-  const legacyOwners = new Set([
-    "@imgly/background-removal/zod",
-    "@n8n/ai-utilities/zod",
-    "@n8n/backend-network/zod",
-    "@n8n/config/zod",
-    "@n8n/expression-runtime/zod",
-    "@n8n/permissions/zod",
-  ]);
-  let zodCount = 0;
-  for (const [owner, [identity]] of Object.entries(lock.packages)) {
-    if (!identity.startsWith("zod@")) continue;
-    zodCount++;
-    if (identity === "zod@3.25.76" && legacyOwners.has(owner)) continue;
-    const version = identity.slice(4).split(".").map(Number);
+// GHSA-mrhx-c7xc-m3w5: Zod 4 is patched. The remaining Zod 3 copies
+// serve IMG.LY's bounded local configuration and n8n's development toolchain.
+// Pin the entire reviewed dependency graph, including workspace dependency
+// scopes and parent versions. Any dependency edit requires re-review until
+// those legacy consumers adopt patched versions and this admission is removed.
+// Pin the editor configuration boundary too, and reject n8n imports outside
+// its own package. The published n8n node has no runtime dependencies.
+// GHSA-pfhg-q3qv-9q6r and GHSA-27mw-82g8-phjj: the static SvelteKit
+// consumers do not use enhanced form actions or prerender setHeaders. Inspect
+// all first-party app/package modules, including imported module extensions.
+const reviewedArtifacts = {
+  "bun.lock": "cac221dbaf629cc6d6fb6004d538966a796550a988b7c521921c57b8d19d0b24",
+  "apps/web/src/lib/image-editor/background-removal.worker.ts":
+    "06f3aaf6c78d574c1d2538903e8bf34cf70032801824d8988a9ba2d2435749d5",
+};
+const generatedDirectories = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  ".git",
+  ".turbo",
+  ".svelte-kit",
+  ".expo",
+]);
+
+function inspectSources(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const sourcePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (!generatedDirectories.has(entry.name)) inspectSources(sourcePath);
+      continue;
+    }
+    if (!entry.isFile() || !/\.(?:[cm]?[jt]s|svelte)$/.test(entry.name)) continue;
+    const source = readFileSync(sourcePath, "utf8");
+    if (/\$app\/forms|\bsetHeaders\b|use:enhance\b/.test(source)) {
+      throw new Error(`Re-review SvelteKit advisory admissions: ${sourcePath}`);
+    }
     if (
-      version.length !== 3 ||
-      version.some((part) => !Number.isInteger(part)) ||
-      version[0] !== 4 ||
-      version[1] < 6 ||
-      (version[1] === 6 && version[2] < 6)
+      !sourcePath.startsWith(`packages${path.sep}n8n-nodes-openpost${path.sep}`) &&
+      /(?:from\s*|import\s*\(|require\s*\()\s*["'](?:@n8n\/|n8n-workflow(?:["'/]))/.test(source)
     ) {
-      throw new Error(`Unreviewed Zod security admission: ${owner} (${identity})`);
+      throw new Error(`Re-review n8n development-only admission: ${sourcePath}`);
     }
   }
-  if (!zodCount) throw new Error("No Zod artifacts found in bun.lock");
-  for (const directory of ["apps/web/src", "apps/marketing/src", "packages/ui/src"]) {
-    const files = Array.from(
-      new Bun.Glob("**/*.{js,ts,svelte}").scanSync({
-        cwd: directory,
-        onlyFiles: true,
-      }),
-    );
-    if (!files.length) throw new Error(`Missing SvelteKit security source boundary: ${directory}`);
-    for (const file of files) {
-      const sourcePath = path.join(directory, file);
-      if (/\$app\/forms|\bsetHeaders\b|use:enhance\b/.test(readFileSync(sourcePath, "utf8"))) {
-        throw new Error(`Re-review SvelteKit advisory admissions: ${sourcePath}`);
-      }
-    }
+}
+
+try {
+  for (const [file, expected] of Object.entries(reviewedArtifacts)) {
+    const actual = createHash("sha256").update(readFileSync(file)).digest("hex");
+    if (actual !== expected) throw new Error(`Re-review legacy Zod admission: ${file}`);
   }
-  console.log("Verified bounded Zod and unused SvelteKit API security admissions");
+  for (const directory of ["apps/web", "apps/marketing", "packages"]) inspectSources(directory);
+  console.log("Verified reviewed dependency graph, editor boundary and unused SvelteKit APIs");
 } catch (error) {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
