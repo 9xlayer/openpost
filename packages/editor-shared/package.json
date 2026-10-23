@@ -45,7 +45,7 @@
 		"@ricky0123/vad-web": "0.0.31",
 		"mediabunny": "1.54.0",
 		"onnxruntime-web": "1.26.0-dev.20260410-5e55544225",
-		"zod": "^4.4.3"
+		"zod": "^4.6.7"
 	},
 	"devDependencies": {
 		"typescript": "5.9.3",
