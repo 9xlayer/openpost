@@ -53,17 +53,9 @@ func (h *MediaHandler) optimizeMediaImage(ctx context.Context, input *OptimizeMe
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	file, err := h.storage.Open(ctx, filepath.Base(original.FilePath))
+	content, err := h.readImageForOptimization(ctx, original)
 	if err != nil {
-		return nil, huma.Error500InternalServerError("Could not open image")
-	}
-	content, err := io.ReadAll(io.LimitReader(file, MaxBufferedMediaUploadBytes+1))
-	closeErr := file.Close()
-	if err != nil || closeErr != nil {
-		return nil, huma.Error500InternalServerError("Could not read image")
-	}
-	if int64(len(content)) > MaxBufferedMediaUploadBytes {
-		return nil, huma.Error413RequestEntityTooLarge("Image is too large to optimize")
+		return nil, err
 	}
 	optimized, err := imageprepare.OptimizePNG(ctx, content)
 	if err != nil {
@@ -91,4 +83,20 @@ func (h *MediaHandler) optimizeMediaImage(ctx context.Context, input *OptimizeMe
 	output.Body.Media = mediaUploadResultFromAttachment(created, false)
 	output.Body.Optimized = true
 	return output, nil
+}
+
+func (h *MediaHandler) readImageForOptimization(ctx context.Context, original models.MediaAttachment) ([]byte, error) {
+	file, err := h.storage.Open(ctx, filepath.Base(original.FilePath))
+	if err != nil {
+		return nil, huma.Error500InternalServerError("Could not open image")
+	}
+	content, err := io.ReadAll(io.LimitReader(file, MaxBufferedMediaUploadBytes+1))
+	closeErr := file.Close()
+	if err != nil || closeErr != nil {
+		return nil, huma.Error500InternalServerError("Could not read image")
+	}
+	if int64(len(content)) > MaxBufferedMediaUploadBytes {
+		return nil, huma.Error413RequestEntityTooLarge("Image is too large to optimize")
+	}
+	return content, nil
 }

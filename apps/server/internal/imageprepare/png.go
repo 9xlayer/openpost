@@ -22,20 +22,42 @@ func OptimizePNG(ctx context.Context, input []byte) ([]byte, error) {
 	if !bytes.HasPrefix(input, signature) {
 		return input, nil
 	}
+	data, err := parsePNGData(input)
+	if err != nil {
+		return nil, err
+	}
+	compressed, err := recompressPNG(ctx, data.compressed)
+	if err != nil {
+		return nil, err
+	}
+	output := replacePNGData(input, data, compressed)
+	if len(output) >= len(input) {
+		return input, nil
+	}
+	return output, nil
+}
+
+type pngData struct {
+	compressed []byte
+	first      int
+	end        int
+}
+
+func parsePNGData(input []byte) (pngData, error) {
 	var imageData bytes.Buffer
 	first, end := -1, 0
 	for pos := len(signature); pos < len(input); {
 		if len(input)-pos < 12 {
-			return nil, errors.New("truncated PNG chunk")
+			return pngData{}, errors.New("truncated PNG chunk")
 		}
 		length := uint64(binary.BigEndian.Uint32(input[pos:]))
 		if length+12 > uint64(len(input)-pos) {
-			return nil, errors.New("truncated PNG data")
+			return pngData{}, errors.New("truncated PNG data")
 		}
 		next := pos + int(length) + 12
 		chunk := input[pos+4 : next-4]
 		if crc32.ChecksumIEEE(chunk) != binary.BigEndian.Uint32(input[next-4:next]) {
-			return nil, errors.New("invalid PNG checksum")
+			return pngData{}, errors.New("invalid PNG checksum")
 		}
 		kind := string(chunk[:4])
 		if kind == "IDAT" {
@@ -51,9 +73,13 @@ func OptimizePNG(ctx context.Context, input []byte) ([]byte, error) {
 		pos = next
 	}
 	if first < 0 || end == 0 {
-		return nil, errors.New("incomplete PNG")
+		return pngData{}, errors.New("incomplete PNG")
 	}
-	reader, err := zlib.NewReader(bytes.NewReader(imageData.Bytes()))
+	return pngData{compressed: imageData.Bytes(), first: first, end: end}, nil
+}
+
+func recompressPNG(ctx context.Context, input []byte) ([]byte, error) {
+	reader, err := zlib.NewReader(bytes.NewReader(input))
 	if err != nil {
 		return nil, err
 	}
@@ -73,28 +99,28 @@ func OptimizePNG(ctx context.Context, input []byte) ([]byte, error) {
 	if count > maxFilteredBytes {
 		return nil, errors.New("PNG optimization memory limit exceeded")
 	}
+	return compressed.Bytes(), nil
+}
+
+func replacePNGData(input []byte, data pngData, compressed []byte) []byte {
 	var output bytes.Buffer
 	output.Write(signature)
-	for pos := len(signature); pos < end; {
+	for pos := len(signature); pos < data.end; {
 		next := pos + int(binary.BigEndian.Uint32(input[pos:])) + 12
 		if string(input[pos+4:pos+8]) != "IDAT" {
 			output.Write(input[pos:next])
-		} else if pos == first {
-			data := compressed.Bytes()
-			_ = binary.Write(&output, binary.BigEndian, uint32(len(data)))
+		} else if pos == data.first {
+			_ = binary.Write(&output, binary.BigEndian, uint32(len(compressed)))
 			output.WriteString("IDAT")
-			output.Write(data)
+			output.Write(compressed)
 			checksum := crc32.NewIEEE()
 			_, _ = checksum.Write([]byte("IDAT"))
-			_, _ = checksum.Write(data)
+			_, _ = checksum.Write(compressed)
 			_ = binary.Write(&output, binary.BigEndian, checksum.Sum32())
 		}
 		pos = next
 	}
-	if output.Len() >= len(input) {
-		return input, nil
-	}
-	return output.Bytes(), nil
+	return output.Bytes()
 }
 
 type contextReader struct {

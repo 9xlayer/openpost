@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"github.com/stretchr/testify/require"
 	"hash/crc32"
 	"image"
 	"image/color"
 	"image/png"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestOptimizePreservesPixelsAndMetadata(t *testing.T) {

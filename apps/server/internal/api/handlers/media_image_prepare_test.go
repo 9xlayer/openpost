@@ -27,7 +27,7 @@ func TestOptimizeImageRetainsOriginalAndReusesCopy(t *testing.T) {
 	require.NoError(t, err)
 	var copyID string
 	for range 2 {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/media/"+original.ID+"/optimize-image", nil)
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/media/"+original.ID+"/optimize-image", nil)
 		req.Header.Set("Authorization", "Bearer web-token")
 		response := httptest.NewRecorder()
 		srv.echo.ServeHTTP(response, req)
@@ -53,7 +53,7 @@ func TestOptimizeImageRetainsOriginalAndReusesCopy(t *testing.T) {
 	require.Equal(t, content.Bytes(), saved)
 	_, err = srv.db.NewUpdate().Model((*models.WorkspaceMember)(nil)).Set("role = ?", models.WorkspaceRoleViewer).Where("workspace_id = ?", "ws-1").Exec(t.Context())
 	require.NoError(t, err)
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/media/"+original.ID+"/optimize-image", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1/media/"+original.ID+"/optimize-image", nil)
 	req.Header.Set("Authorization", "Bearer web-token")
 	denied := httptest.NewRecorder()
 	srv.echo.ServeHTTP(denied, req)
