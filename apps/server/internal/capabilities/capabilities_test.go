@@ -276,15 +276,24 @@ func TestValidateInstagramStoryWarnsWhenCollaboratorsWillBeOmitted(t *testing.T)
 }
 
 func TestValidateOutputAcceptsResolvedLinkURL(t *testing.T) {
-	// The composer projects the first URL in the text into "url" on link posts.
-	for _, provider := range []string{ProviderThreads, ProviderMastodon} {
-		t.Run(provider, func(t *testing.T) {
-			issues := ValidateOutput(provider, provider+".post", models.ContentProfileLinkShare, "Read this: https://example.com/post", "", "", nil,
-				map[string]any{"url": "https://example.com/post", "link_url": ""})
-			for _, issue := range issues {
-				require.NotEqual(t, "error", issue.Severity, issue.Message)
-			}
-		})
+	// Every format that allows text without attachments must accept the URI
+	// projection produced by the composer's canonical link choice.
+	for _, capability := range All() {
+		if capability.Media.MinCount > 0 {
+			continue
+		}
+		for _, mode := range []string{"post", "custom"} {
+			t.Run(capability.Provider+"/"+capability.Profile+"/"+mode, func(t *testing.T) {
+				body := "Read this: https://example.com/post"
+				source := map[string]any{"link": map[string]any{"destinations": map[string]any{"account": map[string]any{"mode": mode, "url": "https://example.com/custom"}}}}
+				settings, err := publicationlink.Resolve(source, "account", capability.Provider, body, nil, 0)
+				require.NoError(t, err)
+				issues := ValidateOutput(capability.Provider, capability.OutputProfile, capability.Profile, body, "A title", "", nil, settings)
+				for _, issue := range issues {
+					require.NotEqual(t, "unsupported_setting", issue.Code, issue.Message)
+				}
+			})
+		}
 	}
 }
 
@@ -691,6 +700,7 @@ func TestValidateAllowsInlineURLsWithMedia(t *testing.T) {
 		{ProviderThreads, "threads.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
 		{ProviderX, "x.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
 		{ProviderMastodon, "mastodon.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
+		{ProviderPixelfed, "pixelfed.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
 		{ProviderLinkedIn, "linkedin.multi_image", models.ContentProfileCarousel, []MediaItem{
 			{ID: "image-1", MimeType: "image/jpeg", Size: 1024},
 			{ID: "image-2", MimeType: "image/jpeg", Size: 1024},
