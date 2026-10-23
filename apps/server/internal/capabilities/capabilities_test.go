@@ -6,6 +6,7 @@ import (
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/publicationlink"
 	"github.com/stretchr/testify/require"
 )
 
@@ -285,6 +286,48 @@ func TestValidateOutputAcceptsResolvedLinkURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateOutputPreservesTextFormatLinkChoices(t *testing.T) {
+	for _, profile := range []string{models.ContentProfileShortText, models.ContentProfileThread} {
+		for _, mode := range []string{"post", "custom", "no link"} {
+			t.Run(profile+"/"+mode, func(t *testing.T) {
+				body := "Read https://example.com/post"
+				choiceMode := mode
+				if mode == "no link" {
+					body, choiceMode = "A text update", "post"
+				}
+				source := map[string]any{"link": map[string]any{"destinations": map[string]any{"account": map[string]any{"mode": choiceMode, "url": "https://example.com/custom"}}}}
+				settings, err := publicationlink.Resolve(source, "account", ProviderLinkedIn, body, nil, 0)
+				require.NoError(t, err)
+				wantURL := "https://example.com/post"
+				switch mode {
+				case "custom":
+					wantURL = "https://example.com/custom"
+				case "no link":
+					wantURL = ""
+				}
+				require.Equal(t, wantURL, settings["url"])
+				output := "linkedin.post"
+				if profile == models.ContentProfileThread {
+					output = "linkedin.thread"
+				}
+				resolved := Resolve(ProviderLinkedIn, ResolveInput{RequestedOutputProfile: output, SourceURL: wantURL, Segments: []ResolveSegment{{Body: body}}})
+				require.True(t, resolved.Compatible, "%v", resolved.Issues)
+				require.Equal(t, output, resolved.OutputProfile)
+				for _, issue := range ValidateOutput(ProviderLinkedIn, output, profile, body, "", "", nil, settings) {
+					require.NotEqual(t, "error", issue.Severity, issue.Message)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateOutputQuoteWithURLRetainsEntitlementError(t *testing.T) {
+	issues := ValidateOutput(ProviderX, "x.post", models.ContentProfileShortText, "Read https://example.com/post", "", "", nil,
+		map[string]any{"url": "https://example.com/post", "quote_url": "https://x.com/person/status/123"})
+	requireNoIssueCode(t, issues, "unsupported_setting")
+	requireIssueCode(t, issues, "setting_unavailable")
 }
 
 func TestResolveRequiresFormatOnlyForGenuinelyAmbiguousDestinations(t *testing.T) {

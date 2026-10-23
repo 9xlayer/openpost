@@ -399,7 +399,9 @@ func buildCatalog() []Capability {
 			c.OutputProfile = outputProfileFor(c.Provider, c.Profile, c.Media)
 		}
 		c.Intents = intentsFor(c.Profile)
-		c.MediaShapes = mediaShapesFor(c.Profile, c.Media)
+		if len(c.MediaShapes) == 0 {
+			c.MediaShapes = mediaShapesFor(c.Profile, c.Media)
+		}
 		if textcards.Supported(c.Provider, "") {
 			c.Settings = append(c.Settings, TextCardSettings()...)
 		}
@@ -458,8 +460,8 @@ func buildCatalog() []Capability {
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileCarousel, Label: "Threads carousel", TextLimit: 500, Media: threadsCarousel, RequiresPublicMedia: true, Settings: threadsSettings()}),
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileShortVideo, Label: "Threads video", TextLimit: 500, Media: publicShortVideo, RequiresPublicMedia: true, Settings: threadsSettings()}),
 
-		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileShortText, Label: "LinkedIn post", TextLimit: 3000, Media: text, Settings: linkedinSettings()}),
-		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileThread, Label: "LinkedIn root plus comments", TextLimit: 1250, Media: text, Settings: linkedinSettings()}),
+		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileShortText, Label: "LinkedIn post", TextLimit: 3000, Media: text, MediaShapes: []string{MediaShapeText, MediaShapeLink}, Settings: linkedinPostSettings()}),
+		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileThread, Label: "LinkedIn root plus comments", TextLimit: 1250, Media: text, MediaShapes: []string{MediaShapeText, MediaShapeLink}, Settings: linkedinPostSettings()}),
 		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileLinkShare, Label: "LinkedIn article", TextLimit: 3000, Media: text, Settings: append(linkSettings(), linkedinSettings()...)}),
 		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileImagePost, Label: "LinkedIn image", TextLimit: 3000, Media: linkedinImage, Settings: linkedinSettings()}),
 		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileCarousel, Label: "LinkedIn document", TextLimit: 3000, Media: document, Settings: append([]SettingField{{Key: "document_title", Label: "Document title", Type: "text", Required: true}}, linkedinSettings()...)}),
@@ -2537,7 +2539,7 @@ func linkSettings() []SettingField {
 
 func xSettings() []SettingField {
 	return []SettingField{
-		{Key: "quote_url", Label: "Quote post", Type: "url", Control: "quote_url", MediaShapes: []string{MediaShapeText}, Conflicts: []SettingCondition{{Key: "poll_options", Operator: "present"}}, Capability: "enterprise_quote", UnavailableReason: "Quote publishing requires X Enterprise API access."},
+		{Key: "quote_url", Label: "Quote post", Type: "url", Control: "quote_url", MediaShapes: []string{MediaShapeText, MediaShapeLink}, Conflicts: []SettingCondition{{Key: "poll_options", Operator: "present"}}, Capability: "enterprise_quote", UnavailableReason: "Quote publishing requires X Enterprise API access."},
 		{Key: "poll_options", Label: "Poll", Type: "textarea", Control: "poll", Scope: SettingScopeSegment, MediaShapes: []string{MediaShapeText}, Constraints: SettingConstraint{MinItems: 2, MaxItems: 4, MinLength: 1, MaxLength: 25}, Conflicts: []SettingCondition{{Key: "media", Operator: "present"}, {Key: "quote_url", Operator: "present"}}, Help: "Add 2–4 options. Polls cannot include media or a quote."},
 		{Key: "poll_duration_minutes", Label: "Poll duration", Type: "number", Scope: SettingScopeSegment, Constraints: SettingConstraint{Minimum: float64Pointer(5), Maximum: float64Pointer(10080)}, Dependencies: []SettingCondition{{Key: "poll_options", Operator: "present"}}},
 		{Key: "reply_settings", Label: "Who can reply", Type: "select", Options: []string{"following", "mentionedUsers", "subscribers", "verified"}},
@@ -2635,6 +2637,11 @@ func blueskySettings() []SettingField {
 		{Key: "reply_gate", Label: "Who can reply", Type: "select", Options: []string{"everyone", "mentioned", "following", "followers", "nobody"}},
 		{Key: "thread_gate", Label: "Thread replies", Type: "select", Scope: SettingScopeSegment, Options: []string{"inherit", "everyone", "mentioned", "following", "followers", "nobody"}},
 	}
+}
+
+func linkedinPostSettings() []SettingField {
+	// Text posts may carry a link without requiring one or changing their format.
+	return append([]SettingField{{Key: "url", Label: "URL", Type: "url", Control: "url"}}, linkedinSettings()...)
 }
 
 func linkedinSettings() []SettingField {
