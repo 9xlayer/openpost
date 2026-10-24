@@ -3106,6 +3106,8 @@
 	"settings_configuration_environment_locked": "Gerido pelo ambiente",
 	"settings_configuration_edit_provider": "Editar aplicação do fornecedor",
 	"settings_configuration_add_provider": "Adicionar aplicação de fornecedor",
+	"settings_configuration_tiktok_approval_notice": "As aplicações TikTok Direct Post têm de se destinar a um público alargado. As aplicações usadas apenas por si ou pela sua equipa não são elegíveis para aprovação. As aplicações sem auditoria só podem publicar em privado.",
+	"settings_configuration_tiktok_approval_link": "Consultar os requisitos do TikTok",
 	"settings_configuration_provider_form_body": "Os segredos são cifrados e nunca são devolvidos pela API.",
 	"settings_configuration_add_another": "Adicionar outra",
 	"settings_configuration_provider": "Fornecedor",

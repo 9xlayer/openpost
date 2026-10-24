@@ -831,6 +831,19 @@
 							</Button>
 						{/if}
 					</div>
+					{#if provider === 'tiktok'}
+						<InlineNotice tone="warning">
+							{m.settings_configuration_tiktok_approval_notice()}
+							<a
+								class="mt-1 flex min-h-11 w-fit items-center underline underline-offset-4"
+								href="https://developers.tiktok.com/doc/content-sharing-guidelines/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{m.settings_configuration_tiktok_approval_link()}
+							</a>
+						</InlineNotice>
+					{/if}
 					<div class="grid gap-4 sm:grid-cols-2">
 						<div class="space-y-2">
 							<Label for="provider-app-provider">{m.settings_configuration_provider()}</Label>

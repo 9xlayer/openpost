@@ -3106,6 +3106,8 @@
 	"settings_configuration_environment_locked": "Durch Umgebung verwaltet",
 	"settings_configuration_edit_provider": "Anbieter-App bearbeiten",
 	"settings_configuration_add_provider": "Anbieter-App hinzufügen",
+	"settings_configuration_tiktok_approval_notice": "TikTok-Direct-Post-Apps müssen sich an ein breites Publikum richten. Apps, die nur du oder dein Team nutzen, können nicht genehmigt werden. Ohne Audit können Apps nur privat veröffentlichen.",
+	"settings_configuration_tiktok_approval_link": "TikToks Anforderungen ansehen",
 	"settings_configuration_provider_form_body": "Secrets werden verschlüsselt gespeichert und nie von der API zurück­gegeben.",
 	"settings_configuration_add_another": "Weitere hinzufügen",
 	"settings_configuration_provider": "Anbieter",

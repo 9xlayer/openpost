@@ -3106,6 +3106,8 @@
 	"settings_configuration_environment_locked": "Ortam tarafından yönetiliyor",
 	"settings_configuration_edit_provider": "Sağlayıcı uygulamasını düzenle",
 	"settings_configuration_add_provider": "Sağlayıcı uygulaması ekle",
+	"settings_configuration_tiktok_approval_notice": "TikTok Direct Post uygulamaları geniş bir kitleye yönelik olmalıdır. Yalnızca sizin veya ekibinizin kullandığı uygulamalar onay alamaz. Denetlenmemiş uygulamalar yalnızca gizli paylaşım yapabilir.",
+	"settings_configuration_tiktok_approval_link": "TikTok gereksinimlerini inceleyin",
 	"settings_configuration_provider_form_body": "Gizli bilgiler durağan halde şifrelenir ve API tarafından asla döndürülmez.",
 	"settings_configuration_add_another": "Başka ekle",
 	"settings_configuration_provider": "Sağlayıcı",

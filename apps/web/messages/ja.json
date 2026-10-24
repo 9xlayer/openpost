@@ -3106,6 +3106,8 @@
 	"settings_configuration_environment_locked": "環境変数で管理",
 	"settings_configuration_edit_provider": "プロバイダーアプリを編集",
 	"settings_configuration_add_provider": "プロバイダーアプリを追加",
+	"settings_configuration_tiktok_approval_notice": "TikTok Direct Postアプリは、幅広いユーザーを対象にする必要があります。自分やチーム内だけで使うアプリは承認の対象になりません。監査を受けていないアプリは非公開でのみ投稿できます。",
+	"settings_configuration_tiktok_approval_link": "TikTokの要件を確認",
 	"settings_configuration_provider_form_body": "シークレットは保存時に暗号化され、APIでは返されません。",
 	"settings_configuration_add_another": "さらに追加",
 	"settings_configuration_provider": "プロバイダー",

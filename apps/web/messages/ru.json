@@ -3119,6 +3119,8 @@
 	"settings_configuration_environment_locked": "Управляется окружением",
 	"settings_configuration_edit_provider": "Изменить приложение сервиса",
 	"settings_configuration_add_provider": "Добавить приложение сервиса",
+	"settings_configuration_tiktok_approval_notice": "Приложения TikTok Direct Post должны быть предназначены для широкой аудитории. Приложения только для вас или вашей команды не подлежат одобрению. Без аудита приложения могут публиковать только приватно.",
+	"settings_configuration_tiktok_approval_link": "Посмотреть требования TikTok",
 	"settings_configuration_provider_form_body": "Секреты хранятся в зашифрованном виде и никогда не возвращаются через API.",
 	"settings_configuration_add_another": "Добавить ещё",
 	"settings_configuration_provider": "Сервис",

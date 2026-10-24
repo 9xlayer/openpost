@@ -3106,6 +3106,8 @@
 	"settings_configuration_environment_locked": "由环境变量管理",
 	"settings_configuration_edit_provider": "编辑平台应用",
 	"settings_configuration_add_provider": "添加平台应用",
+	"settings_configuration_tiktok_approval_notice": "TikTok Direct Post 应用必须面向广泛用户。仅供您或您的团队使用的应用不符合审批条件。未经审核的应用只能私密发布。",
+	"settings_configuration_tiktok_approval_link": "查看 TikTok 的要求",
 	"settings_configuration_provider_form_body": "密钥静态加密存储，API 不会返回。",
 	"settings_configuration_add_another": "再添加一个",
 	"settings_configuration_provider": "服务商",

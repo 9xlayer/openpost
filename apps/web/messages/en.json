@@ -3149,6 +3149,8 @@
 	"settings_configuration_environment_locked": "Managed by environment",
 	"settings_configuration_edit_provider": "Edit provider app",
 	"settings_configuration_add_provider": "Add provider app",
+	"settings_configuration_tiktok_approval_notice": "TikTok Direct Post apps must serve a broad audience. Apps used only by you or your team are ineligible for approval. Unaudited apps can post only privately.",
+	"settings_configuration_tiktok_approval_link": "Review TikTok's requirements",
 	"settings_configuration_provider_form_body": "Secrets are encrypted at rest and are never returned by the API.",
 	"settings_configuration_add_another": "Add another",
 	"settings_configuration_provider": "Provider",
