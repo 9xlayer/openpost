@@ -42,7 +42,6 @@ func (s *Service) MarkAllRead(ctx context.Context, actor Actor, input Query) (in
 			events[i] = inboxchanges.Change{Kind: "engagement", EngagementID: item.ID, Deleted: !item.DeletedAt.IsZero()}
 		}
 		return inboxchanges.Append(ctx, tx, input.WorkspaceID, events...)
-
 	})
 	return len(changed), err
 }
