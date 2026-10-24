@@ -68,6 +68,7 @@ type reviewActionResult struct {
 func (s *Service) performReviewAction(ctx context.Context, item models.EngagementItem, input engagementActionJob) (resultErr error) {
 	defer func() {
 		if resultErr != nil {
+			resultErr = s.continueKnownReviewReceipt(ctx, input.ReviewJobID, resultErr)
 			resultErr = errors.Join(resultErr, s.releaseRejectedReviewOperation(ctx, item, input.ReviewJobID))
 		}
 	}()
@@ -305,7 +306,7 @@ func (s *Service) releaseRejectedReviewOperation(ctx context.Context, item model
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if err == nil && attempt.Status != providerwrite.StatusDefiniteFailure {
+		if err == nil && attempt.Status != providerwrite.StatusDefiniteFailure && attempt.Status != providerwrite.StatusPrepared {
 			return nil
 		}
 		_, err = tx.NewUpdate().Model((*models.EngagementReviewOperation)(nil)).Set("state='rejected'").Set("updated_at=?", s.now()).Where("item_id=? AND job_id=? AND state='active'", item.ID, jobID).Exec(ctx)
@@ -315,4 +316,26 @@ func (s *Service) releaseRejectedReviewOperation(ctx context.Context, item model
 
 func acceptedReviewContinuation(cause error) error {
 	return &providerwrite.OutcomeError{Kind: string(platform.PublishSubmissionPending), ProviderState: "review_reply", RetryAfter: time.Minute, Err: cause}
+}
+
+// Prerequisites can fail before Execute reloads an earlier provider receipt.
+// Keep recovering accepted or uncertain sends, including while tokens refresh.
+func (s *Service) continueKnownReviewReceipt(ctx context.Context, jobID string, failure error) error {
+	if _, pending := providerwrite.IsPending(failure); pending || errors.Is(failure, providerwrite.ErrReconciliationExpired) || jobID == "" {
+		return failure
+	}
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	var attempt models.ProviderWriteAttempt
+	err := s.db.NewSelect().Model(&attempt).Where("operation_id=?", "engagement-review:"+jobID).Order("attempt_number DESC").Limit(1).Scan(recordCtx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return failure
+	}
+	if err != nil {
+		return acceptedReviewContinuation(errors.Join(failure, err))
+	}
+	if attempt.Status == providerwrite.StatusAccepted || (attempt.RetrySafety == string(platform.PublishRetryReconcileOnly) && attempt.ProviderReference != "") {
+		return acceptedReviewContinuation(failure)
+	}
+	return failure
 }

@@ -276,19 +276,23 @@ func TestReviewReplyRejectsStaleWorkerBeforeSendAndCommit(t *testing.T) {
 }
 
 func TestAcceptedReviewRecoversFromReadAndLocalCommitFailuresWithoutResending(t *testing.T) {
-	for _, phase := range []string{"recovery read", "local commit"} {
+	for _, phase := range []string{"recovery read", "recovery token", "local commit"} {
 		t.Run(phase, func(t *testing.T) {
 			s, provider := reviewTestService(t)
 			id, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "Thanks", "recover")
 			require.NoError(t, err)
-			if phase == "recovery read" {
+			if phase != "local commit" {
 				provider.afterWrite = func() {
 					_, err := s.db.NewUpdate().Model((*models.Job)(nil)).Set("status='failed'").Where("id=?", id).Exec(t.Context())
 					require.NoError(t, err)
 				}
 				require.Error(t, runReviewAction(t, s, id))
 				provider.afterWrite = nil
-				provider.getErr = &platform.HTTPError{StatusCode: 429}
+				if phase == "recovery read" {
+					provider.getErr = &platform.HTTPError{StatusCode: 429}
+				} else {
+					s.tokenSource = failingReviewTokens{}
+				}
 			} else {
 				_, err = s.db.ExecContext(t.Context(), `CREATE TRIGGER reject_review_save BEFORE UPDATE ON engagement_items BEGIN SELECT RAISE(FAIL,'storage unavailable'); END`)
 				require.NoError(t, err)
@@ -297,6 +301,7 @@ func TestAcceptedReviewRecoversFromReadAndLocalCommitFailuresWithoutResending(t 
 			_, pending := providerwrite.IsPending(err)
 			require.True(t, pending, "accepted writes must retain a durable continuation after %s: %v", phase, err)
 			provider.getErr = nil
+			s.tokenSource = moderationTokens{}
 			if phase == "local commit" {
 				_, err = s.db.ExecContext(t.Context(), `DROP TRIGGER reject_review_save`)
 				require.NoError(t, err)
