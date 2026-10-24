@@ -59,3 +59,12 @@ func TestInvalidMentionCannotIntroduceProviderMarkupOrWrongIdentity(t *testing.T
 	require.NoError(t, ValidateDestination("@test@one.example", "mastodon", "https://ONE.example/", &Mentions{Version: 1, Spans: []MentionSpan{span}}))
 	require.Error(t, ValidateDestination("@test@one.example", "mastodon", "https://two.example", &Mentions{Version: 1, Spans: []MentionSpan{span}}))
 }
+
+func TestDuplicateMentionDeletionRequiresExplicitSelection(t *testing.T) {
+	for _, start := range []int{3, 14} {
+		before := "Hi @alice and @alice"
+		selected := &Mentions{Version: 1, Spans: []MentionSpan{{Start: start, End: start + 6, Text: "@alice", Target: alice()}}}
+		_, err := Remap(before, "Hi @alice", selected)
+		require.ErrorIs(t, err, ErrMetadataRequired, "either selected occurrence could have been deleted")
+	}
+}

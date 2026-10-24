@@ -106,12 +106,9 @@ func refreshRenditionText(ctx context.Context, db bun.IDB, rendition models.Rend
 			continue
 		}
 		if !joinedSource && !wasOwned {
-			if !inheritedRenditionText(segment, source, previousBodies) {
+			if !refreshOrdinaryRenditionText(segment, source, previousBodies) {
 				continue
 			}
-			// Ordinary inherited text uses the same canonical owner, even without a
-			// poll. Keep independent and legacy poll settings untouched.
-			segment.Body = source.Body
 		} else {
 			refreshPollSegment(segment, rendition, source, canonical, previousPoll, joinedSource)
 		}
@@ -180,4 +177,20 @@ func inheritedRenditionText(segment *models.RenditionSegment, source models.Publ
 		before = source.Body
 	}
 	return segment.BodyOverride == nil && segment.Body == before
+}
+
+// Ordinary text has one owner even when older storage omitted its override.
+func refreshOrdinaryRenditionText(segment *models.RenditionSegment, source models.PublicationSegment, previous map[string]string) bool {
+	if inheritedRenditionText(segment, source, previous) {
+		segment.Body = source.Body
+		return true
+	}
+	if segment.BodyOverride != nil {
+		return false
+	}
+	// Snapshot legacy independent text before new canonical annotations can leak
+	// into it during validation or delivery. Its existing settings remain its own.
+	body := segment.Body
+	segment.BodyOverride = &body
+	return true
 }

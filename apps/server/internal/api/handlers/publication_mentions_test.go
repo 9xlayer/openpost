@@ -127,4 +127,26 @@ func TestPublicationMentionIdentitySurvivesLegacyEditsAndCountsInRevisions(t *te
 	require.Equal(t, "Hi Acme\n\nTail", afterJoined.Renditions[0].Segments[0].Body)
 	require.Equal(t, company, afterJoined.Renditions[0].Segments[0].SourceOverrides[0].Mentions)
 	require.Nil(t, afterJoined.Renditions[0].Segments[0].Settings[posttext.SettingsKey], "joined selections remain per source")
+	for _, legacyBody := range []string{"Custom announcement", "🚀 Hi @alice custom"} {
+		create.Segments[0].Body = "🚀 Hi @alice"
+		response = send(http.MethodPost, "/api/v1/publications", create)
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &publication))
+		// Pre-override publications stored independent destination text without an
+		// explicit override. Simulate that persisted format, then use the public API.
+		_, err = db.NewUpdate().Model((*models.RenditionSegment)(nil)).Set("body = ?", legacyBody).Set("body_override = NULL").Set("settings_json = ?", "{}").Where("rendition_id = ?", publication.Renditions[0].ID).Exec(t.Context())
+		require.NoError(t, err)
+		changed = "Prefix 🚀 Hi @alice"
+		response = send(http.MethodPut, "/api/v1/publications/"+publication.ID, PublicationUpdateBody{ExpectedRevision: publication.Revision, SourceText: &changed})
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		publication = read()
+		destination := publication.Renditions[0].Segments[0]
+		require.Equal(t, legacyBody, destination.Body)
+		require.NotNil(t, destination.BodyOverride, "legacy independence must have an explicit text owner")
+		require.Equal(t, legacyBody, *destination.BodyOverride)
+		require.Nil(t, destination.Settings[posttext.SettingsKey], "canonical selections must not leak into legacy text")
+		response = send(http.MethodPost, "/api/v1/publications/"+publication.ID+"/validate", map[string]any{})
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+		require.NotContains(t, response.Body.String(), "mention_choice_invalid")
+	}
 }

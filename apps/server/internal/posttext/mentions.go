@@ -236,7 +236,7 @@ func utf8BoundaryInBoth(before, after string, left, right int) bool {
 }
 func remapMentionSpan(before, after string, span MentionSpan, prefix, suffix int) (MentionSpan, error) {
 	oldCount, newCount := strings.Count(before, span.Text), strings.Count(after, span.Text)
-	if newCount > oldCount {
+	if newCount > oldCount || (oldCount > 1 && newCount < oldCount) {
 		return span, ErrMetadataRequired
 	}
 	switch {
