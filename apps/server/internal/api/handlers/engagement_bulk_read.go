@@ -15,6 +15,7 @@ type MarkEngagementReadInput struct {
 		Platform      string `json:"platform,omitempty"`
 		AccountID     string `json:"account_id,omitempty"`
 		PublicationID string `json:"publication_id,omitempty"`
+		Kind          string `json:"kind,omitempty" enum:"comment,mention,review"`
 		Archived      bool   `json:"archived,omitempty"`
 	}
 }
@@ -40,7 +41,7 @@ func (h *EngagementMessagingHandler) markEngagementRead(ctx context.Context, inp
 	}
 	count, err := h.engagement.MarkAllRead(ctx, engagementActor(ctx), engagement.Query{
 		WorkspaceID: input.Body.WorkspaceID, Platform: input.Body.Platform, AccountID: input.Body.AccountID,
-		PublicationID: input.Body.PublicationID, Archived: input.Body.Archived,
+		PublicationID: input.Body.PublicationID, Kind: input.Body.Kind, Archived: input.Body.Archived,
 	})
 	if err != nil {
 		return nil, engagementHTTPError(err, "failed to mark matching engagement read")

@@ -38,6 +38,7 @@ func (h *EngagementMessagingHandler) SetFeatureGate(g EngagementMessagingFeature
 }
 
 type ListEngagementInput struct {
+	Kind          string `query:"kind" enum:"comment,mention,review" doc:"Filter account activity by kind; omit for all engagement"`
 	WorkspaceID   string `query:"workspace_id" required:"true"`
 	Platform      string `query:"platform"`
 	AccountID     string `query:"account_id"`
@@ -71,7 +72,7 @@ type EngagementActionInput struct {
 	ItemID string `path:"item_id"`
 	Body   struct {
 		WorkspaceID       string `json:"workspace_id" required:"true"`
-		Action            string `json:"action" enum:"reply,hide,delete,like,unlike" required:"true"`
+		Action            string `json:"action" enum:"reply,delete_reply,hide,delete,like,unlike" required:"true"`
 		Message           string `json:"message,omitempty"`
 		ClientOperationID string `json:"client_operation_id,omitempty" maxLength:"128"`
 	}
@@ -114,6 +115,7 @@ type MessageSyncState struct {
 // EngagementSyncState exposes durable, safe collection health without provider
 // cursors or raw response data.
 type EngagementSyncState struct {
+	Feed            string    `json:"feed,omitempty"`
 	ID              string    `json:"id"`
 	RenditionID     string    `json:"rendition_id"`
 	SocialAccountID string    `json:"social_account_id"`
@@ -425,7 +427,7 @@ func (h *EngagementMessagingHandler) listEngagement(ctx context.Context, input *
 	}
 	page, err := h.engagement.ListEngagement(ctx, engagementActor(ctx), engagement.Query{
 		WorkspaceID: input.WorkspaceID, Platform: input.Platform, AccountID: input.AccountID,
-		PublicationID: input.PublicationID, UnreadOnly: input.UnreadOnly, Archived: input.Archived,
+		PublicationID: input.PublicationID, Kind: input.Kind, UnreadOnly: input.UnreadOnly, Archived: input.Archived,
 		Limit: input.Limit, Offset: input.Offset, Cursor: cursor,
 	})
 	if err != nil {
@@ -438,7 +440,8 @@ func (h *EngagementMessagingHandler) listEngagement(ctx context.Context, input *
 	safeStates := make([]EngagementSyncState, 0, len(states))
 	for _, state := range states {
 		safeStates = append(safeStates, EngagementSyncState{
-			ID: state.ID, RenditionID: state.RenditionID, SocialAccountID: state.SocialAccountID,
+			Feed: state.Feed,
+			ID:   state.ID, RenditionID: state.RenditionID, SocialAccountID: state.SocialAccountID,
 			Platform: state.Platform, Status: state.Status, ErrorCode: state.ErrorCode,
 			ErrorMessage: state.ErrorMessage, LastSuccessAt: state.LastSuccessAt, NextSyncAt: state.NextSyncAt,
 		})
@@ -482,7 +485,7 @@ func (h *EngagementMessagingHandler) queueEngagementAction(ctx context.Context, 
 	actor.CredentialWorkspaceID = input.Body.WorkspaceID
 	jobID, err := h.engagement.QueueEngagementActionReceipt(ctx, actor, input.ItemID, input.Body.Action, input.Body.Message, input.Body.ClientOperationID)
 	if err != nil {
-		if errors.Is(err, engagement.ErrOperationConflict) {
+		if errors.Is(err, engagement.ErrOperationConflict) || errors.Is(err, engagement.ErrReviewReplyBusy) {
 			return nil, huma.Error409Conflict(err.Error())
 		}
 		if errors.Is(err, engagement.ErrAccessDenied) || errors.Is(err, engagement.ErrNotFound) {

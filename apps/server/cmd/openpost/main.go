@@ -622,6 +622,9 @@ func main() {
 		if engagementAdapter, ok := adapter.(platform.EngagementAdapter); ok {
 			engagementService.SetProvider(name, engagementAdapter)
 		}
+		if activityAdapter, ok := adapter.(platform.AccountActivityAdapter); ok {
+			engagementService.SetActivityProvider(name, activityAdapter)
+		}
 		if messagingAdapter, ok := adapter.(platform.MessagingAdapter); ok {
 			messagingService.SetProvider(name, messagingAdapter)
 		}
@@ -906,6 +909,7 @@ func main() {
 	mcpHandler.SetProviderReadiness(providerReadinessService)
 	mcpHandler.SetTokenEncryptor(tokenEncryptor)
 	mcpHandler.SetTokenSource(tokenManager)
+	mcpHandler.SetEngagementService(engagementService)
 	mcpHandler.RegisterRoutes(e)
 	mcpOAuthHandler := handlers.NewMCPOAuthHandler(mcpOAuthService, authenticator, cfg.PublicURL)
 	mcpOAuthHandler.SetIdentityService(identityService)

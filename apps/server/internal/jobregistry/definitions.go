@@ -21,6 +21,7 @@ const (
 	TypeEngagementSweep         = "engagement_sweep"
 	TypeMessagingSweep          = "messaging_sweep"
 	TypeEngagementSync          = "engagement_sync"
+	TypeEngagementAccountSync   = "engagement_account_sync"
 	TypeMessagesSync            = "messages_sync"
 	TypeEngagementAction        = "engagement_action"
 	TypeMessageSend             = "message_send"
@@ -138,6 +139,8 @@ var definitions = map[string]Definition{
 		"A later engagement sweep remains queued; this sweep will not retry."),
 	TypeEngagementSync: providerReadDefinition(TypeEngagementSync, 5, ExecuteEngagement, RecoveryRequeue,
 		"Engagement collection failed. OpenPost will retry when the failure is temporary.", ""),
+	TypeEngagementAccountSync: providerReadDefinition(TypeEngagementAccountSync, 5, ExecuteEngagement, RecoveryRequeue,
+		"Account activity collection failed. OpenPost will retry when the failure is temporary.", ""),
 	TypeMessagingSweep: providerReadDefinition(TypeMessagingSweep, 5, ExecuteMessaging, RecoverySupersedeSweep,
 		"Messaging collection failed. OpenPost will retry when the failure is temporary.",
 		"A later Messaging sweep remains queued; this sweep will not retry."),

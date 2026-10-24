@@ -443,6 +443,9 @@ func prepareMigration(ctx context.Context, db *bun.DB, migration migration) erro
 	case 129:
 		description = "external application access token ownership"
 		err = ensureExternalApplicationTokenColumn(ctx, db)
+	case 171:
+		description = "account-level engagement subjects"
+		err = prepareAccountEngagement(ctx, db)
 	}
 	if err != nil {
 		return fmt.Errorf("migration %s %s preparation failed: %w", migration.name, description, err)

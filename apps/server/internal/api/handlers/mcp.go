@@ -290,6 +290,7 @@ type MCPHandler struct {
 	readiness         *providerreadiness.Service
 	serverVersion     string
 	featureGate       engagementservice.FeatureGate
+	engagement        *engagementservice.Service
 	toolMode          mcpToolMode
 }
 
@@ -1374,7 +1375,7 @@ type mcpOperationDefinition struct {
 }
 
 func mcpOperationCatalog() []mcpOperationDefinition {
-	return []mcpOperationDefinition{
+	return append(mcpInboxTools(), []mcpOperationDefinition{
 		mcpListWorkspacesTool(),
 		mcpListProviderCatalogTool(),
 		mcpListAccountsTool(),
@@ -1454,7 +1455,7 @@ func mcpOperationCatalog() []mcpOperationDefinition {
 		mcpEditorHistoryInspectTool(),
 		mcpEditorHistoryUndoTool(),
 		mcpEditorHistoryRedoTool(),
-	}
+	}...)
 }
 
 func mcpSearchTool() map[string]any {
@@ -2691,6 +2692,18 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"media": mcpOpenObjectSchema(),
 		}, "media")
+	case mcpToolInboxList:
+		return mcpAuthoringSchema[EngagementPage]()
+	case mcpToolInboxGet:
+		return mcpAuthoringSchema[engagementservice.EngagementDetail]()
+	case mcpToolInboxRefresh:
+		return mcpAuthoringSchema[RefreshCapabilityOutcome]()
+	case mcpToolInboxState:
+		return mcpStructuredOutputSchema(map[string]any{"updated": map[string]any{"type": "boolean"}}, "updated")
+	case mcpToolInboxRead:
+		return mcpStructuredOutputSchema(map[string]any{"updated_count": map[string]any{"type": "integer"}}, "updated_count")
+	case mcpToolInboxAction:
+		return mcpStructuredOutputSchema(map[string]any{"job_id": map[string]any{"type": "string"}}, "job_id")
 	case mcpToolLookupMentions:
 		return mcpStructuredOutputSchema(map[string]any{"candidates": mcpArraySchema(mcpAuthoringSchema[platform.MentionCandidate]()), "mode": map[string]any{"type": "string", "enum": []string{"accounts", "exact_company"}}}, "candidates", "mode")
 	case mcpToolPrepareImage:
@@ -3311,6 +3324,8 @@ func (h *MCPHandler) callDiscoveredMCPOperation(ctx context.Context, userID stri
 func (h *MCPHandler) callMCPOperation(ctx context.Context, userID, operation string, args map[string]any) (any, *mcpError) {
 	operation = normalizeMCPOperationName(operation)
 	switch operation {
+	case mcpToolInboxList, mcpToolInboxGet, mcpToolInboxRefresh, mcpToolInboxState, mcpToolInboxRead, mcpToolInboxAction:
+		return h.callInboxTool(ctx, userID, operation, args)
 	case mcpToolWorkspaces, mcpToolProviders, mcpToolSearchDocs:
 		return h.callReadOnlyGlobalTool(ctx, userID, operation, args)
 	case mcpToolLookupMentions, mcpToolAccounts, mcpToolListMedia, mcpToolReadiness, mcpToolPostMetrics, mcpToolDashboardLink:

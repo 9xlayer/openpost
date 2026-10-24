@@ -17,6 +17,7 @@ var mastodonHTMLTags = regexp.MustCompile(`<[^>]+>`)
 
 type mastodonMessageStatus struct {
 	ID          string `json:"id"`
+	URL         string `json:"url"`
 	Visibility  string `json:"visibility"`
 	InReplyToID string `json:"in_reply_to_id"`
 	Content     string `json:"content"`

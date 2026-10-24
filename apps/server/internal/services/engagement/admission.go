@@ -81,20 +81,19 @@ func (s *Service) queueEngagementActionWithDB(ctx context.Context, tx bun.Tx, ac
 	if _, err = validateEngagementAction(item, action, message); err != nil {
 		return "", err
 	}
-	// A new intentional action gets its own durable payload identity. Only the
-	// actor-scoped client receipt identifies a replay, never its text content.
-	payload, _ := json.Marshal(engagementActionJob{ItemID: item.ID, Action: action, Message: message, UserID: actor.UserID, ClientOperationID: firstActionID(operationID)})
-	job, err := jobregistry.NewJob(JobTypeEngagementAct, string(payload), s.now())
+	if item.Kind == "review" {
+		if err := requireReviewActionAvailable(ctx, tx, item.ID); err != nil {
+			return "", err
+		}
+	}
+	job, err := s.newEngagementActionJob(actor, item, action, message, operationID)
 	if err != nil {
 		return "", err
 	}
-	job.ScopeID = item.WorkspaceID
 	if _, err = tx.NewInsert().Model(job).Exec(ctx); err != nil {
 		return "", err
 	}
-	if operationID != "" {
-		_, err = tx.NewRaw(`INSERT INTO engagement_operations(workspace_id,user_id,item_id,operation_id,body_hash,job_id) VALUES(?,?,?,?,?,?)`, item.WorkspaceID, actor.UserID, item.ID, operationID, bodyHash, job.ID).Exec(ctx)
-	}
+	err = s.persistEngagementActionReceipt(ctx, tx, actor, item, operationID, bodyHash, job.ID)
 	return job.ID, err
 }
 
@@ -124,4 +123,36 @@ func firstActionID(operationID string) string {
 		return operationID
 	}
 	return uuid.NewString()
+}
+
+func (s *Service) newEngagementActionJob(actor Actor, item models.EngagementItem, action, message, operationID string) (*models.Job, error) {
+	id := uuid.NewString()
+	input := engagementActionJob{ItemID: item.ID, Action: action, Message: message, UserID: actor.UserID, ClientOperationID: firstActionID(operationID)}
+	if item.Kind == "review" {
+		input.ReviewJobID = id
+	}
+	payload, err := json.Marshal(input)
+	if err != nil {
+		return nil, err
+	}
+	job, err := jobregistry.NewJob(JobTypeEngagementAct, string(payload), s.now())
+	if err != nil {
+		return nil, err
+	}
+	job.ID, job.ScopeID = id, item.WorkspaceID
+	return job, nil
+}
+
+func (s *Service) persistEngagementActionReceipt(ctx context.Context, tx bun.Tx, actor Actor, item models.EngagementItem, operationID, bodyHash, jobID string) error {
+	var err error
+	if operationID != "" {
+		_, err = tx.NewRaw(`INSERT INTO engagement_operations(workspace_id,user_id,item_id,operation_id,body_hash,job_id) VALUES(?,?,?,?,?,?)`, item.WorkspaceID, actor.UserID, item.ID, operationID, bodyHash, jobID).Exec(ctx)
+	}
+	if err == nil && item.Kind == "review" {
+		_, err = tx.NewInsert().Model(&models.EngagementReviewOperation{ItemID: item.ID, JobID: jobID, State: "active", UpdatedAt: s.now()}).On("CONFLICT (item_id) DO UPDATE").Set("job_id=EXCLUDED.job_id").Set("state=EXCLUDED.state").Set("updated_at=EXCLUDED.updated_at").Exec(ctx)
+		if err == nil {
+			err = appendEngagementChange(ctx, tx, item)
+		}
+	}
+	return err
 }

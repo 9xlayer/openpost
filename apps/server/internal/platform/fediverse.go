@@ -750,23 +750,7 @@ func compatListComments(ctx context.Context, instanceURL, accessToken, accountID
 	}
 	comments := make([]Comment, 0, len(response.Descendants))
 	for _, status := range response.Descendants {
-		attachments := make([]CommentAttachment, 0, len(status.MediaAttachments))
-		for _, attachment := range status.MediaAttachments {
-			attachments = append(attachments, CommentAttachment{
-				Type:      attachment.Type,
-				URL:       attachment.URL,
-				Thumbnail: attachment.PreviewURL,
-				AltText:   attachment.Description,
-			})
-		}
-		comments = append(comments, Comment{
-			ID: status.ID, ParentID: status.InReplyToID, AuthorID: status.Account.ID, AuthorName: status.Account.DisplayName,
-			AuthorHandle: prefixHandle(status.Account.Acct), AuthorAvatarURL: status.Account.Avatar,
-			Text: mastodonPlainText(status.Content), CreatedAt: status.CreatedAt, UpdatedAt: status.EditedAt,
-			Attachments: attachments, IsOurs: status.Account.ID == accountID, CanReply: true,
-			CanDelete: status.Account.ID == accountID, CanLike: !status.Favourited,
-			CanUnlike: status.Favourited, Liked: status.Favourited, LikeStateKnown: true,
-		})
+		comments = append(comments, mastodonStatusComment(status, accountID))
 	}
 	return comments, nil
 }
@@ -799,4 +783,24 @@ func compatUnfavouriteComment(ctx context.Context, instanceURL, accessToken, com
 		return fmt.Errorf("unliking %s reply: %w", provider, err)
 	}
 	return nil
+}
+
+func mastodonStatusComment(status mastodonMessageStatus, accountID string) Comment {
+	attachments := make([]CommentAttachment, 0, len(status.MediaAttachments))
+	for _, attachment := range status.MediaAttachments {
+		attachments = append(attachments, CommentAttachment{
+			Type:      attachment.Type,
+			URL:       attachment.URL,
+			Thumbnail: attachment.PreviewURL,
+			AltText:   attachment.Description,
+		})
+	}
+	return Comment{
+		ID: status.ID, ParentID: status.InReplyToID, AuthorID: status.Account.ID, AuthorName: status.Account.DisplayName,
+		AuthorHandle: prefixHandle(status.Account.Acct), AuthorAvatarURL: status.Account.Avatar,
+		Text: mastodonPlainText(status.Content), CreatedAt: status.CreatedAt, UpdatedAt: status.EditedAt,
+		Attachments: attachments, IsOurs: status.Account.ID == accountID, CanReply: true,
+		CanDelete: status.Account.ID == accountID, CanLike: !status.Favourited,
+		CanUnlike: status.Favourited, Liked: status.Favourited, LikeStateKnown: true,
+	}
 }

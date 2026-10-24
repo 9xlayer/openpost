@@ -39,8 +39,8 @@ import (
 //     so content analytics stay unsupported and failed analytics empties are
 //     never cached as measurements.
 //
-// GBP remains behind capability flags: analytics and engagement report
-// unsupported, composer capabilities require app review and carry an
+// GBP remains behind capability flags: analytics report unsupported,
+// reviews use their own permission gate, and composer capabilities require app review with an
 // unavailable reason until Google API access and live certification exist.
 const (
 	googleBusinessAccountManagementBaseURL = "https://mybusinessaccountmanagement.googleapis.com/v1"
@@ -269,6 +269,14 @@ func (g *GoogleBusinessAdapter) listAccountLocations(ctx context.Context, access
 // grant. Single-account enumeration misses locations under additional
 // organization accounts, so every account page is walked.
 func (g *GoogleBusinessAdapter) listOperableLocations(ctx context.Context, accessToken string) ([]googleBusinessLocation, error) {
+	return g.listGoogleBusinessLocations(ctx, accessToken, false)
+}
+
+func (g *GoogleBusinessAdapter) listConnectableLocations(ctx context.Context, accessToken string) ([]googleBusinessLocation, error) {
+	return g.listGoogleBusinessLocations(ctx, accessToken, true)
+}
+
+func (g *GoogleBusinessAdapter) listGoogleBusinessLocations(ctx context.Context, accessToken string, reviews bool) ([]googleBusinessLocation, error) {
 	accounts, err := g.listAccounts(ctx, accessToken)
 	if err != nil {
 		return nil, err
@@ -281,7 +289,9 @@ func (g *GoogleBusinessAdapter) listOperableLocations(ctx context.Context, acces
 			return nil, err
 		}
 		for _, location := range locations {
-			if !googleBusinessLocationOperable(location) {
+			postable := googleBusinessLocationOperable(location)
+			reviewable := reviews && location.LocationState.IsVerified && googleBusinessLocationNamePattern.MatchString(location.Name)
+			if !postable && !reviewable {
 				continue
 			}
 			if _, duplicate := seen[location.Name]; duplicate {
@@ -319,7 +329,7 @@ func (g *GoogleBusinessAdapter) ListAccountSelections(ctx context.Context, token
 	if token == nil {
 		return nil, fmt.Errorf("google business account selection requires a token")
 	}
-	locations, err := g.listOperableLocations(ctx, token.AccessToken)
+	locations, err := g.listConnectableLocations(ctx, token.AccessToken)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +348,7 @@ func (g *GoogleBusinessAdapter) SelectAccount(ctx context.Context, token *TokenR
 	if !googleBusinessLocationNamePattern.MatchString(selectionID) {
 		return nil, fmt.Errorf("google business location selection %q is not a valid location", selectionID)
 	}
-	locations, err := g.listOperableLocations(ctx, token.AccessToken)
+	locations, err := g.listConnectableLocations(ctx, token.AccessToken)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +372,7 @@ func (g *GoogleBusinessAdapter) SelectAccount(ctx context.Context, token *TokenR
 			},
 		}, nil
 	}
-	return nil, fmt.Errorf("google business location selection %s is not operable for local posts", selectionID)
+	return nil, fmt.Errorf("google business location selection %s is not available for publishing or reviews", selectionID)
 }
 
 // RefreshAccountMetadata resolves the current provider-owned name for one
@@ -372,7 +382,7 @@ func (g *GoogleBusinessAdapter) RefreshAccountMetadata(ctx context.Context, acce
 	if !googleBusinessLocationNamePattern.MatchString(accountID) {
 		return nil, fmt.Errorf("google business metadata refresh requires a location resource name")
 	}
-	locations, err := g.listOperableLocations(ctx, accessToken)
+	locations, err := g.listConnectableLocations(ctx, accessToken)
 	if err != nil {
 		return nil, err
 	}
@@ -389,7 +399,7 @@ func (g *GoogleBusinessAdapter) RefreshAccountMetadata(ctx context.Context, acce
 			},
 		}, nil
 	}
-	return nil, fmt.Errorf("google business location %s is no longer operable for local posts", accountID)
+	return nil, fmt.Errorf("google business location %s is no longer available for publishing or reviews", accountID)
 }
 
 func (g *GoogleBusinessAdapter) ListDestinationOptions(ctx context.Context, accessToken string, _ DestinationOptionsInput) (map[string][]DestinationOption, error) {

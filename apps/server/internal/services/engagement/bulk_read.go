@@ -31,7 +31,7 @@ func (s *Service) MarkAllRead(ctx context.Context, actor Actor, input Query) (in
 			return ErrAccessDenied
 		}
 		matching := tx.NewSelect().Model((*models.EngagementItem)(nil)).Column("id").Where("workspace_id = ?", input.WorkspaceID)
-		matching = engagementFilters(matching, input.Platform, input.AccountID, input.PublicationID, true, input.Archived)
+		matching = engagementFilters(matching, input.Platform, input.AccountID, input.PublicationID, input.Kind, true, input.Archived)
 		if err := tx.NewUpdate().Model((*models.EngagementItem)(nil)).
 			Set("read_at = ?", s.now()).Where("workspace_id = ? AND read_at IS NULL", input.WorkspaceID).
 			Where("id IN (?)", matching).Returning("id, deleted_at").Scan(ctx, &changed); err != nil {

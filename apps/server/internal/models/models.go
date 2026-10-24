@@ -1726,7 +1726,15 @@ type EngagementItem struct {
 
 	ID                   string                 `bun:",pk" json:"id"`
 	WorkspaceID          string                 `bun:"workspace_id,notnull" json:"workspace_id"`
-	RenditionID          string                 `bun:"rendition_id,notnull" json:"rendition_id"`
+	RenditionID          string                 `bun:"rendition_id,nullzero" json:"rendition_id,omitempty"`
+	Kind                 string                 `bun:"kind,notnull,default:'comment'" json:"kind,omitempty"`
+	SubjectJSON          string                 `bun:"subject_json,notnull,default:'{}'" json:"-"`
+	Subject              *EngagementSubject     `bun:"-" json:"subject,omitempty"`
+	ReviewReplyCheckAt   time.Time              `bun:"review_reply_check_at,nullzero" json:"-"`
+	ReviewReplyWrittenAt time.Time              `bun:"review_reply_written_at,nullzero" json:"-"`
+	CanDeleteReply       bool                   `bun:"-" json:"can_delete_reply,omitempty"`
+	ReplyJobID           string                 `bun:"-" json:"reply_job_id,omitempty"`
+	ReplyOperationState  string                 `bun:"-" json:"reply_operation_state,omitempty"`
 	SocialAccountID      string                 `bun:"social_account_id,notnull" json:"social_account_id"`
 	Platform             string                 `bun:",notnull" json:"platform"`
 	RemoteID             string                 `bun:"remote_id,notnull" json:"remote_id"`
@@ -1813,6 +1821,7 @@ type DirectMessage struct {
 // EngagementSyncState is the latest safe cursor and collection state for one rendition.
 type EngagementSyncState struct {
 	bun.BaseModel `bun:"table:engagement_sync_states"`
+	Feed          string `bun:"-" json:"feed,omitempty"`
 
 	ID               string    `bun:",pk" json:"id"`
 	WorkspaceID      string    `bun:"workspace_id,notnull" json:"workspace_id"`

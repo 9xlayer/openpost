@@ -95,6 +95,7 @@ func putOptionalFact(payload map[string]any, key, value string) {
 }
 
 type EngagementReceivedFacts struct {
+	Kind            string
 	RecipientUserID string
 	WorkspaceID     string
 	EngagementID    string
@@ -108,7 +109,7 @@ func NewEngagementReceivedOutcome(facts EngagementReceivedFacts) (Outcome, error
 	return newOutcome(semanticOutcome{
 		recipientID: facts.RecipientUserID, workspaceID: facts.WorkspaceID,
 		topic: TypeNewEngagement, eventID: facts.EngagementID,
-		payload: map[string]any{"engagement_id": facts.EngagementID, "publication_id": facts.PublicationID, "rendition_id": facts.RenditionID, "provider": facts.Provider, "author_name": facts.AuthorName},
+		payload: map[string]any{"engagement_id": facts.EngagementID, "publication_id": facts.PublicationID, "rendition_id": facts.RenditionID, "provider": facts.Provider, "author_name": facts.AuthorName, "activity_kind": facts.Kind},
 	})
 }
 
@@ -318,8 +319,17 @@ func materializeEngagementOutcome(value semanticOutcome) (createInput, error) {
 	engagementID, _ := value.payload["engagement_id"].(string)
 	input.Title = "New engagement"
 	input.Body = "Someone replied to your post."
+	switch value.payload["activity_kind"] {
+	case "mention":
+		input.Title, input.Body = "New mention", "Someone mentioned your account."
+	case "review":
+		input.Title, input.Body = "New review", "Your business received a review."
+	}
 	input.Href = "/inbox/engagement?item=" + url.QueryEscape(engagementID)
 	input.Actions = []models.NotificationAction{{Label: "Open reply", Href: input.Href, Kind: "primary"}}
+	if value.payload["activity_kind"] == "mention" || value.payload["activity_kind"] == "review" {
+		input.Actions[0].Label = "Open item"
+	}
 	return input, nil
 }
 
