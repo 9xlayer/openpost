@@ -62,3 +62,21 @@ func assertTestFile(t *testing.T, path, want string) {
 		t.Fatalf("%s = %q, err = %v; want %q", path, got, err, want)
 	}
 }
+
+func TestCopyTreeKeepsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	writeTestFile(t, filepath.Join(source, "photo.png"), "photo")
+	if err := os.Symlink("photo.png", filepath.Join(source, "alias.png")); err != nil {
+		t.Skipf("symlinks are not available: %v", err)
+	}
+	destination := filepath.Join(root, "destination")
+	if err := copyTree(source, destination); err != nil {
+		t.Fatal(err)
+	}
+	link, err := os.Readlink(filepath.Join(destination, "alias.png"))
+	if err != nil || link != "photo.png" {
+		t.Fatalf("link = %q, err = %v", link, err)
+	}
+	assertTestFile(t, filepath.Join(destination, "photo.png"), "photo")
+}

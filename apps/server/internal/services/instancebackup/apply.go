@@ -204,8 +204,15 @@ func copyTree(source, destination string) error {
 		if entry.IsDir() {
 			return os.MkdirAll(target, 0o755)
 		}
+		if entry.Type()&fs.ModeSymlink != 0 {
+			link, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(link, target)
+		}
 		if !entry.Type().IsRegular() {
-			return nil
+			return fmt.Errorf("cannot move %s: unsupported file type", path)
 		}
 		in, err := os.Open(path)
 		if err != nil {
