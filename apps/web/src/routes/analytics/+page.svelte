@@ -69,11 +69,9 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	type RangeDays = AnalyticsRangeDays;
 	type ChartMetric = 'followers' | 'engagement' | 'views';
 
+	const rangePresets: RangeDays[] = [0, 7, 30, 90, 365];
 	let rangeDays = $state<RangeDays>(
-		[0, 7, 30, 90, 365].includes(Number(page.url.searchParams.get('days'))) &&
-			page.url.searchParams.has('days')
-			? (Number(page.url.searchParams.get('days')) as RangeDays)
-			: 30
+		rangePresets.find((days) => String(days) === page.url.searchParams.get('days')) ?? 30
 	);
 	let rangeFrom = $state(page.url.searchParams.get('from') ?? '');
 	let rangeTo = $state(page.url.searchParams.get('to') ?? '');

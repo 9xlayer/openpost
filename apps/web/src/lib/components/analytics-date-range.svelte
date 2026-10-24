@@ -13,6 +13,7 @@
 		onchange: (days: AnalyticsRangeDays, from: string, to: string) => void;
 	}
 	let { days, from = '', to = '', onchange }: Props = $props();
+	const presets: AnalyticsRangeDays[] = [7, 30, 90, 365, 0];
 	let open = $state(false);
 	let draftFrom = $state('');
 	let draftTo = $state('');
@@ -84,13 +85,12 @@
 		aria-label={m.analytics_range_label()}
 	>
 		<div class="grid grid-cols-2 gap-1" role="group" aria-label={m.analytics_range_label()}>
-			{#each [7, 30, 90, 365, 0] as value (value)}
+			{#each presets as value (value)}
 				<Button
 					variant={!from && days === value ? 'secondary' : 'ghost'}
 					class="justify-start"
 					aria-pressed={!from && days === value}
-					onclick={() => choose(value as AnalyticsRangeDays)}
-					>{presetLabel(value as AnalyticsRangeDays)}</Button
+					onclick={() => choose(value)}>{presetLabel(value)}</Button
 				>
 			{/each}
 			<Button
