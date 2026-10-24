@@ -66,8 +66,6 @@ function useReplyIntent(
     submit: () => {
       void session.submit();
     },
-    startNewReply: (text?: string) => {
-      void session.startNewReply(text);
-    },
+    startNewReply: (text?: string) => session.startNewReply(text),
   };
 }

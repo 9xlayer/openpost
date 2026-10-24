@@ -55,11 +55,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const replyUncertain =
     reply.operation?.state === "ambiguous" || reply.operation?.state === "sending";
   const canSubmitReply = replyable && (!reviewActive || replyUncertain);
-  const removal = useOwnerReplyRemoval(
-    workspaceId,
-    id,
-    canEdit && isReview && !!comment?.can_delete_reply,
-  );
+  const removal = useOwnerReplyRemoval(workspaceId, id, canEdit && isReview);
   const removalUncertain =
     removal.operation?.state === "ambiguous" || removal.operation?.state === "sending";
   const [busy, setBusy] = useState(false);
