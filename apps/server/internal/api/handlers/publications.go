@@ -1801,7 +1801,7 @@ func (h *PublicationHandler) replacePublicationSegments(
 			return err
 		}
 	}
-	if err := refreshPublicationPolls(ctx, tx, publication.ID, existing); err != nil {
+	if err := refreshPublicationText(ctx, tx, publication.ID, existing); err != nil {
 		return err
 	}
 	previousMediaIDs = append(previousMediaIDs, allPublicationMediaIDs(nil, inputs, nil)...)
@@ -1827,6 +1827,7 @@ func syncPublicationFirstSegmentBodyTx(
 		}
 		return err
 	}
+	previous := segment
 	var oldSettings map[string]any
 	_ = json.Unmarshal([]byte(segment.SettingsJSON), &oldSettings)
 	nextSettings := maps.Clone(oldSettings)
@@ -1846,7 +1847,7 @@ func syncPublicationFirstSegmentBodyTx(
 	if err != nil {
 		return err
 	}
-	return refreshPublicationPolls(ctx, tx, publicationID, nil)
+	return refreshPublicationText(ctx, tx, publicationID, []models.PublicationSegment{previous})
 }
 
 //nolint:gocyclo

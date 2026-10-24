@@ -355,6 +355,14 @@ func TestSelectedMentionCommandsUseStructuredContracts(t *testing.T) {
 			if body["content_profile"] != "thread" {
 				t.Errorf("profile=%v", body["content_profile"])
 			}
+			if destinations, present := body["renditions"].([]any); present {
+				for _, entry := range destinations {
+					if entry.(map[string]any)["body"] != nil {
+						t.Errorf("structured input must inherit all source segments, got variant body %#v", entry)
+					}
+				}
+			}
+
 			_, _ = w.Write([]byte(`{"id":"post-1","revision":1,"status":"draft"}`))
 		case "POST /api/v1/media/original/prepare-image":
 			prepares++

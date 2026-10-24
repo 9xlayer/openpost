@@ -262,6 +262,18 @@ func newPublicationCreateCmd() *cobra.Command {
 					return err
 				}
 			}
+			renditionContent := content
+			if len(segments) > 0 {
+				renditionContent = ""
+				sourceText = segments[0].Body
+			}
+			renditions := buildPublicationRenditions(profile, renditionContent, flags, accounts, accountIDs, media)
+			if len(segments) > 0 && flags.title == "" && flags.videoTitle == "" {
+				for i := range renditions {
+					renditions[i].Title = ""
+					delete(renditions[i].Settings, "title")
+				}
+			}
 			publication, err := client.CreatePublication(cmd.Context(), api.CreatePublicationInput{
 				Segments:         segments,
 				WorkspaceID:      workspaceID,
@@ -272,7 +284,7 @@ func newPublicationCreateCmd() *cobra.Command {
 				ScheduledAt:      scheduledAt,
 				SocialAccountIDs: accountIDs,
 				Media:            media,
-				Renditions:       buildPublicationRenditions(profile, content, flags, accounts, accountIDs, media),
+				Renditions:       renditions,
 				Metadata:         map[string]interface{}{"created_from": "cli"},
 			})
 			if err != nil {

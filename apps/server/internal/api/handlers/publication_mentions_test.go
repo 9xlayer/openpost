@@ -59,6 +59,11 @@ func TestPublicationMentionIdentitySurvivesLegacyEditsAndCountsInRevisions(t *te
 	require.Equal(t, 10, stored.Spans[0].Start)
 	require.Equal(t, 16, stored.Spans[0].End)
 	require.Equal(t, mentions.Spans[0].Target.ID, stored.Spans[0].Target.ID)
+	require.Equal(t, changed, publication.Renditions[0].Segments[0].Body, "canonical edits refresh inherited destination text")
+	response = send(http.MethodPost, "/api/v1/publications/"+publication.ID+"/validate", map[string]any{})
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.NotContains(t, response.Body.String(), "mention_choice_invalid", response.Body.String())
+
 	unsafe := "A 🚀 Hi @alex"
 	response = send(http.MethodPut, "/api/v1/publications/"+publication.ID, PublicationUpdateBody{ExpectedRevision: publication.Revision, SourceText: &unsafe})
 	require.Equal(t, http.StatusBadRequest, response.Code, response.Body.String())
