@@ -1,3 +1,4 @@
+import type { components } from '$lib/api/types';
 import { client } from '$lib/api/client';
 import type { MediaUploadResult } from '$lib/media-upload-client';
 import { m } from '$lib/paraglide/messages';
@@ -18,7 +19,7 @@ export async function fitStoredImage(options: {
 	mediaId: string;
 	accountId: string;
 	outputProfile: string;
-	settings: Record<string, unknown>;
+	settings: NonNullable<components['schemas']['PrepareMediaImageBody']['settings']>;
 	altText: string;
 	signal: AbortSignal;
 }): Promise<MediaUploadResult> {

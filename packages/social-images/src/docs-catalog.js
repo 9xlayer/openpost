@@ -295,7 +295,7 @@ export const docsPageCatalog = Object.freeze([
   {
     "page": "guides/inbox.mdx",
     "title": "Inbox and notifications",
-    "description": "Read comments, reply to conversations, and choose the alerts you receive.",
+    "description": "Answer comments, incoming mentions, business reviews and conversations.",
     "route": "/guides/inbox",
     "agentRepresentation": {
       "membership": "ordinary"

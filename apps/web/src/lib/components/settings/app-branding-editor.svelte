@@ -55,7 +55,10 @@
 	let saved = $state(false);
 	let pendingReads = $state(0);
 	let generation = 0;
-	const versions: Record<Slot, number> = { logo: 0, dark_logo: 0, wordmark: 0, dark_wordmark: 0 };
+	const versions = { logo: 0, dark_logo: 0, wordmark: 0, dark_wordmark: 0 } satisfies Record<
+		Slot,
+		number
+	>;
 	const canEdit = $derived(
 		organization
 			? settings.can_manage_organization
