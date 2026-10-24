@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"net/url"
 	"slices"
@@ -26,6 +27,7 @@ import (
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/drafts"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/lifecycle"
@@ -818,6 +820,9 @@ func (h *PublicationHandler) replaceAllPublicationRenditions(
 	renditionInputs []RenditionInput,
 	accounts map[string]models.SocialAccount,
 ) error {
+	if err := preserveRenditionMentionInputs(ctx, tx, publication.ID, renditionInputs, accounts); err != nil {
+		return err
+	}
 	if err := h.defaultNewTextCardDestinations(ctx, tx, publication.ID, renditionInputs, accounts); err != nil {
 		return err
 	}
@@ -945,6 +950,9 @@ func (h *PublicationHandler) upsertRenditionsTx(
 		return PublicationResponse{}, err
 	}
 	if len(renditions) > 0 {
+		if err := preserveRenditionMentionInputs(ctx, tx, publication.ID, renditions, accountMap); err != nil {
+			return PublicationResponse{}, err
+		}
 		positions, err := renditionUpsertPositionsTx(ctx, tx, publication.ID, renditions, accountMap)
 		if err != nil {
 			return PublicationResponse{}, err
@@ -1602,6 +1610,11 @@ func (h *PublicationHandler) insertPublicationSegments(
 	publication *models.Publication,
 	inputs []PublicationSegmentInput,
 ) ([]models.PublicationSegment, error) {
+	var mentionErr error
+	inputs, mentionErr = preparePublicationMentions(inputs, nil)
+	if mentionErr != nil {
+		return nil, mentionErr
+	}
 	now := time.Now().UTC()
 	segments := make([]models.PublicationSegment, 0, len(inputs))
 	for position, input := range inputs {
@@ -1692,6 +1705,11 @@ func (h *PublicationHandler) replacePublicationSegments(
 			return nil
 		}
 		return err
+	}
+	var mentionErr error
+	inputs, mentionErr = preparePublicationMentions(inputs, existing)
+	if mentionErr != nil {
+		return mentionErr
 	}
 	existingByID := make(map[string]models.PublicationSegment, len(existing))
 	for _, segment := range existing {
@@ -1809,11 +1827,20 @@ func syncPublicationFirstSegmentBodyTx(
 		}
 		return err
 	}
+	var oldSettings map[string]any
+	_ = json.Unmarshal([]byte(segment.SettingsJSON), &oldSettings)
+	nextSettings := maps.Clone(oldSettings)
+	delete(nextSettings, posttext.SettingsKey)
+	nextSettings, mentionErr := posttext.PreserveSettings(segment.Body, body, oldSettings, nextSettings)
+	if mentionErr != nil {
+		return huma.Error400BadRequest(mentionErr.Error())
+	}
+	segment.SettingsJSON = mustJSON(nextSettings)
 	segment.Body = body
 	segment.UpdatedAt = updatedAt
 	_, err := tx.NewUpdate().
 		Model(&segment).
-		Column("body", "updated_at").
+		Column("body", "settings_json", "updated_at").
 		Where("id = ?", segment.ID).
 		Exec(ctx)
 	if err != nil {
@@ -2021,6 +2048,20 @@ func (h *PublicationHandler) insertRenditionSegments(
 			baseBody := joinedPublicationBody(canonicalSegments)
 			bodyOverride, baseBody = renditionTextOverride(input.BodyOverride, input.Body, baseBody)
 			effectiveBody, effectiveSettings, _ = publicationpoll.ResolveJoined(publicationPollSources(canonicalSegments), rendition.SocialAccountID, rendition.Platform, rendition.OutputProfile, baseBody, input.Settings)
+		}
+
+		authoredMentionsBody := publicationsource.AuthoredBody(canonical, canonicalSegments, mustJSON(input.SourceOverrides), bodyOverride, len(canonicalSegments) > 1 && len(inputs) == 1)
+		var mentionErr error
+		input, bodyOverride, mentionErr = prepareDestinationMentions(input, authoredMentionsBody, bodyOverride)
+		if mentionErr != nil {
+			return mentionErr
+		}
+		// Poll resolution may clone settings. Retain only the authored mention value.
+		if mentions, ok := input.Settings[posttext.SettingsKey]; ok {
+			if effectiveSettings == nil {
+				effectiveSettings = map[string]any{}
+			}
+			effectiveSettings[posttext.SettingsKey] = mentions
 		}
 
 		linkBody := publicationsource.AuthoredBody(canonical, canonicalSegments, mustJSON(input.SourceOverrides), bodyOverride, len(canonicalSegments) > 1 && len(inputs) == 1)
@@ -3165,6 +3206,7 @@ func (h *PublicationHandler) validatePublicationByIDWithDB(ctx context.Context, 
 		}
 		for segmentIndex, segment := range segments {
 			issues = append(issues, validatePublicationPoll(rendition, segment, canonicalSegments, len(segments))...)
+			issues = append(issues, validatePublicationMentions(rendition, accountsByID[rendition.SocialAccountID], segment, canonicalSegments, len(segments))...)
 			segmentSettings := mergePublicationSettings(destinationSettings, segment.Settings)
 			issues = append(issues, validateTextCardOutput(rendition, segment, segmentSettings)...)
 			segmentMedia := deliveredSegmentMedia(segment)

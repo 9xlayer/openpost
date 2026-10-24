@@ -12,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/diagnostics"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/providerwrite"
 )
 
@@ -111,6 +112,9 @@ func ClassifyFailure(err error) Failure {
 }
 
 func classifyLocalPublicationFailure(err error) (Failure, bool) {
+	if errors.Is(err, posttext.ErrInvalid) || errors.Is(err, posttext.ErrMetadataRequired) {
+		return failureForKind(FailureValidation, "mention_choice_invalid", 0, 0), true
+	}
 	var recovery *renditionRecoveryError
 	if errors.As(err, &recovery) {
 		return Failure{Kind: FailureUnknown, Code: "publication_recovery_pending", Retryable: true, Action: FailureActionRetry, Message: "Publishing was interrupted. OpenPost will check the saved delivery before sending again."}, true

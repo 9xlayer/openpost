@@ -143,6 +143,7 @@ var operations = []Operation{
 	readDisabled("list-account-providers"),
 	withSelectors(read("get-account-destination-options", ExposureAlpha), workspaceSelector(), accountSelector()),
 	readDisabled("search-account-publishing-options"),
+	withSelectors(read("lookup-account-mentions", ExposureAlpha), workspaceSelector(), accountSelector()),
 	withSelectors(read("get-provider-readiness", ExposureAlpha), workspaceSelector()),
 	readDisabled("resolve-publishing-capabilities"),
 	withSelectors(read("list-social-sets", ExposureAlpha), workspaceSelector()),

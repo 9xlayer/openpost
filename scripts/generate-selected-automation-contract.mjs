@@ -22,6 +22,15 @@ export const desiredActions = [
       stringField("language", "Language", "Optional provider language code."),
     ],
   }),
+  action("account", "lookupMentions", "lookup-account-mentions", {
+    fields: [
+      workspaceField({ request: false }),
+      accountField(),
+      stringField("query", "Search", "Account search, or exact LinkedIn company vanity name.", {
+        required: true,
+      }),
+    ],
+  }),
   action("account", "getProviderReadiness", "get-provider-readiness", {
     fields: [workspaceField()],
   }),

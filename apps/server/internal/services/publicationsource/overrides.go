@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/posttext"
 )
 
 func HasSourceOverrides(value string) bool {
@@ -58,6 +59,7 @@ type PublicationMediaInput struct {
 // RenditionSourceOverride retains source authorship inside one joined destination output.
 // A nil body inherits; an empty body is an explicit omission.
 type RenditionSourceOverride struct {
+	Mentions             *posttext.Mentions      `json:"mentions,omitempty" doc:"Mention selections paired with this explicit source body; omit to inherit"`
 	PublicationSegmentID string                  `json:"publication_segment_id" doc:"Canonical source segment ID, or matching client reference in the same request"`
 	BodyOverride         *string                 `json:"body_override,omitempty" doc:"Explicit source body; omit or null to inherit"`
 	MediaInherited       bool                    `json:"media_inherited" doc:"Whether this source contributes its canonical media"`

@@ -118,6 +118,7 @@ func delegatedOperationAllowed(scopeSet, operationID string) bool {
 	required := map[string]string{
 		"list-workspaces":                      "workspace:read",
 		"list-accounts":                        "accounts:read",
+		"lookup-account-mentions":              "accounts:read",
 		"list-media":                           "media:read",
 		"list-publications":                    "publications:read",
 		"get-publication":                      "publications:read",

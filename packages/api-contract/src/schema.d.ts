@@ -383,6 +383,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{account_id}/mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find native mention targets for one destination */
+        get: operations["lookup-account-mentions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{account_id}/messaging/x": {
         parameters: {
             query?: never;
@@ -12473,6 +12490,59 @@ export interface components {
             template: components["schemas"]["Template"];
             template_id: string;
         };
+        MentionCandidate: {
+            /** @description Provider account address or company vanity name */
+            detail: string;
+            /** @description Exact visible text inserted into the post */
+            label: string;
+            target: components["schemas"]["MentionTarget"];
+        };
+        MentionLookupOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/MentionLookupOutputBody.json
+             */
+            readonly $schema?: string;
+            candidates: components["schemas"]["MentionCandidate"][] | null;
+            /** @enum {string} */
+            mode: "accounts" | "exact_company";
+        };
+        MentionSpan: {
+            /**
+             * Format: int64
+             * @description Exclusive UTF-8 byte offset
+             */
+            end: number;
+            /**
+             * Format: int64
+             * @description Inclusive UTF-8 byte offset in the exact authored text
+             */
+            start: number;
+            target: components["schemas"]["MentionTarget"];
+            /** @description Exact visible text covered by the range */
+            text: string;
+        };
+        MentionTarget: {
+            /** @description Connected instance origin for Mastodon; empty for global identity namespaces */
+            authority?: string;
+            /** @description Native account address returned by the provider lookup */
+            handle?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "person" | "page";
+            /** @enum {string} */
+            provider: "bluesky" | "mastodon" | "linkedin";
+        };
+        Mentions: {
+            /** @description Ordered, nonoverlapping native mention selections; an empty list explicitly contains no selected mentions */
+            spans: components["schemas"]["MentionSpan"][];
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
+            version: 1;
+        };
         MessageHistoryInputBody: {
             /**
              * Format: uri
@@ -13968,6 +14038,8 @@ export interface components {
             media?: components["schemas"]["PublicationMediaInput"][] | null;
             /** @description Canonical segment settings */
             settings?: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             /** @description Canonical segment title */
@@ -13983,6 +14055,8 @@ export interface components {
             /** Format: int64 */
             position: number;
             settings: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             title: string;
@@ -14615,6 +14689,8 @@ export interface components {
             publication_segment_id?: string;
             /** @description Segment-scoped destination settings */
             settings?: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             /** @description Authored canonical-source overrides for a single joined destination output */
@@ -14652,6 +14728,8 @@ export interface components {
             position: number;
             publication_segment_id: string;
             settings: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             source_overrides?: components["schemas"]["RenditionSourceOverride"][] | null;
@@ -14668,6 +14746,8 @@ export interface components {
             media?: components["schemas"]["PublicationMediaInput"][] | null;
             /** @description Whether this source contributes its canonical media */
             media_inherited: boolean;
+            /** @description Mention selections paired with this explicit source body; omit to inherit */
+            mentions?: components["schemas"]["Mentions"];
             /** @description Canonical source segment ID, or matching client reference in the same request */
             publication_segment_id: string;
         };
@@ -19366,6 +19446,95 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "lookup-account-mentions": {
+        parameters: {
+            query?: {
+                /** @description Account search, or exact LinkedIn company vanity name */
+                query?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Connected destination account */
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MentionLookupOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

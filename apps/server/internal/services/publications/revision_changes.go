@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/publicationlink"
 	"github.com/openpost/backend/internal/services/publicationpoll"
 )
@@ -21,6 +22,7 @@ type revisionMedia struct {
 	Settings             map[string]any
 }
 type revisionSourceOverride struct {
+	Mentions       *posttext.Mentions
 	Source         int
 	Body           *string
 	MediaInherited bool
@@ -144,7 +146,7 @@ func projectRevisionDestination(projection *revisionProjection, publication Publ
 			projection.media[key] = projectRevisionMedia(segment.Media)
 		}
 		for _, override := range segment.SourceOverrides {
-			item.Sources = append(item.Sources, revisionSourceOverride{sources[override.PublicationSegmentID], override.BodyOverride, override.MediaInherited})
+			item.Sources = append(item.Sources, revisionSourceOverride{Mentions: override.Mentions, Source: sources[override.PublicationSegmentID], Body: override.BodyOverride, MediaInherited: override.MediaInherited})
 			if !override.MediaInherited {
 				projection.media[revisionMediaKey{Target: target, Segment: index, Source: sources[override.PublicationSegmentID]}] = projectRevisionMediaInputs(override.Media)
 			}
@@ -194,11 +196,15 @@ func segmentHasAuthoredOverrides(segment revisionSegmentOverride, index, outputC
 		return true
 	}
 	for sourceIndex, source := range segment.Sources {
-		if source.Source != sourceIndex || source.Body != nil || !source.MediaInherited {
+		if sourceHasAuthoredOverrides(source, sourceIndex) {
 			return true
 		}
 	}
 	return false
+}
+
+func sourceHasAuthoredOverrides(source revisionSourceOverride, index int) bool {
+	return source.Source != index || source.Body != nil || source.Mentions != nil || !source.MediaInherited
 }
 
 func revisionSettings(settings map[string]any) map[string]any {

@@ -86,6 +86,7 @@ type PublishingOptionsOutput struct {
 
 func (h *DestinationOptionsHandler) RegisterRoutes(api huma.API) {
 	h.registerPublishingOptions(api)
+	h.registerMentionLookup(api)
 	huma.Register(api, huma.Operation{
 		OperationID: "get-account-destination-options",
 		Method:      http.MethodGet,

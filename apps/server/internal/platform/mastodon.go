@@ -99,6 +99,9 @@ func (m *MastodonAdapter) UploadMedia(ctx context.Context, accessToken, _ string
 }
 
 func (m *MastodonAdapter) Publish(ctx context.Context, accessToken, _ string, req *PublishRequest) (PublishResult, error) {
+	if err := m.validateSelectedMentions(ctx, accessToken, req); err != nil {
+		return PublishResult{}, err
+	}
 	prepared := PublishResult{ProviderState: "create_status", RetrySafety: PublishRetryIdempotent, IdempotencyTTL: time.Hour}
 	if err := req.BeginWrite(prepared); err != nil {
 		return PublishResult{}, err

@@ -724,9 +724,13 @@ func (l *LinkedInAdapter) createPost(ctx context.Context, accessToken, authorURN
 	if visibility != "PUBLIC" && visibility != "CONNECTIONS" {
 		return "", fmt.Errorf("linkedin visibility %q is not supported", visibility)
 	}
+	commentary, err := encodeLinkedInCommentary(req.Content, req.Settings)
+	if err != nil {
+		return "", err
+	}
 	payload := map[string]interface{}{
 		"author":     authorURN,
-		"commentary": encodeLinkedInPlaintext(req.Content),
+		"commentary": commentary,
 		"visibility": visibility,
 		"distribution": map[string]interface{}{
 			"feedDistribution":               "MAIN_FEED",
@@ -855,13 +859,17 @@ var linkedInTextToken = regexp.MustCompile(`(?i)https?://[^\s\p{Z}\x{0085}]+|www
 // encodeLinkedInPlaintext escapes ordinary text and emits native hashtags.
 // URLs and user-supplied mention/template syntax remain plaintext.
 func encodeLinkedInPlaintext(content string) string {
+	return encodeLinkedInPlaintextAt(content, 0, content)
+}
+
+func encodeLinkedInPlaintextAt(content string, offset int, authored string) string {
 	var encoded strings.Builder
 	previous := 0
 	for _, match := range linkedInTextToken.FindAllStringIndex(content, -1) {
 		start, end := match[0], match[1]
 		encoded.WriteString(linkedInPlaintextEscaper.Replace(content[previous:start]))
 		token := content[start:end]
-		if linkedInHashtag(content, start, token) {
+		if linkedInHashtag(authored, start+offset, token) {
 			sign, size := utf8.DecodeRuneInString(token)
 			encoded.WriteString("{hashtag|")
 			encoded.WriteString(linkedInPlaintextEscaper.Replace(string(sign)))
