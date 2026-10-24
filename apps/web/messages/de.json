@@ -10059,5 +10059,8 @@
 	"accounts_devnull_private_key": "Privater SSH-Schlüssel",
 	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
 	"accounts_devnull_username": "Benutzername",
-	"accounts_provider_devnull": "Commits auf dev/null veröffentlichen"
+	"accounts_provider_devnull": "Commits auf dev/null veröffentlichen",
+	"engagement_mark_all_read": "Alle Treffer als gelesen markieren",
+	"engagement_mark_all_read_success": "{count} passende Einträge als gelesen markiert.",
+	"engagement_shared_read_help": "Der Lesestatus wird mit allen in diesem Arbeitsbereich geteilt."
 }

@@ -27,6 +27,7 @@ import {
   mobileInboxAPI,
   setConversationState,
   setCommentState,
+  markMatchingCommentsRead,
   type Conversation,
   type Comment,
 } from "@/lib/inbox/api";
@@ -55,6 +56,8 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
   const [accountId, setAccountId] = useState("");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [bulkReading, setBulkReading] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [undo, setUndo] = useState<{
     kind: "chat" | "comment";
@@ -159,6 +162,27 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
       if (apiRequestIdentityIsCurrent(identity)) setArchiving(null);
     }
   }
+  async function markAllRead() {
+    if (!canEdit || bulkReading || !workspaceId) return;
+    const identity = captureApiRequestIdentity();
+    setBulkReading(true);
+    setError(null);
+    setBulkNotice("");
+    try {
+      const result = await markMatchingCommentsRead(workspaceId, accountId, filter === "archived");
+      if (!apiRequestIdentityIsCurrent(identity)) return;
+      await queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
+      if (apiRequestIdentityIsCurrent(identity))
+        setBulkNotice(
+          `${result.updated_count} comments marked read for everyone in this Workspace.`,
+        );
+    } catch (cause) {
+      if (apiRequestIdentityIsCurrent(identity))
+        setError(cause instanceof Error ? cause.message : "Could not mark comments read");
+    } finally {
+      if (apiRequestIdentityIsCurrent(identity)) setBulkReading(false);
+    }
+  }
   function accountName(id: string) {
     const account = accounts.data?.find((account) => account.id === id);
     return account?.alias || account?.account_username || "Connected account";
@@ -209,6 +233,18 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
       <AccountFilter accounts={accounts.data ?? []} value={accountId} onChange={setAccountId} />
       {accounts.data?.some((account) => account.id === accountId && account.platform === "x") ? (
         <XMessagingRecovery accountId={accountId} workspaceId={workspaceId} />
+      ) : null}
+      {view === "comments" && canEdit ? (
+        <View style={{ gap: 8 }}>
+          <Button
+            title="Mark all matching read"
+            intent="ordinary"
+            disabled={bulkReading}
+            onPress={() => void markAllRead()}
+          />
+          <BodyText>Read status is shared by everyone in this Workspace.</BodyText>
+          {bulkNotice ? <BodyText accessibilityLiveRegion="polite">{bulkNotice}</BodyText> : null}
+        </View>
       ) : null}
       {undo && canEdit ? (
         <View

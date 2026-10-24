@@ -10059,5 +10059,8 @@
 	"accounts_devnull_private_key": "SSH 秘密鍵",
 	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
 	"accounts_devnull_username": "ユーザー名",
-	"accounts_provider_devnull": "dev/null にコミットを投稿"
+	"accounts_provider_devnull": "dev/null にコミットを投稿",
+	"engagement_mark_all_read": "一致するすべての項目を既読にする",
+	"engagement_mark_all_read_success": "一致する{count}件を既読にしました。",
+	"engagement_shared_read_help": "既読状態はこのワークスペースの全員で共有されます。"
 }

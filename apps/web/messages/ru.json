@@ -10059,5 +10059,8 @@
 	"x_messaging_return": "Вернуться в настройки аккаунта",
 	"x_messaging_send_ready": "Отправка доступна с учётом разрешений и ограничений частоты запросов X.",
 	"x_messaging_send_unavailable": "Отправка недоступна для этого аккаунта.",
-	"x_messaging_title": "Сообщения X"
+	"x_messaging_title": "Сообщения X",
+	"engagement_mark_all_read": "Отметить все результаты прочитанными",
+	"engagement_mark_all_read_success": "Отмечено прочитанными: {count}.",
+	"engagement_shared_read_help": "Статус прочтения общий для всех участников рабочего пространства."
 }

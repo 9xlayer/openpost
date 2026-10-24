@@ -265,6 +265,18 @@ export async function setCommentState(
     );
 }
 
+export function markMatchingCommentsRead(
+  workspaceId: string,
+  accountId: string,
+  archived: boolean,
+) {
+  return result(
+    api().POST("/engagement/read", {
+      body: { workspace_id: workspaceId, account_id: accountId || undefined, archived },
+    }),
+  );
+}
+
 export function queueInboxRefresh(
   workspaceId: string,
   view: "chats" | "comments",

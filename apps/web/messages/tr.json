@@ -10059,5 +10059,8 @@
 	"accounts_devnull_private_key": "SSH özel anahtarı",
 	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
 	"accounts_devnull_username": "Kullanıcı adı",
-	"accounts_provider_devnull": "dev/null'a commit gönder"
+	"accounts_provider_devnull": "dev/null'a commit gönder",
+	"engagement_mark_all_read": "Eşleşen tümünü okundu işaretle",
+	"engagement_mark_all_read_success": "Eşleşen {count} öğe okundu olarak işaretlendi.",
+	"engagement_shared_read_help": "Okunma durumu bu çalışma alanındaki herkesle paylaşılır."
 }

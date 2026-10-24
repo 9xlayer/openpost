@@ -405,6 +405,39 @@
 		}
 	}
 
+	async function markAllMatchingRead() {
+		if (!workspaceId || !workspaceCtx.currentWorkspace?.can_edit || actionInFlight) return;
+		const view = captureEngagementMutationView('', unreadOnly);
+		const filters = {
+			workspace_id: view.workspaceID,
+			platform: platformFilter,
+			account_id: queryAccountFilter,
+			publication_id: queryPublicationFilter,
+			archived
+		};
+		const sequence = ++actionRequestSequence;
+		actionInFlight = 'bulk-read';
+		try {
+			const {
+				data,
+				error: apiError,
+				response
+			} = await client.POST('/engagement/read', { body: filters });
+			if (!settleQueryMutationSession(view.session, response)) return;
+			if (apiError || !data) throw new Error('bulk read failed');
+			await reconcileQueryMutation(queryClient, view.session, {
+				cancel: [{ queryKey: inboxQueryKeys.engagementRoot(view.workspaceID) }],
+				invalidate: [{ queryKey: inboxQueryKeys.engagementRoot(view.workspaceID) }]
+			});
+			if (engagementMutationViewIsCurrent(view))
+				showToast(m.engagement_mark_all_read_success({ count: data.updated_count }), 'success');
+		} catch {
+			if (engagementMutationViewIsCurrent(view)) showToast(m.engagement_action_failed(), 'error');
+		} finally {
+			if (sequence === actionRequestSequence) actionInFlight = '';
+		}
+	}
+
 	async function setState(
 		item: EngagementItem,
 		state: { read?: boolean; archived?: boolean },
@@ -951,10 +984,22 @@
 					<Checkbox bind:checked={archived} />
 					{m.engagement_archived()}
 				</label>
+				<Button
+					variant="outline"
+					size="sm"
+					disabled={!workspaceId ||
+						!workspaceCtx.currentWorkspace?.can_edit ||
+						Boolean(actionInFlight)}
+					onclick={() => void markAllMatchingRead()}
+				>
+					<ThemeIcon role="check" class="size-4" />
+					{m.engagement_mark_all_read()}
+				</Button>
 				<span class="ms-auto text-sm text-muted-foreground">{total}</span>
 			</div>
 			<p class="-mt-2 max-w-3xl text-xs leading-5 text-muted-foreground">
 				{m.engagement_archive_help()}
+				{m.engagement_shared_read_help()}
 			</p>
 		</div>
 	{/snippet}

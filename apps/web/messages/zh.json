@@ -10059,5 +10059,8 @@
 	"accounts_devnull_private_key": "SSH 私钥",
 	"accounts_devnull_private_key_placeholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
 	"accounts_devnull_username": "用户名",
-	"accounts_provider_devnull": "向 dev/null 发布提交"
+	"accounts_provider_devnull": "向 dev/null 发布提交",
+	"engagement_mark_all_read": "将所有匹配项标为已读",
+	"engagement_mark_all_read_success": "已将 {count} 个匹配项标为已读。",
+	"engagement_shared_read_help": "已读状态与此工作区中的所有人共享。"
 }

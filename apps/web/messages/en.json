@@ -10059,5 +10059,8 @@
 	"x_messaging_callback_failed": "X messaging authorization could not be completed. Return to account settings and try again.",
 	"x_messaging_callback_cancelled": "X messaging authorization was cancelled. You can start again from account settings.",
 	"x_messaging_callback_identity": "Sign in as the person who started this authorization, then start again from account settings.",
-	"x_messaging_return": "Return to account settings"
+	"x_messaging_return": "Return to account settings",
+	"engagement_mark_all_read": "Mark all matching read",
+	"engagement_mark_all_read_success": "Marked {count} matching items as read.",
+	"engagement_shared_read_help": "Read status is shared with everyone in this workspace."
 }

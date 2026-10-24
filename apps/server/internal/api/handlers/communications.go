@@ -349,6 +349,7 @@ func (h *EngagementMessagingHandler) RegisterRoutes(api huma.API) {
 }
 
 func (h *EngagementMessagingHandler) registerEngagementRoutes(api huma.API) {
+	h.registerBulkEngagementRead(api)
 	huma.Register(api, huma.Operation{
 		OperationID: "list-engagement",
 		Method:      http.MethodGet, Path: "/engagement", Summary: "List stored replies and comments",

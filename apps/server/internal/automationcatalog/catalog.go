@@ -162,6 +162,7 @@ var operations = []Operation{
 	withSelectors(read("list-jobs", ExposureAlpha), workspaceSelector()),
 	withSelectors(read("list-notifications", ExposureAlpha), workspaceSelector()),
 	withSelectors(read("list-engagement", ExposureAlpha), workspaceSelector(), accountSelector()),
+	writeDisabled("mark-engagement-read", EffectLocalMutation),
 	withSelectors(read("list-conversations", ExposureAlpha), workspaceSelector(), accountSelector()),
 	readDisabled("inbox-changes"),
 	readDisabled("inbox-summary"),
