@@ -69,6 +69,7 @@ import { publicationContentUpdate } from "@/lib/publication-content";
 import {
   attachmentRequirement,
   mobileRenditionInput,
+  mobileRenditionGeneratedText,
   mobileRenditionTextFields,
   mobileRenditionTextValue,
   renditionImages,
@@ -139,15 +140,6 @@ function bodyFromPublication(pub: PublicationDetail): string {
 function selectedAccountsFromPublication(pub: PublicationDetail): Set<string> {
   return new Set(
     (pub.renditions ?? []).map((rendition) => rendition.social_account_id).filter(Boolean),
-  );
-}
-
-function renditionFieldsFromPublication(pub: PublicationDetail) {
-  return Object.fromEntries(
-    (pub.renditions ?? []).map((rendition) => [
-      rendition.social_account_id,
-      mobileRenditionTextFields(pub, rendition.social_account_id),
-    ]),
   );
 }
 
@@ -283,7 +275,6 @@ function Composer({
   const [renditionTextEdits, setRenditionTextEdits] = useState<Record<string, RenditionTextEdits>>(
     {},
   );
-  const [renditionFields, setRenditionFields] = useState(() => renditionFieldsFromPublication(pub));
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -324,7 +315,6 @@ function Composer({
     setRenditionTextEdits({});
     setCanonicalTextEdits({});
     setAnnotatedRenditionEdits({});
-    setRenditionFields(renditionFieldsFromPublication(pub));
     setAttachments((current) => [
       ...attachmentsFromPublication(pub),
       ...current.filter((attachment) => !attachment.mediaId),
@@ -946,34 +936,24 @@ function Composer({
         const annotated: Record<string, Record<string, PostTextValue>> = {
           ...annotatedRenditionEdits,
         };
+        const textEdits = { ...renditionTextEdits };
         for (const rendition of data.renditions ?? []) {
-          const field = renditionFields[rendition.social_account_id]?.[0]?.key ?? "body";
-          const before =
-            annotatedRenditionEdits[rendition.social_account_id]?.[field] ??
-            mobileRenditionTextValue(
-              contentSnapshot.current,
-              rendition.social_account_id,
-              field,
-              renditionTextEdits[rendition.social_account_id]?.[field] ??
-                renditionFields[rendition.social_account_id]?.find((item) => item.key === field)
-                  ?.value ??
-                "",
-            );
-          const mentions = remapMentionMetadata(
-            before.body,
+          const next = mobileRenditionGeneratedText(
+            contentSnapshot.current,
+            rendition.social_account_id,
             rendition.body,
-            before.mentions === undefined ? undefined : { version: 1, spans: before.mentions },
+            textEdits[rendition.social_account_id],
+            annotated[rendition.social_account_id],
           );
-          annotated[rendition.social_account_id] = {
-            ...annotated[rendition.social_account_id],
-            [field]: { body: rendition.body, mentions: mentions?.spans },
-          };
+          textEdits[rendition.social_account_id] = next.textEdits;
+          annotated[rendition.social_account_id] = next.annotated;
         }
         return {
           generated: data,
           key,
           canonical: { body: data.source_text, mentions: metadata?.spans },
           annotated,
+          textEdits,
         };
       } catch {
         throw new Error(
@@ -981,22 +961,13 @@ function Composer({
         );
       }
     },
-    onSuccess: ({ generated, key, canonical, annotated }, scope) => {
+    onSuccess: ({ generated, key, canonical, annotated, textEdits }, scope) => {
       if (!workspaceScopeIsCurrent(scope)) return;
       markEditorDirty();
       setBody(generated.source_text);
       setCanonicalTextEdits((current) => ({ ...current, [key]: canonical }));
       setAnnotatedRenditionEdits(annotated);
-      setRenditionTextEdits(
-        Object.fromEntries(
-          (generated.renditions ?? []).map((rendition) => [
-            rendition.social_account_id,
-            {
-              [renditionFields[rendition.social_account_id]?.[0]?.key ?? "body"]: rendition.body,
-            },
-          ]),
-        ),
-      );
+      setRenditionTextEdits(textEdits);
       setStatusMessage("Generated draft ready. Review it before you queue it.");
       setActionError(null);
       void successHaptic();
@@ -1195,42 +1166,43 @@ function Composer({
               }}
             />
           ))}
-        {(
-          renditionFields[accountId] ??
-          mobileRenditionTextFields(contentSnapshot.current, accountId)
-        ).map((field, index, fields) => (
-          <View key={field.key} style={{ gap: spacing.extraSmall }}>
-            {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
-            <PostEditor
-              value={
-                annotatedRenditionEdits[accountId]?.[field.key] ??
-                mobileRenditionTextValue(
-                  contentSnapshot.current,
-                  accountId,
-                  field.key,
-                  renditionTextEdits[accountId]?.[field.key] ?? field.value,
-                )
-              }
-              accountId={accountId}
-              platform={platform}
-              instanceURL={accounts.data?.find((account) => account.id === accountId)?.instance_url}
-              workspaceId={pub.workspace_id}
-              label={`Custom text ${index + 1} for ${platformLabel(platform)}`}
-              placeholder="Account version"
-              onChange={(value) => {
-                markEditorDirty();
-                setAnnotatedRenditionEdits((current) => ({
-                  ...current,
-                  [accountId]: { ...current[accountId], [field.key]: value },
-                }));
-                setRenditionTextEdits((current) => ({
-                  ...current,
-                  [accountId]: { ...current[accountId], [field.key]: value.body },
-                }));
-              }}
-            />
-          </View>
-        ))}
+        {mobileRenditionTextFields(contentSnapshot.current, accountId).map(
+          (field, index, fields) => (
+            <View key={field.key} style={{ gap: spacing.extraSmall }}>
+              {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
+              <PostEditor
+                value={
+                  annotatedRenditionEdits[accountId]?.[field.key] ??
+                  mobileRenditionTextValue(
+                    contentSnapshot.current,
+                    accountId,
+                    field.key,
+                    renditionTextEdits[accountId]?.[field.key] ?? field.value,
+                  )
+                }
+                accountId={accountId}
+                platform={platform}
+                instanceURL={
+                  accounts.data?.find((account) => account.id === accountId)?.instance_url
+                }
+                workspaceId={pub.workspace_id}
+                label={`Custom text ${index + 1} for ${platformLabel(platform)}`}
+                placeholder="Account version"
+                onChange={(value) => {
+                  markEditorDirty();
+                  setAnnotatedRenditionEdits((current) => ({
+                    ...current,
+                    [accountId]: { ...current[accountId], [field.key]: value },
+                  }));
+                  setRenditionTextEdits((current) => ({
+                    ...current,
+                    [accountId]: { ...current[accountId], [field.key]: value.body },
+                  }));
+                }}
+              />
+            </View>
+          ),
+        )}
       </View>
     );
   }

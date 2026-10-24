@@ -85,6 +85,7 @@ func TestPublicationMentionIdentitySurvivesLegacyEditsAndCountsInRevisions(t *te
 	own, err := posttext.Read(publication.Renditions[0].Segments[0].Settings)
 	require.NoError(t, err)
 	require.NotNil(t, own)
+	require.Equal(t, override, publication.Renditions[0].Body, "the summary mirrors the first destination output")
 	require.Equal(t, 17, own.Spans[0].Start)
 	require.Equal(t, "did:plc:z72i7hdynmk6r22z27h6tvur", own.Spans[0].Target.ID, "legacy detachment snapshots the inherited stable identity")
 	unsafeOverride := "Prefix A 🚀 Hi @alex"

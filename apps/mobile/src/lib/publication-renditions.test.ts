@@ -5,6 +5,7 @@ import {
   mobileRenditionInput,
   mobileRenditionTextFields,
   mobileRenditionTextValue,
+  mobileRenditionGeneratedText,
 } from "./publication-renditions";
 
 test("a new annotated destination retains every source and inherited media", () => {
@@ -97,6 +98,48 @@ test("a new annotated destination retains every source and inherited media", () 
       mentions: undefined,
       media_inherited: true,
     },
+  ]);
+});
+
+test("generated text for an added account is the text reviewed and saved", () => {
+  const publication = {
+    renditions: [],
+    segments: [
+      {
+        id: "first",
+        position: 0,
+        body: "Original",
+        title: "",
+        description: "",
+        settings: {},
+        media: [],
+      },
+      {
+        id: "tail",
+        position: 1,
+        body: "Continuation",
+        title: "",
+        description: "",
+        settings: {},
+        media: [],
+      },
+    ],
+  };
+  const generated = mobileRenditionGeneratedText(publication, "new", "Reviewed generated version");
+  const visible = mobileRenditionTextFields(publication, "new").map(
+    (field) => generated.textEdits[field.key] ?? field.value,
+  );
+  expect(visible).toEqual(["Reviewed generated version", "Continuation"]);
+  const saved = mobileRenditionInput(
+    publication,
+    "new",
+    generated.textEdits,
+    [],
+    generated.annotated,
+  );
+  expect(saved.segments?.map((segment) => segment.body_override)).toEqual([
+    "Reviewed generated version",
+    undefined,
   ]);
 });
 

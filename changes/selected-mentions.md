@@ -9,3 +9,5 @@
 - Canonical-only edits refresh inherited destination text while keeping independent legacy variants. Structured CLI creation retains every source when a destination joins a thread.
 
 - Added web and native mention editors with keyboard suggestions, stable selections, structured copying, undo and exact thread text. Updated API, CLI, MCP, SDK and n8n contracts, plus authoring guides.
+
+- Native AI assist keeps generated destination text in the fields people review, and rendition summaries mirror their first saved output.

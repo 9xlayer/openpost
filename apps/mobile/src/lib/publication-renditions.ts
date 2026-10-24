@@ -340,6 +340,30 @@ export function mobileRenditionTextValue(
   return { body, mentions: metadata?.spans };
 }
 
+/** Apply generated text through the same field inventory that people review. */
+export function mobileRenditionGeneratedText(
+  publication: PublicationContent,
+  accountId: string,
+  generated: string,
+  textEdits: RenditionTextEdits = {},
+  annotated: Readonly<Record<string, PostTextValue>> = {},
+) {
+  const field = mobileRenditionTextFields(publication, accountId)[0];
+  const key = field?.key ?? "body";
+  const before =
+    annotated[key] ??
+    mobileRenditionTextValue(publication, accountId, key, textEdits[key] ?? field?.value ?? "");
+  const metadata = remapMentionMetadata(
+    before.body,
+    generated,
+    before.mentions === undefined ? undefined : { version: 1, spans: before.mentions },
+  );
+  return {
+    textEdits: { ...textEdits, [key]: generated },
+    annotated: { ...annotated, [key]: { body: generated, mentions: metadata?.spans } },
+  };
+}
+
 function renditionMentionSettings(
   publication: PublicationContent,
   rendition: Rendition,

@@ -2078,7 +2078,7 @@ func (h *PublicationHandler) insertRenditionSegments(
 		_ = json.Unmarshal([]byte(rendition.SettingsJSON), &linkDestinationSettings)
 		effectiveSettings, _ = publicationlink.ResolveEffective(sourceSettings, rendition.SocialAccountID, rendition.Platform, linkBody, linkDestinationSettings, effectiveSettings, linkMediaCount)
 
-		if position == 0 && len(input.SourceOverrides) > 0 {
+		if position == 0 {
 			rendition.Body = effectiveBody
 			if _, err := tx.NewUpdate().Model(rendition).Column("body").Where("id = ?", rendition.ID).Exec(ctx); err != nil {
 				return err
