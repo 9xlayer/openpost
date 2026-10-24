@@ -34,7 +34,7 @@ describe('account feature presentation', () => {
 			onToggle: vi.fn()
 		});
 
-		const label = screen.getByText('Comments and replies', { exact: true }).element();
+		const label = screen.getByText('Inbox activity', { exact: true }).element();
 		const row = label.closest('div');
 		const card = row?.parentElement;
 		if (!row || !card) throw new Error('Expected the selected feature row inside its card.');
