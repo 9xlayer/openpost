@@ -59,6 +59,7 @@ import (
 	"github.com/openpost/backend/internal/services/identity"
 	"github.com/openpost/backend/internal/services/imagecaption"
 	"github.com/openpost/backend/internal/services/imagegeneration"
+	"github.com/openpost/backend/internal/services/instancebackup"
 	"github.com/openpost/backend/internal/services/instancesettings"
 	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/mcpoauth"
@@ -166,6 +167,20 @@ func main() {
 	if command.role == processRoleMigrate || command.role == processRoleMaintenance {
 		if err := cfg.ValidateRuntime(); err != nil {
 			fatalWithDiagnostics(diagnosticsReporter, err)
+		}
+	}
+
+	instanceBackupPaths := instancebackup.Paths{
+		DatabaseFile: database.SQLiteFilePath(cfg.DatabaseDSN()),
+		MediaDir:     cfg.MediaPath,
+	}
+	if cfg.DatabaseDriver == config.DatabaseDriverSQLite && cfg.StorageDriver == config.StorageDriverLocal && command.role == processRoleAll && instanceBackupPaths.DatabaseFile != "" {
+		applied, err := instancebackup.ApplyPending(instanceBackupPaths, time.Now())
+		if err != nil {
+			fatalfWithDiagnostics(diagnosticsReporter, "failed to apply the staged backup restore: %v", err)
+		}
+		if applied {
+			log.Println("Applied the staged backup restore; the previous data was kept in a pre-restore folder")
 		}
 	}
 
@@ -863,6 +878,19 @@ func main() {
 	}
 
 	mediaHandler.RegisterLegacyRoutes(e)
+	handlers.NewInstanceBackupHandler(db, authenticator, handlers.InstanceBackupConfig{
+		Paths:          instanceBackupPaths,
+		AppVersion:     version,
+		DatabaseDriver: cfg.DatabaseDriver,
+		StorageDriver:  cfg.StorageDriver,
+		EncryptionKey:  cfg.EncryptionKey,
+		ProcessRole:    string(command.role),
+		Restart: func() {
+			if process, err := os.FindProcess(os.Getpid()); err == nil {
+				_ = process.Signal(syscall.SIGTERM)
+			}
+		},
+	}).RegisterRoutes(e)
 	profileHandler.RegisterLegacyRoutes(e)
 	billingHandler := handlers.NewBillingHandler(billingService, db, authenticator)
 	billingHandler.SetUsage(usageService)
