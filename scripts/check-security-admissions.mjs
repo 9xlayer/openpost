@@ -13,7 +13,7 @@ import path from "node:path";
 // consumers do not use enhanced form actions or prerender setHeaders. Inspect
 // all first-party app/package modules, including imported module extensions.
 const reviewedArtifacts = {
-  "bun.lock": "cac221dbaf629cc6d6fb6004d538966a796550a988b7c521921c57b8d19d0b24",
+  "bun.lock": "77bfb260d570dd6721a26cef6bd503f229cea3ade029cc0c0f27d6e667c99e44",
   "apps/web/src/lib/image-editor/background-removal.worker.ts":
     "06f3aaf6c78d574c1d2538903e8bf34cf70032801824d8988a9ba2d2435749d5",
 };

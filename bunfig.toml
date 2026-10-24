@@ -9,6 +9,8 @@ minimumReleaseAgeExcludes = [
   "js-yaml",
   "minimatch",
   "postcss",
+  # Security fix GHSA-m5mm-p8h7-m29v, exact version pinned in package.json.
+  "serialize-javascript",
   "sharp",
   "tar",
   "undici",
