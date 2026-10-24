@@ -1,5 +1,13 @@
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
+
+export async function expectPostText(
+  editor: Locator,
+  text: string,
+  options: { timeout?: number } = {},
+) {
+  await expect.poll(() => editor.innerText(), options).toBe(text);
+}
 
 export const password = "password-1234";
 

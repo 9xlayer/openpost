@@ -2,7 +2,13 @@ import AxeBuilder from "@axe-core/playwright";
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, composerDestinations, createWorkspace, registerUser } from "./helpers";
+import {
+  authenticatePage,
+  composerDestinations,
+  createWorkspace,
+  registerUser,
+  expectPostText,
+} from "./helpers";
 
 test.use({ hasTouch: true });
 
@@ -234,16 +240,16 @@ for (const width of [1280, 390, 320])
       await composerDestinations(page)
         .getByRole("button", { name: /@previewsky, Bluesky/ })
         .click();
-      await expect(skyText).toHaveValue(shared);
+      await expectPostText(skyText, shared);
       await sharedControl.click();
       await expect(sharedControl).toHaveAttribute("aria-pressed", "true");
-      await expect(skyText).toHaveValue(`${shared} updated`);
+      await expectPostText(skyText, `${shared} updated`);
       await composerDestinations(page).getByRole("button", { name: "All", exact: true }).click();
       await page.getByRole("textbox", { name: "Post text", exact: true }).fill(shared);
       await composerDestinations(page)
         .getByRole("button", { name: /@previewsky, Bluesky/ })
         .click();
-      await expect(skyText).toHaveValue(shared);
+      await expectPostText(skyText, shared);
 
       if (width === 320) await skyText.fill("A Bluesky-only update https://account.example/new");
       await frame.getByRole("button", { name: "Edit", exact: true }).click();
@@ -264,22 +270,9 @@ for (const width of [1280, 390, 320])
       await expect(frame.getByText("A Bluesky headline", { exact: true })).toBeVisible();
       if (width !== 320)
         await expect(page.getByText("Using shared text", { exact: true })).toHaveCount(0);
-      await skyText.evaluate((element) => {
-        element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
-        element.value = "東京";
-        element.dispatchEvent(
-          new InputEvent("input", {
-            bubbles: true,
-            inputType: "insertCompositionText",
-            data: "東京",
-            isComposing: true,
-          }),
-        );
-        element.dispatchEvent(
-          new CompositionEvent("compositionend", { bubbles: true, data: "東京" }),
-        );
-      });
-      await expect(skyText).toHaveValue("東京");
+      await skyText.fill("");
+      await page.keyboard.insertText("東京");
+      await expectPostText(skyText, "東京");
       await skyText.fill("A Bluesky-only update https://account.example/new");
       await expect(page.getByText("Custom text", { exact: true })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Use shared", exact: true })).toHaveCount(0);
@@ -325,9 +318,7 @@ for (const width of [1280, 390, 320])
           title: "A Bluesky headline",
         });
       await composerDestinations(page).getByRole("button", { name: "All", exact: true }).click();
-      await expect(page.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
-        shared,
-      );
+      await expectPostText(page.getByRole("textbox", { name: "Post text", exact: true }), shared);
       await composerDestinations(page)
         .getByRole("button", { name: /Preview person, LinkedIn/ })
         .click();
@@ -358,7 +349,8 @@ for (const width of [1280, 390, 320])
       await composerDestinations(page)
         .getByRole("button", { name: /@previewsky, Bluesky/ })
         .click();
-      await expect(frame.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+      await expectPostText(
+        frame.getByRole("textbox", { name: "Post text", exact: true }),
         "A Bluesky-only update https://account.example/new",
       );
       await expect(frame.getByText("account.example", { exact: true })).toBeVisible();
@@ -380,7 +372,7 @@ for (const width of [1280, 390, 320])
         .focus();
       await page.keyboard.press("Enter");
       await page.getByRole("menuitem", { name: "Use shared", exact: true }).click();
-      await expect(skyText).toHaveValue(shared);
+      await expectPostText(skyText, shared);
       await expect(
         page
           .getByTestId("composer-variant-toolbar")

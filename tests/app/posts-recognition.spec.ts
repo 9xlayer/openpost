@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createPublication, createWorkspace, registerUser } from "./helpers";
+import {
+  authenticatePage,
+  createPublication,
+  createWorkspace,
+  registerUser,
+  expectPostText,
+} from "./helpers";
 import {
   fixtureDirectory,
   fixedNow,
@@ -241,7 +247,8 @@ test("draft gallery keeps content, selection and search without repeated row chr
   await expect(gallery.locator("article")).toHaveCount(1);
   await gallery.getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`/publications/${text.id}`));
-  await expect(page.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+  await expectPostText(
+    page.getByRole("textbox", { name: "Post text", exact: true }),
     "The lesson from our first customer interview",
   );
   expect(errors).toEqual([]);

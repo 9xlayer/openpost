@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createPublication, createWorkspace, registerUser } from "./helpers";
+import {
+  authenticatePage,
+  createPublication,
+  createWorkspace,
+  registerUser,
+  expectPostText,
+} from "./helpers";
 
 test("thread authoring reorder supports keyboard preview, drop, cancel, and undo", async ({
   page,
@@ -43,28 +49,28 @@ test("thread authoring reorder supports keyboard preview, drop, cancel, and undo
   await handles.nth(0).focus();
   await page.keyboard.press("Space");
   await page.keyboard.press("ArrowDown");
-  await expect(page.locator("#post-textarea-0")).toHaveValue("Second edited post");
-  await expect(page.locator("#post-textarea-1")).toHaveValue("First edited post");
+  await expectPostText(page.locator("#post-textarea-0"), "Second edited post");
+  await expectPostText(page.locator("#post-textarea-1"), "First edited post");
   await page.waitForTimeout(2200);
   expect(saves).toHaveLength(0);
 
   await page.keyboard.press("Escape");
-  await expect(page.locator("#post-textarea-0")).toHaveValue("First edited post");
-  await expect(page.locator("#post-textarea-1")).toHaveValue("Second edited post");
+  await expectPostText(page.locator("#post-textarea-0"), "First edited post");
+  await expectPostText(page.locator("#post-textarea-1"), "Second edited post");
 
   await handles.nth(0).focus();
   await page.keyboard.press("Space");
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Space");
-  await expect(page.locator("#post-textarea-0")).toHaveValue("Second edited post");
-  await expect(page.locator("#post-textarea-1")).toHaveValue("First edited post");
+  await expectPostText(page.locator("#post-textarea-0"), "Second edited post");
+  await expectPostText(page.locator("#post-textarea-1"), "First edited post");
 
   const undo = composer.getByRole("button", { name: "Undo reorder", exact: true });
   await expect(undo).toBeVisible();
   await page.locator("#post-textarea-0").fill("Second edited after reorder");
   await undo.click();
-  await expect(page.locator("#post-textarea-0")).toHaveValue("First edited post");
-  await expect(page.locator("#post-textarea-1")).toHaveValue("Second edited after reorder");
+  await expectPostText(page.locator("#post-textarea-0"), "First edited post");
+  await expectPostText(page.locator("#post-textarea-1"), "Second edited after reorder");
   for (const width of [1280, 390, 320])
     for (const colorScheme of ["light", "dark"] as const) {
       await page.setViewportSize({ width, height: 900 });
