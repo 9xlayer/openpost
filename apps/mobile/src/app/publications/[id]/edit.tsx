@@ -1,3 +1,4 @@
+import { renditionReadinessSegments } from "@/lib/publication-image-choices";
 import { AccountImageFit, type AccountImageChoice } from "@/components/account-image-fit";
 import { PostEditor } from "@/components/post-editor";
 import {
@@ -54,6 +55,7 @@ import {
   readinessRequestSignature,
   resolveDestinationCapabilities,
   type ReadinessSegment,
+  type ReadinessRequestInput,
   type ResolvedDestinationCapability,
 } from "@/lib/destination-readiness";
 import { formatDateTime, platformLabel } from "@/lib/format";
@@ -358,20 +360,54 @@ function Composer({
     }));
   }
 
-  function computeReadinessInput(firstSegmentMediaIds: string[]) {
+  function selectedImageIDs(accountId: string, resolvedProfile?: string) {
+    const profile =
+      contentSnapshot.current.renditions?.find((r) => r.social_account_id === accountId)
+        ?.output_profile ||
+      resolvedProfile ||
+      readinessByAccount[accountId]?.output_profile;
+    return Object.fromEntries(
+      Object.values(imageChoices)
+        .filter(
+          (choice) =>
+            choice.accountId === accountId && choice.selected && choice.profile === profile,
+        )
+        .map((choice) => [choice.originalId, choice.prepared.id]),
+    );
+  }
+
+  function computeReadinessInput(
+    firstSegmentMediaIds: string[],
+    accountIds = [...selectableAccountIds].sort(),
+  ) {
     const segments = buildReadinessSegments(firstSegmentMediaIds);
-    const accountIds = [...selectableAccountIds].sort();
-    return {
-      accountIds,
-      segments,
-      signature: readinessRequestSignature({ accountIds, segments }),
-    };
+    const snapshot = contentSnapshot.current;
+    const accountSegments = Object.fromEntries(
+      accountIds.map((accountId) => {
+        const stored = snapshot.renditions?.find((item) => item.social_account_id === accountId);
+        const strategy =
+          stored?.segments?.length === 1 && (snapshot.segments?.length ?? 0) > 1
+            ? "join"
+            : (readinessByAccount[accountId]?.segment_strategy ?? "preserve");
+        const input = mobileRenditionInput(
+          snapshot,
+          accountId,
+          renditionTextEdits[accountId],
+          attachments,
+          annotatedRenditionEdits[accountId],
+          strategy,
+          selectedImageIDs(accountId),
+        );
+        return [accountId, renditionReadinessSegments(snapshot, input, segments, strategy)];
+      }),
+    );
+    const input = { accountIds, segments, accountSegments };
+    return { ...input, signature: readinessRequestSignature(input) };
   }
 
   async function runReadinessResolve(
     signature: string,
-    accountIds: string[],
-    segments: ReadinessSegment[],
+    input: ReadinessRequestInput,
   ): Promise<void> {
     const workspaceId = getWorkspaceId();
     if (!workspaceId) return;
@@ -381,11 +417,7 @@ function Composer({
     const controller = new AbortController();
     readinessAbort.current = controller;
     try {
-      const resolved = await resolveDestinationCapabilities(
-        api(),
-        { accountIds, segments },
-        controller.signal,
-      );
+      const resolved = await resolveDestinationCapabilities(api(), input, controller.signal);
       requireCurrentQueryActor(scope);
       if (sequence !== readinessSequence.current) return;
       if (!workspaceScopeIsCurrent(scope)) return;
@@ -412,7 +444,8 @@ function Composer({
     .map((attachment) => `${attachment.localId}:${attachment.mediaId ?? ""}`)
     .join(",");
   useEffect(() => {
-    const { accountIds, segments, signature } = computeReadinessInput(readyMediaIds);
+    const input = computeReadinessInput(readyMediaIds);
+    const { accountIds, signature } = input;
     if (readinessTimer.current) {
       clearTimeout(readinessTimer.current);
       readinessTimer.current = null;
@@ -428,7 +461,7 @@ function Composer({
     if (signature === lastReadinessSignature.current) return;
     readinessTimer.current = setTimeout(() => {
       readinessTimer.current = null;
-      void runReadinessResolve(signature, accountIds, segments);
+      void runReadinessResolve(signature, input);
     }, readinessDebounceMs());
     return () => {
       if (readinessTimer.current) {
@@ -438,7 +471,16 @@ function Composer({
       readinessAbort.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [body, readinessAccountsKey, readinessAttachmentsKey, readinessNonce, pub]);
+  }, [
+    body,
+    readinessAccountsKey,
+    readinessAttachmentsKey,
+    readinessNonce,
+    pub,
+    imageChoices,
+    renditionTextEdits,
+    annotatedRenditionEdits,
+  ]);
 
   // Readiness describes the destinations selected now. Clearing the last one
   // leaves earlier results in state, so consumers read these derived values and
@@ -458,10 +500,11 @@ function Composer({
     scope: EditorMutationScope,
     firstSegmentMediaIds: string[],
   ): Promise<string | null> {
-    const { accountIds, segments } = computeReadinessInput(firstSegmentMediaIds);
+    const input = computeReadinessInput(firstSegmentMediaIds);
+    const { accountIds } = input;
     if (accountIds.length === 0) return null;
     try {
-      const resolved = await resolveDestinationCapabilities(api(), { accountIds, segments });
+      const resolved = await resolveDestinationCapabilities(api(), input);
       requireCurrentQueryActor(scope);
       if (!workspaceScopeIsCurrent(scope)) return null;
       return firstPublishBlocker(resolved, accountIds);
@@ -615,12 +658,13 @@ function Composer({
         ),
     );
     const addedCapabilities = addedAccounts.length
-      ? await resolveDestinationCapabilities(requestApi, {
-          accountIds: addedAccounts,
-          segments: buildReadinessSegments(
+      ? await resolveDestinationCapabilities(
+          requestApi,
+          computeReadinessInput(
             media.flatMap((item) => (item.mediaId ? [item.mediaId] : [])),
+            addedAccounts,
           ),
-        })
+        )
       : {};
     requireCurrentQueryActor(scope);
 
@@ -672,21 +716,7 @@ function Composer({
               renditionMedia,
               annotatedRenditionEdits[accountId],
               addedCapabilities[accountId]?.segment_strategy,
-              Object.fromEntries(
-                Object.values(imageChoices)
-                  .filter(
-                    (choice) =>
-                      choice.accountId === accountId &&
-                      choice.selected &&
-                      choice.profile ===
-                        (contentSnapshot.current.renditions?.find(
-                          (r) => r.social_account_id === accountId,
-                        )?.output_profile ||
-                          addedCapabilities[accountId]?.output_profile ||
-                          effectiveReadinessByAccount[accountId]?.output_profile),
-                  )
-                  .map((choice) => [choice.originalId, choice.prepared.id]),
-              ),
+              selectedImageIDs(accountId, addedCapabilities[accountId]?.output_profile),
             ),
           ),
         },

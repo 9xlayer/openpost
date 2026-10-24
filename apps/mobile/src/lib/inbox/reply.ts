@@ -10,6 +10,7 @@ interface ReplySnapshot {
   error?: string;
 }
 interface ReplyDependencies {
+  action?: "reply" | "delete_reply";
   read(): Promise<ConversationDraft>;
   write(draft: ConversationDraft, admission?: DraftAdmission): Promise<boolean | void>;
   admit(body: string, operationId: string): Promise<{ job_id?: string }>;
@@ -18,7 +19,7 @@ interface ReplyDependencies {
   online(): boolean;
   current(): boolean;
 }
-/** Owns admission, crash recovery and provider receipts for one authored public reply. */
+/** Owns admission, crash recovery and receipts for a public reply or its removal. */
 export class PublicReplySession {
   private value: ReplySnapshot = { ready: false, text: "", operation: null, history: [] };
   private listeners = new Set<() => void>();
@@ -135,7 +136,7 @@ export class PublicReplySession {
     const prior = this.value.operation;
     if (prior?.jobId || prior?.state === "failed" || prior?.state === "confirmed") return;
     const body = prior?.body ?? this.value.text.trim();
-    if (!body) return;
+    if (!body && this.dependencies.action !== "delete_reply") return;
     const operation: PendingSend = {
       ...prior,
       operationId: prior?.operationId ?? this.dependencies.newOperationId(),

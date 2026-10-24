@@ -148,3 +148,45 @@ test("fitted image selection retains a legacy whole-output caption and independe
   expect(input.segments?.[0]?.source_overrides).toBeUndefined();
   expect(rendition.segments?.[0].media?.[0].id).toBe("original");
 });
+
+test("capability checks use selected copies and saved independent destination media", async () => {
+  const { renditionReadinessSegments } = await import("./publication-image-choices");
+  const publication = { segments: sources, renditions: [] };
+  const canonical = sources.map((source) => ({
+    content: source.body,
+    mediaIds: (source.media ?? []).map((item) => item.id),
+  }));
+  const prepared = mobileRenditionInput(
+    publication,
+    "account",
+    undefined,
+    [],
+    undefined,
+    "preserve",
+    { original: "fitted" },
+  );
+  expect(renditionReadinessSegments(publication, prepared, canonical, "preserve")).toEqual([
+    { content: "First caption", mediaIds: ["fitted"] },
+    { content: "Continuation", mediaIds: ["tail-image"] },
+  ]);
+  const saved = {
+    social_account_id: "account",
+    segments: [
+      {
+        publication_segment_id: "first",
+        media_inherited: false,
+        media: [{ media_id: "saved-fitted" }],
+      },
+      { publication_segment_id: "tail", media_inherited: true },
+    ],
+  };
+  expect(renditionReadinessSegments(publication, saved, canonical, "preserve")[0].mediaIds).toEqual(
+    ["saved-fitted"],
+  );
+  const joined = mobileRenditionInput(publication, "account", undefined, [], undefined, "join", {
+    original: "fitted",
+  });
+  expect(renditionReadinessSegments(publication, joined, canonical, "join")).toEqual([
+    { content: "First caption\n\nContinuation", mediaIds: ["fitted", "tail-image"] },
+  ]);
+});

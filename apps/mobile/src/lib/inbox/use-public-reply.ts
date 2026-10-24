@@ -11,19 +11,40 @@ import {
 import { useInboxJob } from "./use-job";
 
 export function usePublicReply(workspaceId: string, itemId: string, canEdit: boolean) {
+  return useReplyIntent(workspaceId, itemId, canEdit, "reply");
+}
+
+export function useOwnerReplyRemoval(workspaceId: string, itemId: string, canEdit: boolean) {
+  return useReplyIntent(workspaceId, itemId, canEdit, "delete_reply");
+}
+
+function useReplyIntent(
+  workspaceId: string,
+  itemId: string,
+  canEdit: boolean,
+  action: "reply" | "delete_reply",
+) {
   const session = useMemo(() => {
     const scope = inboxStorageScope(workspaceId);
-    const draftId = `comment-${itemId}`;
+    const draftId = `${action === "reply" ? "comment" : "review-removal"}-${itemId}`;
     return new PublicReplySession({
+      action,
       read: () => readConversationDraft(scope, draftId),
       write: (draft, admission) => saveConversationDraft(scope, draftId, draft, admission),
-      admit: (body, operationId) => commentAction(workspaceId, itemId, "reply", body, operationId),
+      admit: (body, operationId) =>
+        commentAction(
+          workspaceId,
+          itemId,
+          action,
+          action === "reply" ? body : undefined,
+          operationId,
+        ),
       newOperationId: newInboxOperationId,
       current: scope.current,
       canEdit: () => false,
       online: getInboxOnline,
     });
-  }, [workspaceId, itemId]);
+  }, [workspaceId, itemId, action]);
   const state = useSyncExternalStore(session.subscribe, session.snapshot, session.snapshot);
   const receipt = useInboxJob(workspaceId, state.operation?.jobId);
   useEffect(() => {

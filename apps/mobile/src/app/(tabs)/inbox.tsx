@@ -124,7 +124,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
   const refresh = useInboxRefresh({
     workspaceId,
     view,
-    viewKey: `${view}:${filter}:${accountId}`,
+    viewKey: `${view}:${filter}:${accountId}:${kind}`,
     canEdit,
     previousSuccess: successfulAt,
     reloadStored: async () => {
@@ -430,7 +430,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
               <View style={{ paddingHorizontal: spacing.large }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${activityAuthor(item)}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}, ${item.body ? `${item.body}, ` : ""}On: ${item.publication_title || item.publication_excerpt || "Public post"}`}
+                  accessibilityLabel={`${activityAuthor(item)}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}, ${item.body ? `${item.body}, ` : ""}${activityContext(item)}`}
                   onPress={() => openComment(item)}
                   style={({ pressed }) => ({
                     flexDirection: "row",
@@ -460,13 +460,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
                       {item.body ||
                         (item.kind === "review" ? "Rating without written feedback" : "")}
                     </BodyText>
-                    <BodyText numberOfLines={1}>
-                      {item.kind === "review"
-                        ? `Business review${item.subject?.review?.stars == null ? "" : ` · ${item.subject.review.stars}/5`}`
-                        : item.kind === "mention"
-                          ? "Incoming mention"
-                          : `On: ${item.publication_title || item.publication_excerpt || "Public post"}`}
-                    </BodyText>
+                    <BodyText numberOfLines={1}>{activityContext(item)}</BodyText>
                   </View>
                 </Pressable>
               </View>
@@ -543,6 +537,13 @@ function SwipeableRow({
       {children}
     </Swipeable>
   );
+}
+
+function activityContext(item: Comment) {
+  if (item.kind === "review")
+    return `Business review${item.subject?.review?.stars == null ? "" : ` · ${item.subject.review.stars}/5`}`;
+  if (item.kind === "mention") return "Incoming mention";
+  return `On: ${item.publication_title || item.publication_excerpt || "Public post"}`;
 }
 
 function activityAuthor(item: Comment): string {

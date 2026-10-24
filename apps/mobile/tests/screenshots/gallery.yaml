@@ -2,6 +2,7 @@ appId: com.openpost.app
 ---
 - launchApp
 - openLink: openpost:///drafts
+- runFlow: open-link-guard.yaml
 - runFlow:
     when:
       visible: "Open in.*OpenPost.*"
@@ -15,27 +16,32 @@ appId: com.openpost.app
 # Open page captures through their public routes, independently of native
 # tab-bar gesture timing after the development-client launch.
 - openLink: com.openpost.app:///calendar
+- runFlow: open-link-guard.yaml
 - extendedWaitUntil:
     visible: October 2026
     timeout: 20000
 - takeScreenshot: calendar-${SCHEME}
 - openLink: com.openpost.app:///analytics
+- runFlow: open-link-guard.yaml
 - assertVisible: Followers
 - assertVisible: Trends
 - takeScreenshot: analytics-${SCHEME}
 - openLink: com.openpost.app:///inbox
+- runFlow: open-link-guard.yaml
 - extendedWaitUntil:
     visible: Chats
     timeout: 20000
 - assertVisible: Activity
 - takeScreenshot: inbox-preview-${SCHEME}
 - openLink: com.openpost.app:///drafts
+- runFlow: open-link-guard.yaml
 - extendedWaitUntil:
     visible: Recent drafts
     timeout: 20000
 # Open the composer through its route, matching the other page captures,
 # because a tap on the wrapped draft title races the navigation to editor.
 - openLink: com.openpost.app:///publications/draft-one/edit
+- runFlow: open-link-guard.yaml
 - extendedWaitUntil:
     visible: ".*Social Set.*"
     timeout: 20000
@@ -117,6 +123,7 @@ appId: com.openpost.app
 - tapOn: Back
 - runFlow: settings-guard.yaml
 - openLink: com.openpost.app:///privacy
+- runFlow: open-link-guard.yaml
 - extendedWaitUntil:
     visible: App analytics
     timeout: 20000
@@ -127,6 +134,7 @@ appId: com.openpost.app
 - takeScreenshot: privacy-${SCHEME}
 
 - openLink: com.openpost.app:///publications/client-review
+- runFlow: open-link-guard.yaml
 - extendedWaitUntil:
     visible: Client review
     timeout: 20000

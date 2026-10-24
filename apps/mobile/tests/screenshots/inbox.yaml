@@ -2,6 +2,7 @@ appId: com.openpost.app
 ---
 # Uses only tests/screenshots/entry.js sample data, never a live provider.
 - openLink: openpost:///inbox
+- runFlow: open-link-guard.yaml
 - runFlow:
     when:
       visible: "Open in.*OpenPost.*"
@@ -35,6 +36,7 @@ appId: com.openpost.app
 - waitForAnimationToEnd
 - takeScreenshot: chat-${SCHEME}
 - openLink: openpost:///inbox
+- runFlow: open-link-guard.yaml
 - tapOn: Activity
 - tapOn: Comments
 - extendedWaitUntil:
@@ -49,6 +51,7 @@ appId: com.openpost.app
 - waitForAnimationToEnd
 - takeScreenshot: comment-${SCHEME}
 - openLink: openpost:///inbox
+- runFlow: open-link-guard.yaml
 - tapOn: Activity
 - tapOn: Mentions
 - assertVisible: ".*Thanks for sharing the launch.*"
@@ -56,16 +59,18 @@ appId: com.openpost.app
 - assertVisible: Incoming mention
 - takeScreenshot: mention-${SCHEME}
 - openLink: openpost:///inbox
+- runFlow: open-link-guard.yaml
 - tapOn: Activity
 - tapOn: Reviews
-- assertVisible: Anonymous reviewer
-- tapOn: Anonymous reviewer
+- assertVisible: ".*Anonymous reviewer.*"
+- tapOn: ".*Anonymous reviewer.*"
 - assertVisible: Business review
 - assertVisible: "Rating: 5/5"
 - assertVisible: "Google moderation: Pending review"
 - assertVisible: Remove your reply
 - takeScreenshot: review-${SCHEME}
 - openLink: openpost:///media
+- runFlow: open-link-guard.yaml
 - assertVisible: Images
 - assertVisible: lisbon-tram.png
 - waitForAnimationToEnd

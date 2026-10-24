@@ -92,3 +92,68 @@ export function applyRenditionImageChoices(
   });
   return changed ? { ...rendition, segments: output } : rendition;
 }
+
+/** Project the same destination choices used by Save into capability checks. */
+export function renditionReadinessSegments(
+  publication: Publication,
+  rendition: RenditionInput,
+  canonical: { content: string; mediaIds: string[] }[],
+  strategy: "preserve" | "join",
+): { content: string; mediaIds: string[] }[] {
+  const sources = publication.segments ?? [];
+  const stored = publication.renditions?.find(
+    (item) => item.social_account_id === rendition.social_account_id,
+  );
+  const sourceValue = (id: string | undefined, index: number) =>
+    canonical[sources.findIndex((source) => source.id === id)] ??
+    canonical[index] ?? { content: "", mediaIds: [] };
+  const join = (values: { content: string; mediaIds: string[] }[]) => ({
+    content: values
+      .map((value) => value.content.trim())
+      .filter(Boolean)
+      .join("\n\n"),
+    mediaIds: [...new Set(values.flatMap((value) => value.mediaIds))],
+  });
+  if (!rendition.segments?.length) {
+    if (stored && !stored.segments?.length)
+      return [
+        {
+          content: rendition.body ?? stored.body,
+          mediaIds:
+            rendition.media?.map((item) => item.media_id) ??
+            stored.media?.map((item) => item.id) ??
+            [],
+        },
+      ];
+    return strategy === "join" && canonical.length > 1 ? [join(canonical)] : canonical;
+  }
+  return rendition.segments.map((segment, index) => {
+    if (segment.source_overrides?.length)
+      return join(
+        sources.map((source, position) => {
+          const inherited = canonical[position] ?? { content: "", mediaIds: [] };
+          const override = segment.source_overrides?.find(
+            (item) => item.publication_segment_id === source.id,
+          );
+          return {
+            content: override?.body_override ?? inherited.content,
+            mediaIds:
+              override?.media_inherited === false
+                ? (override.media ?? []).map((item) => item.media_id)
+                : inherited.mediaIds,
+          };
+        }),
+      );
+    const inherited =
+      rendition.segments?.length === 1 && canonical.length > 1
+        ? join(canonical)
+        : sourceValue(segment.publication_segment_id, index);
+    return {
+      content: segment.body_override ?? segment.body ?? inherited.content,
+      mediaIds:
+        segment.media_inherited === false
+          ? (segment.media ?? []).map((item) => item.media_id)
+          : inherited.mediaIds,
+    };
+  });
+}

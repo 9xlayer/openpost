@@ -285,3 +285,40 @@ test("an accepted owner reply can be deliberately replaced while retaining its f
     { body: "Updated owner reply", operationId: "intentional-replacement" },
   ]);
 });
+
+test("owner reply removal survives lost admission and restart with one durable identity", async () => {
+  let disk: ConversationDraft = { text: "", sends: [] };
+  const requests: string[] = [];
+  let lost = true;
+  const create = () =>
+    new PublicReplySession({
+      action: "delete_reply",
+      read: async () => parseDraft(JSON.stringify(disk)),
+      write: async (value) => {
+        disk = value;
+      },
+      admit: async (body, id) => {
+        expect(body).toBe("");
+        expect(disk.sends[0]?.operationId).toBe(id);
+        requests.push(id);
+        if (lost) throw new Error("lost removal response");
+        return { job_id: "removal-receipt" };
+      },
+      newOperationId: () => operationId,
+      canEdit: () => true,
+      online: () => true,
+      current: () => true,
+    });
+  const first = create();
+  await first.restore();
+  await first.submit();
+  expect(disk.sends[0]?.state).toBe("ambiguous");
+  const reopened = create();
+  await reopened.restore();
+  lost = false;
+  await reopened.submit();
+  expect(requests).toEqual([operationId, operationId]);
+  await reopened.observe({ id: "removal-receipt", status: "completed" });
+  await reopened.submit();
+  expect(requests).toHaveLength(2);
+});

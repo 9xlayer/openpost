@@ -17,7 +17,7 @@ import { useComment } from "@/lib/inbox/queries";
 import { commentAction, setCommentState } from "@/lib/inbox/api";
 import { orderedCommentAncestors } from "@/lib/inbox/ancestors";
 import { useInboxOnline } from "@/lib/inbox/connection";
-import { usePublicReply } from "@/lib/inbox/use-public-reply";
+import { useOwnerReplyRemoval, usePublicReply } from "@/lib/inbox/use-public-reply";
 import { useInboxJob } from "@/lib/inbox/use-job";
 import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "@/lib/api/client";
 import { useInboxUpdates } from "@/lib/inbox/lifecycle";
@@ -50,18 +50,24 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const online = useInboxOnline();
   const isReview = comment?.kind === "review";
   const reviewActive = isReview && comment?.reply_operation_state === "active";
-  const replyable =
-    canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at && !reviewActive;
+  const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at;
   const reply = usePublicReply(workspaceId, id, replyable);
+  const replyUncertain =
+    reply.operation?.state === "ambiguous" || reply.operation?.state === "sending";
+  const canSubmitReply = replyable && (!reviewActive || replyUncertain);
+  const removal = useOwnerReplyRemoval(
+    workspaceId,
+    id,
+    canEdit && isReview && !!comment?.can_delete_reply,
+  );
+  const removalUncertain =
+    removal.operation?.state === "ambiguous" || removal.operation?.state === "sending";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [undoArchive, setUndoArchive] = useState<boolean | null>(null);
   const [moderationJobId, setModerationJobId] = useState<string>();
-  const moderation = useInboxJob(
-    workspaceId,
-    moderationJobId ?? (isReview ? comment?.reply_job_id : undefined),
-  );
+  const moderation = useInboxJob(workspaceId, isReview ? comment?.reply_job_id : moderationJobId);
   const inFlight = useRef(false);
   const mounted = useRef(true);
   const composerScroll = useRef<ScrollView>(null);
@@ -94,6 +100,10 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
     if (moderation.job?.status === "completed")
       void queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
   }, [moderation.job, queryClient, workspaceId]);
+  useEffect(() => {
+    if (removal.receipt.job?.status === "completed")
+      void queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
+  }, [removal.receipt.job, queryClient, workspaceId]);
   async function archive(archived: boolean, undo = false) {
     if (!canEdit || !comment || inFlight.current) return;
     const identity = captureApiRequestIdentity();
@@ -117,7 +127,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
       if (mounted.current && apiRequestIdentityIsCurrent(identity)) setBusy(false);
     }
   }
-  async function action(kind: "delete_reply" | "hide" | "delete" | "like" | "unlike") {
+  async function action(kind: "hide" | "delete" | "like" | "unlike") {
     if (!canEdit || !comment || inFlight.current) return;
     const identity = captureApiRequestIdentity();
     inFlight.current = true;
@@ -216,6 +226,34 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 ) : null}
               </View>
               {comment.subject?.review ? <ReviewContext review={comment.subject.review} /> : null}
+              {removal.operation ? (
+                <View style={{ gap: 8 }}>
+                  <BodyText selectable>Removal intent: {removal.operation.operationId}</BodyText>
+                  {removal.operation.jobId ? (
+                    <BodyText selectable>Removal receipt: {removal.operation.jobId}</BodyText>
+                  ) : null}
+                  <BodyText>
+                    Removal status: {removal.receipt.job?.status ?? removal.operation.state}
+                  </BodyText>
+                  {removal.error ? <QueryNotice message={removal.error} /> : null}
+                  {removalUncertain ? (
+                    <Button
+                      title="Recover removal receipt"
+                      intent="ordinary"
+                      onPress={removal.submit}
+                      disabled={!canEdit || !online || removal.operation.state === "sending"}
+                    />
+                  ) : null}
+                  {removal.operation.jobId ? (
+                    <Button
+                      title="Check removal receipt"
+                      intent="ordinary"
+                      onPress={removal.receipt.check}
+                      disabled={removal.receipt.checking}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
               {isReview && comment.reply_job_id ? (
                 <View style={{ gap: 8 }}>
                   <BodyText selectable>Reply receipt: {comment.reply_job_id}</BodyText>
@@ -357,9 +395,18 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                       ) : null}
                       {comment.can_delete_reply ? (
                         <Button
-                          title="Remove your reply"
+                          title={
+                            removalUncertain ? "Retry reply removal safely" : "Remove your reply"
+                          }
                           intent="destructive"
-                          disabled={busy || reviewActive || moderation.checking}
+                          disabled={
+                            busy ||
+                            !online ||
+                            !removal.ready ||
+                            (reviewActive && !removalUncertain) ||
+                            removal.operation?.state === "queued" ||
+                            removal.operation?.state === "sending"
+                          }
                           onPress={() =>
                             Alert.alert(
                               "Remove your reply?",
@@ -369,7 +416,15 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                                 {
                                   text: "Remove reply",
                                   style: "destructive",
-                                  onPress: () => void action("delete_reply"),
+                                  onPress: () =>
+                                    void (async () => {
+                                      if (
+                                        removal.operation?.state === "confirmed" ||
+                                        removal.operation?.state === "failed"
+                                      )
+                                        await removal.startNewReply("");
+                                      removal.submit();
+                                    })(),
                                 },
                               ],
                             )
@@ -483,15 +538,17 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   You’re offline. Your draft is saved. Reconnect, then tap Reply publicly.
                 </BodyText>
               ) : null}
-              {!replyable ? (
+              {!replyable || reviewActive ? (
                 <BodyText>
-                  {comment.deleted_at
-                    ? "This comment has been deleted."
-                    : comment.archived_at
-                      ? "Reopen this comment to reply."
-                      : !canEdit
-                        ? "Your Workspace role cannot reply."
-                        : "This network or account does not support replies here."}
+                  {reviewActive
+                    ? "A reply operation is still being checked. Recover its existing receipt before starting another."
+                    : comment.deleted_at
+                      ? "This comment has been deleted."
+                      : comment.archived_at
+                        ? "Reopen this comment to reply."
+                        : !canEdit
+                          ? "Your Workspace role cannot reply."
+                          : "This network or account does not support replies here."}
                 </BodyText>
               ) : null}
               {reply.operation?.state === "confirmed" ? (
@@ -546,7 +603,8 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               {isReview &&
               comment.subject?.review?.owner_reply &&
               (!reply.operation || reply.operation.state === "confirmed") &&
-              replyable ? (
+              replyable &&
+              !reviewActive ? (
                 <Button
                   title="Edit owner reply"
                   intent="ordinary"
@@ -566,6 +624,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 multiline
                 editable={
                   replyable &&
+                  !reviewActive &&
                   reply.ready &&
                   !busy &&
                   (!reply.operation || reply.operation.state === "confirmed")
@@ -601,7 +660,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 loading={reply.operation?.state === "sending"}
                 disabled={
                   !online ||
-                  !replyable ||
+                  !canSubmitReply ||
                   !reply.ready ||
                   !reply.text.trim() ||
                   (isReview && countUTF8Bytes(reply.text.trim()) > 4096) ||
