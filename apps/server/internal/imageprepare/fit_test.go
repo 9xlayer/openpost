@@ -8,7 +8,9 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"os"
 	"testing"
+	"time"
 
 	"github.com/openpost/backend/internal/capabilities"
 	"github.com/stretchr/testify/require"
@@ -80,4 +82,35 @@ func TestFitRejectsAnimationUnsafeDimensionsAndImpossibleLimits(t *testing.T) {
 	cancel()
 	_, _, err = Fit(ctx, source, capabilities.MediaConstraint{})
 	require.ErrorIs(t, err, context.Canceled)
+}
+
+func TestFitNarrowImageRespectsPixelBudget(t *testing.T) {
+	var input bytes.Buffer
+	require.NoError(t, png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 10000, 1))))
+	data, _, err := Fit(t.Context(), input.Bytes(), capabilities.MediaConstraint{MaxPixels: 1000})
+	require.NoError(t, err)
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	require.NoError(t, err)
+	require.LessOrEqual(t, config.Width*config.Height, 1000)
+}
+
+func TestMain(m *testing.M) {
+	if handled, err := RunWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
+		if err != nil {
+			os.Exit(1)
+		}
+		return
+	}
+	os.Exit(m.Run())
+}
+
+func TestFitDeadlineTerminatesImageWorker(t *testing.T) {
+	var input bytes.Buffer
+	require.NoError(t, png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 4096, 4096))))
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
+	defer cancel()
+	started := time.Now()
+	_, _, err := Fit(ctx, input.Bytes(), capabilities.MediaConstraint{AspectRatios: []string{"1:1"}})
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	require.Less(t, time.Since(started), time.Second)
 }

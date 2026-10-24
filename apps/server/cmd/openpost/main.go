@@ -32,6 +32,7 @@ import (
 	"github.com/openpost/backend/internal/connectors"
 	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/diagnostics"
+	"github.com/openpost/backend/internal/imageprepare"
 	"github.com/openpost/backend/internal/memes"
 	operationallogging "github.com/openpost/backend/internal/operational/logging"
 	"github.com/openpost/backend/internal/platform"
@@ -120,6 +121,13 @@ func configureMCPToolMode(handler mcpToolModeSetter, cfg *config.Config) {
 
 //nolint:gocyclo
 func main() {
+	if handled, err := imageprepare.RunWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
+		if err != nil {
+			os.Exit(1)
+		}
+		return
+	}
+
 	runtimeLogger := operationallogging.New(os.Stdout, "openpost", runningBuildRevision())
 	log.SetFlags(0)
 	log.SetOutput(runtimeLogger.LegacyWriter())

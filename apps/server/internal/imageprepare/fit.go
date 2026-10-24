@@ -25,9 +25,9 @@ import (
 var ErrCannotFit = errors.New("image cannot be fitted within the destination limits")
 var ErrAnimated = errors.New("animated images cannot be fitted without losing frames")
 
-// Fit creates a padded, downscaled derivative. It never crops or modifies the
+// fit creates a padded, downscaled derivative. It never crops or modifies the
 // source. Decoding and canvas allocations are bounded before they occur.
-func Fit(ctx context.Context, input []byte, limits capabilities.MediaConstraint) ([]byte, string, error) {
+func fit(ctx context.Context, input []byte, limits capabilities.MediaConstraint) ([]byte, string, error) {
 	source, err := decodeFitImage(ctx, input)
 	if err != nil {
 		return nil, "", err
@@ -149,7 +149,16 @@ func fitCanvas(w, h int, limits capabilities.MediaConstraint) (int, int) {
 	if math.IsInf(width, 0) || math.IsInf(height, 0) || width*height > float64(math.MaxInt32) {
 		return 0, 0
 	}
-	return max(1, int(math.Floor(width*scale))), max(1, int(math.Floor(height*scale)))
+	cw, ch := max(1, int(math.Floor(width*scale))), max(1, int(math.Floor(height*scale)))
+	// Rounding a short side up to one pixel must not exceed the area budget.
+	if limits.MaxPixels > 0 && int64(cw) > limits.MaxPixels/int64(ch) {
+		if cw >= ch {
+			cw = max(1, int(limits.MaxPixels/int64(ch)))
+		} else {
+			ch = max(1, int(limits.MaxPixels/int64(cw)))
+		}
+	}
+	return cw, ch
 }
 
 func animated(input []byte, format string) bool {
