@@ -21,7 +21,7 @@ This directory is for local, gitignored source checkouts used as implementation 
 - `qcut/` is a shallow clone of <https://github.com/Quriosity-agent/qcut>. Use it for product and interaction ideas only until its source license permits more.
 - `claude-seo/` is a shallow clone of <https://github.com/AgriciDaniel/claude-seo> at `v2.4.0` (`e77e783e38eeb738424eb72117abbd2dacdd88af`, MIT). Codex runs its local audit scripts through `.agents/skills/openpost-seo/SKILL.md`.
 
-The [October 2026 publishing competitor audit](competitor-audit-2026-10-10.md) records the pulled revisions, source licenses, provider reliability findings, and useful changes across Postiz, TryPost, Shoutrrr, PostHive, Mixpost, Socioboard, and OpenPost. The [October 10 to 17 follow-up](competitor-audit-2026-10-17.md) verifies the next weekly report and records the adopted and deferred changes.
+The [October 2026 publishing competitor audit](competitor-audit-2026-10-10.md) records the pulled revisions, source licenses, provider reliability findings, and useful changes across Postiz, TryPost, Shoutrrr, PostHive, Mixpost, Socioboard, and OpenPost. The [October 10 to 17 follow-up](competitor-audit-2026-10-17.md) verifies the next weekly report and records the adopted and deferred changes. The [October 17 to 24 audit](competitor-audit-2026-10-24.md) covers all 39 local references and records provider fixes, preserved checkouts, unavailable upstreams, and product decisions.
 
 All checkout directories are ignored by Git. Keep them shallow and local. Never commit or vendor them. Audit the exact source revision and license before porting any code.
 
