@@ -1,3 +1,4 @@
+import { applyRenditionImageChoices } from "./publication-image-choices";
 import {
   joinPostText,
   readMentionMetadata,
@@ -109,8 +110,28 @@ export function attachmentRequirement(
   };
 }
 
-/** Preserve authored destination media, formats, and segment settings on native saves. */
 export function mobileRenditionInput(
+  publication: PublicationContent,
+  accountId: string,
+  textEdits: RenditionTextEdits | undefined,
+  attachments: readonly Attachment[],
+  annotatedEdits?: Readonly<Record<string, PostTextValue>>,
+  strategy: "preserve" | "join" = "preserve",
+  imageChoices: Readonly<Record<string, string>> = {},
+): components["schemas"]["RenditionInput"] {
+  const input = buildMobileRenditionInput(
+    publication,
+    accountId,
+    textEdits,
+    attachments,
+    annotatedEdits,
+    strategy,
+  );
+  return applyRenditionImageChoices(publication, input, imageChoices, strategy);
+}
+
+/** Preserve authored destination media, formats, and segment settings on native saves. */
+function buildMobileRenditionInput(
   publication: PublicationContent,
   accountId: string,
   textEdits: RenditionTextEdits | undefined,

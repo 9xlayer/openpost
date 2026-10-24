@@ -14,6 +14,8 @@ const screens = inbox
       ["chat", "Conversation"],
       ["comments", "Comments"],
       ["comment", "Public reply"],
+      ["mention", "Incoming mention"],
+      ["review", "Business review"],
       ["media", "Media"],
     ]
   : [
@@ -23,11 +25,11 @@ const screens = inbox
       ["calendar", "Calendar"],
       ["analytics", "Analytics"],
     ];
-const width = 1840;
 const phoneWidth = 320;
 const bezel = 10;
 const screenWidth = phoneWidth - bezel * 2;
 const gutter = 40;
+const width = screens.length * (phoneWidth + gutter) + gutter;
 const labelHeight = inbox ? 64 : 44;
 const radius = 44;
 

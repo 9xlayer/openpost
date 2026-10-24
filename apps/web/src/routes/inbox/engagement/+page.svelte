@@ -7,6 +7,8 @@
 	Responsive: One column at every width, with controls wrapping into touch-safe rows on phones.
 -->
 <script lang="ts">
+	import { countUTF8Bytes } from '@openpost/platform-text';
+	import EngagementReview from '$lib/components/engagement-review.svelte';
 	import { appBranding } from '$lib/app-branding.svelte';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import {
@@ -76,6 +78,7 @@
 	let unreadOnly = $state(false);
 	let archived = $state(false);
 	let platformFilter = $state('');
+	let kindFilter = $state<'' | 'comment' | 'mention' | 'review'>('');
 	let selectedPublication = $state.raw<Publication | null>(null);
 	let publicationSearch = $state('');
 	let publicationQuerySearch = $state('');
@@ -90,7 +93,7 @@
 	let appliedActionViewKey = '';
 	let confirmItem = $state.raw<EngagementItem | null>(null);
 	let confirmScope = $state.raw<EngagementMutationScope | null>(null);
-	let confirmAction = $state<'hide' | 'delete'>('delete');
+	let confirmAction = $state<'hide' | 'delete' | 'delete_reply'>('delete');
 	let confirmDialogOpen = $state(false);
 	let toast = $state('');
 	let toastTone = $state<'neutral' | 'success' | 'error'>('neutral');
@@ -104,6 +107,7 @@
 		publicationWorkspaceId === workspaceId ? publicationQuerySearch : ''
 	);
 	const engagementFilters = $derived({
+		kind: kindFilter || undefined,
 		platform: platformFilter,
 		accountId: queryAccountFilter,
 		publicationId: queryPublicationFilter,
@@ -210,6 +214,14 @@
 		syncStates.filter(
 			(state) =>
 				!['ok', 'pending', 'unsupported'].includes(state.status) &&
+				(!kindFilter ||
+					!state.feed ||
+					state.feed ===
+						(kindFilter === 'comment'
+							? 'comments'
+							: kindFilter === 'mention'
+								? 'mentions'
+								: 'reviews')) &&
 				(!platformFilter || state.platform === platformFilter) &&
 				(!accountFilter || state.social_account_id === accountFilter)
 		)
@@ -227,7 +239,7 @@
 		>();
 		for (const state of filteredSyncStates) {
 			const kind = recoveryKind(state);
-			const key = `${state.social_account_id}:${kind}:${state.error_code || state.status}`;
+			const key = `${state.social_account_id}:${state.feed ?? 'comments'}:${kind}:${state.error_code || state.status}`;
 			const group = groups.get(key) ?? {
 				key,
 				kind,
@@ -255,8 +267,11 @@
 			{ key: string; items: EngagementItem[]; newest: number }
 		>();
 		for (const item of items) {
-			const group = groups.get(item.rendition_id) ?? {
-				key: item.rendition_id,
+			const key =
+				item.rendition_id ||
+				`${item.social_account_id}:${item.kind || 'comment'}:${item.conversation_remote_id || item.subject?.remote_id || item.id}`;
+			const group = groups.get(key) ?? {
+				key,
 				items: [],
 				newest: 0
 			};
@@ -265,7 +280,7 @@
 				group.newest,
 				new Date(item.remote_created_at || item.created_at).getTime() || 0
 			);
-			groups.set(item.rendition_id, group);
+			groups.set(key, group);
 		}
 		return [...groups.values()]
 			.map((group) => ({ ...group, items: orderThread(group.items) }))
@@ -414,6 +429,7 @@
 			platform: platformFilter,
 			account_id: queryAccountFilter,
 			publication_id: queryPublicationFilter,
+			kind: kindFilter || undefined,
 			archived
 		};
 		const sequence = ++actionRequestSequence;
@@ -509,10 +525,16 @@
 
 	async function queueAction(
 		item: EngagementItem,
-		action: 'reply' | 'hide' | 'delete' | 'like' | 'unlike',
+		action: 'reply' | 'delete_reply' | 'hide' | 'delete' | 'like' | 'unlike',
 		announce = true
 	) {
 		if (!workspaceId || engagementAllDisabled || actionInFlight) return false;
+		if (
+			item.kind === 'review' &&
+			(item.reply_operation_state === 'active' ||
+				(action === 'reply' && countUTF8Bytes(replyBody.trim()) > 4096))
+		)
+			return false;
 		const identity = auth.captureIdentity();
 		if (!identity) return false;
 		const scope = captureEngagementMutationView(item.id, unreadOnly);
@@ -527,7 +549,11 @@
 				submittedReply.trim()
 			);
 			if (!engagementMutationViewIsCurrent(scope)) return false;
-			const { error: apiError, response } = await client.POST('/engagement/{item_id}/actions', {
+			const {
+				data,
+				error: apiError,
+				response
+			} = await client.POST('/engagement/{item_id}/actions', {
 				params: { path: { item_id: item.id } },
 				body: {
 					workspace_id: scope.workspaceID,
@@ -544,6 +570,16 @@
 				return false;
 			}
 			operation.complete();
+			if (item.kind === 'review' && data?.job_id) {
+				updateEngagementData(scope.queryKey, (page) => ({
+					...page,
+					items: (page.items ?? []).map((candidate) =>
+						candidate.id === item.id
+							? { ...candidate, reply_job_id: data.job_id, reply_operation_state: 'active' }
+							: candidate
+					)
+				}));
+			}
 			if (
 				action === 'reply' &&
 				engagementMutationViewIsCurrent(scope) &&
@@ -589,6 +625,7 @@
 		return JSON.stringify([
 			workspaceId,
 			platformFilter,
+			kindFilter,
 			accountFilter,
 			publicationFilter,
 			unreadOnly,
@@ -642,7 +679,7 @@
 		toastTone = tone;
 	}
 
-	function requestProviderAction(item: EngagementItem, action: 'hide' | 'delete') {
+	function requestProviderAction(item: EngagementItem, action: 'hide' | 'delete' | 'delete_reply') {
 		confirmItem = item;
 		confirmScope = captureEngagementMutationView(item.id, unreadOnly);
 		confirmAction = action;
@@ -676,7 +713,9 @@
 	}
 
 	function authorLabel(item: EngagementItem) {
-		return item.author_name || item.author_handle || m.common_untitled_user();
+		return item.subject?.review?.anonymous
+			? m.engagement_anonymous_review()
+			: item.author_name || item.author_handle || m.common_untitled_user();
 	}
 
 	function hasTimestamp(value: string | undefined) {
@@ -898,6 +937,30 @@
 			<div class="flex flex-wrap items-center gap-3">
 				<Select.Root
 					type="single"
+					value={kindFilter || 'all'}
+					onValueChange={(value) => {
+						kindFilter =
+							value === 'comment' || value === 'mention' || value === 'review' ? value : '';
+					}}
+				>
+					<Select.Trigger class="h-11 w-44 sm:h-9" aria-label={m.engagement_activity_type()}
+						>{kindFilter === 'comment'
+							? m.engagement_activity_comments()
+							: kindFilter === 'mention'
+								? m.engagement_activity_mentions()
+								: kindFilter === 'review'
+									? m.engagement_activity_reviews()
+									: m.engagement_activity_all()}</Select.Trigger
+					>
+					<Select.Content>
+						<Select.Item value="all">{m.engagement_activity_all()}</Select.Item>
+						<Select.Item value="comment">{m.engagement_activity_comments()}</Select.Item>
+						<Select.Item value="mention">{m.engagement_activity_mentions()}</Select.Item>
+						<Select.Item value="review">{m.engagement_activity_reviews()}</Select.Item>
+					</Select.Content>
+				</Select.Root>
+				<Select.Root
+					type="single"
 					value={platformFilter || 'all'}
 					onValueChange={(value) => {
 						platformFilter = value === 'all' ? '' : value;
@@ -1027,7 +1090,11 @@
 
 		{#if showEngagementDisabledNotice}
 			<div data-testid="engagement-disabled-notice">
-				<InlineNotice tone="warning" message={m.engagement_feature_disabled_notice()}>
+				<InlineNotice
+					tone="warning"
+					message={m.engagement_feature_disabled_notice()}
+					class="flex-col items-stretch sm:flex-row sm:items-center"
+				>
 					{#snippet actions()}
 						<Button
 							href="/settings?tab=accounts"
@@ -1096,14 +1163,22 @@
 										getPlatformName(firstItem.platform)}
 								platform={firstItem.platform}
 								avatarUrl={account?.account_avatar_url}
-								detail={m.engagement_reply_count({ count: group.items.length })}
+								detail={firstItem.kind === 'review'
+									? m.engagement_activity_reviews()
+									: firstItem.kind === 'mention'
+										? m.engagement_activity_mentions()
+										: m.engagement_reply_count({ count: group.items.length })}
 								class="max-w-full sm:max-w-52"
 							/>
 							<div class="min-w-0 flex-1">
 								<h2 class="truncate text-sm font-semibold">
 									{firstItem.publication_title ||
 										firstItem.publication_excerpt ||
-										m.engagement_untitled_publication()}
+										(firstItem.kind === 'review'
+											? m.engagement_review_context()
+											: firstItem.kind === 'mention'
+												? m.engagement_mention_context()
+												: m.engagement_untitled_publication())}
 								</h2>
 							</div>
 							{#if firstItem.provider_post_url}
@@ -1168,7 +1243,9 @@
 													</p>
 												{:else if attachments.length === 0}
 													<p class="mt-2 text-sm text-muted-foreground">
-														{m.engagement_empty_reply_content()}
+														{item.kind === 'review'
+															? m.engagement_rating_only()
+															: m.engagement_empty_reply_content()}
 													</p>
 												{/if}
 												{#if attachments.length}
@@ -1189,6 +1266,15 @@
 												{/if}
 											{/if}
 
+											{#if item.kind === 'review'}
+												<EngagementReview {item} />
+												{#if item.reply_operation_state === 'active'}<p
+														class="mt-2 text-sm text-muted-foreground"
+													>
+														{m.engagement_review_reply_busy()}
+													</p>{/if}
+											{/if}
+
 											<div class="mt-3 flex flex-wrap gap-1">
 												{#if item.can_reply && !isDeleted}
 													<Button
@@ -1196,7 +1282,7 @@
 														size="sm"
 														onclick={() => {
 															replyItemId = replyItemId === item.id ? '' : item.id;
-															replyBody = '';
+															replyBody = item.subject?.review?.owner_reply?.text ?? '';
 														}}
 													>
 														<ThemeIcon role="reply" class="size-4" />{m.engagement_reply()}
@@ -1224,6 +1310,18 @@
 														onclick={() => void setState(item, { read: true })}
 													>
 														{m.engagement_mark_read()}
+													</Button>
+												{/if}
+												{#if item.can_delete_reply && !isDeleted}
+													<Button
+														variant="ghost"
+														size="sm"
+														class="text-destructive"
+														disabled={item.reply_operation_state === 'active' ||
+															actionInFlight === item.id}
+														onclick={() => requestProviderAction(item, 'delete_reply')}
+													>
+														{m.engagement_remove_owner_reply()}
 													</Button>
 												{/if}
 												{#if item.can_hide && !item.hidden && !isDeleted}
@@ -1278,11 +1376,20 @@
 														rows={3}
 														required
 													/>
+													{#if item.kind === 'review'}<p class="text-xs text-muted-foreground">
+															{m.engagement_review_reply_bytes({
+																count: countUTF8Bytes(replyBody.trim())
+															})}
+														</p>{/if}
 													<div class="flex justify-end">
 														<Button
 															type="submit"
 															size="sm"
-															disabled={!replyBody.trim() || actionInFlight === item.id}
+															disabled={!replyBody.trim() ||
+																actionInFlight === item.id ||
+																(item.kind === 'review' &&
+																	(item.reply_operation_state === 'active' ||
+																		countUTF8Bytes(replyBody.trim()) > 4096))}
 														>
 															{m.engagement_send_reply()}
 														</Button>
@@ -1322,14 +1429,20 @@
 
 <DestructiveConfirmDialog
 	bind:open={confirmDialogOpen}
-	title={confirmAction === 'delete'
-		? m.engagement_delete({ platform: confirmPlatformName })
-		: m.engagement_hide()}
-	description={confirmAction === 'delete'
-		? m.engagement_delete_confirm_description({ platform: confirmPlatformName })
-		: m.engagement_hide_confirm_description()}
-	confirmLabel={confirmAction === 'delete'
-		? m.engagement_delete({ platform: confirmPlatformName })
-		: m.engagement_hide()}
+	title={confirmAction === 'delete_reply'
+		? m.engagement_remove_owner_reply()
+		: confirmAction === 'delete'
+			? m.engagement_delete({ platform: confirmPlatformName })
+			: m.engagement_hide()}
+	description={confirmAction === 'delete_reply'
+		? m.engagement_remove_owner_reply_description()
+		: confirmAction === 'delete'
+			? m.engagement_delete_confirm_description({ platform: confirmPlatformName })
+			: m.engagement_hide_confirm_description()}
+	confirmLabel={confirmAction === 'delete_reply'
+		? m.engagement_remove_owner_reply()
+		: confirmAction === 'delete'
+			? m.engagement_delete({ platform: confirmPlatformName })
+			: m.engagement_hide()}
 	onConfirm={confirmProviderAction}
 />

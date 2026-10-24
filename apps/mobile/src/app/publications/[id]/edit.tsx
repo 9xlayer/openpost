@@ -1,3 +1,4 @@
+import { AccountImageFit, type AccountImageChoice } from "@/components/account-image-fit";
 import { PostEditor } from "@/components/post-editor";
 import {
   readMentionMetadata,
@@ -276,6 +277,7 @@ function Composer({
     {},
   );
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
+  const [imageChoices, setImageChoices] = useState<Record<string, AccountImageChoice>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [readinessByAccount, setReadinessByAccount] = useState<
@@ -315,6 +317,7 @@ function Composer({
     setRenditionTextEdits({});
     setCanonicalTextEdits({});
     setAnnotatedRenditionEdits({});
+    setImageChoices({});
     setAttachments((current) => [
       ...attachmentsFromPublication(pub),
       ...current.filter((attachment) => !attachment.mediaId),
@@ -669,6 +672,21 @@ function Composer({
               renditionMedia,
               annotatedRenditionEdits[accountId],
               addedCapabilities[accountId]?.segment_strategy,
+              Object.fromEntries(
+                Object.values(imageChoices)
+                  .filter(
+                    (choice) =>
+                      choice.accountId === accountId &&
+                      choice.selected &&
+                      choice.profile ===
+                        (contentSnapshot.current.renditions?.find(
+                          (r) => r.social_account_id === accountId,
+                        )?.output_profile ||
+                          addedCapabilities[accountId]?.output_profile ||
+                          effectiveReadinessByAccount[accountId]?.output_profile),
+                  )
+                  .map((choice) => [choice.originalId, choice.prepared.id]),
+              ),
             ),
           ),
         },
@@ -1151,21 +1169,44 @@ function Composer({
     const platform = accounts.data?.find((account) => account.id === accountId)?.platform ?? "";
     return (
       <View style={{ gap: spacing.small }}>
-        {(pub.renditions ?? [])
-          .filter((rendition) => rendition.social_account_id === accountId)
-          .flatMap(renditionImages)
-          .map((media) => (
-            <MediaImage
-              key={media.id}
-              uri={media.url}
-              contentFit="contain"
-              accessibilityLabel={media.alt_text || "Post image"}
-              style={{
-                width: "100%",
-                aspectRatio: media.width && media.height ? media.width / media.height : 1,
+        {(() => {
+          const rendition = contentSnapshot.current.renditions?.find(
+            (item) => item.social_account_id === accountId,
+          );
+          const profile =
+            rendition?.output_profile ||
+            effectiveReadinessByAccount[accountId]?.output_profile ||
+            "";
+          const images = rendition
+            ? renditionImages(rendition)
+            : [
+                ...new Map(
+                  (contentSnapshot.current.segments ?? [])
+                    .flatMap((source) => source.media ?? [])
+                    .filter((media) => media.mime_type?.startsWith("image/"))
+                    .map((media) => [media.id, media]),
+                ).values(),
+              ];
+          return images.map((media) => (
+            <AccountImageFit
+              key={`${accountId}:${profile}:${media.id}`}
+              accountId={accountId}
+              media={media}
+              profile={profile}
+              settings={rendition?.settings ?? {}}
+              choice={imageChoices[`${accountId}:${media.id}`]}
+              onChange={(choice) => {
+                if (choice.selected || imageChoices[`${accountId}:${media.id}`]?.selected)
+                  markEditorDirty();
+                setImageChoices((current) => ({
+                  ...current,
+                  [`${accountId}:${media.id}`]: choice,
+                }));
               }}
             />
-          ))}
+          ));
+        })()}
+
         {mobileRenditionTextFields(contentSnapshot.current, accountId).map(
           (field, index, fields) => (
             <View key={field.key} style={{ gap: spacing.extraSmall }}>

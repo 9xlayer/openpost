@@ -7728,7 +7728,7 @@
 						"type": "string"
 					},
 					"action": {
-						"enum": ["reply", "hide", "delete", "like", "unlike"],
+						"enum": ["reply", "delete_reply", "hide", "delete", "like", "unlike"],
 						"type": "string"
 					},
 					"client_operation_id": {
@@ -7844,6 +7844,9 @@
 					"can_delete": {
 						"type": "boolean"
 					},
+					"can_delete_reply": {
+						"type": "boolean"
+					},
 					"can_hide": {
 						"type": "boolean"
 					},
@@ -7879,6 +7882,9 @@
 					},
 					"is_ours": {
 						"type": "boolean"
+					},
+					"kind": {
+						"type": "string"
 					},
 					"last_seen_at": {
 						"format": "date-time",
@@ -7919,8 +7925,17 @@
 					"rendition_id": {
 						"type": "string"
 					},
+					"reply_job_id": {
+						"type": "string"
+					},
+					"reply_operation_state": {
+						"type": "string"
+					},
 					"social_account_id": {
 						"type": "string"
+					},
+					"subject": {
+						"$ref": "#/components/schemas/EngagementSubject"
 					},
 					"updated_at": {
 						"format": "date-time",
@@ -7933,7 +7948,6 @@
 				"required": [
 					"id",
 					"workspace_id",
-					"rendition_id",
 					"social_account_id",
 					"platform",
 					"remote_id",
@@ -7992,6 +8006,34 @@
 				"required": ["items", "total", "sync_states"],
 				"type": "object"
 			},
+			"EngagementSubject": {
+				"additionalProperties": false,
+				"properties": {
+					"kind": {
+						"type": "string"
+					},
+					"parent": {
+						"$ref": "#/components/schemas/PostReference"
+					},
+					"remote_id": {
+						"type": "string"
+					},
+					"review": {
+						"$ref": "#/components/schemas/ReviewContext"
+					},
+					"root": {
+						"$ref": "#/components/schemas/PostReference"
+					},
+					"url": {
+						"type": "string"
+					},
+					"visibility": {
+						"type": "string"
+					}
+				},
+				"required": ["kind", "remote_id"],
+				"type": "object"
+			},
 			"EngagementSyncState": {
 				"additionalProperties": false,
 				"properties": {
@@ -7999,6 +8041,9 @@
 						"type": "string"
 					},
 					"error_message": {
+						"type": "string"
+					},
+					"feed": {
 						"type": "string"
 					},
 					"id": {
@@ -12591,6 +12636,10 @@
 					"archived": {
 						"type": "boolean"
 					},
+					"kind": {
+						"enum": ["comment", "mention", "review"],
+						"type": "string"
+					},
 					"platform": {
 						"type": "string"
 					},
@@ -13192,6 +13241,11 @@
 						"description": "Producing OpenPost Image Editor page ID",
 						"type": "string"
 					},
+					"height": {
+						"description": "Known image height in pixels",
+						"format": "int64",
+						"type": "integer"
+					},
 					"id": {
 						"description": "Media ID",
 						"type": "string"
@@ -13238,6 +13292,11 @@
 					"url": {
 						"description": "URL to access the media",
 						"type": "string"
+					},
+					"width": {
+						"description": "Known image width in pixels",
+						"format": "int64",
+						"type": "integer"
 					}
 				},
 				"required": [
@@ -15491,6 +15550,19 @@
 					"skipped",
 					"review_flags"
 				],
+				"type": "object"
+			},
+			"PostReference": {
+				"additionalProperties": false,
+				"properties": {
+					"cid": {
+						"type": "string"
+					},
+					"uri": {
+						"type": "string"
+					}
+				},
+				"required": ["uri", "cid"],
 				"type": "object"
 			},
 			"PostingScheduleResponse": {
@@ -20130,6 +20202,23 @@
 				"required": ["workspace_id", "message_id"],
 				"type": "object"
 			},
+			"ReviewContext": {
+				"additionalProperties": false,
+				"properties": {
+					"anonymous": {
+						"type": "boolean"
+					},
+					"owner_reply": {
+						"$ref": "#/components/schemas/ReviewReply"
+					},
+					"stars": {
+						"format": "int64",
+						"type": "integer"
+					}
+				},
+				"required": ["anonymous"],
+				"type": "object"
+			},
 			"ReviewFlag": {
 				"additionalProperties": false,
 				"properties": {
@@ -20147,6 +20236,26 @@
 					}
 				},
 				"required": ["field", "severity", "message"],
+				"type": "object"
+			},
+			"ReviewReply": {
+				"additionalProperties": false,
+				"properties": {
+					"policy_violation": {
+						"type": "string"
+					},
+					"state": {
+						"type": "string"
+					},
+					"text": {
+						"type": "string"
+					},
+					"updated_at": {
+						"format": "date-time",
+						"type": "string"
+					}
+				},
+				"required": ["text", "state"],
 				"type": "object"
 			},
 			"Revoke-organization-ownership-transferResponse": {
@@ -39816,6 +39925,17 @@
 			"get": {
 				"operationId": "list-engagement",
 				"parameters": [
+					{
+						"description": "Filter account activity by kind; omit for all engagement",
+						"explode": false,
+						"in": "query",
+						"name": "kind",
+						"schema": {
+							"description": "Filter account activity by kind; omit for all engagement",
+							"enum": ["comment", "mention", "review"],
+							"type": "string"
+						}
+					},
 					{
 						"explode": false,
 						"in": "query",

@@ -44,3 +44,18 @@ npx skills add https://github.com/getopenpost/openpost --skill openpost-cli
 ```
 
 Use the skill when an assistant already has terminal access. Use [MCP](/mcp) when the assistant supports MCP and you want a direct OpenPost connection without relying on shell commands.
+
+## Read and answer Inbox activity
+
+```sh
+openpost inbox list --kind mention --limit 50
+openpost inbox list --kind review --account-id ACCOUNT_ID
+openpost inbox get ITEM_ID
+openpost inbox mark-read --kind mention
+openpost inbox state ITEM_ID --archived
+openpost inbox act REVIEW_ID --action reply --message 'Thanks for your feedback' --operation-id review-reply-20261024
+```
+
+The commands return JSON, including native subject context, feed health, moderation and job receipts. Pass `--cursor` with the previous response's `next_cursor` to continue a list. `mark-read` affects all matching unread items across every page. State changes are shared by the Workspace.
+
+Reuse `--operation-id` only when retrying the exact same action and text after an interrupted admission. Inspect the returned job before replacing a Google owner reply. `--action delete_reply` removes only the owner reply, never the customer's review. See the [Inbox guide](/guides/inbox) for provider permissions and moderation.

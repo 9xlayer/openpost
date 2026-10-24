@@ -63,7 +63,15 @@ export function InboxStatusTabs<T extends string>({
 }) {
   const { colors, spacing, typography } = useNativeTheme().manifest;
   return (
-    <View accessibilityRole="tablist" style={{ flexDirection: "row", gap: spacing.extraLarge }}>
+    <View
+      accessibilityRole="tablist"
+      style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        columnGap: spacing.large,
+        rowGap: spacing.small,
+      }}
+    >
       {values.map(({ value, label }) => {
         const active = selected === value;
         return (

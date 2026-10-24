@@ -267,3 +267,21 @@ test("pending reply admission locks the submitted body before the asynchronous d
     sends: [{ operationId, jobId: "reply-job" }],
   });
 });
+
+test("an accepted owner reply can be deliberately replaced while retaining its first receipt", async () => {
+  const f = fixture();
+  const session = f.create();
+  await session.restore();
+  await session.submit();
+  await session.observe({ id: "reply-job", status: "completed" });
+  await session.startNewReply("Updated owner reply");
+  expect(session.snapshot().text).toBe("Updated owner reply");
+  expect(session.snapshot().history).toMatchObject([
+    { operationId, jobId: "reply-job", state: "confirmed" },
+  ]);
+  await session.submit();
+  expect(f.requests).toEqual([
+    { body: "Thanks, Alex!", operationId },
+    { body: "Updated owner reply", operationId: "intentional-replacement" },
+  ]);
+});

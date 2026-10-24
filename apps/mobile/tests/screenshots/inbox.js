@@ -55,6 +55,7 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
   const comments = [
     {
       id: "comment-one",
+      kind: "comment",
       workspace_id: workspace.id,
       social_account_id: accounts[0].id,
       platform: "bluesky",
@@ -87,6 +88,54 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
       remote_created_at: now.toISOString(),
     },
   ];
+  comments.push(
+    {
+      ...comments[0],
+      id: "mention-one",
+      remote_id: "mention-one",
+      kind: "mention",
+      rendition_id: undefined,
+      publication_id: undefined,
+      publication_title: undefined,
+      publication_excerpt: undefined,
+      provider_post_url: undefined,
+      can_delete: false,
+      body: "Thanks for sharing the launch. We mentioned Studio in our roundup.",
+      subject: {
+        kind: "post",
+        remote_id: "mention-one",
+        url: "https://bsky.app/profile/example.invalid/post/sample",
+      },
+    },
+    {
+      ...comments[0],
+      id: "review-one",
+      remote_id: "accounts/1/locations/2/reviews/3",
+      kind: "review",
+      social_account_id: "google-account",
+      platform: "googlebusiness",
+      rendition_id: undefined,
+      publication_id: undefined,
+      publication_title: undefined,
+      publication_excerpt: undefined,
+      provider_post_url: undefined,
+      author_name: "",
+      author_handle: "",
+      body: "",
+      can_delete: false,
+      can_delete_reply: true,
+      can_like: false,
+      subject: {
+        kind: "review",
+        remote_id: "accounts/1/locations/2/reviews/3",
+        review: {
+          anonymous: true,
+          stars: 5,
+          owner_reply: { text: "Thanks for your feedback!", state: "PENDING" },
+        },
+      },
+    },
+  );
   let revision = 0;
   let lastSuccess = new SystemDate(now.getTime() - 180000).toISOString();
   const jobReads = new Map();
@@ -271,6 +320,7 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
       const items = chats.filter(
         (row) =>
           Boolean(row.archived_at) === (url.searchParams.get("archived") === "true") &&
+          (!url.searchParams.get("kind") || row.kind === url.searchParams.get("kind")) &&
           (!url.searchParams.get("account_id") ||
             row.social_account_id === url.searchParams.get("account_id")) &&
           (url.searchParams.get("unread_only") !== "true" || row.unread_count > 0) &&
@@ -298,6 +348,7 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
       const items = comments.filter(
         (row) =>
           Boolean(row.archived_at) === (url.searchParams.get("archived") === "true") &&
+          (!url.searchParams.get("kind") || row.kind === url.searchParams.get("kind")) &&
           (!url.searchParams.get("account_id") ||
             row.social_account_id === url.searchParams.get("account_id")) &&
           (url.searchParams.get("unread_only") !== "true" || !row.read_at),

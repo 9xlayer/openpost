@@ -77,3 +77,11 @@ Grant `mcp:full` only if you then want the assistant to make a correction or ret
 | Bridge command missing     | Configure the absolute path returned by `command -v openpost-mcp`. Run it as the user who saved the CLI profile. |
 
 Inspect recent calls under **Settings > Personal > Developer access** for the client, tool, workspace, result, and failure reason.
+
+## Review Inbox mentions and business reviews
+
+Use `list_inbox` with `workspace_id` and `kind: "mention"` or `kind: "review"`. Follow its `next_cursor`, and use `get_inbox_item` for native context, moderation and operation receipts. These tools read stored state and work with `mcp:read`.
+
+With `mcp:full`, `refresh_inbox` queues collection, `set_inbox_state` changes shared read/archive state, and `mark_inbox_read` marks all matching unread items across every page. `act_on_inbox_item` queues only supported actions. Supply a stable `client_operation_id` for that exact intent.
+
+A Google review reply replaces the location owner's one reply. `delete_reply` removes only that reply. Never infer delivery from admission, or approval from delivery. Inspect the job and Google moderation state before another replacement. See the [Inbox guide](/guides/inbox) for account permissions and recovery.

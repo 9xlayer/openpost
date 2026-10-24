@@ -13,6 +13,17 @@ import * as ts from "typescript";
 // cannot read). It reads only local checkout files, so it runs offline.
 
 const SDK_TYPES = [
+  { sdk: "EngagementItem", schema: "EngagementItem" },
+  { sdk: "EngagementAttachment", schema: "EngagementAttachment" },
+  { sdk: "EngagementSubject", schema: "EngagementSubject" },
+  { sdk: "ReviewContext", schema: "ReviewContext" },
+  { sdk: "ReviewReply", schema: "ReviewReply" },
+  { sdk: "PostReference", schema: "PostReference" },
+  { sdk: "EngagementPage", schema: "EngagementPage" },
+  { sdk: "EngagementDetail", schema: "EngagementDetail" },
+  { sdk: "EngagementSyncState", schema: "EngagementSyncState" },
+  { sdk: "RefreshCapabilityOutcome", schema: "RefreshCapabilityOutcome" },
+
   { sdk: "PublicationSegmentInput", schema: "PublicationSegmentInput" },
   { sdk: "RenditionSegmentInput", schema: "RenditionSegmentInput" },
   { sdk: "RenditionSourceOverride", schema: "RenditionSourceOverride" },

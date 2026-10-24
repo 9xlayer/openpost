@@ -99,20 +99,20 @@ export class PublicReplySession {
       });
     }
   }
-  async startNewReply() {
+  async startNewReply(text?: string) {
     const operation = this.value.operation;
     if (
       !this.current() ||
       !(this.allowed ?? this.dependencies.canEdit()) ||
       !operation?.jobId ||
-      operation.state !== "failed" ||
+      (operation.state !== "failed" && operation.state !== "confirmed") ||
       this.inFlight
     )
       return;
-    // Only this deliberate recovery unlocks editing. A new UUID is allocated by the later Send.
+    // A deliberate new intent retains the old receipt and allocates a new UUID on Send.
     await this.persist({
       ready: true,
-      text: operation.body,
+      text: text ?? (operation.state === "failed" ? operation.body : ""),
       operation: null,
       history: [...this.value.history, operation],
     }).catch(() =>

@@ -2,6 +2,7 @@ import type { components } from '@openpost/api-contract';
 import {
 	OpenPostQueryError,
 	type InboxQueryAPI,
+	type JobStatusQueryAPI,
 	type InboxUpdateAPI,
 	type XMessagingQueryAPI,
 	type NormalizedConversationFilters,
@@ -24,8 +25,17 @@ export class InboxMessageQueryError extends OpenPostQueryError {
 	}
 }
 
-export function createInboxQueryAPI(transport: QueryTransport): InboxQueryAPI {
+export function createInboxQueryAPI(transport: QueryTransport): InboxQueryAPI & JobStatusQueryAPI {
 	return {
+		async getJob(_workspaceId, jobId, signal) {
+			const { data } = await queryGET({
+				signal,
+				fallback: 'Could not inspect Inbox action.',
+				request: (signal) =>
+					transport.GET('/jobs/{id}', { params: { path: { id: jobId } }, signal })
+			});
+			return data;
+		},
 		async getEngagement(workspaceId, itemId, signal) {
 			const { data } = await queryGET({
 				signal,
@@ -113,6 +123,7 @@ function engagementQuery(
 		platform: filters.platform || undefined,
 		account_id: filters.accountId || undefined,
 		publication_id: filters.publicationId || undefined,
+		kind: filters.kind,
 		unread_only: filters.unreadOnly,
 		archived: filters.archived,
 		limit: filters.limit,

@@ -72,6 +72,7 @@ const accounts = [
     platform: "linkedin",
     account_username: "Studio team",
   },
+  { ...account, id: "google-account", platform: "googlebusiness", account_username: "Studio" },
   {
     ...account,
     id: "facebook-account",

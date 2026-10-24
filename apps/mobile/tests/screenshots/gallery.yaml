@@ -1,7 +1,7 @@
 appId: com.openpost.app
 ---
 - launchApp
-- openLink: com.openpost.app://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081
+- openLink: openpost:///drafts
 - runFlow:
     when:
       visible: "Open in.*OpenPost.*"
@@ -27,7 +27,7 @@ appId: com.openpost.app
 - extendedWaitUntil:
     visible: Chats
     timeout: 20000
-- assertVisible: Comments
+- assertVisible: Activity
 - takeScreenshot: inbox-preview-${SCHEME}
 - openLink: com.openpost.app:///drafts
 - extendedWaitUntil:

@@ -37,23 +37,24 @@ openpost [flags]
 
 **Subcommands**
 
-| Command                | Description                                                  |
-| ---------------------- | ------------------------------------------------------------ |
-| `openpost account`     | Manage connected social accounts                             |
-| `openpost auth`        | Authenticate with an OpenPost instance                       |
-| `openpost billing`     | Manage Hosted service billing                                |
-| `openpost completion`  | Generate shell completion script                             |
-| `openpost doctor`      | Check local CLI configuration without contacting an instance |
-| `openpost instance`    | Manage OpenPost instance profiles                            |
-| `openpost jobs`        | List background jobs                                         |
-| `openpost media`       | Upload and list media attachments                            |
-| `openpost post`        | Create, list, view, update, and delete posts                 |
-| `openpost provider`    | Inspect provider availability and publishing support         |
-| `openpost publication` | Create, list, validate, and publish publications             |
-| `openpost schedule`    | Manage reusable posting schedule slots                       |
-| `openpost thread`      | Create multi-post threads                                    |
-| `openpost version`     | Print the openpost CLI version                               |
-| `openpost workspace`   | Manage the active OpenPost workspace                         |
+| Command                | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| `openpost account`     | Manage connected social accounts                                 |
+| `openpost auth`        | Authenticate with an OpenPost instance                           |
+| `openpost billing`     | Manage Hosted service billing                                    |
+| `openpost completion`  | Generate shell completion script                                 |
+| `openpost doctor`      | Check local CLI configuration without contacting an instance     |
+| `openpost inbox`       | Read and act on comments, incoming mentions and business reviews |
+| `openpost instance`    | Manage OpenPost instance profiles                                |
+| `openpost jobs`        | List background jobs                                             |
+| `openpost media`       | Upload and list media attachments                                |
+| `openpost post`        | Create, list, view, update, and delete posts                     |
+| `openpost provider`    | Inspect provider availability and publishing support             |
+| `openpost publication` | Create, list, validate, and publish publications                 |
+| `openpost schedule`    | Manage reusable posting schedule slots                           |
+| `openpost thread`      | Create multi-post threads                                        |
+| `openpost version`     | Print the openpost CLI version                                   |
+| `openpost workspace`   | Manage the active OpenPost workspace                             |
 
 ### `openpost account`
 
@@ -533,6 +534,218 @@ Check local CLI configuration without contacting an instance
 ```text
 openpost doctor
 ```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox`
+
+Read and act on comments, incoming mentions and business reviews
+
+**Usage**
+
+```text
+openpost inbox
+```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+**Subcommands**
+
+| Command                    | Description                                                     |
+| -------------------------- | --------------------------------------------------------------- |
+| `openpost inbox act`       | Queue a supported reply or moderation action                    |
+| `openpost inbox get`       | Read an Inbox item, native context and review reply receipt     |
+| `openpost inbox list`      | Read stored Inbox items and feed health, without provider calls |
+| `openpost inbox mark-read` | Mark every matching unread item read across all pages           |
+| `openpost inbox refresh`   | Queue durable collection for enabled accounts                   |
+| `openpost inbox state`     | Update shared Workspace read and archive state                  |
+
+### `openpost inbox act`
+
+Queue a supported reply or moderation action
+
+Queue an action supported by the item's can_* capabilities. For a Google review, reply replaces the owner reply and delete_reply removes only that reply. Reviews cannot be deleted. Inspect the returned job and the item's moderation state before replacing a review reply again. Reuse --operation-id only for the same intent.
+
+**Usage**
+
+```text
+openpost inbox act &lt;item-id&gt; [flags]
+```
+
+**Flags**
+
+| Flag             | Default | Description                                                |
+| ---------------- | ------- | ---------------------------------------------------------- |
+| `--action`       | `reply` | reply, delete_reply, hide, delete, like or unlike          |
+| `--message`      | `-`     | reply text; Google owner replies allow 4096 UTF-8 bytes    |
+| `--operation-id` | `-`     | stable ID for this exact intent, required for safe retries |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox get`
+
+Read an Inbox item, native context and review reply receipt
+
+**Usage**
+
+```text
+openpost inbox get &lt;item-id&gt;
+```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox list`
+
+Read stored Inbox items and feed health, without provider calls
+
+**Usage**
+
+```text
+openpost inbox list [flags]
+```
+
+**Flags**
+
+| Flag               | Default | Description                                                     |
+| ------------------ | ------- | --------------------------------------------------------------- |
+| `--account-id`     | `-`     | connected account ID                                            |
+| `--archived`       | `false` | read archived items instead of active items                     |
+| `--cursor`         | `-`     | next_cursor from the previous response                          |
+| `--kind`           | `-`     | comment, mention or review; omit for all                        |
+| `--limit`          | `50`    | page size, from 1 to 100                                        |
+| `--platform`       | `-`     | filter by provider                                              |
+| `--publication-id` | `-`     | filter by an OpenPost post, excluding unrelated native activity |
+| `--unread`         | `false` | only unread items                                               |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox mark-read`
+
+Mark every matching unread item read across all pages
+
+**Usage**
+
+```text
+openpost inbox mark-read [flags]
+```
+
+**Flags**
+
+| Flag               | Default | Description                                                     |
+| ------------------ | ------- | --------------------------------------------------------------- |
+| `--account-id`     | `-`     | connected account ID                                            |
+| `--archived`       | `false` | read archived items instead of active items                     |
+| `--kind`           | `-`     | comment, mention or review; omit for all                        |
+| `--platform`       | `-`     | filter by provider                                              |
+| `--publication-id` | `-`     | filter by an OpenPost post, excluding unrelated native activity |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox refresh`
+
+Queue durable collection for enabled accounts
+
+**Usage**
+
+```text
+openpost inbox refresh
+```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox state`
+
+Update shared Workspace read and archive state
+
+**Usage**
+
+```text
+openpost inbox state &lt;item-id&gt;... [flags]
+```
+
+**Flags**
+
+| Flag         | Default | Description                               |
+| ------------ | ------- | ----------------------------------------- |
+| `--archived` | `false` | archive, or --archived=false to reopen    |
+| `--read`     | `false` | mark read, or --read=false to mark unread |
 
 **Inherited Flags**
 

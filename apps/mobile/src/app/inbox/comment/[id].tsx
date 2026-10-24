@@ -1,3 +1,5 @@
+import { countUTF8Bytes } from "@openpost/platform-text";
+import { ReviewContext } from "@/components/inbox/review-context";
 import { InboxSessionBoundary } from "@/components/inbox/session-boundary";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Linking, ScrollView, View } from "react-native";
@@ -46,14 +48,20 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const canEdit = !!useWorkspaceCapabilities()?.can_edit;
   const queryClient = useQueryClient();
   const online = useInboxOnline();
-  const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at;
+  const isReview = comment?.kind === "review";
+  const reviewActive = isReview && comment?.reply_operation_state === "active";
+  const replyable =
+    canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at && !reviewActive;
   const reply = usePublicReply(workspaceId, id, replyable);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [undoArchive, setUndoArchive] = useState<boolean | null>(null);
   const [moderationJobId, setModerationJobId] = useState<string>();
-  const moderation = useInboxJob(workspaceId, moderationJobId);
+  const moderation = useInboxJob(
+    workspaceId,
+    moderationJobId ?? (isReview ? comment?.reply_job_id : undefined),
+  );
   const inFlight = useRef(false);
   const mounted = useRef(true);
   const composerScroll = useRef<ScrollView>(null);
@@ -109,7 +117,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
       if (mounted.current && apiRequestIdentityIsCurrent(identity)) setBusy(false);
     }
   }
-  async function action(kind: "hide" | "delete" | "like" | "unlike") {
+  async function action(kind: "delete_reply" | "hide" | "delete" | "like" | "unlike") {
     if (!canEdit || !comment || inFlight.current) return;
     const identity = captureApiRequestIdentity();
     inFlight.current = true;
@@ -138,7 +146,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
     <Screen safeTop={false}>
       <Stack.Screen
         options={{
-          title: "Comment",
+          title: isReview ? "Business review" : comment?.kind === "mention" ? "Mention" : "Comment",
           headerBackTitle: "Inbox",
           headerLeft: router.canGoBack()
             ? undefined
@@ -179,24 +187,56 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   borderBottomColor: colors.outlineVariant,
                 }}
               >
-                <ContentTitle>Original post</ContentTitle>
+                <ContentTitle>
+                  {isReview
+                    ? "Business review"
+                    : comment.kind === "mention"
+                      ? "Incoming mention"
+                      : "Original post"}
+                </ContentTitle>
                 <BodyText selectable style={{ color: colors.onSurface }}>
                   {comment.publication_title ||
                     comment.publication_excerpt ||
-                    "Post context is unavailable."}
+                    (isReview
+                      ? "Customer feedback on this location."
+                      : comment.kind === "mention"
+                        ? "This post mentions your connected account."
+                        : "Post context is unavailable.")}
                 </BodyText>
                 {comment.publication_title && comment.publication_excerpt ? (
                   <BodyText selectable>{comment.publication_excerpt}</BodyText>
                 ) : null}
                 {comment.provider_post_url && /^https?:\/\//.test(comment.provider_post_url) ? (
                   <Button
-                    title="Open original post"
+                    title={isReview ? "Open review" : "Open original post"}
                     intent="link"
                     onPress={() => void Linking.openURL(comment.provider_post_url!)}
                     style={{ alignSelf: "flex-start" }}
                   />
                 ) : null}
               </View>
+              {comment.subject?.review ? <ReviewContext review={comment.subject.review} /> : null}
+              {isReview && comment.reply_job_id ? (
+                <View style={{ gap: 8 }}>
+                  <BodyText selectable>Reply receipt: {comment.reply_job_id}</BodyText>
+                  <BodyText>
+                    Reply operation:{" "}
+                    {moderation.job?.status || comment.reply_operation_state || "Not specified"}
+                  </BodyText>
+                  {reviewActive ? (
+                    <BodyText>
+                      A reply operation is still being checked. Inspect its receipt before replacing
+                      it.
+                    </BodyText>
+                  ) : null}
+                  <Button
+                    title="Check reply receipt"
+                    intent="ordinary"
+                    onPress={moderation.check}
+                    disabled={moderation.checking}
+                  />
+                </View>
+              ) : null}
               {comment.parent_remote_id ? (
                 <View style={{ gap: 6 }}>
                   <ContentTitle>Earlier in this thread</ContentTitle>
@@ -247,7 +287,9 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   </View>
                 </View>
                 <BodyText selectable style={{ color: colors.onSurface }}>
-                  {comment.deleted_at ? "This comment was deleted." : comment.body}
+                  {comment.deleted_at
+                    ? "This item was deleted."
+                    : comment.body || (isReview ? "Rating without written feedback" : "")}
                 </BodyText>
                 {comment.hidden ? <BodyText>Hidden on the network</BodyText> : null}
                 {comment.attachments?.map((attachment, index) =>
@@ -310,6 +352,28 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                           intent="ordinary"
                           disabled={busy || moderation.checking}
                           onPress={() => void action("hide")}
+                          style={compactAction}
+                        />
+                      ) : null}
+                      {comment.can_delete_reply ? (
+                        <Button
+                          title="Remove your reply"
+                          intent="destructive"
+                          disabled={busy || reviewActive || moderation.checking}
+                          onPress={() =>
+                            Alert.alert(
+                              "Remove your reply?",
+                              "Remove only your reply from Google. The customer review stays visible.",
+                              [
+                                { text: "Cancel", style: "cancel" },
+                                {
+                                  text: "Remove reply",
+                                  style: "destructive",
+                                  onPress: () => void action("delete_reply"),
+                                },
+                              ],
+                            )
+                          }
                           style={compactAction}
                         />
                       ) : null}
@@ -403,7 +467,11 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               contentContainerStyle={{ paddingHorizontal: spacing.large, paddingTop: 12, gap: 8 }}
             >
               <BodyText style={[typography.labelMedium]}>
-                Public reply to {comment.author_name || comment.author_handle || "this person"}, as{" "}
+                Public reply to{" "}
+                {comment.subject?.review?.anonymous
+                  ? "the anonymous reviewer"
+                  : comment.author_name || comment.author_handle || "this person"}
+                , as{" "}
                 {account?.alias ||
                   comment.account_username ||
                   account?.account_username ||
@@ -428,7 +496,9 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               ) : null}
               {reply.operation?.state === "confirmed" ? (
                 <BodyText accessibilityLiveRegion="polite">
-                  Public reply confirmed by the network.
+                  {isReview
+                    ? "Reply accepted by Google. Its public visibility depends on moderation."
+                    : "Public reply confirmed by the network."}
                 </BodyText>
               ) : reply.operation?.state === "failed" ? (
                 <QueryNotice
@@ -473,6 +543,23 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   ) : null}
                 </View>
               ) : null}
+              {isReview &&
+              comment.subject?.review?.owner_reply &&
+              (!reply.operation || reply.operation.state === "confirmed") &&
+              replyable ? (
+                <Button
+                  title="Edit owner reply"
+                  intent="ordinary"
+                  onPress={() => {
+                    const text = comment.subject?.review?.owner_reply?.text || "";
+                    if (reply.operation?.state === "confirmed") reply.startNewReply(text);
+                    else reply.setText(text);
+                  }}
+                />
+              ) : null}
+              {isReview ? (
+                <BodyText>{countUTF8Bytes(reply.text.trim())}/4096 UTF-8 bytes</BodyText>
+              ) : null}
               <TextField
                 accessibilityLabel="Public reply"
                 placeholder="Write a public reply"
@@ -506,7 +593,9 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 title={
                   reply.operation?.state === "ambiguous" && !reply.operation.jobId
                     ? "Retry public reply safely"
-                    : "Reply publicly"
+                    : isReview
+                      ? "Save owner reply"
+                      : "Reply publicly"
                 }
                 intent="focal"
                 loading={reply.operation?.state === "sending"}
@@ -515,6 +604,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   !replyable ||
                   !reply.ready ||
                   !reply.text.trim() ||
+                  (isReview && countUTF8Bytes(reply.text.trim()) > 4096) ||
                   !!reply.operation?.jobId ||
                   reply.operation?.state === "failed"
                 }

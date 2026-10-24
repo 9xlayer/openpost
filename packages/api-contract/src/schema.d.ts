@@ -10077,7 +10077,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @enum {string} */
-            action: "reply" | "hide" | "delete" | "like" | "unlike";
+            action: "reply" | "delete_reply" | "hide" | "delete" | "like" | "unlike";
             client_operation_id?: string;
             message?: string;
             workspace_id: string;
@@ -10120,6 +10120,7 @@ export interface components {
             author_remote_id: string;
             body: string;
             can_delete: boolean;
+            can_delete_reply?: boolean;
             can_hide: boolean;
             can_like: boolean;
             can_reply: boolean;
@@ -10134,6 +10135,7 @@ export interface components {
             hidden: boolean;
             id: string;
             is_ours: boolean;
+            kind?: string;
             /** Format: date-time */
             last_seen_at: string;
             liked: boolean;
@@ -10148,8 +10150,11 @@ export interface components {
             /** Format: date-time */
             remote_created_at?: string;
             remote_id: string;
-            rendition_id: string;
+            rendition_id?: string;
+            reply_job_id?: string;
+            reply_operation_state?: string;
             social_account_id: string;
+            subject?: components["schemas"]["EngagementSubject"];
             /** Format: date-time */
             updated_at: string;
             workspace_id: string;
@@ -10167,9 +10172,19 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        EngagementSubject: {
+            kind: string;
+            parent?: components["schemas"]["PostReference"];
+            remote_id: string;
+            review?: components["schemas"]["ReviewContext"];
+            root?: components["schemas"]["PostReference"];
+            url?: string;
+            visibility?: string;
+        };
         EngagementSyncState: {
             error_code: string;
             error_message: string;
+            feed?: string;
             id: string;
             /** Format: date-time */
             last_success_at?: string;
@@ -12080,6 +12095,8 @@ export interface components {
             readonly $schema?: string;
             account_id?: string;
             archived?: boolean;
+            /** @enum {string} */
+            kind?: "comment" | "mention" | "review";
             platform?: string;
             publication_id?: string;
             workspace_id: string;
@@ -12374,6 +12391,11 @@ export interface components {
             design_document_id?: string;
             /** @description Producing OpenPost Image Editor page ID */
             design_page_id?: string;
+            /**
+             * Format: int64
+             * @description Known image height in pixels
+             */
+            height?: number;
             /** @description Media ID */
             id: string;
             /** @description MIME type */
@@ -12405,6 +12427,11 @@ export interface components {
             source: string;
             /** @description URL to access the media */
             url: string;
+            /**
+             * Format: int64
+             * @description Known image width in pixels
+             */
+            width?: number;
         };
         MediaUsageItem: {
             /** @description Publication content (truncated) */
@@ -13281,6 +13308,10 @@ export interface components {
             label: string;
             review_flags: components["schemas"]["ReviewFlag"][] | null;
             skipped: components["schemas"]["SkippedDestination"][] | null;
+        };
+        PostReference: {
+            cid: string;
+            uri: string;
         };
         PostingScheduleResponse: {
             /**
@@ -15275,11 +15306,24 @@ export interface components {
             message_id: string;
             workspace_id: string;
         };
+        ReviewContext: {
+            anonymous: boolean;
+            owner_reply?: components["schemas"]["ReviewReply"];
+            /** Format: int64 */
+            stars?: number;
+        };
         ReviewFlag: {
             account_id?: string;
             field: string;
             message: string;
             severity: string;
+        };
+        ReviewReply: {
+            policy_violation?: string;
+            state: string;
+            text: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         "Revoke-organization-ownership-transferResponse": {
             /**
@@ -27801,6 +27845,8 @@ export interface operations {
     "list-engagement": {
         parameters: {
             query: {
+                /** @description Filter account activity by kind; omit for all engagement */
+                kind?: "comment" | "mention" | "review";
                 workspace_id: string;
                 platform?: string;
                 account_id?: string;
