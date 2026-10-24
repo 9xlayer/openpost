@@ -1,19 +1,22 @@
 import { client } from '$lib/api/client';
 import { queryClient } from '$lib/query/client';
+import { queryGET } from './transport';
 import {
-	createOpenPostQueryError,
 	mentionLookupQueryOptions,
 	runWithCallerAbort,
 	type MentionLookupQueryAPI
 } from '@openpost/query-catalog';
 const lookupAPI: MentionLookupQueryAPI = {
 	async lookupMentions(_workspaceId, accountId, query, signal) {
-		const { data, error, response } = await client.GET('/accounts/{account_id}/mentions', {
-			params: { path: { account_id: accountId }, query: { query } },
-			signal
+		const { data } = await queryGET({
+			signal,
+			fallback: 'Could not search mentions',
+			request: (requestSignal) =>
+				client.GET('/accounts/{account_id}/mentions', {
+					params: { path: { account_id: accountId }, query: { query } },
+					signal: requestSignal
+				})
 		});
-		if (error || !data)
-			throw createOpenPostQueryError(response.status, error, 'Could not search mentions');
 		return { ...data, candidates: data.candidates ?? [] };
 	}
 };

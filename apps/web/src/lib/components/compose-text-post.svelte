@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { joinPostText } from '@openpost/platform-text/mentions';
 	import PostEditor from '@openpost/ui/components/post-editor';
-	import { lookupComposerMentions } from '$lib/composer/mentions';
+	import { lookupComposerMentions } from '$lib/query/mentions';
 	import {
 		readMentionMetadata,
 		validTextMentions,
