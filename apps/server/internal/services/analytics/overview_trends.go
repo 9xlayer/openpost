@@ -38,12 +38,12 @@ func dailyFollowerTrend(accounts []AccountOverview, accountID string) []DailyBre
 func (s *Service) loadDailyContentTrends(
 	ctx context.Context,
 	workspaceID string,
-	start time.Time,
+	start, end time.Time,
 	accountID string,
 ) ([]DailyBreakdownPoint, []DailyBreakdownPoint, error) {
 	var snapshots []models.AnalyticsRenditionSnapshot
 	query := s.db.NewSelect().Model(&snapshots).
-		Where("workspace_id = ? AND captured_at >= ?", workspaceID, start).
+		Where("workspace_id = ? AND captured_at >= ? AND captured_at < ?", workspaceID, start, end).
 		Order("rendition_id ASC", "captured_at ASC")
 	if accountID != "" {
 		query = query.Where("social_account_id = ?", accountID)

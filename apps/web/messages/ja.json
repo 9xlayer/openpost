@@ -10129,5 +10129,12 @@
 	"engagement_review_approved": "承認済み",
 	"engagement_review_rejected": "拒否",
 	"engagement_review_unknown": "未指定",
-	"engagement_review_reply_busy": "返信処理を確認中です。変更する前に受付記録を確認してください。"
+	"engagement_review_reply_busy": "返信処理を確認中です。変更する前に受付記録を確認してください。",
+	"analytics_range_year": "過去1年",
+	"analytics_range_all": "全期間",
+	"analytics_range_custom": "カスタム期間",
+	"analytics_range_custom_help": "UTCの日付を指定します。開始日と終了日を含みます。指標は各プラットフォームの集計期間を維持します。",
+	"analytics_range_invalid": "開始日と、開始日以降かつ今日以前の終了日を選択してください。",
+	"analytics_range_export_description": "{range}の保存済み測定値をエクスポートします。",
+	"analytics_range_dates": "{from} – {to}"
 }

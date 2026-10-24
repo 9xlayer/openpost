@@ -10129,5 +10129,12 @@
 	"engagement_review_approved": "Approuvée",
 	"engagement_review_rejected": "Refusée",
 	"engagement_review_unknown": "Non précisé",
-	"engagement_review_reply_busy": "Une réponse est encore en cours de vérification. Consultez son reçu avant de la remplacer."
+	"engagement_review_reply_busy": "Une réponse est encore en cours de vérification. Consultez son reçu avant de la remplacer.",
+	"analytics_range_year": "Dernière année",
+	"analytics_range_all": "Depuis le début",
+	"analytics_range_custom": "Période personnalisée",
+	"analytics_range_custom_help": "Choisissez des dates inclusives en UTC. Les métriques conservent leurs propres périodes de rapport.",
+	"analytics_range_invalid": "Choisissez une date de début et une date de fin comprise entre celle-ci et aujourd’hui.",
+	"analytics_range_export_description": "Exporter les mesures enregistrées pour {range}.",
+	"analytics_range_dates": "{from} – {to}"
 }

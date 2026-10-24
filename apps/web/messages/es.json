@@ -10129,5 +10129,12 @@
 	"engagement_review_approved": "Aprobada",
 	"engagement_review_rejected": "Rechazada",
 	"engagement_review_unknown": "Sin especificar",
-	"engagement_review_reply_busy": "Se está comprobando una respuesta. Revisa su recibo antes de sustituirla."
+	"engagement_review_reply_busy": "Se está comprobando una respuesta. Revisa su recibo antes de sustituirla.",
+	"analytics_range_year": "Último año",
+	"analytics_range_all": "Todo el tiempo",
+	"analytics_range_custom": "Rango personalizado",
+	"analytics_range_custom_help": "Selecciona fechas inclusivas en UTC. Las métricas conservan sus propios períodos de informe.",
+	"analytics_range_invalid": "Elige una fecha inicial y una final entre la fecha inicial y hoy.",
+	"analytics_range_export_description": "Exporta las mediciones guardadas de {range}.",
+	"analytics_range_dates": "{from} – {to}"
 }

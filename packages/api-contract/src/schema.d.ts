@@ -13130,6 +13130,10 @@ export interface components {
             publications: components["schemas"]["PublicationOverview"][] | null;
             /** Format: int64 */
             range_days: number;
+            /** Format: date-time */
+            range_end?: string;
+            /** Format: date-time */
+            range_start?: string;
             summary: components["schemas"]["Summary"];
             trends: components["schemas"]["TrendSeries"];
         };
@@ -14892,10 +14896,12 @@ export interface components {
         RepurposeRange: {
             /**
              * Format: int64
-             * @description Reporting window in days
+             * @description Reporting window in days; 0 means all time
              * @enum {integer}
              */
-            days: 7 | 30 | 90;
+            days: 0 | 7 | 30 | 90 | 365;
+            from?: string;
+            to?: string;
         };
         RepurposeSource: {
             /**
@@ -21358,8 +21364,12 @@ export interface operations {
             query: {
                 /** @description Workspace ID */
                 workspace_id: string;
-                /** @description Reporting window in days (7, 30, or 90) */
+                /** @description Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days. */
                 days?: number;
+                /** @description Inclusive start date (YYYY-MM-DD, UTC), supplied together with to */
+                from?: string;
+                /** @description Inclusive end date (YYYY-MM-DD, UTC), supplied together with from */
+                to?: string;
                 /** @description Optional social account ID used to filter results and content totals */
                 account_id?: string;
                 /** @description Stored result ordering */
@@ -21427,8 +21437,12 @@ export interface operations {
             query: {
                 /** @description Workspace ID */
                 workspace_id: string;
-                /** @description Reporting window in days (7, 30, or 90) */
+                /** @description Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days. */
                 days?: number;
+                /** @description Inclusive start date (YYYY-MM-DD, UTC), supplied together with to */
+                from?: string;
+                /** @description Inclusive end date (YYYY-MM-DD, UTC), supplied together with from */
+                to?: string;
                 /** @description Optional comma-separated social account IDs. Intersects with account_id and platforms when supplied. */
                 account_ids?: string;
                 /** @description Optional social account ID to export */

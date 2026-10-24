@@ -121,6 +121,8 @@ export function createMobileQueryAPI(getTransport: () => QueryTransport): Mobile
               query: {
                 workspace_id: workspaceId,
                 days: filters.days,
+                from: filters.from || undefined,
+                to: filters.to || undefined,
                 account_id: filters.accountId || undefined,
                 sort: filters.sort,
                 cursor: cursor || undefined,

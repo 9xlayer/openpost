@@ -32,7 +32,9 @@ func (h *AnalyticsHandler) SetFeatureGate(g AnalyticsFeatureGate) {
 
 type GetAnalyticsOverviewInput struct {
 	WorkspaceID string `query:"workspace_id" required:"true" doc:"Workspace ID"`
-	Days        int    `query:"days" default:"30" doc:"Reporting window in days (7, 30, or 90)"`
+	Days        int    `query:"days" default:"30" doc:"Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days."`
+	From        string `query:"from" doc:"Inclusive start date (YYYY-MM-DD, UTC), supplied together with to"`
+	To          string `query:"to" doc:"Inclusive end date (YYYY-MM-DD, UTC), supplied together with from"`
 	AccountID   string `query:"account_id" doc:"Optional social account ID used to filter results and content totals"`
 	Sort        string `query:"sort" default:"engagement" enum:"engagement,views,newest" doc:"Stored result ordering"`
 	Cursor      string `query:"cursor" doc:"Opaque source-bound content cursor"`
@@ -83,15 +85,18 @@ func (h *AnalyticsHandler) RegisterRoutes(api huma.API) {
 		if err := h.requireWorkspaceAccess(ctx, input.WorkspaceID, false); err != nil {
 			return nil, err
 		}
-		if input.Days != 7 && input.Days != 30 && input.Days != 90 {
-			return nil, huma.Error400BadRequest("days must be 7, 30, or 90")
+		if err := analyticsservice.ValidateRange(input.Days, input.From, input.To); err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
 		}
 		overview, err := h.service.OverviewWithOptions(ctx, input.WorkspaceID, input.Days, analyticsservice.OverviewOptions{
-			AccountID: input.AccountID,
-			Sort:      input.Sort,
-			Cursor:    input.Cursor,
-			Limit:     input.Limit,
+			From: input.From, To: input.To, AccountID: input.AccountID,
+			Sort:   input.Sort,
+			Cursor: input.Cursor,
+			Limit:  input.Limit,
 		})
+		if errors.Is(err, analyticsservice.ErrInvalidRange) {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
 		if errors.Is(err, analyticsservice.ErrInvalidOverviewCursor) {
 			return nil, huma.Error400BadRequest("invalid analytics cursor")
 		}

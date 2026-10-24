@@ -25,6 +25,8 @@ function analyticsQuery(workspaceId: string, filters: NormalizedAnalyticsFilters
 	return {
 		workspace_id: workspaceId,
 		days: filters.days,
+		from: filters.from || undefined,
+		to: filters.to || undefined,
 		account_id: filters.accountId || undefined,
 		sort: filters.sort,
 		cursor: cursor || undefined,

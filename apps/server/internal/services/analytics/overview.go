@@ -140,6 +140,8 @@ type Overview struct {
 	GeneratedAt    time.Time             `json:"generated_at"`
 	LastSyncedAt   time.Time             `json:"last_synced_at,omitempty"`
 	RangeDays      int                   `json:"range_days"`
+	RangeStart     time.Time             `json:"range_start,omitempty"`
+	RangeEnd       time.Time             `json:"range_end,omitempty"`
 	Summary        Summary               `json:"summary"`
 	Accounts       []AccountOverview     `json:"accounts"`
 	FollowerSeries []SeriesPoint         `json:"follower_series"`
@@ -167,6 +169,8 @@ func (s *Service) Overview(ctx context.Context, workspaceID string, days int) (O
 }
 
 type OverviewOptions struct {
+	From      string
+	To        string
 	AccountID string
 	Sort      string
 	Cursor    string
@@ -179,7 +183,9 @@ type OverviewOptions struct {
 var ErrInvalidOverviewCursor = errors.New("invalid analytics overview cursor")
 
 func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, days int, options OverviewOptions) (Overview, error) {
-	days = normalizeOverviewDays(days)
+	if err := ValidateRange(days, options.From, options.To); err != nil {
+		return Overview{}, err
+	}
 	options = normalizeOverviewOptions(options)
 	if options.Unpaged && options.Cursor != "" {
 		return Overview{}, ErrInvalidOverviewCursor
@@ -192,10 +198,14 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 		}
 		now = cursor.RangeEnd.UTC()
 	}
-	start := now.AddDate(0, 0, -days)
+	start, end, err := s.overviewRange(ctx, workspaceID, days, options.From, options.To, now)
+	if err != nil {
+		return Overview{}, err
+	}
 	result := Overview{
-		GeneratedAt:        now,
-		RangeDays:          days,
+		GeneratedAt: now,
+		RangeDays:   days,
+		RangeStart:  start, RangeEnd: end,
 		AccountGrowthScope: "account_wide",
 		Summary:            Summary{FollowerScope: "account_wide"},
 		Accounts:           []AccountOverview{},
@@ -219,7 +229,7 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 		return Overview{}, err
 	}
 	result.LastSyncedAt = lastSyncedAt
-	history, err := s.loadAccountHistory(ctx, workspaceID, start)
+	history, err := s.loadAccountHistory(ctx, workspaceID, start, end)
 	if err != nil {
 		return Overview{}, err
 	}
@@ -227,11 +237,11 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 	result.Accounts = s.buildAccountOverviews(activeAccounts, stateByID, history, &result.Summary)
 	result.FollowerSeries = combinedFollowerSeries(result.Accounts)
 	result.Trends.Followers = dailyFollowerTrend(result.Accounts, options.AccountID)
-	result.Trends.Engagement, result.Trends.Views, err = s.loadDailyContentTrends(ctx, workspaceID, start, options.AccountID)
+	result.Trends.Engagement, result.Trends.Views, err = s.loadDailyContentTrends(ctx, workspaceID, start, end, options.AccountID)
 	if err != nil {
 		return Overview{}, err
 	}
-	allContent, err := s.loadManagedContent(ctx, workspaceID, start, options.AccountID, accountByID, now)
+	allContent, err := s.loadManagedContent(ctx, workspaceID, start, end, options.AccountID, accountByID, now)
 	if err != nil {
 		return Overview{}, err
 	}
@@ -239,7 +249,7 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 	if err != nil {
 		return Overview{}, err
 	}
-	result.Insights = buildOverviewInsights(insightContent, result.Accounts, options.AccountID, start, now)
+	result.Insights = buildOverviewInsights(insightContent, result.Accounts, options.AccountID, start, end)
 	orderContentOverviews(allContent, options.Sort)
 	result.ContentMetricKeys = measuredContentMetrics(allContent)
 	result.ContentTotal = len(allContent)
@@ -256,8 +266,8 @@ func (s *Service) OverviewWithOptions(ctx context.Context, workspaceID string, d
 	if err != nil {
 		return Overview{}, err
 	}
-	end := min(offset+options.Limit, len(allContent))
-	result.Content = allContent[offset:end]
+	endIndex := min(offset+options.Limit, len(allContent))
+	result.Content = allContent[offset:endIndex]
 	result.Publications = buildPublicationOverviews(result.Content)
 	nextCursor := s.encodeOverviewNextCursor(workspaceID, offset, len(result.Content), len(allContent), options, days, populationRevision, now)
 	result.ContentNextCursor = nextCursor
@@ -280,15 +290,6 @@ func normalizeOverviewOptions(options OverviewOptions) OverviewOptions {
 	}
 	options.Cursor = strings.TrimSpace(options.Cursor)
 	return options
-}
-
-func normalizeOverviewDays(days int) int {
-	switch days {
-	case 7, 30, 90:
-		return days
-	default:
-		return 30
-	}
 }
 
 func (s *Service) loadOverviewAccounts(
@@ -353,12 +354,12 @@ func (s *Service) loadOverviewStates(
 func (s *Service) loadAccountHistory(
 	ctx context.Context,
 	workspaceID string,
-	start time.Time,
+	start, end time.Time,
 ) (map[string][]models.AnalyticsAccountSnapshot, error) {
 	var snapshots []models.AnalyticsAccountSnapshot
 	if err := s.db.NewSelect().
 		Model(&snapshots).
-		Where("workspace_id = ? AND captured_at >= ?", workspaceID, start).
+		Where("workspace_id = ? AND captured_at >= ? AND captured_at < ?", workspaceID, start, end).
 		Order("social_account_id ASC", "captured_at ASC").
 		Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("list account analytics history: %w", err)
@@ -629,8 +630,10 @@ type overviewCursor struct {
 	AccountID   string    `json:"account_id"`
 	Sort        string    `json:"sort"`
 	Days        int       `json:"days"`
+	From        string    `json:"from,omitempty"`
+	To          string    `json:"to,omitempty"`
 	Revision    string    `json:"revision"`
-	RangeEnd    time.Time `json:"range_end"`
+	RangeEnd    time.Time `json:"range_end,omitempty"`
 }
 
 func overviewPopulationRevision(content []ContentOverview) string {
@@ -749,7 +752,7 @@ func addMeasuredSummary(summary *MetricSummary, values platform.AnalyticsValues,
 func (s *Service) loadManagedContent(
 	ctx context.Context,
 	workspaceID string,
-	start time.Time,
+	start, end time.Time,
 	accountID string,
 	accountByID map[string]models.SocialAccount,
 	now time.Time,
@@ -760,7 +763,8 @@ func (s *Service) loadManagedContent(
 		Where("publication.workspace_id = ?", workspaceID).
 		Where("publication.status = ?", models.PublicationStatusPublished).
 		Where("rendition.status = ?", models.RenditionStatusPublished).
-		Where("COALESCE(publication.actual_run_at, publication.updated_at) >= ?", start)
+		Where("COALESCE(publication.actual_run_at, publication.updated_at) >= ?", start).
+		Where("COALESCE(publication.actual_run_at, publication.updated_at) < ?", end)
 	if accountID != "" {
 		query = query.Where("rendition.social_account_id = ?", accountID)
 	}

@@ -4,11 +4,13 @@ import { openPostWorkspaceKey } from "./keys";
 import { openPostQueryPolicy, queryStaleTime } from "./policies";
 
 export type AnalyticsOverview = components["schemas"]["Overview"];
-export type AnalyticsRangeDays = 7 | 30 | 90;
+export type AnalyticsRangeDays = 0 | 7 | 30 | 90 | 365;
 export type AnalyticsSort = "engagement" | "views" | "newest";
 
 export interface AnalyticsFilters {
   readonly days: AnalyticsRangeDays;
+  readonly from?: string;
+  readonly to?: string;
   readonly accountId?: string;
   readonly sort?: AnalyticsSort;
   readonly limit?: number;
@@ -47,11 +49,15 @@ export function analyticsOverviewQueryOptions(
   };
 }
 
-export type NormalizedAnalyticsFilters = ReturnType<typeof normalizeAnalyticsFilters>;
+export type NormalizedAnalyticsFilters = ReturnType<typeof normalizeAnalyticsFilters> & {
+  readonly from?: string;
+  readonly to?: string;
+};
 
 export function normalizeAnalyticsFilters(filters: AnalyticsFilters) {
   return {
     days: filters.days,
+    ...(filters.from || filters.to ? { from: filters.from ?? "", to: filters.to ?? "" } : {}),
     accountId: filters.accountId?.trim() ?? "",
     sort: filters.sort ?? "engagement",
     limit: filters.limit ?? 50,

@@ -296,6 +296,7 @@ for (const [themeID, scheme] of [
         await expect(warnings).toBeFocused();
         await expect(warning).not.toBeVisible();
         await expect(page.getByRole("img", { name: "100", exact: true })).toBeVisible();
+        await page.getByRole("button", { name: /^Reporting window:/ }).click();
         await page.getByRole("button", { name: "7 days", exact: true }).click();
         await expect(page.getByRole("img", { name: "200", exact: true })).toBeVisible();
         let finishRefresh!: () => void;

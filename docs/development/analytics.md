@@ -35,3 +35,9 @@ The sweep uniqueness rule applies to pending sweeps. A running sweep can queue i
 `POST /api/v1/analytics/refresh` requires editor access and reconsiders collection without bypassing provider gates. `POST /api/v1/analytics/repurpose` accepts a Workspace ID, discriminated content reference, and range in the request body. It recomputes bounded evidence and returns a fresh local composer handoff without writing a Publication, changing the source, or calling an AI provider.
 
 The API preserves engagement and exposure types. The frontend and mobile declarations are regenerated from Huma through OpenAPI. Analytics is intentionally not a first-class CLI or MCP workflow; their parity documentation continues to mark it unavailable rather than publishing a divergent contract.
+
+## Reporting windows
+
+Overview, exports, and repurpose evidence share the same range contract. `days` accepts 7, 30, 90, 365, or 0 for all time. Existing requests still default to 30 days. A custom range supplies both `from` and `to` as inclusive UTC calendar dates and takes precedence over `days`. The server resolves an inclusive start and exclusive end, caps the interval at the current time, and rejects incomplete, inverted, or invalid dates. Pagination binds the requested dates as well as the preset and account.
+
+All time begins at the earliest stored published post or analytics snapshot in the Workspace. It does not initiate provider history reads. Published-content inventory follows its original publication time; trends include only measurements captured within the selected interval. Lifetime counters and account-wide current measurements retain their existing scope labels, so choosing a historical interval never relabels a lifetime total as activity during that interval. Exports use the resolved interval, and the web URL preserves the selected preset or custom dates.

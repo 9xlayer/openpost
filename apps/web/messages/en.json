@@ -10129,5 +10129,12 @@
 	"engagement_review_approved": "Approved",
 	"engagement_review_rejected": "Rejected",
 	"engagement_review_unknown": "Not specified",
-	"engagement_review_reply_busy": "A reply operation is still being checked. Inspect its receipt before replacing it."
+	"engagement_review_reply_busy": "A reply operation is still being checked. Inspect its receipt before replacing it.",
+	"analytics_range_year": "Last year",
+	"analytics_range_all": "All time",
+	"analytics_range_custom": "Custom range",
+	"analytics_range_custom_help": "Choose inclusive dates in UTC. Provider metrics keep their own reporting periods.",
+	"analytics_range_invalid": "Choose a start date and an end date on or after it, up to today.",
+	"analytics_range_export_description": "Export the stored measurements for {range}.",
+	"analytics_range_dates": "{from} – {to}"
 }
