@@ -41,7 +41,7 @@ func Stage(ctx context.Context, paths Paths, current Current, upload io.Reader, 
 	if err := os.RemoveAll(pendingDir); err != nil {
 		return Manifest{}, fmt.Errorf("clear previous staged restore: %w", err)
 	}
-	if err := os.MkdirAll(pendingDir, 0o755); err != nil {
+	if err := os.MkdirAll(pendingDir, 0o700); err != nil {
 		return Manifest{}, fmt.Errorf("create staging directory: %w", err)
 	}
 	manifest, err := stageInto(ctx, pendingDir, current, upload, now)
@@ -54,7 +54,7 @@ func Stage(ctx context.Context, paths Paths, current Current, upload io.Reader, 
 
 func stageInto(ctx context.Context, pendingDir string, current Current, upload io.Reader, now time.Time) (Manifest, error) {
 	uploadPath := filepath.Join(pendingDir, pendingUploadName)
-	uploadFile, err := os.Create(uploadPath)
+	uploadFile, err := os.OpenFile(uploadPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("save uploaded backup: %w", err)
 	}
@@ -199,7 +199,7 @@ func extractFile(file *zip.File, target string, maxBytes int64) (int64, string, 
 	if maxBytes < 0 || file.UncompressedSize64 > uint64(maxBytes) {
 		return 0, "", ErrInvalidArchive
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
 		return 0, "", err
 	}
 	source, err := file.Open()
@@ -207,7 +207,7 @@ func extractFile(file *zip.File, target string, maxBytes int64) (int64, string, 
 		return 0, "", ErrInvalidArchive
 	}
 	defer source.Close()
-	destination, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	destination, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return 0, "", err
 	}

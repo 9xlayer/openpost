@@ -33,18 +33,19 @@ func ApplyPending(paths Paths, now time.Time) (bool, error) {
 	}
 
 	restorePoint := filepath.Join(paths.dataDir(), restorePointPrefix+now.UTC().Format("20060102T150405Z"))
-	if err := os.MkdirAll(restorePoint, 0o755); err != nil {
+	if err := os.MkdirAll(restorePoint, 0o700); err != nil {
 		return false, err
 	}
 
 	var undo undoStack
-	if err := setAsideCurrentData(paths, restorePoint, &undo); err != nil {
-		undo.run()
-		removeEmptyRestorePoint(restorePoint)
-		return false, err
+	err = setAsideCurrentData(paths, restorePoint, &undo)
+	if err == nil {
+		err = installStagedData(paths, &undo)
 	}
-	if err := installStagedData(paths, &undo); err != nil {
-		undo.run()
+	if err != nil {
+		if rollbackErr := undo.run(); rollbackErr != nil {
+			return false, fmt.Errorf("%w; rollback incomplete, the previous data may still be in %s: %w", err, restorePoint, rollbackErr)
+		}
 		removeEmptyRestorePoint(restorePoint)
 		return false, err
 	}
@@ -63,16 +64,20 @@ func removeEmptyRestorePoint(restorePoint string) {
 	_ = os.Remove(restorePoint)
 }
 
-type undoStack []func()
+type undoStack []func() error
 
-func (u *undoStack) push(step func()) {
+func (u *undoStack) push(step func() error) {
 	*u = append(*u, step)
 }
 
-func (u undoStack) run() {
+func (u undoStack) run() error {
+	var failures []error
 	for index := len(u) - 1; index >= 0; index-- {
-		u[index]()
+		if err := u[index](); err != nil {
+			failures = append(failures, err)
+		}
 	}
+	return errors.Join(failures...)
 }
 
 func setAsideCurrentData(paths Paths, restorePoint string, undo *undoStack) error {
@@ -84,7 +89,7 @@ func setAsideCurrentData(paths Paths, restorePoint string, undo *undoStack) erro
 			return fmt.Errorf("set aside current database: %w", err)
 		}
 		if moved {
-			undo.push(func() { _ = moveEntry(destination, source) })
+			undo.push(func() error { return moveEntry(destination, source) })
 		}
 	}
 	if paths.MediaDir == "" {
@@ -95,7 +100,7 @@ func setAsideCurrentData(paths Paths, restorePoint string, undo *undoStack) erro
 		return fmt.Errorf("set aside current media: %w", err)
 	}
 	if len(moved) > 0 {
-		undo.push(func() { _ = moveBack(moved) })
+		undo.push(func() error { return moveBack(moved) })
 	}
 	return nil
 }
@@ -105,7 +110,7 @@ func installStagedData(paths Paths, undo *undoStack) error {
 	if err := moveEntry(stagedDatabase, paths.DatabaseFile); err != nil {
 		return fmt.Errorf("install restored database: %w", err)
 	}
-	undo.push(func() { _ = moveEntry(paths.DatabaseFile, stagedDatabase) })
+	undo.push(func() error { return moveEntry(paths.DatabaseFile, stagedDatabase) })
 	if paths.MediaDir == "" {
 		return nil
 	}
