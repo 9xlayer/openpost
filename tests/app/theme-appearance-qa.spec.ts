@@ -10,7 +10,7 @@ test.beforeAll(async () => {
 });
 
 async function loginAsFreshUser(request: APIRequestContext, page: Page, seed: string) {
-  const email = `appearance-qa-${seed}@example.com`;
+  const email = `appearance-qa-${seed}-${crypto.randomUUID()}@example.com`;
   const { token } = await registerUser(request, email);
   const workspace = await createWorkspace(request, token, `Appearance QA ${seed}`);
   await authenticatePage(page, token);
@@ -56,6 +56,7 @@ test("built-in gallery opens a preview and editor controls are keyboard reachabl
   await page.keyboard.press("Tab");
   let focusable = 0;
   let withIndicator = 0;
+  const missingIndicators: string[] = [];
   for (let step = 0; step < 25; step += 1) {
     const focused = page.locator(":focus");
     if ((await focused.count()) === 0) break;
@@ -67,6 +68,13 @@ test("built-in gallery opens a preview and editor controls are keyboard reachabl
       return boxShadow || outline;
     });
     if (indicator) withIndicator += 1;
+    else
+      missingIndicators.push(
+        await focused.evaluate(
+          (element) =>
+            `${element.tagName} ${element.getAttribute("aria-label") ?? element.textContent?.trim().slice(0, 80) ?? ""}`,
+        ),
+      );
     await page.keyboard.press("Tab");
   }
   await page.screenshot({ path: `${SHOT}/editor-keyboard-focus.png`, fullPage: true });
@@ -105,7 +113,10 @@ test("built-in gallery opens a preview and editor controls are keyboard reachabl
 
   expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
   expect(focusable, "keyboard reaches appearance controls").toBeGreaterThan(0);
-  expect(withIndicator, "every focused control shows a focus indicator").toBe(focusable);
+  expect(
+    withIndicator,
+    `every focused control shows a focus indicator: ${missingIndicators.join(" | ")}`,
+  ).toBe(focusable);
   expect(smallTargets, `controls under 44px: ${smallTargets.join(" | ")}`).toEqual([]);
 });
 
