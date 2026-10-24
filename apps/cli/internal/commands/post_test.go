@@ -252,7 +252,7 @@ func TestPostCreateReportsAcceptedScheduleWhenStatusLookupFails(t *testing.T) {
 
 func TestPostMediaUpdatePreservesMentionedThreadsAndIndependentVariants(t *testing.T) {
 	t.Setenv("OPENPOST_CONFIG_DIR", t.TempDir())
-	const current = `{"id":"post-1","workspace_id":"ws-1","title":"Mentioned thread","source_text":"Hi @alice","content_profile":"thread","status":"draft","revision":7,"segments":[{"id":"source-1","body":"Hi @alice","settings":{"mentions":{"version":1,"spans":[{"start":3,"end":9,"text":"@alice","target":{"provider":"bluesky","kind":"person","id":"did:plc:ewvi7nxzyoun6zhxrhs64oiz"}}]}},"media":[{"id":"old-photo"}]},{"id":"source-2","body":"Keep the thread tail","settings":{},"media":[{"id":"tail-photo"}]}],"renditions":[{"social_account_id":"account-1","platform":"bluesky","body":"Custom @bob","segments":[{"publication_segment_id":"source-1","body_override":"Custom @bob","settings":{"mentions":{"version":1,"spans":[{"start":7,"end":11,"text":"@bob","target":{"provider":"bluesky","kind":"person","id":"did:plc:z72i7hdynmk6r22z27h6tvur"}}]}}}]}]}`
+	current := `{"id":"post-1","workspace_id":"ws-1","title":"Mentioned thread","source_text":"Hi @alice","content_profile":"thread","status":"draft","revision":7,"segments":[{"id":"source-1","body":"Hi @alice","settings":{"mentions":{"version":1,"spans":[{"start":3,"end":9,"text":"@alice","target":{"provider":"bluesky","kind":"person","id":"did:plc:ewvi7nxzyoun6zhxrhs64oiz"}}]}},"media":[{"id":"old-photo"}]},{"id":"source-2","body":"Keep the thread tail","settings":{},"media":[{"id":"tail-photo"}]}],"renditions":[{"social_account_id":"account-1","platform":"bluesky","body":"Custom @bob","segments":[{"publication_segment_id":"source-1","body_override":"Custom @bob","settings":{"mentions":{"version":1,"spans":[{"start":7,"end":11,"text":"@bob","target":{"provider":"bluesky","kind":"person","id":"did:plc:z72i7hdynmk6r22z27h6tvur"}}]}}}]}]}`
 	var saved map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -312,6 +312,30 @@ func TestPostMediaUpdatePreservesMentionedThreadsAndIndependentVariants(t *testi
 	}
 	if _, present := variant["body"]; present {
 		t.Fatalf("account selection flattened the variant: %#v", variant)
+	}
+
+	current = strings.Replace(current, `"publication_segment_id":"source-1","body_override":"Custom @bob"`, `"id":"stored-segment","publication_segment_id":"source-1","body":"Custom @bob"`, 1)
+	var legacy map[string]any
+	if err := json.Unmarshal([]byte(current), &legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacy["segments"] = legacy["segments"].([]any)[:1]
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	current = string(encoded)
+
+	for _, extra := range [][]string{nil, {"--content", "Prefix Hi @alice"}} {
+		args := append([]string{"--instance", srv.URL, "--token", "op_cli_test", "--workspace", "Production", "post", "update", "post-1", "--accounts", "account-1"}, extra...)
+		_, err = executeRootCaptureStdout(t, args...)
+		if err != nil {
+			t.Fatal(err)
+		}
+		retained := saved["renditions"].([]any)[0].(map[string]any)["segments"].([]any)[0].(map[string]any)
+		if retained["body_override"] != "Custom @bob" || retained["settings"].(map[string]any)["mentions"] == nil {
+			t.Fatalf("account selection discarded legacy independent text: %#v", retained)
+		}
 	}
 }
 

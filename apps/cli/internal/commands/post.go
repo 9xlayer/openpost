@@ -240,7 +240,7 @@ func newPostUpdateCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				in.Renditions, err = retainedRenditionsForAccounts(accountIDs, current.Renditions)
+				in.Renditions, err = retainedRenditionsForAccounts(accountIDs, current)
 				if err != nil {
 					return err
 				}
@@ -593,16 +593,16 @@ func authoredMediaInputs(media []api.MediaSummary) []api.PublicationMediaInput {
 	return out
 }
 
-func retainedRenditionsForAccounts(accountIDs []string, current []api.Rendition) ([]api.RenditionInput, error) {
-	out := make([]api.RenditionInput, 0, len(current))
+func retainedRenditionsForAccounts(accountIDs []string, current *api.Publication) ([]api.RenditionInput, error) {
+	out := make([]api.RenditionInput, 0, len(current.Renditions))
 	for _, accountID := range accountIDs {
 		found := false
-		for _, rendition := range current {
+		for _, rendition := range current.Renditions {
 			if rendition.SocialAccountID != accountID {
 				continue
 			}
 			found = true
-			input, err := authoredRenditionInput(rendition)
+			input, err := authoredRenditionInput(rendition, current.Segments)
 			if err != nil {
 				return nil, err
 			}
@@ -615,7 +615,7 @@ func retainedRenditionsForAccounts(accountIDs []string, current []api.Rendition)
 	return out, nil
 }
 
-func authoredRenditionInput(rendition api.Rendition) (api.RenditionInput, error) {
+func authoredRenditionInput(rendition api.Rendition, canonical []api.PublicationSegment) (api.RenditionInput, error) {
 	out := api.RenditionInput{SocialAccountID: rendition.SocialAccountID, TargetKey: rendition.TargetKey, Profile: rendition.Profile, OutputProfile: rendition.OutputProfile, FormatLocked: rendition.FormatLocked, Settings: rendition.Settings}
 	if rendition.ScheduleOverride != "" {
 		parsed, err := time.Parse(time.RFC3339Nano, rendition.ScheduleOverride)
@@ -633,7 +633,8 @@ func authoredRenditionInput(rendition api.Rendition) (api.RenditionInput, error)
 			continue
 		}
 		inherited := segment.MediaInherited
-		out.Segments = append(out.Segments, api.RenditionSegmentInput{PublicationSegmentID: segment.PublicationSegmentID, BodyOverride: segment.BodyOverride, TitleOverride: segment.TitleOverride, DescriptionOverride: segment.DescriptionOverride, URLOverride: segment.URLOverride, Settings: segment.Settings, SourceOverrides: segment.SourceOverrides, MediaInherited: &inherited, Media: authoredMediaInputs(segment.Media)})
+		bodyOverride := retainedSegmentBody(segment, rendition, canonical)
+		out.Segments = append(out.Segments, api.RenditionSegmentInput{PublicationSegmentID: segment.PublicationSegmentID, BodyOverride: bodyOverride, TitleOverride: segment.TitleOverride, DescriptionOverride: segment.DescriptionOverride, URLOverride: segment.URLOverride, Settings: segment.Settings, SourceOverrides: segment.SourceOverrides, MediaInherited: &inherited, Media: authoredMediaInputs(segment.Media)})
 	}
 	return out, nil
 }
@@ -654,4 +655,24 @@ func preview(s string, n int) string {
 		return s[:n]
 	}
 	return s[:n-3] + "..."
+}
+
+// Legacy ordinary variants may own text without a persisted override. Preserve
+// that ownership when retaining accounts, before a canonical edit is applied.
+func retainedSegmentBody(segment api.RenditionSegment, rendition api.Rendition, canonical []api.PublicationSegment) *string {
+	if segment.BodyOverride != nil || len(segment.SourceOverrides) > 0 || (len(rendition.Segments) == 1 && len(canonical) > 1) {
+		return segment.BodyOverride
+	}
+	for _, source := range canonical {
+		if source.ID != segment.PublicationSegmentID {
+			continue
+		}
+		// Generated poll/link text belongs to their projection owners.
+		if source.Settings["poll"] != nil || source.Settings["link"] != nil || source.Body == segment.Body {
+			return nil
+		}
+		body := segment.Body
+		return &body
+	}
+	return nil
 }
