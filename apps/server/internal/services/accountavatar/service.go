@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -32,19 +31,14 @@ type Service struct {
 	resolver netguard.Resolver
 }
 
-func New(storage mediastore.BlobStorage) *Service {
-	return &Service{storage: storage}
+// Cache is the storage boundary used by account connection and profile refresh.
+type Cache interface {
+	CacheAvatar(context.Context, string, string) (string, error)
+	Delete(context.Context, string) error
 }
 
-func (s *Service) CacheLinkedIn(ctx context.Context, accountID, rawURL string) (string, error) {
-	remote, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || remote == nil {
-		return "", fmt.Errorf("invalid LinkedIn profile photo URL")
-	}
-	if !isLinkedInMediaHost(remote.Hostname()) {
-		return "", fmt.Errorf("profile photo URL is not hosted by LinkedIn")
-	}
-	return s.CacheAvatar(ctx, accountID, rawURL)
+func New(storage mediastore.BlobStorage) *Service {
+	return &Service{storage: storage}
 }
 
 // CacheAvatar copies any provider's profile photo into our storage so the
@@ -79,20 +73,17 @@ func (s *Service) CacheAvatar(ctx context.Context, accountID, rawURL string) (st
 }
 
 func (s *Service) Delete(ctx context.Context, avatarURL string) error {
-	remote, err := url.Parse(strings.TrimSpace(avatarURL))
-	if err != nil {
+	if !IsCached(avatarURL) {
 		return nil
 	}
-	key := filepath.Base(remote.Path)
-	if !strings.HasPrefix(key, accountAvatarKeyPrefix) {
-		return nil
-	}
+	key := filepath.Base(avatarURL)
 	return mediastore.DeleteForCleanup(ctx, s.storage, key)
 }
 
-func isLinkedInMediaHost(host string) bool {
-	host = strings.ToLower(strings.TrimSpace(host))
-	return host == "media.licdn.com" || strings.HasSuffix(host, ".licdn.com")
+// IsCached identifies only account photos served by OpenPost, never remote URLs.
+func IsCached(rawURL string) bool {
+	return strings.HasPrefix(rawURL, accountAvatarURLPrefix+accountAvatarKeyPrefix) &&
+		!strings.ContainsAny(strings.TrimPrefix(rawURL, accountAvatarURLPrefix), "/?#")
 }
 
 func imageExtension(contentType string) string {

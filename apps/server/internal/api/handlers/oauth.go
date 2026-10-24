@@ -29,6 +29,7 @@ import (
 	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/oauthstate"
+	"github.com/openpost/backend/internal/services/organizationguard"
 	"github.com/openpost/backend/internal/services/providerreadiness"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/openpost/backend/internal/telemetry"
@@ -96,7 +97,7 @@ type OAuthHandler struct {
 	connectorRegistry            *connectors.Registry
 	connectorStore               *connectors.Store
 	tokenSource                  AccessTokenSource
-	accountAvatars               accountAvatarCache
+	accountAvatars               accountavatar.Cache
 	blueskyPDS                   func(context.Context, string) (string, string, error)
 	blueskyAdapter               func(string) blueskyLoginProvider
 	// frontendURL is the absolute base URL the SPA is served from
@@ -104,11 +105,6 @@ type OAuthHandler struct {
 	// here so they work behind reverse proxies and subpath mounts.
 	frontendURL string
 	telemetry   telemetry.Recorder
-}
-
-type accountAvatarCache interface {
-	CacheLinkedIn(context.Context, string, string) (string, error)
-	Delete(context.Context, string) error
 }
 
 func mastodonInstanceURL(adapter platform.Adapter) string {
@@ -2432,6 +2428,7 @@ func (h *OAuthHandler) persistAccountSelection(ctx context.Context, userID strin
 	saver := h.accountSaver
 	if saver == nil {
 		saver = account_saver.NewAccountSaver(h.db, h.crypto)
+		saver.SetAvatarCache(h.accountAvatars)
 	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, pending.Platform, pending.InstanceURL, pending.ExecutionIntent, userID,
@@ -2862,10 +2859,10 @@ func (h *OAuthHandler) refreshAccountProfile(ctx context.Context, account models
 		return models.SocialAccount{}, huma.Error409Conflict("the provider returned a different account identity; reconnect this account instead")
 	}
 	cachedAvatarURL := ""
-	if account.Platform == "linkedin" && h.accountAvatars != nil && strings.TrimSpace(profile.AvatarURL) != "" {
-		cachedAvatarURL, err = h.accountAvatars.CacheLinkedIn(ctx, account.ID, profile.AvatarURL)
+	if h.accountAvatars != nil && strings.TrimSpace(profile.AvatarURL) != "" {
+		cachedAvatarURL, err = h.accountAvatars.CacheAvatar(ctx, account.ID, profile.AvatarURL)
 		if err != nil {
-			log.Printf("failed to cache LinkedIn avatar for account %s: %v", account.ID, err)
+			log.Printf("failed to cache %s avatar for account %s", account.Platform, account.ID)
 			return models.SocialAccount{}, huma.Error502BadGateway("the provider profile photo could not be saved")
 		}
 		cachedProfile := *profile
@@ -2888,9 +2885,15 @@ func (h *OAuthHandler) refreshAccountProfile(ctx context.Context, account models
 func (h *OAuthHandler) SetAccountAvatarStorage(storage mediastore.BlobStorage) {
 	if storage == nil {
 		h.accountAvatars = nil
+		if h.accountSaver != nil {
+			h.accountSaver.SetAvatarCache(nil)
+		}
 		return
 	}
 	h.accountAvatars = accountavatar.New(storage)
+	if h.accountSaver != nil {
+		h.accountSaver.SetAvatarCache(h.accountAvatars)
+	}
 }
 
 func (h *OAuthHandler) updateAccountProfileMetadata(ctx context.Context, account models.SocialAccount, profile *platform.UserProfile) error {
@@ -2900,26 +2903,32 @@ func (h *OAuthHandler) updateAccountProfileMetadata(ctx context.Context, account
 		return nil
 	}
 
-	query := h.db.NewUpdate().Model((*models.SocialAccount)(nil)).
-		Where("id = ? AND workspace_id = ? AND account_id = ? AND is_active = ?", account.ID, account.WorkspaceID, account.AccountID, true)
-	if username != "" {
-		query = query.Set("account_username = ?", username)
-	}
-	if avatarURL != "" {
-		query = query.Set("account_avatar_url = ?", avatarURL)
-	}
-	result, err := query.Exec(ctx)
-	if err != nil {
-		return huma.Error500InternalServerError("failed to update account metadata")
-	}
-	updated, err := result.RowsAffected()
-	if err != nil {
-		return huma.Error500InternalServerError("failed to verify account metadata update")
-	}
-	if updated != 1 {
-		return huma.Error409Conflict("the account changed while its profile was refreshing; try again")
-	}
-	return nil
+	// Share the connection transaction's fence. Fetching the provider profile and
+	// photo stays outside the lock, then the revision predicates reject stale work.
+	return organizationguard.WithWorkspace(ctx, h.db, account.WorkspaceID, func(ctx context.Context, db bun.IDB) error {
+		query := db.NewUpdate().Model((*models.SocialAccount)(nil)).
+			Where("id = ? AND workspace_id = ? AND account_id = ? AND is_active = ?", account.ID, account.WorkspaceID, account.AccountID, true).
+			Where("account_avatar_url = ?", account.AccountAvatarURL).
+			Where("account_username = ? AND oauth_grant_id = ?", account.AccountUsername, account.OAuthGrantID)
+		if username != "" {
+			query = query.Set("account_username = ?", username)
+		}
+		if avatarURL != "" {
+			query = query.Set("account_avatar_url = ?", avatarURL)
+		}
+		result, err := query.Exec(ctx)
+		if err != nil {
+			return huma.Error500InternalServerError("failed to update account metadata")
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return huma.Error500InternalServerError("failed to verify account metadata update")
+		}
+		if updated != 1 {
+			return huma.Error409Conflict("the account changed while its profile was refreshing; try again")
+		}
+		return nil
+	})
 }
 
 func refreshProviderAccountMetadata(ctx context.Context, adapter platform.Adapter, accessToken string, account models.SocialAccount) (*platform.UserProfile, error) {

@@ -19,14 +19,14 @@ func (stubResolver) LookupIPAddr(context.Context, string) ([]net.IPAddr, error) 
 	return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
 }
 
-func TestCacheLinkedInStoresAValidatedImageBehindAnOpenPostURL(t *testing.T) {
+func TestCacheAvatarStoresAnImageBehindAnOpenPostURL(t *testing.T) {
 	t.Parallel()
 
 	storage := mediastore.NewLocalStorage(t.TempDir(), "/media")
 	service := New(storage)
 	service.resolver = stubResolver{}
 	service.client = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
-		require.Equal(t, "media.licdn.com", req.URL.Hostname())
+		require.Equal(t, "scontent.cdninstagram.com", req.URL.Hostname())
 		return &http.Response{
 			StatusCode: http.StatusOK,
 			Header:     http.Header{"Content-Type": []string{"image/jpeg"}},
@@ -35,10 +35,10 @@ func TestCacheLinkedInStoresAValidatedImageBehindAnOpenPostURL(t *testing.T) {
 		}, nil
 	})}
 
-	avatarURL, err := service.CacheLinkedIn(
+	avatarURL, err := service.CacheAvatar(
 		t.Context(),
 		"account-1",
-		"https://media.licdn.com/profile.jpg?signature=provider",
+		"https://scontent.cdninstagram.com/profile.jpg?signature=provider",
 	)
 	require.NoError(t, err)
 	require.Regexp(t, `^/avatars/avatar_account_account-1_[a-f0-9-]+\.jpg$`, avatarURL)
@@ -50,15 +50,6 @@ func TestCacheLinkedInStoresAValidatedImageBehindAnOpenPostURL(t *testing.T) {
 	content, err := io.ReadAll(stored)
 	require.NoError(t, err)
 	require.Equal(t, jpegFixture, content)
-}
-
-func TestCacheLinkedInRejectsForeignHosts(t *testing.T) {
-	t.Parallel()
-
-	storage := mediastore.NewLocalStorage(t.TempDir(), "/media")
-	service := New(storage)
-	_, err := service.CacheLinkedIn(t.Context(), "account-1", "https://cdn.example/photo.jpg")
-	require.ErrorContains(t, err, "not hosted by LinkedIn")
 }
 
 func TestCacheAvatarRejectsCredentialedURL(t *testing.T) {
@@ -77,6 +68,16 @@ func TestDeleteIgnoresForeignURLs(t *testing.T) {
 	storage := mediastore.NewLocalStorage(t.TempDir(), "/media")
 	service := New(storage)
 	require.NoError(t, service.Delete(t.Context(), "https://cdn.example/photo.jpg"))
+	const key = "avatar_account_existing.jpg"
+	_, err := storage.Save(t.Context(), key, strings.NewReader("stored-photo"))
+	require.NoError(t, err)
+	require.NoError(t, service.Delete(t.Context(), "https://cdn.example/"+key))
+	stored, err := storage.Open(t.Context(), key)
+	require.NoError(t, err)
+	require.NoError(t, stored.Close())
+	require.NoError(t, service.Delete(t.Context(), "/avatars/"+key))
+	_, err = storage.Open(t.Context(), key)
+	require.Error(t, err)
 	require.NoError(t, service.Delete(t.Context(), "/avatars/not-an-account-avatar.jpg"))
 }
 

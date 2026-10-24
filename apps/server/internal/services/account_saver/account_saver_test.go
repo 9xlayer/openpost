@@ -3,6 +3,7 @@ package account_saver
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -438,4 +439,79 @@ func TestSaveAccountRechecksQuotaAfterCompetingConnection(t *testing.T) {
 	count, err := db.NewSelect().Model((*models.SocialAccount)(nil)).Where("workspace_id = ? AND is_active = ?", "ws", true).Count(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
+}
+
+// The account-save boundary covers single connections and multi-destination OAuth.
+func TestAccountPhotosSurviveReconnectAndFailedDownloads(t *testing.T) {
+	db := createTestDB(t)
+	seedWorkspaceMember(t, db, "ws", "user")
+	saver := NewAccountSaver(db, crypto.NewTokenEncryptor("test-secret-key-for-testing-only"))
+	cache := &avatarCacheStub{url: "/avatars/avatar_account_first.jpg"}
+	saver.SetAvatarCache(cache)
+	input := SaveAccountInput{Actor: accountSaverActor("user"), UserID: "user", WorkspaceID: "ws", PlatformName: "facebook", AccountID: "page", AccountUsername: "Page", AccountAvatarURL: "https://cdn.example/photo?signature=temporary", Token: &platform.TokenResult{AccessToken: "token"}}
+	account, err := saver.SaveAccountFromInput(t.Context(), input)
+	require.NoError(t, err)
+	require.Equal(t, cache.url, account.AccountAvatarURL)
+	var stored models.SocialAccount
+	require.NoError(t, db.NewSelect().Model(&stored).Where("id = ?", account.ID).Scan(t.Context()))
+	require.Equal(t, cache.url, stored.AccountAvatarURL)
+	require.Empty(t, cache.deleted)
+
+	// Download failures do not break connection or overwrite an existing photo.
+	cache.err = errors.New("provider unavailable")
+	reconnected, err := saver.SaveAccountFromInput(t.Context(), input)
+	require.NoError(t, err)
+	require.Equal(t, account.ID, reconnected.ID)
+	require.Equal(t, account.AccountAvatarURL, reconnected.AccountAvatarURL)
+	require.Empty(t, cache.deleted)
+	input.AccountID = "new-page"
+	withoutPhoto, err := saver.SaveAccountFromInput(t.Context(), input)
+	require.NoError(t, err)
+	require.Empty(t, withoutPhoto.AccountAvatarURL, "never persist a temporary URL when caching fails")
+
+	// A successful replacement retires the previous stored object after commit.
+	cache.err = nil
+	cache.url = "/avatars/avatar_account_replaced.jpg"
+	input.AccountID = "page"
+	replacement, err := saver.SaveAccountFromInput(t.Context(), input)
+	require.NoError(t, err)
+	require.Equal(t, cache.url, replacement.AccountAvatarURL)
+	require.Equal(t, []string{account.AccountAvatarURL}, cache.deleted)
+
+	// Providers that omit a picture preserve the last saved version.
+	input.AccountAvatarURL = ""
+	unchanged, err := saver.SaveAccountFromInput(t.Context(), input)
+	require.NoError(t, err)
+	require.Equal(t, replacement.AccountAvatarURL, unchanged.AccountAvatarURL)
+}
+
+func TestAccountPhotoObjectsAreRemovedWhenBatchSaveRollsBack(t *testing.T) {
+	db := createTestDB(t)
+	seedWorkspaceMember(t, db, "ws", "user")
+	saver := NewAccountSaver(db, crypto.NewTokenEncryptor("test-secret-key-for-testing-only"))
+	cache := &avatarCacheStub{url: "/avatars/avatar_account_uncommitted.jpg"}
+	saver.SetAvatarCache(cache)
+	// Fail the real database transaction after downloading, not a mocked write.
+	_, err := db.ExecContext(t.Context(), `CREATE TRIGGER reject_account BEFORE INSERT ON social_accounts BEGIN SELECT RAISE(ABORT, 'write failed'); END`)
+	require.NoError(t, err)
+	_, err = saver.SaveAccountFromInput(t.Context(), SaveAccountInput{Actor: accountSaverActor("user"), UserID: "user", WorkspaceID: "ws", PlatformName: "threads", AccountID: "profile", AccountUsername: "Profile", AccountAvatarURL: "https://cdn.example/photo", Token: &platform.TokenResult{AccessToken: "token"}})
+	require.ErrorContains(t, err, "write failed")
+	require.Equal(t, []string{cache.url}, cache.deleted)
+	count, err := db.NewSelect().Model((*models.SocialAccount)(nil)).Count(t.Context())
+	require.NoError(t, err)
+	require.Zero(t, count)
+}
+
+type avatarCacheStub struct {
+	url     string
+	err     error
+	deleted []string
+}
+
+func (c *avatarCacheStub) CacheAvatar(context.Context, string, string) (string, error) {
+	return c.url, c.err
+}
+func (c *avatarCacheStub) Delete(_ context.Context, url string) error {
+	c.deleted = append(c.deleted, url)
+	return nil
 }

@@ -48,36 +48,40 @@ func TestRefreshAccountMetadataUpdatesTheExactStoredAccount(t *testing.T) {
 	require.Equal(t, `{"connection_type":"oauth"}`, account.CapabilityState)
 }
 
-func TestRefreshAccountMetadataCachesLinkedInAvatarOnOpenPost(t *testing.T) {
-	t.Parallel()
+func TestRefreshAccountMetadataCachesProviderAvatarOnOpenPost(t *testing.T) {
+	for _, backend := range []struct {
+		name   string
+		create func(testing.TB, ...any) *bun.DB
+	}{{"sqlite", createHandlerTestDB}, {"postgres", createHandlerPostgresTestDB}} {
+		t.Run(backend.name, func(t *testing.T) {
+			for _, provider := range []string{"linkedin", "facebook", "instagram", "threads", "x"} {
+				t.Run(provider, func(t *testing.T) {
+					providerURL := "https://cdn.example/current-avatar.jpg?signature=temporary"
+					adapter := &accountMetadataAdapter{profile: &platform.UserProfile{
+						ID: "provider-account-1", Username: "current-name", AvatarURL: providerURL,
+					}}
+					srv := newAccountMetadataTestServerWithDatabase(t, adapter, backend.create)
+					_, err := srv.db.NewUpdate().Model((*models.SocialAccount)(nil)).
+						Set("platform = ?", provider).Where("id = ?", "acc-1").Exec(t.Context())
+					require.NoError(t, err)
+					srv.handler.providers = map[string]platform.Adapter{provider: adapter}
+					cache := &accountAvatarCacheStub{url: "/avatars/avatar_account_acc-1_current.jpg"}
+					srv.handler.accountAvatars = cache
 
-	adapter := &accountMetadataAdapter{profile: &platform.UserProfile{
-		ID:        "provider-account-1",
-		Username:  "current-name",
-		AvatarURL: "https://media.licdn.com/current-avatar.jpg?signature=provider",
-	}}
-	srv := newAccountMetadataTestServer(t, adapter)
-	_, err := srv.db.NewUpdate().Model((*models.SocialAccount)(nil)).
-		Set("platform = ?", "linkedin").
-		Where("id = ?", "acc-1").
-		Exec(t.Context())
-	require.NoError(t, err)
-	srv.handler.providers = map[string]platform.Adapter{"linkedin": adapter}
-	cache := &accountAvatarCacheStub{url: "/avatars/avatar_account_acc-1_current.jpg"}
-	srv.handler.accountAvatars = cache
-
-	resp := srv.request(t)
-	require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
-	require.Equal(t, "acc-1", cache.accountID)
-	require.Equal(t, "https://media.licdn.com/current-avatar.jpg?signature=provider", cache.providerURL)
-
-	var out AccountResponse
-	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
-	require.Equal(t, cache.url, out.AccountAvatarURL)
-
-	var account models.SocialAccount
-	require.NoError(t, srv.db.NewSelect().Model(&account).Where("id = ?", "acc-1").Scan(t.Context()))
-	require.Equal(t, cache.url, account.AccountAvatarURL)
+					resp := srv.request(t)
+					require.Equal(t, http.StatusOK, resp.Code, resp.Body.String())
+					var out AccountResponse
+					require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &out))
+					require.Equal(t, cache.url, out.AccountAvatarURL, "refresh must not persist an expiring provider URL")
+					var account models.SocialAccount
+					require.NoError(t, srv.db.NewSelect().Model(&account).Where("id = ?", "acc-1").Scan(t.Context()))
+					require.Equal(t, cache.url, account.AccountAvatarURL)
+					require.Equal(t, "acc-1", cache.accountID)
+					require.Equal(t, providerURL, cache.providerURL)
+				})
+			}
+		})
+	}
 }
 
 func TestRefreshAccountMetadataPreservesStoredValuesWhenProviderOmitsThem(t *testing.T) {
@@ -204,15 +208,22 @@ type accountAvatarCacheStub struct {
 	url         string
 	accountID   string
 	providerURL string
+	err         error
+	deleted     []string
+	before      func()
 }
 
-func (cache *accountAvatarCacheStub) CacheLinkedIn(_ context.Context, accountID, providerURL string) (string, error) {
+func (cache *accountAvatarCacheStub) CacheAvatar(_ context.Context, accountID, providerURL string) (string, error) {
+	if cache.before != nil {
+		cache.before()
+	}
 	cache.accountID = accountID
 	cache.providerURL = providerURL
-	return cache.url, nil
+	return cache.url, cache.err
 }
 
-func (cache *accountAvatarCacheStub) Delete(context.Context, string) error {
+func (cache *accountAvatarCacheStub) Delete(_ context.Context, url string) error {
+	cache.deleted = append(cache.deleted, url)
 	return nil
 }
 
@@ -249,9 +260,17 @@ func (adapter *destinationAccountMetadataAdapter) RefreshAccountMetadata(_ conte
 
 func newAccountMetadataTestServer(t *testing.T, adapter platform.Adapter) *accountsTestServer {
 	t.Helper()
+	return newAccountMetadataTestServerWithDatabase(t, adapter, createHandlerTestDB)
+}
 
-	db := createHandlerTestDB(t, (*models.WorkspaceMember)(nil), (*models.SocialAccount)(nil), (*models.ProviderAccountBinding)(nil))
-	_, err := db.NewInsert().Model(&models.WorkspaceMember{
+func newAccountMetadataTestServerWithDatabase(t *testing.T, adapter platform.Adapter, create func(testing.TB, ...any) *bun.DB) *accountsTestServer {
+	t.Helper()
+	db := create(t, (*models.OAuthGrant)(nil), (*models.Organization)(nil), (*models.Workspace)(nil), (*models.WorkspaceMember)(nil), (*models.SocialAccount)(nil), (*models.ProviderAccountBinding)(nil))
+	_, err := db.NewInsert().Model(&models.Organization{ID: "org-1", Name: "Organization"}).Exec(t.Context())
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.Workspace{ID: "ws-1", OrganizationID: "org-1", Name: "Workspace"}).Exec(t.Context())
+	require.NoError(t, err)
+	_, err = db.NewInsert().Model(&models.WorkspaceMember{
 		WorkspaceID: "ws-1",
 		UserID:      "user-1",
 		Role:        models.WorkspaceRoleAdmin,
@@ -310,4 +329,35 @@ func TestAccountAliasPreservesProviderIdentity(t *testing.T) {
 		require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", "acc-1").Scan(t.Context()))
 		require.Equal(t, "stored-name", stored.AccountUsername)
 	}
+}
+
+func TestRefreshAccountPhotoDownloadFailureKeepsStoredProfile(t *testing.T) {
+	adapter := &accountMetadataAdapter{profile: &platform.UserProfile{ID: "provider-account-1", Username: "changed-name", AvatarURL: "https://cdn.example/photo"}}
+	srv := newAccountMetadataTestServer(t, adapter)
+	cache := &accountAvatarCacheStub{err: errors.New("download failed")}
+	srv.handler.accountAvatars = cache
+	resp := srv.request(t)
+	require.Equal(t, http.StatusBadGateway, resp.Code, resp.Body.String())
+	var stored models.SocialAccount
+	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", "acc-1").Scan(t.Context()))
+	require.Equal(t, "stored-name", stored.AccountUsername)
+	require.Equal(t, "https://cdn.example/stored-avatar.jpg", stored.AccountAvatarURL)
+	require.Empty(t, cache.deleted)
+}
+
+func TestRefreshAccountPhotoDoesNotOverwriteAConcurrentRefresh(t *testing.T) {
+	adapter := &accountMetadataAdapter{profile: &platform.UserProfile{ID: "provider-account-1", Username: "changed-name", AvatarURL: "https://cdn.example/photo"}}
+	srv := newAccountMetadataTestServer(t, adapter)
+	cache := &accountAvatarCacheStub{url: "/avatars/avatar_account_losing_refresh.jpg"}
+	cache.before = func() {
+		_, err := srv.db.NewUpdate().Model((*models.SocialAccount)(nil)).Set("account_avatar_url = ?", "/avatars/avatar_account_newer.jpg").Where("id = ?", "acc-1").Exec(t.Context())
+		require.NoError(t, err)
+	}
+	srv.handler.accountAvatars = cache
+	resp := srv.request(t)
+	require.Equal(t, http.StatusConflict, resp.Code, resp.Body.String())
+	var stored models.SocialAccount
+	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", "acc-1").Scan(t.Context()))
+	require.Equal(t, "/avatars/avatar_account_newer.jpg", stored.AccountAvatarURL)
+	require.Equal(t, []string{cache.url}, cache.deleted)
 }

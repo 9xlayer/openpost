@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/accountavatar"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/organizationguard"
@@ -32,6 +33,7 @@ type AccountSaver struct {
 	db          *bun.DB
 	crypto      *crypto.TokenEncryptor
 	entitlement entitlements.Service
+	avatars     accountavatar.Cache
 }
 
 type SaveAccountInput struct {
@@ -74,6 +76,10 @@ func NewAccountSaver(db *bun.DB, crypto *crypto.TokenEncryptor, entitlement ...e
 		crypto:      crypto,
 		entitlement: entitlementService,
 	}
+}
+
+func (s *AccountSaver) SetAvatarCache(cache accountavatar.Cache) {
+	s.avatars = cache
 }
 
 func (s *AccountSaver) SetEntitlement(entitlement entitlements.Service) {
@@ -167,9 +173,13 @@ func (s *AccountSaver) SaveAccountsFromInputs(ctx context.Context, inputs []Save
 		return nil, err
 	}
 
-	if err := s.persistSaveAccounts(ctx, first, accounts, isExisting, preparedGrants, now); err != nil {
+	cachedAvatars := s.cacheAccountAvatars(ctx, accounts, normalizedInputs)
+	retiredAvatars, err := s.persistSaveAccounts(ctx, first, accounts, isExisting, preparedGrants, cachedAvatars, now)
+	if err != nil {
+		s.deleteUnusedAvatars(ctx, cachedAvatars)
 		return nil, err
 	}
+	s.deleteUnusedAvatars(ctx, retiredAvatars)
 
 	for _, prepared := range preparedGrants {
 		if err := tokenmanager.ScheduleGrantRefreshJob(ctx, s.db, prepared.grant.ID, prepared.grant.AccessTokenExpiresAt); err != nil {
@@ -269,8 +279,9 @@ func assembleSaveAccountRecords(inputs []SaveAccountInput, existingAccounts []*m
 	return accounts, isExisting, nil
 }
 
-func (s *AccountSaver) persistSaveAccounts(ctx context.Context, first SaveAccountInput, accounts []*models.SocialAccount, isExisting []bool, preparedGrants []preparedGrant, now time.Time) error {
-	return s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+func (s *AccountSaver) persistSaveAccounts(ctx context.Context, first SaveAccountInput, accounts []*models.SocialAccount, isExisting []bool, preparedGrants []preparedGrant, cachedAvatars []string, now time.Time) ([]string, error) {
+	var retiredAvatars []string
+	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
 		if err := organizationguard.LockWorkspace(txCtx, tx, first.WorkspaceID); err != nil {
 			return err
 		}
@@ -292,6 +303,7 @@ func (s *AccountSaver) persistSaveAccounts(ctx context.Context, first SaveAccoun
 				amount++
 			}
 			if existing != nil {
+				retiredAvatars = append(retiredAvatars, s.reconcileAccountAvatar(account, existing, cachedAvatars[index]))
 				account.ID = existing.ID
 				account.CreatedAt = existing.CreatedAt
 				account.IsNewlyInserted = false
@@ -314,6 +326,7 @@ func (s *AccountSaver) persistSaveAccounts(ctx context.Context, first SaveAccoun
 		}
 		return persistSaveAccountRows(txCtx, tx, first, accounts, isExisting, now)
 	})
+	return retiredAvatars, err
 }
 
 func persistSaveAccountRows(txCtx context.Context, tx bun.Tx, first SaveAccountInput, accounts []*models.SocialAccount, isExisting []bool, now time.Time) error {
