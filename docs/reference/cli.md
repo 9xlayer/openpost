@@ -82,11 +82,12 @@ openpost account
 
 **Subcommands**
 
-| Command                       | Description                    |
-| ----------------------------- | ------------------------------ |
-| `openpost account disconnect` | Disconnect a social account    |
-| `openpost account list`       | List connected social accounts |
-| `openpost account rename`     | Rename a social account slug   |
+| Command                       | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| `openpost account disconnect` | Disconnect a social account                   |
+| `openpost account list`       | List connected social accounts                |
+| `openpost account mentions`   | Find native mention identities for an account |
+| `openpost account rename`     | Rename a social account slug                  |
 
 ### `openpost account disconnect`
 
@@ -128,6 +129,35 @@ openpost account list [flags]
 | Flag         | Default | Description        |
 | ------------ | ------- | ------------------ |
 | `--platform` | `-`     | filter by platform |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost account mentions`
+
+Find native mention identities for an account
+
+**Usage**
+
+```text
+openpost account mentions &lt;account&gt; [flags]
+```
+
+**Flags**
+
+| Flag      | Default | Description                                           |
+| --------- | ------- | ----------------------------------------------------- |
+| `--query` | `-`     | Account search, or exact LinkedIn company vanity name |
 
 **Inherited Flags**
 
@@ -782,14 +812,15 @@ openpost media
 
 **Subcommands**
 
-| Command                  | Description                               |
-| ------------------------ | ----------------------------------------- |
-| `openpost media delete`  | Delete an unused media attachment         |
-| `openpost media list`    | List media attachments                    |
-| `openpost media storage` | Show media storage usage                  |
-| `openpost media update`  | Update media alt text                     |
-| `openpost media upload`  | Upload a media file                       |
-| `openpost media usage`   | List content that uses a media attachment |
+| Command                        | Description                                   |
+| ------------------------------ | --------------------------------------------- |
+| `openpost media delete`        | Delete an unused media attachment             |
+| `openpost media list`          | List media attachments                        |
+| `openpost media prepare-image` | Fit a separate image copy for one destination |
+| `openpost media storage`       | Show media storage usage                      |
+| `openpost media update`        | Update media alt text                         |
+| `openpost media upload`        | Upload a media file                           |
+| `openpost media usage`         | List content that uses a media attachment     |
 
 ### `openpost media delete`
 
@@ -829,6 +860,38 @@ openpost media list [flags]
 | Flag      | Default | Description                             |
 | --------- | ------- | --------------------------------------- |
 | `--limit` | `0`     | maximum number of media items to return |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost media prepare-image`
+
+Fit a separate image copy for one destination
+
+**Usage**
+
+```text
+openpost media prepare-image &lt;media-id&gt; [flags]
+```
+
+**Flags**
+
+| Flag               | Default | Description                                                |
+| ------------------ | ------- | ---------------------------------------------------------- |
+| `--account`        | `-`     | Connected account ID or slug                               |
+| `--alt`            | `-`     | Alt text for the fitted copy; pass an empty value to clear |
+| `--output-profile` | `-`     | Explicit destination format from capabilities              |
+| `--settings-file`  | `-`     | Destination settings JSON file, or - for stdin             |
 
 **Inherited Flags**
 
@@ -995,16 +1058,17 @@ openpost post create [flags]
 
 **Flags**
 
-| Flag             | Default | Description                                         |
-| ---------------- | ------- | --------------------------------------------------- |
-| `--accounts`     | `-`     | comma-separated account selectors                   |
-| `--content`      | `-`     | post content                                        |
-| `--file`         | `-`     | read post content from a file                       |
-| `--media`        | `[]`    | media id or local file path; repeatable             |
-| `--media-alt`    | `[]`    | alt text for the matching uploaded --media          |
-| `--random-delay` | `0`     | random delay in minutes                             |
-| `--schedule`     | `-`     | natural-language, RFC3339, next-slot, now, or draft |
-| `--thread-draft` | `-`     | encoded thread draft to attach                      |
+| Flag              | Default | Description                                                                        |
+| ----------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--accounts`      | `-`     | comma-separated account selectors                                                  |
+| `--content`       | `-`     | post content                                                                       |
+| `--file`          | `-`     | read post content from a file                                                      |
+| `--media`         | `[]`    | media id or local file path; repeatable                                            |
+| `--media-alt`     | `[]`    | alt text for the matching uploaded --media                                         |
+| `--random-delay`  | `0`     | random delay in minutes                                                            |
+| `--schedule`      | `-`     | natural-language, RFC3339, next-slot, now, or draft                                |
+| `--segments-file` | `-`     | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin |
+| `--thread-draft`  | `-`     | encoded thread draft to attach                                                     |
 
 **Inherited Flags**
 
@@ -1114,14 +1178,15 @@ openpost post update &lt;post-id&gt; [flags]
 
 **Flags**
 
-| Flag             | Default | Description                                                                       |
-| ---------------- | ------- | --------------------------------------------------------------------------------- |
-| `--accounts`     | `-`     | comma-separated account selectors                                                 |
-| `--content`      | `-`     | post content                                                                      |
-| `--media`        | `[]`    | replacement media id or local file path; repeatable; pass an empty value to clear |
-| `--media-alt`    | `[]`    | alt text for the matching uploaded --media                                        |
-| `--random-delay` | `0`     | random delay in minutes                                                           |
-| `--schedule`     | `-`     | natural-language, RFC3339, next-slot, now, or draft; empty string unschedules     |
+| Flag              | Default | Description                                                                        |
+| ----------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--accounts`      | `-`     | comma-separated account selectors                                                  |
+| `--content`       | `-`     | post content                                                                       |
+| `--media`         | `[]`    | replacement media id or local file path; repeatable; pass an empty value to clear  |
+| `--media-alt`     | `[]`    | alt text for the matching uploaded --media                                         |
+| `--random-delay`  | `0`     | random delay in minutes                                                            |
+| `--schedule`      | `-`     | natural-language, RFC3339, next-slot, now, or draft; empty string unschedules      |
+| `--segments-file` | `-`     | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin |
 
 **Inherited Flags**
 
@@ -1382,6 +1447,7 @@ openpost publication create [flags]
 | `--media-alt`         | `[]`          | alt text for uploaded media                                                                           |
 | `--privacy`           | `-`           | YouTube privacy status: private, unlisted, or public                                                  |
 | `--schedule`          | `-`           | schedule time                                                                                         |
+| `--segments-file`     | `-`           | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin                    |
 | `--tiktok-method`     | `DIRECT_POST` | TikTok content posting method                                                                         |
 | `--tiktok-privacy`    | `SELF_ONLY`   | TikTok privacy level                                                                                  |
 | `--title`             | `-`           | publication title                                                                                     |
@@ -1751,15 +1817,16 @@ openpost publication update &lt;publication-id&gt; [flags]
 
 **Flags**
 
-| Flag                | Default | Description                                   |
-| ------------------- | ------- | --------------------------------------------- |
-| `--content`         | `-`     | shared post or caption text                   |
-| `--content-profile` | `-`     | content profile                               |
-| `--file`            | `-`     | read shared text from file or '-' for stdin   |
-| `--force`           | `false` | overwrite after reviewing a revision conflict |
-| `--schedule`        | `-`     | new schedule time; use draft to clear         |
-| `--title`           | `-`     | publication title                             |
-| `--url`             | `-`     | source URL; pass an empty value to clear      |
+| Flag                | Default | Description                                                                        |
+| ------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--content`         | `-`     | shared post or caption text                                                        |
+| `--content-profile` | `-`     | content profile                                                                    |
+| `--file`            | `-`     | read shared text from file or '-' for stdin                                        |
+| `--force`           | `false` | overwrite after reviewing a revision conflict                                      |
+| `--schedule`        | `-`     | new schedule time; use draft to clear                                              |
+| `--segments-file`   | `-`     | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin |
+| `--title`           | `-`     | publication title                                                                  |
+| `--url`             | `-`     | source URL; pass an empty value to clear                                           |
 
 **Inherited Flags**
 

@@ -112,3 +112,15 @@ export type {
 } from "./outcomes.js";
 export { iterateOffsetPages } from "./pagination.js";
 export type { OffsetPageOptions } from "./pagination.js";
+
+export type {
+  MentionTarget,
+  MentionSpan,
+  Mentions,
+  MentionCandidate,
+  MentionLookup,
+  PublicationSegmentSettings,
+  RenditionSourceOverride,
+} from "./types.js";
+
+export type { PrepareMediaImageInput, PreparedMediaImage } from "./types.js";

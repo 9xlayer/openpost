@@ -13,6 +13,15 @@ import * as ts from "typescript";
 // cannot read). It reads only local checkout files, so it runs offline.
 
 const SDK_TYPES = [
+  { sdk: "PublicationSegmentInput", schema: "PublicationSegmentInput" },
+  { sdk: "RenditionSegmentInput", schema: "RenditionSegmentInput" },
+  { sdk: "RenditionSourceOverride", schema: "RenditionSourceOverride" },
+  { sdk: "MentionTarget", schema: "MentionTarget" },
+  { sdk: "MentionSpan", schema: "MentionSpan" },
+  { sdk: "Mentions", schema: "Mentions" },
+  { sdk: "MentionCandidate", schema: "MentionCandidate" },
+  { sdk: "PrepareMediaImageInput", schema: "PrepareMediaImageBody" },
+
   { sdk: "SocialAccount", schema: "AccountResponse" },
   { sdk: "Publication", schema: "PublicationResponse" },
   { sdk: "Rendition", schema: "RenditionResponse" },
@@ -23,6 +32,8 @@ const SDK_TYPES = [
 // Stable optional contract fields the acceptance criteria require even though
 // the schema does not mark them required.
 const REQUIRED_OPTIONALS: Record<string, string[]> = {
+  RenditionSegmentInput: ["source_overrides", "settings", "media_inherited", "media"],
+  RenditionSourceOverride: ["mentions", "body_override"],
   Publication: ["segments", "media", "social_set_id", "creation_preset"],
   Rendition: [
     "target_key",

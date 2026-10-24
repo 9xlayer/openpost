@@ -335,7 +335,8 @@ const fullPublicationFixture = `{
 					"source_overrides": [
 						{
 							"publication_segment_id": "seg_1",
-							"body_override": "We launched!",
+							"body_override": "@alice",
+ "mentions": {"version":1,"spans":[{"start":0,"end":6,"text":"@alice","target":{"provider":"bluesky","kind":"person","id":"did:plc:ewvi7nxzyoun6zhxrhs64oiz"}}]},
 							"media_inherited": true,
 							"media": [{"media_id": "med_1", "role": "inline", "alt_text": "launch art"}]
 						}

@@ -13,6 +13,7 @@ import (
 )
 
 type publicationFlags struct {
+	segmentsFile     string
 	profile          string
 	title            string
 	content          string
@@ -74,6 +75,12 @@ func newPublicationUpdateCmd() *cobra.Command {
 				return err
 			}
 			input := api.UpdatePublicationInput{ExpectedRevision: current.Revision, Force: flags.force}
+			if flags.segmentsFile != "" {
+				input.Segments, err = readPublicationSegments(flags.segmentsFile)
+				if err != nil {
+					return err
+				}
+			}
 			if cmd.Flags().Changed("title") {
 				input.Title = &flags.title
 			}
@@ -99,7 +106,7 @@ func newPublicationUpdateCmd() *cobra.Command {
 				input.ClearSchedule = input.ScheduledAt == nil
 			}
 			if input.Title == nil && input.ContentProfile == nil && input.SourceText == nil &&
-				input.SourceURL == nil && input.ScheduledAt == nil && !input.ClearSchedule {
+				input.SourceURL == nil && input.ScheduledAt == nil && !input.ClearSchedule && len(input.Segments) == 0 {
 				return fmt.Errorf("no publication changes requested")
 			}
 			updated, err := client.UpdatePublication(cmd.Context(), args[0], input)
@@ -109,10 +116,12 @@ func newPublicationUpdateCmd() *cobra.Command {
 			return printPublicationSummary(cfg, updated)
 		},
 	}
+	cmd.Flags().StringVar(&flags.segmentsFile, "segments-file", "", "Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin")
 	cmd.Flags().StringVar(&flags.title, "title", "", "publication title")
 	cmd.Flags().StringVar(&flags.profile, "content-profile", "", "content profile")
 	cmd.Flags().StringVar(&flags.content, "content", "", "shared post or caption text")
 	cmd.Flags().StringVar(&flags.file, "file", "", "read shared text from file or '-' for stdin")
+	cmd.MarkFlagsMutuallyExclusive("segments-file", "file", "content")
 	cmd.Flags().StringVar(&flags.url, "url", "", "source URL; pass an empty value to clear")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "new schedule time; use draft to clear")
 	cmd.Flags().BoolVar(&flags.force, "force", false, "overwrite after reviewing a revision conflict")
@@ -210,9 +219,16 @@ func newPublicationCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			segments, err := readOptionalPublicationSegments(flags.segmentsFile)
+			if err != nil {
+				return err
+			}
 			content, err := contentFromFlags(flags.content, flags.file)
 			if err != nil {
 				return err
+			}
+			if len(segments) > 0 {
+				content = segments[0].Body
 			}
 			accountIDs, err := resolveAccounts(cmd, client, workspaceID, flags.accounts)
 			if err != nil {
@@ -234,6 +250,9 @@ func newPublicationCreateCmd() *cobra.Command {
 				media = append(media, api.PublicationMediaInput{MediaID: mediaID, Role: "attachment"})
 			}
 			profile := defaultString(flags.profile, "short_text")
+			if len(segments) > 1 && !cmd.Flags().Changed("content-profile") {
+				profile = "thread"
+			}
 			sourceText := publicationSourceText(profile, content, flags)
 			title := publicationTitle(profile, sourceText, flags)
 			accounts := []api.SocialAccount{}
@@ -244,6 +263,7 @@ func newPublicationCreateCmd() *cobra.Command {
 				}
 			}
 			publication, err := client.CreatePublication(cmd.Context(), api.CreatePublicationInput{
+				Segments:         segments,
 				WorkspaceID:      workspaceID,
 				Title:            title,
 				ContentProfile:   profile,
@@ -271,9 +291,11 @@ func newPublicationCreateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&flags.profile, "content-profile", "short_text", "content profile: short_text, thread, link_share, image_post, carousel, story, short_video, long_video")
+	cmd.Flags().StringVar(&flags.segmentsFile, "segments-file", "", "Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin")
 	cmd.Flags().StringVar(&flags.title, "title", "", "publication title")
 	cmd.Flags().StringVar(&flags.content, "content", "", "post text or fallback source text")
 	cmd.Flags().StringVar(&flags.file, "file", "", "read post/source text from file or '-' for stdin")
+	cmd.MarkFlagsMutuallyExclusive("segments-file", "file", "content")
 	cmd.Flags().StringVar(&flags.url, "url", "", "source URL for link shares")
 	cmd.Flags().StringVar(&flags.description, "description", "", "description field for link/video outputs")
 	cmd.Flags().StringVar(&flags.caption, "caption", "", "caption for image, carousel, story, or social video outputs")
@@ -958,4 +980,27 @@ func commentActions(comment api.Comment) string {
 		return "-"
 	}
 	return strings.Join(actions, ",")
+}
+
+func readOptionalPublicationSegments(file string) ([]api.PublicationSegmentInput, error) {
+	if file == "" {
+		return nil, nil
+	}
+	return readPublicationSegments(file)
+}
+func readPublicationSegments(file string) ([]api.PublicationSegmentInput, error) {
+	payload, err := contentFromFlags("", file)
+	if err != nil {
+		return nil, err
+	}
+	var segments []api.PublicationSegmentInput
+	decoder := json.NewDecoder(strings.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&segments); err != nil {
+		return nil, fmt.Errorf("decode publication segments: %w", err)
+	}
+	if len(segments) == 0 {
+		return nil, fmt.Errorf("segments JSON must contain at least one item")
+	}
+	return segments, nil
 }
