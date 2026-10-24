@@ -6,6 +6,10 @@ import {
   type AnalyticsRangeDays,
 } from "@openpost/query-catalog";
 import { gradientSvg } from "@openpost/dither/paint";
+import {
+  analyticsCalendarDate as calendarDate,
+  analyticsPickerDate,
+} from "@/lib/analytics-date-range";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { useState } from "react";
@@ -35,8 +39,6 @@ import { useNativeTheme } from "@/theme";
 const RANGES: readonly AnalyticsRangeDays[] = [7, 30, 90, 365, 0];
 const rangeLabel = (days: AnalyticsRangeDays) =>
   days === 0 ? "All time" : days === 365 ? "Last year" : `${days} days`;
-const calendarDate = (date: Date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 const number = new Intl.NumberFormat("en", {
   notation: "compact",
   maximumFractionDigits: 1,
@@ -153,8 +155,9 @@ function AnalyticsDashboard() {
               {picking ? (
                 <DateTimePicker
                   mode="date"
-                  value={new Date(`${picking === "from" ? draftFrom : draftTo}T12:00:00`)}
-                  maximumDate={new Date()}
+                  value={analyticsPickerDate(picking === "from" ? draftFrom : draftTo)}
+                  timeZoneName="UTC"
+                  maximumDate={new Date(`${calendarDate(new Date())}T23:59:59.999Z`)}
                   onChange={(event, date) => {
                     setPicking(null);
                     if (event.type === "set" && date) {

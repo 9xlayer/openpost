@@ -22,6 +22,8 @@ Snapshots include workspace and provider identity for scoped queries and deletio
 
 The worker handles `analytics_sweep`, `analytics_account_sync`, and `analytics_rendition_sync`. A partial unique job index prevents duplicate active work for the same subject. The sweep runs every 15 minutes, queues only due subjects, and always schedules its successor.
 
+Explicit Workspace refreshes can collect published renditions of any age through the existing permission, readiness, deduplication, and rate-limit gates. Background collection retains its seven-day eligibility window.
+
 Account checks start on a daily cadence. Rendition checks use 1, 3, 12, and 24 hour bands until day 7. Repeated unchanged results can increase the current interval to 8× its base cadence. Stored backoff and `Retry-After` apply to scheduled and manual refresh alike.
 
 Permission and unsupported states do not consume provider quota. OpenPost re-evaluates them during sweeps so reconnects and newly added adapter support recover without manual database changes. Rate limits preserve the last successful values and use the provider's retry hint when available.
