@@ -1,3 +1,6 @@
 {
-	"post": "We just shipped Workflows in OpenPost.\n\nTurn a GitHub release into a post for every channel, then review it before it goes out."
+	"hero": "Just shipped Workflows.",
+	"body": "Turn a GitHub release into a post for every channel.",
+	"short": "Workflows: GitHub release in, posts out.",
+	"reply": "Thanks! The docs are live."
 }
