@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { HttpClient } from "./client";
 import { OpenPostError } from "./errors";
-import { SDK_VERSION } from "./version";
+import { readFileSync } from "node:fs";
+const metadata = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 import { OpenPost } from "./index";
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
@@ -22,7 +23,7 @@ describe("HttpClient", () => {
     expect(url).toBe("https://example.test/api/v1/workspaces");
     const headers = init.headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer tok");
-    expect(headers["User-Agent"]).toBe(`openpost-sdk/${SDK_VERSION}`);
+    expect(headers["User-Agent"]).toBe(`openpost-sdk/${metadata.version}`);
   });
 
   it("throws missing_config without a token", async () => {
