@@ -18,6 +18,7 @@ test("Dither keeps the app's main routes usable on desktop and phones", async ({
   await authenticatePage(page, token);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  await page.clock.install();
   const surfaces = [
     ["/", "composer"],
     ["/publications?tab=drafts", "publications"],
@@ -56,6 +57,11 @@ test("Dither keeps the app's main routes usable on desktop and phones", async ({
         )
         .toEqual({ theme: "dither", errors: [] });
       await expect(page.locator("html")).toHaveAttribute("data-theme-scheme", scheme);
+      if (path === "/settings?tab=appearance") {
+        await expect(page.getByTestId("theme-library")).toBeVisible();
+        // Let delayed loaders settle, including those in inactive tabs.
+        await page.clock.runFor(1_000);
+      }
       await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
       await expect(
         path === "/record"

@@ -40,13 +40,13 @@
 			></InlineNotice
 		>{/if}
 	<Tabs.Content value="theme"
-		>{#if Themes}<Themes />{:else if !failed}<PageLoading
+		>{#if Themes}<Themes />{:else if !failed && selected === 'theme'}<PageLoading
 				layout="sections"
 				label={m.common_loading()}
 			/>{/if}</Tabs.Content
 	>
 	<Tabs.Content value="branding"
-		>{#if Branding}<Branding />{:else if !failed}<PageLoading
+		>{#if Branding}<Branding />{:else if !failed && selected === 'branding'}<PageLoading
 				layout="sections"
 				label={m.common_loading()}
 			/>{/if}</Tabs.Content
