@@ -38,6 +38,9 @@
     "apps/docs/content/docs/**/*.mdx",
     "apps/docs/*.{mjs,ts}",
     "apps/docs/scripts/**/*.{js,mjs,ts}",
+    // The package subpath resolves to build output, so mark the authored editor
+    // used by the composer as the source root for this dynamic package boundary.
+    "packages/ui/src/lib/components/post-editor.svelte",
     // Published and shared library surfaces.
     "packages/*/src/index.{js,mjs,ts}",
     // n8n loads nodes/credentials from dist/ at runtime; the TS sources are

@@ -5,7 +5,6 @@ import {
   type PostTextValue,
   type StructuredPostTextValue,
 } from "@openpost/platform-text/mentions";
-export type { PostTextValue, MentionCandidate } from "@openpost/platform-text/mentions";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
 export function postTextDocument(value: PostTextValue): JSONContent {
