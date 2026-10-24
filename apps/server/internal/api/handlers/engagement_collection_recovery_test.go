@@ -56,9 +56,15 @@ func TestThreadsEngagementRefreshRequiresReplyReadGrant(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	var page EngagementPage
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &page))
-	require.Len(t, page.SyncStates, 1)
-	require.Equal(t, "permission_required", page.SyncStates[0].Status)
-	require.Equal(t, "missing_scope", page.SyncStates[0].ErrorCode)
+	require.Len(t, page.SyncStates, 2)
+	feeds := map[string]EngagementSyncState{}
+	for _, state := range page.SyncStates {
+		feeds[state.Feed] = state
+	}
+	require.Equal(t, "permission_required", feeds["comments"].Status)
+	require.Equal(t, "permission_required", feeds["mentions"].Status)
+	require.Equal(t, "missing_scope", feeds["comments"].ErrorCode)
+	require.Equal(t, "missing_scope", feeds["mentions"].ErrorCode)
 	_, err = db.NewUpdate().Model(account).Set("granted_scopes = ?", account.GrantedScopes+" threads_read_replies").WherePK().Exec(t.Context())
 	require.NoError(t, err)
 	refresh = srv.request(t, http.MethodPost, "/api/v1/engagement/refresh", map[string]string{"workspace_id": "ws-1"})

@@ -106,10 +106,18 @@ type EngagementReceivedFacts struct {
 }
 
 func NewEngagementReceivedOutcome(facts EngagementReceivedFacts) (Outcome, error) {
+	kind := strings.TrimSpace(facts.Kind)
+	if kind == "" {
+		kind = "comment"
+	}
+	payload := map[string]any{"engagement_id": facts.EngagementID, "provider": facts.Provider, "activity_kind": kind}
+	putOptionalFact(payload, "publication_id", facts.PublicationID)
+	putOptionalFact(payload, "rendition_id", facts.RenditionID)
+	putOptionalFact(payload, "author_name", facts.AuthorName)
 	return newOutcome(semanticOutcome{
 		recipientID: facts.RecipientUserID, workspaceID: facts.WorkspaceID,
 		topic: TypeNewEngagement, eventID: facts.EngagementID,
-		payload: map[string]any{"engagement_id": facts.EngagementID, "publication_id": facts.PublicationID, "rendition_id": facts.RenditionID, "provider": facts.Provider, "author_name": facts.AuthorName, "activity_kind": facts.Kind},
+		payload: payload,
 	})
 }
 

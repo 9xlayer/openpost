@@ -135,7 +135,11 @@ func (s *Service) newEngagementActionJob(actor Actor, item models.EngagementItem
 	if err != nil {
 		return nil, err
 	}
-	job, err := jobregistry.NewJob(JobTypeEngagementAct, string(payload), s.now())
+	jobType := JobTypeEngagementAct
+	if item.Kind == "review" {
+		jobType = jobregistry.TypeEngagementReviewAction
+	}
+	job, err := jobregistry.NewJob(jobType, string(payload), s.now())
 	if err != nil {
 		return nil, err
 	}

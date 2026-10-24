@@ -12,6 +12,7 @@ import (
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/uptrace/bun"
 )
 
 const (
@@ -158,4 +159,28 @@ func JobExecutionFromContext(ctx context.Context) (JobExecution, bool) {
 func operationIdempotencyKey(operationID string) string {
 	digest := sha256.Sum256([]byte(strings.TrimSpace(operationID)))
 	return "pw_" + hex.EncodeToString(digest[:16])
+}
+
+// RequireCurrentJobExecution locks a worker's current lease when called in a
+// transaction. Synchronous callers without a job retain their existing fence.
+func RequireCurrentJobExecution(ctx context.Context, db bun.IDB, jobID string) error {
+	execution, ok := JobExecutionFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	if jobID != "" && jobID != execution.ID {
+		return ErrWriteInProgress
+	}
+	result, err := db.NewUpdate().Model((*models.Job)(nil)).Set("id=id").Where("id=? AND status='processing' AND attempts=? AND locked_at=?", execution.ID, execution.Attempt, execution.LockedAt).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	count, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if count != 1 {
+		return ErrWriteInProgress
+	}
+	return nil
 }

@@ -71,8 +71,7 @@ func (s *Service) persistAccountActivity(ctx context.Context, tx bun.Tx, account
 	if err := validateAccountActivity(remote); err != nil {
 		return err
 	}
-	var existing models.EngagementItem
-	err := tx.NewSelect().Model(&existing).Where("social_account_id=? AND remote_id=?", account.ID, remote.ID).Scan(ctx)
+	existing, err := findEngagementIdentity(ctx, tx, account, remote.ID)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
@@ -267,4 +266,12 @@ func retainRecentReviewReceipt(review *inboxactivity.ReviewContext, existing mod
 		return
 	}
 	review.OwnerReply = old
+}
+
+func findEngagementIdentity(ctx context.Context, db bun.IDB, account models.SocialAccount, remoteID string) (models.EngagementItem, error) {
+	var existing models.EngagementItem
+	err := db.NewSelect().Model(&existing).Where("social_account_id=? AND platform=?", account.ID, account.Platform).
+		Where("(native_remote_id=? OR remote_id=?)", inboxactivity.NativeIdentity(account.Platform, remoteID), remoteID).
+		OrderExpr("CASE WHEN rendition_id IS NOT NULL THEN 0 ELSE 1 END").Order("created_at ASC", "id ASC").Limit(1).Scan(ctx)
+	return existing, err
 }

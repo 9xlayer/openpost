@@ -12,6 +12,7 @@ import (
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/notifications"
 	"github.com/openpost/backend/internal/services/providerwrite"
 	"github.com/stretchr/testify/require"
 )
@@ -67,6 +68,7 @@ func executeAccountActivity(t *testing.T, s *Service, job models.Job) {
 
 func TestAccountActivityResumesPartialPagesAndPreservesSharedReadState(t *testing.T) {
 	s := admissionTestService(t)
+	s.notifications = notifications.NewService(s.db)
 	s.tokenSource = moderationTokens{}
 	provider := &activityProvider{fail: "second", pages: map[string]platform.AccountActivityPage{
 		"":       {Items: []platform.AccountActivityItem{activityMention("one", "First mention")}, NextCursor: "second"},
@@ -177,4 +179,58 @@ func TestAccountActivityRetainsContinuationWhenPageBudgetIsExhausted(t *testing.
 	require.NoError(t, s.db.NewSelect().Model(&state).WherePK().Scan(t.Context()))
 	require.Empty(t, state.Cursor)
 	require.False(t, state.Watermark.IsZero())
+}
+
+type registeredActivityProvider struct {
+	moderationProvider
+	activityProvider
+}
+
+func TestRuntimeEngagementRegistrationAlsoCollectsMentions(t *testing.T) {
+	s := admissionTestService(t)
+	s.tokenSource = moderationTokens{}
+	provider := &registeredActivityProvider{activityProvider: activityProvider{fail: "never", pages: map[string]platform.AccountActivityPage{"": {Items: []platform.AccountActivityItem{activityMention("runtime", "New instance mention")}}}}}
+	s.SetProvider("bluesky", provider)
+	_, err := s.RefreshWorkspace(t.Context(), Actor{UserID: "u"}, "w", true)
+	require.NoError(t, err)
+	count, err := s.db.NewSelect().Model((*models.Job)(nil)).Where("type=?", jobregistry.TypeEngagementAccountSync).Count(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, count, "the OAuth runtime registration seam must enable activity without a restart")
+}
+
+func TestMentionUnderNonRootPostRetainsExistingCommentIdentity(t *testing.T) {
+	s := admissionTestService(t)
+	s.tokenSource = moderationTokens{}
+	legacy := `{"_root":{"cid":"owned-reply-cid","uri":"at://did:plc:owner/app.bsky.feed.post/owned-reply"},"cid":"mention-cid","uri":"at://did:plc:alice/app.bsky.feed.post/mention"}`
+	incoming := `{"_root":{"cid":"root-cid","uri":"at://did:plc:root/app.bsky.feed.post/root"},"cid":"mention-cid","uri":"at://did:plc:alice/app.bsky.feed.post/mention"}`
+	_, err := s.db.NewUpdate().Model((*models.EngagementItem)(nil)).Set("remote_id=?", legacy).Set("read_at=?", time.Now().UTC()).Set("archived_at=?", time.Now().UTC()).Where("id='c'").Exec(t.Context())
+	require.NoError(t, err)
+	var rendition models.Rendition
+	var account models.SocialAccount
+	var publication models.Publication
+	require.NoError(t, s.db.NewSelect().Model(&rendition).Where("id='r'").Scan(t.Context()))
+	require.NoError(t, s.db.NewSelect().Model(&account).Where("id='a'").Scan(t.Context()))
+	require.NoError(t, s.db.NewSelect().Model(&publication).Where("id='p'").Scan(t.Context()))
+	err = s.persistEngagementComments(t.Context(), rendition, account, publication, []platform.Comment{{ID: legacy, Text: "Existing comment", CanReply: true}}, time.Now().UTC())
+	require.NoError(t, err)
+	// An older comment keeps its public ID and action receipts when discovered as a mention.
+	_, err = s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "c", "reply", "Saved intent", "existing-receipt")
+	require.NoError(t, err)
+	mention := activityMention(incoming, "Mentioned below our reply")
+	mention.Subject.RemoteID = "at://did:plc:alice/app.bsky.feed.post/mention"
+	provider := &activityProvider{fail: "never", pages: map[string]platform.AccountActivityPage{"": {Items: []platform.AccountActivityItem{mention}}}}
+	s.SetActivityProvider("bluesky", provider)
+	executeAccountActivity(t, s, accountActivityReceipt(t, s))
+	count, err := s.db.NewSelect().Model((*models.EngagementItem)(nil)).Count(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 1, count, "native identity must deduplicate notification and comment representations")
+	detail, err := s.GetEngagement(t.Context(), Actor{UserID: "u"}, "w", "c")
+	require.NoError(t, err)
+	require.Equal(t, "mention", detail.Item.Kind)
+	require.Equal(t, legacy, detail.Item.RemoteID)
+	require.False(t, detail.Item.ReadAt.IsZero())
+	require.False(t, detail.Item.ArchivedAt.IsZero())
+	var receipts int
+	require.NoError(t, s.db.NewRaw("SELECT COUNT(*) FROM engagement_operations WHERE item_id='c'").Scan(t.Context(), &receipts))
+	require.Equal(t, 1, receipts)
 }

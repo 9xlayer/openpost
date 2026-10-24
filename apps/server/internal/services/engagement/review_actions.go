@@ -65,7 +65,12 @@ type reviewActionResult struct {
 	known bool
 }
 
-func (s *Service) performReviewAction(ctx context.Context, item models.EngagementItem, input engagementActionJob) error {
+func (s *Service) performReviewAction(ctx context.Context, item models.EngagementItem, input engagementActionJob) (resultErr error) {
+	defer func() {
+		if resultErr != nil {
+			resultErr = errors.Join(resultErr, s.releaseRejectedReviewOperation(ctx, item, input.ReviewJobID))
+		}
+	}()
 	authority, reviews, err := s.reviewActionAuthority(ctx, item, input)
 	if err != nil {
 		return err
@@ -94,7 +99,7 @@ func (s *Service) performReviewAction(ctx context.Context, item models.Engagemen
 		return reconcileReviewAction(readCtx, reviews, token, authority.Account.AccountID, reference, input, &result)
 	})
 	if writeErr != nil {
-		return errors.Join(writeErr, s.releaseRejectedReviewOperation(ctx, item, input.ReviewJobID))
+		return writeErr
 	}
 
 	if !result.known {
@@ -185,6 +190,9 @@ func (s *Service) commitReviewReply(ctx context.Context, item models.EngagementI
 		if err := organizationguard.LockWorkspace(ctx, tx, item.WorkspaceID); err != nil {
 			return err
 		}
+		if err := providerwrite.RequireCurrentJobExecution(ctx, tx, jobID); err != nil {
+			return err
+		}
 		var operation models.EngagementReviewOperation
 		if err := tx.NewSelect().Model(&operation).Where("item_id=?", item.ID).Scan(ctx); err != nil {
 			return err
@@ -226,6 +234,9 @@ func (s *Service) reviewActionAuthority(ctx context.Context, item models.Engagem
 	}
 	if execution, ok := providerwrite.JobExecutionFromContext(ctx); !ok || execution.ID != input.ReviewJobID {
 		return activityAuthority{}, nil, fmt.Errorf("review reply job identity changed")
+	}
+	if err := providerwrite.RequireCurrentJobExecution(ctx, s.db, input.ReviewJobID); err != nil {
+		return activityAuthority{}, nil, err
 	}
 	authority, err := s.loadActivityAuthority(ctx, s.db, item.SocialAccountID)
 	if err != nil {
@@ -290,13 +301,10 @@ func (s *Service) releaseRejectedReviewOperation(ctx context.Context, item model
 		}
 		var attempt models.ProviderWriteAttempt
 		err = tx.NewSelect().Model(&attempt).Where("operation_id=?", "engagement-review:"+jobID).Order("attempt_number DESC").Limit(1).Scan(ctx)
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil
-		}
-		if err != nil {
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if attempt.Status != providerwrite.StatusDefiniteFailure {
+		if err == nil && attempt.Status != providerwrite.StatusDefiniteFailure {
 			return nil
 		}
 		_, err = tx.NewUpdate().Model((*models.EngagementReviewOperation)(nil)).Set("state='rejected'").Set("updated_at=?", s.now()).Where("item_id=? AND job_id=? AND state='active'", item.ID, jobID).Exec(ctx)

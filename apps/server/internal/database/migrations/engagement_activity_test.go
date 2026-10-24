@@ -41,7 +41,7 @@ func exerciseAccountActivityUpgrade(t *testing.T, db *bun.DB) {
 		`INSERT INTO social_accounts(id,workspace_id,slug,platform,account_id,access_token_encrypted) VALUES('activity-account','activity-ws','activity','bluesky','did:plc:sample',?)`,
 		`INSERT INTO publications(id,workspace_id,created_by,title,status) VALUES('activity-post','activity-ws','activity-user','Activity','draft')`,
 		`INSERT INTO renditions(id,publication_id,social_account_id,platform,profile) VALUES('activity-rendition','activity-post','activity-account','bluesky','short_text')`,
-		`INSERT INTO engagement_items(id,workspace_id,rendition_id,social_account_id,platform,remote_id,body,read_at,last_seen_at) VALUES('activity-comment','activity-ws','activity-rendition','activity-account','bluesky','comment','Original',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+		`INSERT INTO engagement_items(id,workspace_id,rendition_id,social_account_id,platform,remote_id,body,read_at,last_seen_at) VALUES('activity-comment','activity-ws','activity-rendition','activity-account','bluesky','{"uri":"at://did:plc:alice/app.bsky.feed.post/comment","cid":"comment-cid"}','Original',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
 		`INSERT INTO engagement_operations(workspace_id,user_id,item_id,operation_id,body_hash,job_id) VALUES('activity-ws','activity-user','activity-comment','operation','hash','job')`,
 	} {
 		var args []any
@@ -59,6 +59,9 @@ func exerciseAccountActivityUpgrade(t *testing.T, db *bun.DB) {
 	var read bool
 	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT body,read_at IS NOT NULL FROM engagement_items WHERE id='activity-comment'`).Scan(&body, &read))
 	require.Equal(t, "Original", body)
+	var nativeID string
+	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT native_remote_id FROM engagement_items WHERE id='activity-comment'`).Scan(&nativeID))
+	require.Equal(t, "at://did:plc:alice/app.bsky.feed.post/comment", nativeID)
 	require.True(t, read)
 	require.NoError(t, db.QueryRowContext(t.Context(), `SELECT job_id FROM engagement_operations WHERE item_id='activity-comment'`).Scan(&receipt))
 	require.Equal(t, "job", receipt)

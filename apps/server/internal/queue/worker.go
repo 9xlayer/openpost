@@ -1037,6 +1037,9 @@ func classifyRepurposeFailure(err error) classifiedJobFailure {
 }
 
 func classifyJobContinuation(processErr error) (classifiedJobFailure, bool) {
+	if retryAfter, pending := providerwrite.IsPending(processErr); pending {
+		return classifiedJobFailure{retryable: true, retryAfter: retryAfter, message: "The provider write is awaiting reconciliation. OpenPost will check its outcome before sending again.", preserveAttempts: true}, true
+	}
 	if errors.Is(processErr, imagegeneration.ErrBillingPending) || errors.Is(processErr, imagegeneration.ErrUnavailable) {
 		return classifiedJobFailure{retryable: true, retryAfter: 5 * time.Minute, message: "Image generation is waiting for configuration or billing.", preserveAttempts: true}, true
 	}

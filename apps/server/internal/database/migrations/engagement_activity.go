@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/openpost/backend/internal/inboxactivity"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect"
 )
@@ -77,4 +78,23 @@ func prepareAccountEngagement(ctx context.Context, db *bun.DB) (result error) {
 		}
 		return rows.Err()
 	})
+}
+
+func backfillEngagementNativeIdentity(ctx context.Context, db *bun.DB) error {
+	var after string
+	for {
+		var rows []struct{ ID, Platform, RemoteID string }
+		if err := db.NewRaw("SELECT id,platform,remote_id FROM engagement_items WHERE native_remote_id='' AND id>? ORDER BY id LIMIT 100", after).Scan(ctx, &rows); err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		for _, row := range rows {
+			if _, err := db.ExecContext(ctx, "UPDATE engagement_items SET native_remote_id=? WHERE id=? AND native_remote_id=''", inboxactivity.NativeIdentity(row.Platform, row.RemoteID), row.ID); err != nil {
+				return err
+			}
+			after = row.ID
+		}
+	}
 }

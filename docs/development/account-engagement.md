@@ -27,6 +27,7 @@ cannot be deleted. An owner reply is one replaceable value, limited to 4096
 UTF-8 bytes, with moderation state independent of submission acceptance.
 Unknown moderation and policy values remain inspectable.
 
+Review action jobs resume through their provider-write fence after a worker crash.
 Review writes use durable admission and provider-write receipts, serializing
 replacement and removal per review. Ambiguous writes reconcile through a read
 before any resend. A short propagation window preserves just-accepted local
@@ -35,7 +36,9 @@ independently of review update timestamps, after listing pages, at most two
 reviews per job. Read reconciliation can record an accepted write after the
 initiating actor loses edit permission; fresh writes still require permission.
 
-Migration 171 preserves existing comment foreign keys and dependent receipts.
+Migrations 171 and 172 preserve existing comment foreign keys and dependent receipts.
+Native object identities deduplicate Bluesky comments and mention notifications
+without replacing existing item IDs or opaque reply references.
 PostgreSQL drops the Rendition non-null constraint. SQLite rebuilds the installed
 table on one connection with foreign keys disabled outside the transaction,
 preserves columns/indexes/triggers and verifies foreign keys before commit.

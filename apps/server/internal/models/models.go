@@ -1738,6 +1738,7 @@ type EngagementItem struct {
 	SocialAccountID      string                 `bun:"social_account_id,notnull" json:"social_account_id"`
 	Platform             string                 `bun:",notnull" json:"platform"`
 	RemoteID             string                 `bun:"remote_id,notnull" json:"remote_id"`
+	NativeRemoteID       string                 `bun:"native_remote_id,notnull,default:''" json:"-"`
 	ParentRemoteID       string                 `bun:"parent_remote_id,notnull,default:''" json:"parent_remote_id"`
 	ConversationRemoteID string                 `bun:"conversation_remote_id,notnull,default:''" json:"conversation_remote_id"`
 	AuthorRemoteID       string                 `bun:"author_remote_id,notnull,default:''" json:"author_remote_id"`

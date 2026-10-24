@@ -2,7 +2,11 @@
 // provider payloads, credentials, persistence or transport behavior.
 package inboxactivity
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
 
 type PostReference struct {
 	URI string `json:"uri"`
@@ -32,4 +36,18 @@ type EngagementSubject struct {
 	Root       *PostReference `json:"root,omitempty"`
 	Parent     *PostReference `json:"parent,omitempty"`
 	Review     *ReviewContext `json:"review,omitempty"`
+}
+
+// NativeIdentity excludes historical reply-routing context from object identity.
+// The original remote reference remains stored for existing action receipts.
+func NativeIdentity(provider, remoteID string) string {
+	if provider == "bluesky" {
+		var reference struct {
+			URI string `json:"uri"`
+		}
+		if json.Unmarshal([]byte(remoteID), &reference) == nil && strings.HasPrefix(reference.URI, "at://") && len(reference.URI) <= 512 {
+			return reference.URI
+		}
+	}
+	return remoteID
 }

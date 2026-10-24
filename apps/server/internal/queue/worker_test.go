@@ -11,10 +11,13 @@ import (
 
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/crypto"
+	"github.com/openpost/backend/internal/services/engagement"
+	"github.com/openpost/backend/internal/services/providerwrite"
 	"github.com/openpost/backend/internal/services/publicationbuilder"
 	"github.com/openpost/backend/internal/services/publisher"
 	repostservice "github.com/openpost/backend/internal/services/reposts"
@@ -475,4 +478,55 @@ func TestExhaustedBuildJobReportsCommittedDomainFailure(t *testing.T) {
 	require.Len(t, recorder.Events, 1)
 	require.Equal(t, telemetry.EventPublicationBuildFailed, recorder.Events[0].Name)
 	require.Equal(t, "job_failed", recorder.Events[0].Properties["error_code"])
+}
+
+func TestPendingProviderWriteContinuesBeyondOrdinaryAttemptLimit(t *testing.T) {
+	db := createTestDB(t)
+	defer db.Close()
+	worker := NewWorker(db, "review-worker", time.Second, nil, nil, stubStorage{})
+	now := time.Now().UTC()
+	job := &models.Job{ID: "pending-review", Type: jobregistry.TypeEngagementAction, Status: jobStatusProcessing, LockedBy: worker.workerID, LockedAt: now, Attempts: 1, MaxAttempts: 1, RunAt: now}
+	_, err := db.NewInsert().Model(job).Exec(t.Context())
+	require.NoError(t, err)
+	pending := &providerwrite.OutcomeError{Kind: string(platform.PublishSubmissionPending), RetryAfter: time.Minute, Err: providerwrite.ErrOutcomePending}
+	worker.finishFailedJob(t.Context(), job, pending)
+	require.NoError(t, db.NewSelect().Model(job).WherePK().Scan(t.Context()))
+	require.Equal(t, jobStatusPending, job.Status)
+	require.LessOrEqual(t, job.Attempts, 1)
+	require.True(t, job.RunAt.After(now.Add(50*time.Second)))
+}
+
+type reviewRecoveryGate struct{}
+
+func (reviewRecoveryGate) IsEffectiveEnabled(context.Context, string, string) (bool, error) {
+	return true, nil
+}
+func TestReviewReplyCrashRecoveryKeepsItsDurableIntent(t *testing.T) {
+	db, err := database.InitDBWithDriver("sqlite", "file:review-recovery-"+t.Name()+"?mode=memory&cache=shared")
+	require.NoError(t, err)
+	defer db.Close()
+	require.NoError(t, database.CreateSchema(db))
+	for _, row := range []any{
+		&models.User{ID: "u", Email: "review-recovery@example.test"},
+		&models.Organization{ID: "o", Name: "Org", CreatedByID: "u"},
+		&models.Workspace{ID: "w", Name: "Workspace", OrganizationID: "o"},
+		&models.WorkspaceMember{WorkspaceID: "w", UserID: "u", Role: models.WorkspaceRoleAdmin, Status: models.WorkspaceMemberStatusActive},
+		&models.SocialAccount{ID: "a", WorkspaceID: "w", Slug: "reviews", Platform: "googlebusiness", AccountID: "accounts/1/locations/2", AccessTokenEnc: []byte("synthetic"), IsActive: true},
+		&models.EngagementItem{ID: "review", WorkspaceID: "w", SocialAccountID: "a", Platform: "googlebusiness", RemoteID: "accounts/1/locations/2/reviews/3", Kind: "review", CanReply: true, SubjectJSON: `{"kind":"review","remote_id":"accounts/1/locations/2/reviews/3","review":{"anonymous":true}}`, LastSeenAt: time.Now().UTC()},
+	} {
+		_, err = db.NewInsert().Model(row).Exec(t.Context())
+		require.NoError(t, err)
+	}
+	service := engagement.NewService(db, nil, nil)
+	service.SetFeatureGate(reviewRecoveryGate{})
+	id, err := service.QueueEngagementActionReceipt(t.Context(), engagement.Actor{UserID: "u"}, "review", "reply", "Thanks", "crash")
+	require.NoError(t, err)
+	_, err = db.NewUpdate().Model((*models.Job)(nil)).Set("status='processing'").Set("attempts=1").Set("locked_by='old-worker'").Set("locked_at=?", time.Now().UTC().Add(-time.Hour)).Where("id=?", id).Exec(t.Context())
+	require.NoError(t, err)
+	worker := NewWorker(db, "new-worker", time.Second, nil, nil, stubStorage{})
+	worker.requeueStaleProcessingJobs(t.Context())
+	var job models.Job
+	require.NoError(t, db.NewSelect().Model(&job).Where("id=?", id).Scan(t.Context()))
+	require.Equal(t, jobStatusPending, job.Status, "a review intent must resume through its write fence after a worker crash")
+	require.Contains(t, job.Payload, "Thanks")
 }

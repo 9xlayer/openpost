@@ -24,6 +24,7 @@ const (
 	TypeEngagementAccountSync   = "engagement_account_sync"
 	TypeMessagesSync            = "messages_sync"
 	TypeEngagementAction        = "engagement_action"
+	TypeEngagementReviewAction  = "engagement_review_action"
 	TypeMessageSend             = "message_send"
 	TypeNotificationEmail       = "notification_email"
 	TypeQueueReminderSweep      = "queue_reminder_sweep"
@@ -146,6 +147,10 @@ var definitions = map[string]Definition{
 		"A later Messaging sweep remains queued; this sweep will not retry."),
 	TypeMessagesSync: providerReadDefinition(TypeMessagesSync, 5, ExecuteMessaging, RecoveryRequeue,
 		"Messaging collection failed. OpenPost will retry when the failure is temporary.", ""),
+	TypeEngagementReviewAction: {
+		Type: TypeEngagementReviewAction, DefaultMaxAttempts: 1, Execution: ExecuteEngagement, Failure: FailureProviderWrite, Recovery: RecoveryRequeue,
+		FailureMessage: "The review reply could not complete. Inspect its receipt before replacing the reply.",
+	},
 	TypeEngagementAction: providerWriteDefinition(TypeEngagementAction, ExecuteEngagement,
 		"The provider write failed. OpenPost did not retry because the provider result may be ambiguous."),
 	TypeMessageSend: providerWriteDefinition(TypeMessageSend, ExecuteMessaging,

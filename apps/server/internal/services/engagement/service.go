@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/openpost/backend/internal/inboxactivity"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
@@ -81,6 +82,9 @@ func (s *Service) SetProvider(name string, adapter platform.EngagementAdapter) {
 	s.providersMu.Lock()
 	defer s.providersMu.Unlock()
 	s.providers[name] = adapter
+	if activity, ok := adapter.(platform.AccountActivityAdapter); ok {
+		s.activityProviders[name] = activity
+	}
 }
 
 func (s *Service) SetFeatureGate(g FeatureGate) {
@@ -138,7 +142,7 @@ func (s *Service) HandleJob(ctx context.Context, jobType, payload string) error 
 			return fmt.Errorf("decode account engagement sync: %w", err)
 		}
 		return s.syncAccountActivity(ctx, input)
-	case JobTypeEngagementAct:
+	case JobTypeEngagementAct, jobregistry.TypeEngagementReviewAction:
 		var input engagementActionJob
 		if err := json.Unmarshal([]byte(payload), &input); err != nil {
 			return fmt.Errorf("decode engagement action: %w", err)
@@ -349,7 +353,7 @@ func (s *Service) syncEngagement(ctx context.Context, renditionID string) error 
 	now := s.now()
 	var publication models.Publication
 	_ = s.db.NewSelect().Model(&publication).Where("id = ?", rendition.PublicationID).Scan(ctx)
-	if _, err := s.persistEngagementComments(ctx, rendition, account, publication, comments, now); err != nil {
+	if err := s.persistEngagementComments(ctx, rendition, account, publication, comments, now); err != nil {
 		return err
 	}
 	publishedAt := publication.ActualRunAt
@@ -535,9 +539,11 @@ func (s *Service) persistEngagementComments(
 	publication models.Publication,
 	comments []platform.Comment,
 	now time.Time,
-) ([]models.EngagementItem, error) {
-	newItems := make([]models.EngagementItem, 0)
+) error {
 	err := s.db.RunInTx(ctx, &sql.TxOptions{}, func(ctx context.Context, tx bun.Tx) error {
+		if err := organizationguard.LockWorkspace(ctx, tx, account.WorkspaceID); err != nil {
+			return err
+		}
 		for _, comment := range comments {
 			item, isNew, err := persistEngagementComment(ctx, tx, rendition, account, comment, now)
 			if err != nil {
@@ -546,14 +552,13 @@ func (s *Service) persistEngagementComments(
 			if !isNew {
 				continue
 			}
-			newItems = append(newItems, item)
 			if err := s.notifyNewEngagement(ctx, tx, publication, rendition, account, item); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	return newItems, err
+	return err
 }
 
 func persistEngagementComment(
@@ -573,10 +578,7 @@ func persistEngagementComment(
 			Exec(ctx)
 		return models.EngagementItem{}, false, err
 	}
-	var existing models.EngagementItem
-	existingErr := tx.NewSelect().Model(&existing).
-		Where("social_account_id = ? AND remote_id = ?", account.ID, comment.ID).
-		Scan(ctx)
+	existing, existingErr := findEngagementIdentity(ctx, tx, account, comment.ID)
 	exists := existingErr == nil
 	if existingErr != nil && !errors.Is(existingErr, sql.ErrNoRows) {
 		return models.EngagementItem{}, false, existingErr
@@ -633,7 +635,8 @@ func engagementItemFromComment(
 		ReviewReplyWrittenAt: existing.ReviewReplyWrittenAt,
 		SocialAccountID:      account.ID,
 		Platform:             account.Platform,
-		RemoteID:             boundedText(comment.ID, 512),
+		RemoteID:             firstNonEmpty(existing.RemoteID, boundedText(comment.ID, 512)),
+		NativeRemoteID:       inboxactivity.NativeIdentity(account.Platform, comment.ID),
 		ParentRemoteID:       boundedText(comment.ParentID, 512),
 		ConversationRemoteID: boundedText(comment.ConversationID, 512),
 		AuthorRemoteID:       boundedText(comment.AuthorID, 512),
@@ -884,11 +887,20 @@ func (s *Service) performEngagementAction(ctx context.Context, input engagementA
 	if !ok {
 		return fmt.Errorf("engagement actions are unsupported")
 	}
+	var authority *activityAuthority
+	if item.Kind == "mention" {
+		current, err := s.loadActivityAuthority(ctx, s.db, account.ID)
+		if err != nil {
+			return err
+		}
+		authority = &current
+		account = current.Account
+	}
 	token, err := s.tokenSource.GetValidAccessToken(ctx, account.ID)
 	if err != nil {
 		return err
 	}
-	err = s.executeEngagementAction(ctx, commenter, token, account, &item, input)
+	err = s.executeEngagementAction(ctx, commenter, token, account, &item, input, authority)
 	if err != nil {
 		_ = s.notifyReplyFailed(ctx, input.UserID, item, account, input)
 	}
@@ -916,6 +928,7 @@ func (s *Service) executeEngagementAction(
 	account models.SocialAccount,
 	item *models.EngagementItem,
 	input engagementActionJob,
+	authority *activityAuthority,
 ) error {
 	// Preserve the historical namespace so accepted writes fenced before the
 	// module extraction remain idempotent after deployment.
@@ -937,6 +950,18 @@ func (s *Service) executeEngagementAction(
 		Provider: account.Platform, Operation: "engagement_" + input.Action,
 		PayloadFingerprint: fingerprint,
 	}, func(sendCtx context.Context, control *providerwrite.Control) (platform.PublishResult, error) {
+		if err := s.authorize(sendCtx, item.WorkspaceID, Actor{UserID: input.UserID}, workspaceaccess.LevelEdit); err != nil {
+			return platform.PublishResult{}, err
+		}
+		if authority != nil {
+			current, err := s.loadActivityAuthority(sendCtx, s.db, account.ID)
+			if err != nil {
+				return platform.PublishResult{}, err
+			}
+			if current.Account.OAuthGrantID != authority.Account.OAuthGrantID || !current.GrantConsentedAt.Equal(authority.GrantConsentedAt) || !current.FeatureDecidedAt.Equal(authority.FeatureDecidedAt) || current.Account.GrantedScopes != authority.Account.GrantedScopes {
+				return platform.PublishResult{}, errActivityChanged
+			}
+		}
 		if err := control.Begin(platform.PublishResult{
 			ProviderState: "engagement_" + input.Action,
 			RetrySafety:   platform.PublishRetryNever,
@@ -1948,6 +1973,7 @@ func saveEngagementItem(ctx context.Context, tx bun.Tx, item models.EngagementIt
 		On("CONFLICT (social_account_id, remote_id) DO UPDATE").
 		Set("parent_remote_id = EXCLUDED.parent_remote_id").
 		Set("rendition_id = COALESCE(EXCLUDED.rendition_id, engagement_item.rendition_id)").
+		Set("native_remote_id = EXCLUDED.native_remote_id").
 		Set("kind = EXCLUDED.kind").
 		Set("subject_json = EXCLUDED.subject_json").
 		Set("review_reply_check_at = EXCLUDED.review_reply_check_at").

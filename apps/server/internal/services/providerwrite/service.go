@@ -76,6 +76,9 @@ func (c *Control) Begin(result platform.PublishResult) error {
 	durableCtx, cancel := durableContext(c.ctx)
 	defer cancel()
 	err := c.service.db.RunInTx(durableCtx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		if err := RequireCurrentJobExecution(txCtx, tx, c.attempt.JobID); err != nil {
+			return err
+		}
 		updated, updateErr := query.Conn(tx).Exec(txCtx)
 		if updateErr != nil {
 			return fmt.Errorf("enter provider write fence: %w", updateErr)

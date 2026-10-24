@@ -22,6 +22,7 @@ type reviewProvider struct {
 	reply                  *inboxactivity.ReviewReply
 	listingReply           *inboxactivity.ReviewReply
 	ambiguous              bool
+	afterWrite             func()
 	writes, deletes, reads int
 }
 
@@ -40,6 +41,9 @@ func (p *reviewProvider) GetReview(context.Context, string, string, string) (pla
 }
 func (p *reviewProvider) SetReviewReply(_ context.Context, _, _, _, message string) (inboxactivity.ReviewReply, error) {
 	p.writes++
+	if p.afterWrite != nil {
+		p.afterWrite()
+	}
 	p.reply = &inboxactivity.ReviewReply{Text: message, State: "PENDING", UpdatedAt: time.Now().UTC()}
 	if p.ambiguous {
 		return inboxactivity.ReviewReply{}, fmt.Errorf("connection dropped after Google accepted the reply")
@@ -213,4 +217,56 @@ func TestAcceptedReviewReplySurvivesStaleListingOnlyDuringPropagation(t *testing
 	detail, err = s.GetEngagement(t.Context(), actor, "w", "review")
 	require.NoError(t, err)
 	require.Equal(t, "Old reply", detail.Item.Subject.Review.OwnerReply.Text, "later provider edits remain authoritative")
+}
+
+type failingReviewTokens struct{}
+
+func (failingReviewTokens) GetValidAccessToken(context.Context, string) (string, error) {
+	return "", fmt.Errorf("reconnect required")
+}
+func TestUnsentReviewTokenFailureReleasesOperation(t *testing.T) {
+	s, provider := reviewTestService(t)
+	s.tokenSource = failingReviewTokens{}
+	job, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "First", "token-failure")
+	require.NoError(t, err)
+	require.Error(t, runReviewAction(t, s, job))
+	require.Zero(t, provider.writes)
+	s.tokenSource = moderationTokens{}
+	_, err = s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "New intent", "after-reconnect")
+	require.NoError(t, err)
+}
+func TestReviewReplyRejectsStaleWorkerBeforeSendAndCommit(t *testing.T) {
+	for _, when := range []string{"before send", "after send"} {
+		t.Run(when, func(t *testing.T) {
+			s, provider := reviewTestService(t)
+			id, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "Thanks", "stale")
+			require.NoError(t, err)
+			var job models.Job
+			require.NoError(t, s.db.NewSelect().Model(&job).Where("id=?", id).Scan(t.Context()))
+			job.Status = "processing"
+			job.Attempts = 1
+			job.LockedAt = time.Now().UTC()
+			_, err = s.db.NewUpdate().Model(&job).Column("status", "attempts", "locked_at").WherePK().Exec(t.Context())
+			require.NoError(t, err)
+			expire := func() {
+				_, err := s.db.NewUpdate().Model((*models.Job)(nil)).Set("status='failed'").Where("id=?", id).Exec(t.Context())
+				require.NoError(t, err)
+			}
+			if when == "before send" {
+				expire()
+			} else {
+				provider.afterWrite = expire
+			}
+			ctx := providerwrite.WithJobExecution(t.Context(), id, job.Attempts, job.LockedAt)
+			require.Error(t, s.HandleJob(ctx, job.Type, job.Payload))
+			if when == "before send" {
+				require.Zero(t, provider.writes)
+			} else {
+				require.Equal(t, 1, provider.writes)
+			}
+			detail, err := s.GetEngagement(t.Context(), Actor{UserID: "u"}, "w", "review")
+			require.NoError(t, err)
+			require.Nil(t, detail.Item.Subject.Review.OwnerReply, "a stale worker cannot commit Inbox state")
+		})
+	}
 }

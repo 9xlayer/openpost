@@ -199,3 +199,14 @@ func isIncomingMastodonMention(kind string, status *mastodonMessageStatus, accou
 func mastodonMentionReplyVisibility(visibility string) bool {
 	return visibility == "public" || visibility == "unlisted" || visibility == "private"
 }
+
+func (b *BlueskyAdapter) ReplyToAccountActivity(ctx context.Context, token, accountID, remoteID string, subject inboxactivity.EngagementSubject, message string) (string, error) {
+	if subject.Kind != "post" || subject.Root == nil || subject.Parent == nil || subject.Parent.URI != subject.RemoteID || subject.Root.URI == "" || subject.Root.CID == "" || subject.Parent.CID == "" || inboxactivity.NativeIdentity("bluesky", remoteID) != subject.RemoteID {
+		return "", fmt.Errorf("bluesky mention reply context is missing")
+	}
+	reference, err := json.Marshal(map[string]any{"uri": subject.Parent.URI, "cid": subject.Parent.CID, "_root": map[string]string{"uri": subject.Root.URI, "cid": subject.Root.CID}})
+	if err != nil {
+		return "", err
+	}
+	return b.ReplyToComment(ctx, token, accountID, string(reference), message)
+}

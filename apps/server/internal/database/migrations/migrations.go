@@ -210,6 +210,11 @@ func hasMigration(migrations []migration, version int64, name string) bool {
 }
 
 func finalizeMigrations(ctx context.Context, db *bun.DB, appliedSet map[int64]bool) error {
+	if appliedSet[172] {
+		if err := backfillEngagementNativeIdentity(ctx, db); err != nil {
+			return fmt.Errorf("engagement native identity backfill failed: %w", err)
+		}
+	}
 	if err := repairAppliedSchema(ctx, db, appliedSet); err != nil {
 		return err
 	}
