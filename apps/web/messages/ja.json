@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "メンション検索のリクエスト上限に達しました。しばらくしてから再試行してください。",
 	"app_branding_appearance_description": "テーマとアプリのブランド設定をカスタマイズします。",
 	"editor_mention_limit": "投稿には選択したメンションを最大50件含められます。",
-	"editor_mention_account_required": "このアカウントのメンションを選択するか、プレーンテキストを貼り付けてください。"
+	"editor_mention_account_required": "このアカウントのメンションを選択するか、プレーンテキストを貼り付けてください。",
+	"compose_copy_mentions_incompatible": "これらのメンションは別のネットワークまたはサーバーに属しています。対応する投稿先を選んでください。"
 }

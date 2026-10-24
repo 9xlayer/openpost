@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "Bahsetme araması istek sınırına ulaştı. Daha sonra yeniden deneyin.",
 	"app_branding_appearance_description": "Temaları ve uygulama markasını özelleştirin.",
 	"editor_mention_limit": "Bir gönderi en fazla 50 seçili bahsetme içerebilir.",
-	"editor_mention_account_required": "Bu hesap için bahsetmeleri seçin veya düz metin yapıştırın."
+	"editor_mention_account_required": "Bu hesap için bahsetmeleri seçin veya düz metin yapıştırın.",
+	"compose_copy_mentions_incompatible": "Bu bahsetmeler başka bir ağa veya sunucuya ait. Uyumlu paylaşım hedeflerini seçin."
 }

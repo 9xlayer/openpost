@@ -3,6 +3,77 @@ import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
 import { authenticatePage, createWorkspace, registerUser, composerDestinations } from "./helpers";
 
+test("copying a variant replaces its selected company identity", async ({ page, request }) => {
+  const auth = await registerUser(request, `mention-copy-${randomUUID()}@example.com`);
+  const workspace = await createWorkspace(request, auth.token, "Copy mention choices");
+  const accountIDs = [randomUUID(), randomUUID()];
+  for (const [index, id] of accountIDs.entries())
+    execFileSync("sqlite3", [
+      "-cmd",
+      ".timeout 5000",
+      `/tmp/openpost-app-e2e-${process.env.OPENPOST_APP_E2E_PORT ?? 18180}.db`,
+      `INSERT INTO social_accounts (id,workspace_id,slug,platform,account_id,account_username,access_token_encrypted,is_active) VALUES ('${id}','${workspace.id}','copy-${index}','linkedin','${id}','company-${index}',X'00',1);`,
+    ]);
+  const headers = { Authorization: `Bearer ${auth.token}` };
+  const created = await request.post("/api/v1/publications", {
+    headers,
+    data: {
+      workspace_id: workspace.id,
+      title: "Copy mentions",
+      content_profile: "short_text",
+      source_text: "Shared",
+      segments: [{ id: "source", body: "Shared" }],
+      renditions: accountIDs.map((id, index) => ({
+        social_account_id: id,
+        segments: [
+          {
+            publication_segment_id: "source",
+            body_override: "Hi Acme",
+            settings: {
+              mentions: {
+                version: 1,
+                spans: [
+                  {
+                    start: 3,
+                    end: 7,
+                    text: "Acme",
+                    target: {
+                      provider: "linkedin",
+                      kind: "page",
+                      id: `urn:li:organization:${index + 123}`,
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      })),
+    },
+  });
+  expect(created.ok(), await created.text()).toBe(true);
+  const publication = await created.json();
+  await authenticatePage(page, auth.token);
+  await page.goto(`/publications/${publication.id}?workspace_id=${workspace.id}`);
+  await page.locator(`#composer-destination-${accountIDs[0]}`).click();
+  await page
+    .getByRole("region", { name: "Destinations", exact: true })
+    .getByRole("button", { name: "More", exact: true })
+    .click();
+  await page.getByRole("menuitem", { name: "Copy rendition to…", exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Apply", exact: true }).click();
+  await expect
+    .poll(async () => {
+      const saved = await (
+        await request.get(`/api/v1/publications/${publication.id}`, { headers })
+      ).json();
+      return saved.renditions.find(
+        (rendition: { social_account_id: string }) => rendition.social_account_id === accountIDs[1],
+      ).segments[0].settings?.mentions?.spans?.[0]?.target?.id;
+    })
+    .toBe("urn:li:organization:123");
+});
+
 test("selected mentions survive edits, undo, copying, thread saves and reloads", async ({
   page,
   request,

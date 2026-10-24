@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "提及搜索请求已达上限，请稍后重试。",
 	"app_branding_appearance_description": "自定义主题和应用品牌。",
 	"editor_mention_limit": "每篇帖子最多可包含 50 个已选择的提及。",
-	"editor_mention_account_required": "请选择此账号的提及，或粘贴纯文本。"
+	"editor_mention_account_required": "请选择此账号的提及，或粘贴纯文本。",
+	"compose_copy_mentions_incompatible": "这些提及属于其他网络或服务器。请选择兼容的发布目标。"
 }

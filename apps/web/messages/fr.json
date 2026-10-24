@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "La recherche de mentions a atteint sa limite de requêtes. Réessayez plus tard.",
 	"app_branding_appearance_description": "Personnalisez les thèmes et l’identité de l’application.",
 	"editor_mention_limit": "Une publication peut inclure jusqu’à 50 mentions sélectionnées.",
-	"editor_mention_account_required": "Choisissez des mentions pour ce compte ou collez du texte brut."
+	"editor_mention_account_required": "Choisissez des mentions pour ce compte ou collez du texte brut.",
+	"compose_copy_mentions_incompatible": "Ces mentions appartiennent à un autre réseau ou serveur. Choisissez des destinations compatibles."
 }

@@ -615,6 +615,22 @@ function Composer({
         rendition.social_account_id && !activeAccounts.has(rendition.social_account_id),
     );
 
+    const addedAccounts = desired.filter(
+      (accountId) =>
+        !(contentSnapshot.current.renditions ?? []).some(
+          (rendition) => rendition.social_account_id === accountId,
+        ),
+    );
+    const addedCapabilities = addedAccounts.length
+      ? await resolveDestinationCapabilities(requestApi, {
+          accountIds: addedAccounts,
+          segments: buildReadinessSegments(
+            media.flatMap((item) => (item.mediaId ? [item.mediaId] : [])),
+          ),
+        })
+      : {};
+    requireCurrentQueryActor(scope);
+
     const initialScheduled = pub.scheduled_at ? new Date(pub.scheduled_at).getTime() : 0;
     const effectiveScheduledAt = scheduleOverride ?? scheduledAt;
     const scheduledChanged = (effectiveScheduledAt?.getTime() ?? 0) !== initialScheduled;
@@ -662,6 +678,7 @@ function Composer({
               renditionTextEdits[accountId],
               renditionMedia,
               annotatedRenditionEdits[accountId],
+              addedCapabilities[accountId]?.segment_strategy,
             ),
           ),
         },
@@ -1178,43 +1195,42 @@ function Composer({
               }}
             />
           ))}
-        {(renditionFields[accountId] ?? [{ key: "body", value: body }]).map(
-          (field, index, fields) => (
-            <View key={field.key} style={{ gap: spacing.extraSmall }}>
-              {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
-              <PostEditor
-                value={
-                  annotatedRenditionEdits[accountId]?.[field.key] ??
-                  mobileRenditionTextValue(
-                    contentSnapshot.current,
-                    accountId,
-                    field.key,
-                    renditionTextEdits[accountId]?.[field.key] ?? field.value,
-                  )
-                }
-                accountId={accountId}
-                platform={platform}
-                instanceURL={
-                  accounts.data?.find((account) => account.id === accountId)?.instance_url
-                }
-                workspaceId={pub.workspace_id}
-                label={`Custom text ${index + 1} for ${platformLabel(platform)}`}
-                placeholder="Account version"
-                onChange={(value) => {
-                  markEditorDirty();
-                  setAnnotatedRenditionEdits((current) => ({
-                    ...current,
-                    [accountId]: { ...current[accountId], [field.key]: value },
-                  }));
-                  setRenditionTextEdits((current) => ({
-                    ...current,
-                    [accountId]: { ...current[accountId], [field.key]: value.body },
-                  }));
-                }}
-              />
-            </View>
-          ),
-        )}
+        {(
+          renditionFields[accountId] ??
+          mobileRenditionTextFields(contentSnapshot.current, accountId)
+        ).map((field, index, fields) => (
+          <View key={field.key} style={{ gap: spacing.extraSmall }}>
+            {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
+            <PostEditor
+              value={
+                annotatedRenditionEdits[accountId]?.[field.key] ??
+                mobileRenditionTextValue(
+                  contentSnapshot.current,
+                  accountId,
+                  field.key,
+                  renditionTextEdits[accountId]?.[field.key] ?? field.value,
+                )
+              }
+              accountId={accountId}
+              platform={platform}
+              instanceURL={accounts.data?.find((account) => account.id === accountId)?.instance_url}
+              workspaceId={pub.workspace_id}
+              label={`Custom text ${index + 1} for ${platformLabel(platform)}`}
+              placeholder="Account version"
+              onChange={(value) => {
+                markEditorDirty();
+                setAnnotatedRenditionEdits((current) => ({
+                  ...current,
+                  [accountId]: { ...current[accountId], [field.key]: value },
+                }));
+                setRenditionTextEdits((current) => ({
+                  ...current,
+                  [accountId]: { ...current[accountId], [field.key]: value.body },
+                }));
+              }}
+            />
+          </View>
+        ))}
       </View>
     );
   }

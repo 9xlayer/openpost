@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "A busca de menções atingiu o limite de solicitações. Tente mais tarde.",
 	"app_branding_appearance_description": "Personalize os temas e a marca do aplicativo.",
 	"editor_mention_limit": "Uma publicação pode incluir até 50 menções selecionadas.",
-	"editor_mention_account_required": "Escolha menções para esta conta ou cole texto simples."
+	"editor_mention_account_required": "Escolha menções para esta conta ou cole texto simples.",
+	"compose_copy_mentions_incompatible": "Estas menções pertencem a outra rede ou servidor. Escolha destinos compatíveis."
 }

@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "Mention search is rate limited. Try again later.",
 	"app_branding_appearance_description": "Customize themes and app branding.",
 	"editor_mention_limit": "A post can include at most 50 selected mentions.",
-	"editor_mention_account_required": "Choose mentions for this account, or paste plain text."
+	"editor_mention_account_required": "Choose mentions for this account, or paste plain text.",
+	"compose_copy_mentions_incompatible": "These mentions belong to a different network or server. Choose matching destinations."
 }

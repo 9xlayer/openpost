@@ -529,6 +529,7 @@
 	let variants = $state<Map<string, Record<string, VariantPost>>>(new Map());
 	let activeVariantAccountId = $state<string | null>(null);
 	let destinationActionOpen = $state(false);
+	let destinationCopyError = $state('');
 	let destinationAction = $state<'copy' | 'media'>('copy');
 	let destinationActionTargetIds = $state<string[]>([]);
 
@@ -6520,6 +6521,7 @@
 			return;
 		}
 		destinationAction = action;
+		destinationCopyError = '';
 		destinationActionTargetIds = selectedAccountIds.filter(
 			(accountId) => accountId !== activeVariantAccountId
 		);
@@ -6528,6 +6530,7 @@
 
 	function toggleDestinationActionTarget(accountId: string) {
 		if (hasPendingPasteMediaUploads || !selectedAccountIds.includes(accountId)) return;
+		destinationCopyError = '';
 		destinationActionTargetIds = destinationActionTargetIds.includes(accountId)
 			? destinationActionTargetIds.filter((id) => id !== accountId)
 			: [...destinationActionTargetIds, accountId];
@@ -6556,6 +6559,26 @@
 			variants.get(sourceAccountId) ?? inheritedVariantRecord(),
 			posts
 		);
+		if (
+			destinationAction === 'copy' &&
+			currentTargetIds.some((targetId) => {
+				const account = selectedAccounts.find((account) => account.id === targetId);
+				return posts.some((post) => {
+					const variant = source[post.key];
+					const metadata = variant?.contentInherited ? post.mentions : variant?.mentions;
+					return metadata?.spans.some(
+						(span) =>
+							span.target.provider !== account?.platform ||
+							(span.target.provider === 'mastodon' &&
+								span.target.authority?.replace(/\/$/, '').toLowerCase() !==
+									account?.instance_url?.replace(/\/$/, '').toLowerCase())
+					);
+				});
+			})
+		) {
+			destinationCopyError = m.compose_copy_mentions_incompatible();
+			return;
+		}
 		const nextVariants = new SvelteMap(variants);
 		const nextSchedules = { ...scheduleOverridesByAccount };
 
@@ -6573,6 +6596,9 @@
 						? post.content
 						: sourceVariant.content;
 					targetVariant.contentInherited = sourceVariant.contentInherited;
+					targetVariant.mentions = sourceVariant.contentInherited
+						? post.mentions
+						: (sourceVariant.mentions ?? { version: 1, spans: [] });
 				}
 				targetVariant.mediaIds = sourceVariant.mediaInherited
 					? [...post.mediaIds]
@@ -8395,6 +8421,9 @@
 			{/each}
 		</div>
 		<Dialog.Footer>
+			{#if destinationCopyError}<p role="alert" class="text-sm text-destructive">
+					{destinationCopyError}
+				</p>{/if}
 			<Button type="button" variant="outline" onclick={() => (destinationActionOpen = false)}>
 				{m.common_cancel()}
 			</Button>

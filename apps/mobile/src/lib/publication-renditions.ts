@@ -1,4 +1,5 @@
 import {
+  joinPostText,
   readMentionMetadata,
   remapMentionMetadata,
   type PostTextValue,
@@ -50,6 +51,11 @@ export function mobileRenditionTextFields(publication: PublicationContent, accou
       value: authoredSegmentBody(publication, rendition, segment),
     }));
   }
+  if (!rendition && publication.segments?.length)
+    return publication.segments.map((source) => ({
+      key: `source:${source.id}`,
+      value: source.body,
+    }));
   return [{ key: "body", value: rendition?.body ?? publication.segments?.[0]?.body ?? "" }];
 }
 
@@ -110,24 +116,11 @@ export function mobileRenditionInput(
   textEdits: RenditionTextEdits | undefined,
   attachments: readonly Attachment[],
   annotatedEdits?: Readonly<Record<string, PostTextValue>>,
+  segmentStrategy: "preserve" | "join" = "preserve",
 ): components["schemas"]["RenditionInput"] {
   const rendition = publication.renditions?.find((item) => item.social_account_id === accountId);
   if (!rendition)
-    return {
-      ...(annotatedEdits?.body?.mentions !== undefined
-        ? {
-            segments: [
-              {
-                publication_segment_id: publication.segments?.[0]?.id,
-                body_override: annotatedEdits.body.body,
-                settings: { mentions: { version: 1, spans: annotatedEdits.body.mentions } },
-              },
-            ],
-          }
-        : {}),
-      social_account_id: accountId,
-      ...(textEdits?.body === undefined ? {} : { body: textEdits.body }),
-    };
+    return newMobileRendition(publication, accountId, textEdits, annotatedEdits, segmentStrategy);
   const segments = rendition.segments?.map((segment) => {
     const requirement = attachmentRequirement(segment.settings);
     const supplied = requirement
@@ -226,6 +219,55 @@ export function mobileRenditionInput(
   };
 }
 
+function newMobileRendition(
+  publication: PublicationContent,
+  accountId: string,
+  textEdits: RenditionTextEdits | undefined,
+  annotated: Readonly<Record<string, PostTextValue>> | undefined,
+  strategy: "preserve" | "join",
+): components["schemas"]["RenditionInput"] {
+  const sources = publication.segments ?? [];
+  const decisions = sources.map((source, index) => {
+    const key = `source:${source.id}`;
+    const edit = annotated?.[key] ?? (index === 0 ? annotated?.body : undefined);
+    const body = edit?.body ?? textEdits?.[key] ?? (index === 0 ? textEdits?.body : undefined);
+    const previous = readMentionMetadata(source.body, source.settings?.mentions);
+    const metadata =
+      edit?.mentions === undefined
+        ? body === undefined
+          ? undefined
+          : remapMentionMetadata(source.body, body, previous)
+        : { version: 1 as const, spans: edit.mentions };
+    return { source, body, metadata };
+  });
+  if (!decisions.some((decision) => decision.body !== undefined))
+    return { social_account_id: accountId };
+  if (strategy === "join" && sources.length > 1)
+    return {
+      social_account_id: accountId,
+      segments: [
+        {
+          publication_segment_id: sources[0].id,
+          source_overrides: decisions.map(({ source, body, metadata }) => ({
+            publication_segment_id: source.id,
+            media_inherited: true,
+            body_override: body,
+            mentions: metadata,
+          })),
+        },
+      ],
+    };
+  return {
+    social_account_id: accountId,
+    segments: decisions.map(({ source, body, metadata }) => ({
+      publication_segment_id: source.id,
+      body_override: body,
+      media_inherited: true,
+      ...(metadata ? { settings: { mentions: metadata } } : {}),
+    })),
+  };
+}
+
 export function renditionImages(rendition: Rendition): Media[] {
   const media =
     rendition.segments?.flatMap((segment) => segment.media ?? []) ?? rendition.media ?? [];
@@ -263,17 +305,37 @@ export function mobileRenditionTextValue(
   if (key.startsWith("source:")) {
     const segment = rendition?.segments?.find((segment) => segment.source_overrides?.length);
     if (segment) metadata = joinedSourceMentionValue(publication, segment, key.slice(7)).metadata;
+    else {
+      const source = publication.segments?.find((source) => source.id === key.slice(7));
+      metadata = readMentionMetadata(body, source?.settings?.mentions);
+    }
   } else {
     const segment = rendition?.segments?.find((segment) => key === `segment:${segment.position}`);
     const source = publication.segments?.find(
       (source) => source.id === segment?.publication_segment_id,
     );
-    metadata = readMentionMetadata(
-      body,
-      segment?.body_override !== undefined
-        ? segment.settings?.mentions
-        : source?.settings?.mentions,
-    );
+    if (
+      segment &&
+      segment.body_override == null &&
+      rendition?.segments?.length === 1 &&
+      (publication.segments?.length ?? 0) > 1
+    ) {
+      const joined = joinPostText(
+        (publication.segments ?? []).map((source) => ({
+          body: source.body,
+          mentions: readMentionMetadata(source.body, source.settings?.mentions)?.spans,
+        })),
+      );
+      metadata = remapMentionMetadata(
+        joined.body,
+        body,
+        joined.mentions === undefined ? undefined : { version: 1, spans: joined.mentions },
+      );
+    } else
+      metadata = readMentionMetadata(
+        body,
+        segment?.body_override != null ? segment.settings?.mentions : source?.settings?.mentions,
+      );
   }
   return { body, mentions: metadata?.spans };
 }

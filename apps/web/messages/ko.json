@@ -10104,5 +10104,6 @@
 	"editor_rate_limited": "멘션 검색 요청 한도에 도달했습니다. 나중에 다시 시도하세요.",
 	"app_branding_appearance_description": "테마와 앱 브랜딩을 맞춤 설정하세요.",
 	"editor_mention_limit": "게시물에는 선택한 멘션을 최대 50개 포함할 수 있습니다.",
-	"editor_mention_account_required": "이 계정의 멘션을 선택하거나 일반 텍스트를 붙여넣으세요."
+	"editor_mention_account_required": "이 계정의 멘션을 선택하거나 일반 텍스트를 붙여넣으세요.",
+	"compose_copy_mentions_incompatible": "이 멘션은 다른 네트워크 또는 서버에 속합니다. 호환되는 게시 대상을 선택하세요."
 }
