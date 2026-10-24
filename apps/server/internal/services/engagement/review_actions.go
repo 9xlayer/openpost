@@ -68,7 +68,6 @@ type reviewActionResult struct {
 func (s *Service) performReviewAction(ctx context.Context, item models.EngagementItem, input engagementActionJob) (resultErr error) {
 	defer func() {
 		if resultErr != nil {
-			resultErr = s.continueKnownReviewReceipt(ctx, input.ReviewJobID, resultErr)
 			resultErr = errors.Join(resultErr, s.releaseRejectedReviewOperation(ctx, item, input.ReviewJobID))
 		}
 	}()
@@ -321,7 +320,7 @@ func acceptedReviewContinuation(cause error) error {
 // Prerequisites can fail before Execute reloads an earlier provider receipt.
 // Keep recovering accepted or uncertain sends, including while tokens refresh.
 func (s *Service) continueKnownReviewReceipt(ctx context.Context, jobID string, failure error) error {
-	if _, pending := providerwrite.IsPending(failure); pending || errors.Is(failure, providerwrite.ErrReconciliationExpired) || jobID == "" {
+	if _, pending := providerwrite.IsPending(failure); pending || errors.Is(failure, providerwrite.ErrReconciliationExpired) || errors.Is(failure, sql.ErrNoRows) || jobID == "" {
 		return failure
 	}
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)

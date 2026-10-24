@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openpost/backend/internal/database"
 	"github.com/openpost/backend/internal/inboxactivity"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
@@ -276,7 +277,7 @@ func TestReviewReplyRejectsStaleWorkerBeforeSendAndCommit(t *testing.T) {
 }
 
 func TestAcceptedReviewRecoversFromReadAndLocalCommitFailuresWithoutResending(t *testing.T) {
-	for _, phase := range []string{"recovery read", "recovery token", "local commit"} {
+	for _, phase := range []string{"recovery read", "recovery token", "dispatch database", "local commit"} {
 		t.Run(phase, func(t *testing.T) {
 			s, provider := reviewTestService(t)
 			id, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "Thanks", "recover")
@@ -297,7 +298,22 @@ func TestAcceptedReviewRecoversFromReadAndLocalCommitFailuresWithoutResending(t 
 				_, err = s.db.ExecContext(t.Context(), `CREATE TRIGGER reject_review_save BEFORE UPDATE ON engagement_items BEGIN SELECT RAISE(FAIL,'storage unavailable'); END`)
 				require.NoError(t, err)
 			}
-			err = runReviewAction(t, s, id)
+			originalDB := s.db
+			if phase == "dispatch database" {
+				var job models.Job
+				require.NoError(t, s.db.NewSelect().Model(&job).Where("id=?", id).Scan(t.Context()))
+				job.Status, job.LockedAt = "processing", time.Now().UTC()
+				_, err = s.db.NewUpdate().Model(&job).Column("status", "locked_at").WherePK().Exec(t.Context())
+				require.NoError(t, err)
+				unavailable, openErr := database.InitDBWithDriver("sqlite", "file:unavailable-review-"+t.Name()+"?mode=memory&cache=shared")
+				require.NoError(t, openErr)
+				require.NoError(t, unavailable.Close())
+				s.db = unavailable
+				err = s.HandleJob(providerwrite.WithJobExecution(t.Context(), id, job.Attempts, job.LockedAt), job.Type, job.Payload)
+				s.db = originalDB
+			} else {
+				err = runReviewAction(t, s, id)
+			}
 			_, pending := providerwrite.IsPending(err)
 			require.True(t, pending, "accepted writes must retain a durable continuation after %s: %v", phase, err)
 			provider.getErr = nil

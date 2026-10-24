@@ -864,7 +864,14 @@ func enqueueProviderCommentJob(ctx context.Context, db bun.IDB, jobID, payload s
 	return err
 }
 
-func (s *Service) performEngagementAction(ctx context.Context, input engagementActionJob) error {
+func (s *Service) performEngagementAction(ctx context.Context, input engagementActionJob) (resultErr error) {
+	if input.ReviewJobID != "" {
+		defer func() {
+			if resultErr != nil {
+				resultErr = s.continueKnownReviewReceipt(ctx, input.ReviewJobID, resultErr)
+			}
+		}()
+	}
 	if input.ProviderCommentID != "" || input.RenditionID != "" || input.JobID != "" {
 		return s.performProviderCommentAction(ctx, input)
 	}
