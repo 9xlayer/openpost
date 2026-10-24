@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -36,7 +37,7 @@
 </script>
 
 <svelte:head>
-	<title>{page.status} — {title} — OpenPost</title>
+	<title>{page.status} — {title} — {appBranding.profile.display_name}</title>
 </svelte:head>
 
 <AppErrorState status={page.status} {online} onBack={goBack} onRetry={retry} {links} />

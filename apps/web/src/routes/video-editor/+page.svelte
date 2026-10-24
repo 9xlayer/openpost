@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { projectPresetName } from '$lib/video-editor/project/preset-label';
 	import { goto } from '$app/navigation';
 	import EditorStart from '$lib/components/editor-start.svelte';
@@ -655,7 +656,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.video_editor_title()}</title>
+	<title>{appBranding.title(m.video_editor_title())}</title>
 	<meta
 		name="description"
 		content="Record or import footage, edit for four social formats, and export without a watermark."

@@ -7,6 +7,7 @@ FORM: FreeCut studio-workspace grammar, pinned by the user; seed freecut-parity-
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
 -->
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount, tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages';
 	import { goto } from '$app/navigation';
@@ -2456,7 +2457,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 {/snippet}
 
 <svelte:head>
-	<title>{editorSession.project?.name ?? m.video_editor_title()}</title>
+	<title>{editorSession.project?.name ?? appBranding.title(m.video_editor_title())}</title>
 </svelte:head>
 
 {#snippet leftPanelIcon(option: LeftPanelOption, className?: string)}

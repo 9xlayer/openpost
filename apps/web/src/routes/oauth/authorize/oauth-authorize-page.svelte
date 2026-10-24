@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { goto } from '$app/navigation';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import { resolve } from '$app/paths';
@@ -358,7 +359,11 @@
 </script>
 
 <svelte:head>
-	<title>{isExternalApplication ? m.oauth_authorize_app_title() : m.oauth_authorize_title()}</title>
+	<title
+		>{isExternalApplication
+			? m.oauth_authorize_app_title()
+			: appBranding.title(m.oauth_authorize_title())}</title
+	>
 </svelte:head>
 
 {#snippet botIcon()}

@@ -7,6 +7,7 @@
 	Responsive: One column at every width, with controls wrapping into touch-safe rows on phones.
 -->
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import {
 		accountFeaturesQueryOptions,
@@ -785,7 +786,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.engagement_heading()} · OpenPost</title>
+	<title>{m.engagement_heading()} · {appBranding.profile.display_name}</title>
 </svelte:head>
 
 {#if toast}

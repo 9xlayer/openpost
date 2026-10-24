@@ -62,8 +62,15 @@ const settingsDestinationDefinitions = [
 	{
 		id: 'brand',
 		group: 'workspace',
-		label: m.media_brand,
+		label: m.app_branding_kit,
 		description: m.media_brand_description,
+		loadingVariant: 'form'
+	},
+	{
+		id: 'app-branding',
+		group: 'workspace',
+		label: m.app_branding_title,
+		description: m.app_branding_description,
 		loadingVariant: 'form'
 	},
 	{
@@ -109,7 +116,7 @@ const settingsDestinationDefinitions = [
 		id: 'appearance',
 		group: 'organization',
 		label: m.settings_appearance,
-		description: () => m.theme_library_description(),
+		description: () => m.app_branding_appearance_description(),
 		loadingVariant: 'cards'
 	},
 	{

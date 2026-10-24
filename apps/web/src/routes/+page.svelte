@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { goto } from '$app/navigation';
 	import { resolveAppPath } from '$lib/app-path';
@@ -14,7 +15,7 @@
 </script>
 
 <svelte:head>
-	<title>OpenPost</title>
+	<title>{appBranding.profile.display_name}</title>
 </svelte:head>
 
 <div class="flex flex-1 flex-col overflow-hidden">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import { captureTelemetryEvent } from '@openpost/telemetry';
@@ -476,7 +477,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.checkout_title()}</title>
+	<title>{appBranding.title(m.checkout_title())}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 

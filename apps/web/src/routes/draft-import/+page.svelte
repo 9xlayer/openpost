@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
@@ -85,7 +86,7 @@
 </script>
 
 <svelte:head
-	><title>{m.tool_draft_opening()} | OpenPost</title><meta
+	><title>{m.tool_draft_opening()} | {appBranding.profile.display_name}</title><meta
 		name="robots"
 		content="noindex"
 	/></svelte:head

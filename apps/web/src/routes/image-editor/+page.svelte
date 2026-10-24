@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { createQuery, createInfiniteQuery } from '@tanstack/svelte-query';
 	import {
@@ -425,7 +426,7 @@
 {/snippet}
 
 <svelte:head>
-	<title>{m.image_editor_public_meta_title()}</title>
+	<title>{appBranding.title(m.image_editor_public_meta_title())}</title>
 	<meta name="description" content={m.image_editor_public_meta_description()} />
 	<link rel="canonical" href="https://app.openpo.st/image-editor" />
 	<meta property="og:site_name" content="OpenPost" />

@@ -4,6 +4,7 @@ STORY: A visitor understands the product, sees every plan, and can start a trial
 FIRST VIEWPORT: Brand and sign-in sit above the offer; entry price and trial terms stay beside the primary action.
 -->
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { ArrowRight, CalendarClock, ChartNoAxesCombined, PanelsTopLeft } from '@lucide/svelte';
 	import LanguageSwitcher from '$lib/components/language-switcher.svelte';
 	import Logo from '$lib/components/Logo.svelte';
@@ -37,7 +38,7 @@ FIRST VIEWPORT: Brand and sign-in sit above the offer; entry price and trial ter
 </script>
 
 <svelte:head>
-	<title>{m.public_home_meta_title()}</title>
+	<title>{appBranding.title(m.public_home_meta_title())}</title>
 	<meta name="description" content={m.public_home_meta_description()} />
 	<link rel="canonical" href="https://app.openpo.st/" />
 </svelte:head>

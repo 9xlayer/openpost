@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { page } from '$app/state';
 	import { onMount, tick, untrack } from 'svelte';
 	import { ProtectedIcon, ThemeIcon } from '$lib/themes/icons';
@@ -255,7 +256,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.notifications_heading()} · OpenPost</title>
+	<title>{m.notifications_heading()} · {appBranding.profile.display_name}</title>
 </svelte:head>
 
 {#if toast}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { readQueryErrorMessage } from '$lib/query/error-message';
 	import { goto } from '$app/navigation';
 	import { ProtectedIcon } from '$lib/themes/icons';
@@ -82,7 +83,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.auth_legal_title()}</title>
+	<title>{appBranding.title(m.auth_legal_title())}</title>
 </svelte:head>
 
 <StandaloneShell

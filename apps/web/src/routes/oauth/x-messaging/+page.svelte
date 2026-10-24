@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth';
 	import { client } from '$lib/api/client';
@@ -86,7 +87,7 @@
 </script>
 
 <svelte:head
-	><title>{m.x_messaging_title()} | OpenPost</title><meta
+	><title>{m.x_messaging_title()} | {appBranding.profile.display_name}</title><meta
 		name="referrer"
 		content="no-referrer"
 	/></svelte:head

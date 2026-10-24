@@ -1,6 +1,7 @@
 import {
   createOpenPostQueryError,
   type OpenPostQueryAPI,
+  type AppBrandingQueryAPI,
   type QueryPageResult,
   type VideoProjectQueryAPI,
   type AnalyticsQueryAPI,
@@ -12,15 +13,16 @@ import {
 import { api, captureApiRequestIdentity, settleApiUnauthorized, type Api } from "./api/client";
 
 type QueryTransport = Pick<Api, "GET">;
-type MobileQueryAPI = Pick<
-  OpenPostQueryAPI,
-  | "getPublication"
-  | "listAccounts"
-  | "listActivityPublications"
-  | "listCalendarPublications"
-  | "listSocialSets"
-  | "listWorkspaces"
-> &
+type MobileQueryAPI = AppBrandingQueryAPI &
+  Pick<
+    OpenPostQueryAPI,
+    | "getPublication"
+    | "listAccounts"
+    | "listActivityPublications"
+    | "listCalendarPublications"
+    | "listSocialSets"
+    | "listWorkspaces"
+  > &
   Pick<VideoProjectQueryAPI, "listVideoProjectSummaries"> &
   AnalyticsQueryAPI &
   VoiceProfileQueryAPI & {
@@ -54,6 +56,18 @@ export async function mobileQueryTransportRequest<T>(
 
 export function createMobileQueryAPI(getTransport: () => QueryTransport): MobileQueryAPI {
   return {
+    async getAppBranding(workspaceId, signal) {
+      const { data } = await queryGET({
+        signal,
+        fallback: "Could not load app branding",
+        request: (signal) =>
+          getTransport().GET("/app-branding/{workspace_id}", {
+            signal,
+            params: { path: { workspace_id: workspaceId } },
+          }),
+      });
+      return data;
+    },
     async listPublicationReviews(workspaceId, publicationId, signal) {
       const { data } = await queryGET({
         signal,

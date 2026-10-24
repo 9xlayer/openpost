@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -64,7 +65,7 @@
 	});
 </script>
 
-<svelte:head><title>{m.templates_title()} · OpenPost</title></svelte:head>
+<svelte:head><title>{m.templates_title()} · {appBranding.profile.display_name}</title></svelte:head>
 <PageContainer
 	title={m.templates_title()}
 	description={m.templates_description()}

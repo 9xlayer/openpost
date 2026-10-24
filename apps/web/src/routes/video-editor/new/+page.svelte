@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import VideoEditorChoice from '$lib/components/video-editor-choice.svelte';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import { CloudVideoProjectRepository } from '$lib/video-editor/cloud/project-repository';
@@ -73,7 +74,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.video_editor_title()}</title>
+	<title>{appBranding.title(m.video_editor_title())}</title>
 	<meta
 		name="description"
 		content="Record or import footage, edit for four social formats, and export without a watermark."

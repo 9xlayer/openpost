@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onDestroy } from 'svelte';
 	import { get } from 'svelte/store';
 	import { goto, replaceState } from '$app/navigation';
@@ -41,7 +42,8 @@
 		developer: () => import('$lib/components/settings/DeveloperSettingsTab.svelte'),
 		general: () => import('$lib/components/settings/WorkspacePreferencesSettings.svelte'),
 		brand: () => import('$lib/components/settings/BrandSettingsTab.svelte'),
-		appearance: () => import('$lib/components/themes/theme-appearance-settings.svelte'),
+		'app-branding': () => import('$lib/components/settings/AppBrandingSettings.svelte'),
+		appearance: () => import('$lib/components/themes/appearance-settings.svelte'),
 		accounts: () => import('$lib/components/account-management.svelte'),
 		reposts: () => import('$lib/components/repost-automation-settings.svelte'),
 		schedule: () => import('$lib/components/settings/ScheduleSettingsTab.svelte'),
@@ -250,7 +252,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.settings_page_title()}</title>
+	<title>{appBranding.title(m.settings_page_title())}</title>
 </svelte:head>
 
 <PageContainer
@@ -336,6 +338,11 @@
 						{#if panels['brand']}
 							{@const BrandSettingsTab = panels['brand'].default}
 							<BrandSettingsTab workspaceID={workspaceCtx.currentWorkspace?.id ?? ''} active />
+						{/if}
+					{:else if activeSettingsTab === 'app-branding'}
+						{#if panels['app-branding']}
+							{@const AppBrandingSettings = panels['app-branding'].default}
+							<AppBrandingSettings workspaceOnly />
 						{/if}
 					{:else if activeSettingsTab === 'appearance'}
 						{#if panels['appearance']}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { readQueryErrorMessage } from '$lib/query/error-message';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
@@ -139,7 +140,7 @@
 </script>
 
 <svelte:head>
-	<title>{title} - OpenPost</title>
+	<title>{title} - {appBranding.profile.display_name}</title>
 	<meta
 		name="description"
 		content={profile

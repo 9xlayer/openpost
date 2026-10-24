@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import { captureTelemetryEvent } from '@openpost/telemetry';
@@ -386,7 +387,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.image_editor_new_design()} · {m.image_editor_title()}</title>
+	<title>{m.image_editor_new_design()} · {appBranding.title(m.image_editor_title())}</title>
 	<meta
 		name="description"
 		content="Create posts, carousel pages, Story slides, and thumbnails in your browser."

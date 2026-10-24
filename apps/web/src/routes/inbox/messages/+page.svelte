@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { ThemeIcon } from '$lib/themes/icons';
 	import {
 		accountFeaturesQueryOptions,
@@ -818,7 +819,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.messages_heading()} · OpenPost</title>
+	<title>{m.messages_heading()} · {appBranding.profile.display_name}</title>
 </svelte:head>
 
 {#if toast}

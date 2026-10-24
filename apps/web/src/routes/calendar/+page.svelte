@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import PublicationViewSwitch from '$lib/components/publication-view-switch.svelte';
 	import { goto } from '$app/navigation';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
@@ -1195,7 +1196,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.activity_title()} · {m.sidebar_calendar()} · {m.common_openpost()}</title>
+	<title>{m.activity_title()} · {m.sidebar_calendar()} · {appBranding.profile.display_name}</title>
 </svelte:head>
 
 <div

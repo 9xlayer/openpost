@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import { tick, untrack } from 'svelte';
@@ -175,7 +176,7 @@
 	}
 </script>
 
-<svelte:head><title>{m.workflows_title()} · OpenPost</title></svelte:head>
+<svelte:head><title>{m.workflows_title()} · {appBranding.profile.display_name}</title></svelte:head>
 <PageContainer
 	title={m.workflows_title()}
 	description={m.workflows_subtitle()}

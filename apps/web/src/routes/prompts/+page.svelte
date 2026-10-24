@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { client } from '$lib/api/client';
 	import type { operations } from '$lib/api/types';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
@@ -302,7 +303,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.prompts_page_title()}</title>
+	<title>{appBranding.title(m.prompts_page_title())}</title>
 </svelte:head>
 
 {#if toastMessage}

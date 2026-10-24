@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { workflowConnectionsQueryOptions } from '@openpost/query-catalog';
 	import { workflowQueryAPI } from '$lib/query/workflows';
@@ -65,7 +66,9 @@
 	}
 </script>
 
-<svelte:head><title>{m.workflows_connections()} · OpenPost</title></svelte:head>
+<svelte:head
+	><title>{m.workflows_connections()} · {appBranding.profile.display_name}</title></svelte:head
+>
 <PageContainer
 	title={m.workflows_connections()}
 	description={m.workflows_connections_help()}

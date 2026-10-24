@@ -37,7 +37,7 @@ export function LaunchPlaceholder({ pending, offline }: { pending: boolean; offl
   return (
     <Screen>
       <View style={styles.launchContent}>
-        <Brand compact style={styles.brand} />
+        <Brand compact workspace style={styles.brand} />
         <DelayedQueryPlaceholder pending={pending} shape="launch" offline={offline} />
       </View>
     </Screen>

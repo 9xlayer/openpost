@@ -1,4 +1,6 @@
 <script lang="ts">
+	import AppBrandingRuntime from '$lib/components/app-branding-runtime.svelte';
+	import { appBranding } from '$lib/app-branding.svelte';
 	import './layout.css';
 	import PwaManager from '$lib/components/pwa-manager.svelte';
 	import NavigationProgress from '$lib/components/navigation-progress.svelte';
@@ -537,11 +539,23 @@
 <svelte:window onbeforeunload={warnBeforeUnload} />
 
 <svelte:head>
-	<title>OpenPost</title>
+	<title>{appBranding.profile.display_name}</title>
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
 	<ThemeAppShell publicDefault={isPublicRoute} />
+	<AppBrandingRuntime
+		enabled={!isPreviewRoute &&
+			!isPublicProfileRoute &&
+			!publicRoutes.some((route) => currentPath.startsWith(route)) &&
+			![
+				'/onboarding',
+				'/checkout',
+				'/ownership-transfer',
+				'/draft-import',
+				'/legal-acceptance'
+			].includes(currentPath)}
+	/>
 	<NavigationProgress />
 	{#if !isPreviewRoute}
 		<PwaManager />

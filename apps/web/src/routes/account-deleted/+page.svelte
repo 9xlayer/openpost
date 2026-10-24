@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { resolve } from '$app/paths';
 	import { ProtectedIcon } from '$lib/themes/icons';
 	import StandaloneShell from '$lib/components/standalone-shell.svelte';
@@ -6,7 +7,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.auth_account_deleted_title()}</title>
+	<title>{appBranding.title(m.auth_account_deleted_title())}</title>
 </svelte:head>
 
 {#snippet successIcon()}

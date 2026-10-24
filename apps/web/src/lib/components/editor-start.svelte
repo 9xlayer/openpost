@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import type { Snippet } from 'svelte';
 	import Logo from '$lib/components/Logo.svelte';
 	import LanguageSwitcher from '$lib/components/language-switcher.svelte';
@@ -28,7 +29,7 @@
 		<a
 			href="/"
 			class="flex min-h-11 items-center rounded-md focus-visible:outline-2 focus-visible:outline-ring"
-			aria-label={m.sidebar_openpost_home()}
+			aria-label={m.app_branding_home({ name: appBranding.profile.display_name })}
 		>
 			<Logo width={112} height={33} />
 		</a>

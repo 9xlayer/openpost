@@ -58,16 +58,6 @@ for (const scheme of ["light", "dark"]) {
       labelContext.font = "12px OpenPostGallery";
       labelContext.fillText("Sample data", phoneWidth / 2, 42);
     }
-    if (name === "inbox-preview") {
-      const inboxGallery = resolve(output, `mobile-inbox-gallery-${scheme}.png`);
-      const phone = await sharp(inboxGallery)
-        .extract({ left: gutter, top: gutter + 64, width: phoneWidth, height: phoneHeight })
-        .png()
-        .toBuffer();
-      layers.push({ input: Buffer.from(labelCanvas.toBuffer("image/png")), left, top });
-      layers.push({ input: phone, left, top: top + labelHeight });
-      continue;
-    }
     const capture = resolve(input, `${name}-${scheme}.png`);
     const size = await sharp(capture).metadata();
     if (size.width !== metadata.width || size.height !== metadata.height) {

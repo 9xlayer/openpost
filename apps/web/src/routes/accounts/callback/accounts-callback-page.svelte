@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { goto } from '$app/navigation';
 	import { ProtectedIcon } from '$lib/themes/icons';
 	import { onMount } from 'svelte';
@@ -218,7 +219,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.accounts_callback_title()}</title>
+	<title>{appBranding.title(m.accounts_callback_title())}</title>
 </svelte:head>
 
 <StandaloneShell

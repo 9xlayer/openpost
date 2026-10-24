@@ -16,8 +16,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/appbranding"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/identity"
+	"github.com/openpost/backend/internal/services/organizationguard"
 	"github.com/uptrace/bun"
 )
 
@@ -606,6 +608,27 @@ func DeleteWorkspaceData(ctx context.Context, tx bun.Tx, workspaceIDs []string, 
 		return err
 	}
 	if err := DeleteJobsReferencing(ctx, tx, references); err != nil {
+		return err
+	}
+	// Collect branding under the same Organization fence as profile writes.
+	// A preflight inventory can predate a save that commits before deletion.
+	var workspaces []models.Workspace
+	if err := tx.NewSelect().Model(&workspaces).Column("id", "organization_id").Where("id IN (?)", bun.List(workspaceIDs)).Order("organization_id", "id").Scan(ctx); err != nil {
+		return err
+	}
+	for _, workspace := range workspaces {
+		if err := organizationguard.LockOrganization(ctx, tx, workspace.OrganizationID); err != nil {
+			return err
+		}
+		keys, err := appbranding.StoredObjectKeys(ctx, tx, workspace.OrganizationID, workspace.ID)
+		if err != nil {
+			return err
+		}
+		if _, err = EnqueueStorageCleanup(ctx, tx, keys); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.NewDelete().Table("app_branding_profiles").Where("workspace_id IN (?)", bun.List(workspaceIDs)).Exec(ctx); err != nil {
 		return err
 	}
 	for _, deletion := range deletionPlan(workspaceIDs, ids) {

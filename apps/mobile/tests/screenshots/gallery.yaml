@@ -23,6 +23,12 @@ appId: com.openpost.app
 - assertVisible: Followers
 - assertVisible: Trends
 - takeScreenshot: analytics-${SCHEME}
+- openLink: com.openpost.app:///inbox
+- extendedWaitUntil:
+    visible: Chats
+    timeout: 20000
+- assertVisible: Comments
+- takeScreenshot: inbox-preview-${SCHEME}
 - openLink: com.openpost.app:///drafts
 - extendedWaitUntil:
     visible: Recent drafts

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -26,7 +27,10 @@
 	);
 </script>
 
-<svelte:head><title>{design.data?.title ?? m.templates_title()} · OpenPost</title></svelte:head>
+<svelte:head
+	><title>{design.data?.title ?? m.templates_title()} · {appBranding.profile.display_name}</title
+	></svelte:head
+>
 {#if design.isPending && !design.data}<PageLoading
 		layout="composer"
 	/>{:else if design.isError && !design.data}<div class="p-4">
