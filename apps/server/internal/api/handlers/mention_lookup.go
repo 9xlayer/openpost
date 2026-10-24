@@ -39,7 +39,7 @@ func (h *DestinationOptionsHandler) lookupAccountMentions(ctx context.Context, i
 	if err := h.db.NewSelect().Model(&account).Where("id = ? AND is_active = ?", input.AccountID, true).Scan(ctx); err != nil {
 		return nil, huma.Error404NotFound("connected account not found")
 	}
-	if err := providerReadinessWorkspaceAccess(ctx, h.db, account.WorkspaceID, userID); err != nil {
+	if err := h.authorizeMentionLookupAccount(ctx, account, userID); err != nil {
 		return nil, err
 	}
 	adapter, ok := h.adapterForDestinationAccount(account).(platform.MentionLookupAdapter)
@@ -78,4 +78,22 @@ func (h *DestinationOptionsHandler) lookupAccountMentions(ctx context.Context, i
 		output.Body.Candidates = []platform.MentionCandidate{}
 	}
 	return output, nil
+}
+
+func (h *DestinationOptionsHandler) authorizeMentionLookupAccount(ctx context.Context, account models.SocialAccount, userID string) error {
+	if err := providerReadinessWorkspaceAccess(ctx, h.db, account.WorkspaceID, userID); err != nil {
+		return err
+	}
+	installationID := middleware.GetInstallationID(ctx)
+	if installationID == "" {
+		return nil
+	}
+	allowed, err := filterExternalAppAccounts(ctx, h.db, installationID, account.WorkspaceID, []models.SocialAccount{account})
+	if err != nil {
+		return huma.Error500InternalServerError("Could not validate account grants")
+	}
+	if len(allowed) != 1 {
+		return huma.Error403Forbidden("external application is not granted this social account")
+	}
+	return nil
 }

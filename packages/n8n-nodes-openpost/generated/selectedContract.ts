@@ -249,10 +249,10 @@ export const selectedContract = {
         },
         {
           apiName: "query",
-          body: true,
+          body: false,
           description: "Account search, or exact LinkedIn company vanity name",
           displayName: "Search",
-          location: "body",
+          location: "query",
           name: "query",
           nodeType: "string",
           request: true,
@@ -2191,7 +2191,7 @@ export const selectedContract = {
       synthetic: false,
     },
   ],
-  checksum: "e15961bfc27e139c68e287b3391f4807fbcd7c8b1729b5f131d8288c5aa48ee3",
+  checksum: "3824390aa6b182af8b196d457a4139491ba861c0d2e1e58faeaafba6e1b0ff7e",
   findings: [],
   generatedAt: "1970-01-01T00:00:00.000Z",
   source: {

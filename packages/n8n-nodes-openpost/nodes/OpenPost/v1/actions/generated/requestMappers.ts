@@ -124,8 +124,8 @@ export const generatedActionRequestMappers = [
       },
       {
         apiName: "query",
-        body: true,
-        location: "body",
+        body: false,
+        location: "query",
         name: "query",
       },
     ],

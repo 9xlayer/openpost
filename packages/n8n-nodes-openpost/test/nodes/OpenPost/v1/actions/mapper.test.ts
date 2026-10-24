@@ -77,3 +77,22 @@ describe("OpenPost request mapper", () => {
     );
   });
 });
+
+test("mention lookup sends the search in the GET query", () => {
+  const mapper = findGeneratedAction("account", "lookupMentions");
+  if (!mapper) throw new Error("missing lookup action");
+  const request = buildOpenPostRequest({
+    baseUrl: "https://example.com",
+    mapper,
+    itemIndex: 0,
+    executionId: "exec",
+    parameters: {
+      get(name, fallback) {
+        return name === "accountId" ? "account-1" : name === "query" ? "A & B" : fallback;
+      },
+    },
+  });
+  expect(request.options.url).toBe("https://example.com/api/v1/accounts/account-1/mentions");
+  expect(request.options.qs).toEqual({ query: "A & B" });
+  expect(request.options.body).toBeUndefined();
+});

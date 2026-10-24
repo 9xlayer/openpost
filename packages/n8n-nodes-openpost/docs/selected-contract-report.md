@@ -4,7 +4,7 @@ Generated from the canonical OpenAPI `x-openpost-automation` metadata.
 
 - Source version: 1.0.0
 - Actions emitted: 22
-- Checksum: e15961bfc27e139c68e287b3391f4807fbcd7c8b1729b5f131d8288c5aa48ee3
+- Checksum: 3824390aa6b182af8b196d457a4139491ba861c0d2e1e58faeaafba6e1b0ff7e
 
 ## Actions
 

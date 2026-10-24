@@ -28,6 +28,7 @@ export const desiredActions = [
       accountField(),
       stringField("query", "Search", "Account search, or exact LinkedIn company vanity name.", {
         required: true,
+        location: "query",
       }),
     ],
   }),
