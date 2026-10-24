@@ -31,6 +31,7 @@ import (
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/idempotency"
 	"github.com/openpost/backend/internal/imageprepare"
+	"github.com/openpost/backend/internal/imagethumbnail"
 	"github.com/openpost/backend/internal/mediacodec/ico"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/auth"
@@ -4079,13 +4080,13 @@ func (h *MediaHandler) processImage(ctx context.Context, content []byte, mediaID
 		thumbContentType = "image/png"
 	}
 
-	smThumb := imaging.Thumbnail(img, ThumbnailSizeSM, ThumbnailSizeSM, imaging.Lanczos)
+	smThumb := imagethumbnail.Square(img, ThumbnailSizeSM)
 	smFilename := "sm_" + mediaID + thumbExtension
 	if err := h.saveThumbnail(ctx, smFilename, smThumb, thumbFormat, thumbContentType); err == nil {
 		thumbnails.SM = smFilename
 	}
 
-	mdThumb := imaging.Thumbnail(img, ThumbnailSizeMD, ThumbnailSizeMD, imaging.Lanczos)
+	mdThumb := imagethumbnail.Square(img, ThumbnailSizeMD)
 	mdFilename := "md_" + mediaID + thumbExtension
 	if err := h.saveThumbnail(ctx, mdFilename, mdThumb, thumbFormat, thumbContentType); err == nil {
 		thumbnails.MD = mdFilename
