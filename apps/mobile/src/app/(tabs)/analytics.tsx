@@ -13,7 +13,14 @@ import {
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SvgXml } from "react-native-svg";
 
 import { BottomDrawer } from "@/components/bottom-drawer";
@@ -125,24 +132,28 @@ function AnalyticsDashboard() {
       </View>
       <BottomDrawer open={rangeOpen} onDismiss={() => setRangeOpen(false)} title="Date range">
         <View style={{ gap: spacing.medium, padding: spacing.large }}>
-          {RANGES.map((range) => (
-            <Button
-              key={range}
-              title={rangeLabel(range)}
-              intent={!from && days === range ? "primary" : "ordinary"}
-              accessibilityState={{ selected: !from && days === range }}
-              onPress={() => {
-                setDays(range);
-                setFrom("");
-                setTo("");
-                setRangeOpen(false);
-              }}
-            />
-          ))}
+          {!custom &&
+            RANGES.map((range) => (
+              <Button
+                key={range}
+                title={rangeLabel(range)}
+                intent={!from && days === range ? "primary" : "ordinary"}
+                accessibilityState={{ selected: !from && days === range }}
+                onPress={() => {
+                  setDays(range);
+                  setFrom("");
+                  setTo("");
+                  setRangeOpen(false);
+                }}
+              />
+            ))}
           <Button
-            title="Custom range"
-            intent={custom ? "primary" : "ordinary"}
-            onPress={() => setCustom(true)}
+            title={custom ? "Back to presets" : "Custom range"}
+            intent="ordinary"
+            onPress={() => {
+              setCustom(!custom);
+              setPicking(null);
+            }}
           />
           {custom ? (
             <>
@@ -156,11 +167,12 @@ function AnalyticsDashboard() {
               {picking ? (
                 <DateTimePicker
                   mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
                   value={analyticsPickerDate(picking === "from" ? draftFrom : draftTo)}
                   timeZoneName="UTC"
                   maximumDate={new Date(`${calendarDate(new Date())}T23:59:59.999Z`)}
                   onChange={(event, date) => {
-                    setPicking(null);
+                    if (Platform.OS !== "ios") setPicking(null);
                     if (event.type === "set" && date) {
                       if (picking === "from") setDraftFrom(calendarDate(date));
                       else setDraftTo(calendarDate(date));
@@ -170,6 +182,9 @@ function AnalyticsDashboard() {
               ) : null}
               {!validRange ? (
                 <BodyText>Choose an end date on or after the start date.</BodyText>
+              ) : null}
+              {picking && Platform.OS === "ios" ? (
+                <Button title="Done" intent="ordinary" onPress={() => setPicking(null)} />
               ) : null}
               <Button
                 title="Apply"
@@ -312,7 +327,9 @@ function AnalyticsDashboard() {
                             params: { id: publicationId },
                           })
                         }
-                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.6 : 1,
+                        })}
                       >
                         <ContentSection
                           style={{
