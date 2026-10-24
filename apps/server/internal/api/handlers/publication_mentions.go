@@ -60,3 +60,21 @@ func validatePublicationMentions(rendition models.Rendition, account models.Soci
 	}
 	return []capabilities.ValidationIssue{{Code: "mention_choice_invalid", Message: err.Error(), Severity: "error", Provider: rendition.Platform, Field: "mentions", SegmentID: segment.ID, Scope: capabilities.SettingScopeSegment, ScopeID: segment.ID}}
 }
+
+func snapshotCanonicalMentionOverride(input RenditionSegmentInput, canonical []models.PublicationSegment, sourceID string, body *string, joined bool) (RenditionSegmentInput, error) {
+	if body == nil || len(input.SourceOverrides) > 0 {
+		return input, nil
+	}
+	if _, explicit := input.Settings[posttext.SettingsKey]; explicit {
+		return input, nil
+	}
+	inherited, projection, err := publicationsource.ResolveMentions(canonical, sourceID, "", nil, nil, joined)
+	if err != nil {
+		return input, err
+	}
+	if projection == nil {
+		return input, nil
+	}
+	input.Settings, err = posttext.PreserveSettings(inherited, *body, map[string]any{posttext.SettingsKey: &projection.Mentions}, input.Settings)
+	return input, err
+}

@@ -57,8 +57,10 @@ func preserveRenditionSegmentMentions(input *RenditionInput, previous []models.R
 			if !sameMentionSource(*next, old, index, i) {
 				continue
 			}
-			if err := preserveRenditionTextMentions(next, old, canonical, len(previous) == 1 && len(canonical) > 1); err != nil {
-				return err
+			if len(next.SourceOverrides) == 0 {
+				if err := preserveRenditionTextMentions(next, old, canonical, len(previous) == 1 && len(canonical) > 1); err != nil {
+					return err
+				}
 			}
 			if err := preserveJoinedMentionInputs(next.SourceOverrides, readRenditionSourceOverrides(old.SourceOverridesJSON), canonical); err != nil {
 				return err

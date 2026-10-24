@@ -99,6 +99,18 @@ func normalizeJoinedSourceOverrides(input RenditionSegmentInput, canonical []mod
 		if source.BodyOverride != nil {
 			authoredBody = *source.BodyOverride
 		}
+		if source.BodyOverride != nil && source.Mentions == nil {
+			var settings map[string]any
+			_ = json.Unmarshal([]byte(matched.SettingsJSON), &settings)
+			inherited, err := posttext.Read(settings)
+			if err != nil {
+				return input, huma.Error400BadRequest(err.Error())
+			}
+			source.Mentions, err = posttext.Remap(matched.Body, authoredBody, inherited)
+			if err != nil {
+				return input, huma.Error400BadRequest(err.Error())
+			}
+		}
 		if err := posttext.Validate(authoredBody, source.Mentions); err != nil {
 			return input, huma.Error400BadRequest(err.Error())
 		}

@@ -12,6 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/lifecycle"
@@ -462,4 +463,27 @@ func TestConfirmedPublicationSurvivesQuotaSettlementFailure(t *testing.T) {
 	var receipt models.MonthlyUsageReservation
 	require.NoError(t, srv.db.NewSelect().Model(&receipt).Scan(t.Context()))
 	require.Equal(t, "held", receipt.State, "failed accounting must retain conservative quota exposure")
+}
+
+type mentionPreflightPublisher struct{ *fakePublisherAdapter }
+
+func (p *mentionPreflightPublisher) ValidateMentionTargets(_ context.Context, _ string, req *platform.PublishRequest) error {
+	if req.Content == "Second mention" {
+		return fmt.Errorf("%w: selected mention changed", posttext.ErrInvalid)
+	}
+	return nil
+}
+func TestThreadMentionPreflightRejectsLaterSegmentBeforeFirstWrite(t *testing.T) {
+	adapter := &fakePublisherAdapter{externalID: "must-not-publish"}
+	srv := newPublisherLifecycleTestServer(t, adapter)
+	srv.service.SetProvider("x", &mentionPreflightPublisher{adapter})
+	canonical := []models.PublicationSegment{{ID: "first", PublicationID: "publication-1", Body: "First mention", SettingsJSON: "{}"}, {ID: "second", PublicationID: "publication-1", Position: 1, Body: "Second mention", SettingsJSON: "{}"}}
+	_, err := srv.db.NewInsert().Model(&canonical).Exec(t.Context())
+	require.NoError(t, err)
+	segments := []models.RenditionSegment{{ID: "out-first", RenditionID: "rendition-1", PublicationSegmentID: "first", Body: "First mention", SettingsJSON: "{}", Status: models.RenditionStatusReady}, {ID: "out-second", RenditionID: "rendition-1", PublicationSegmentID: "second", Position: 1, Body: "Second mention", SettingsJSON: "{}", Status: models.RenditionStatusReady}}
+	_, err = srv.db.NewInsert().Model(&segments).Exec(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, srv.publishPublication(t))
+	require.Zero(t, adapter.publishCalls)
+	require.Zero(t, adapter.uploadCalls)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/posttext"
+	"github.com/openpost/backend/internal/services/publicationsource"
 	"github.com/stretchr/testify/require"
 )
 
@@ -85,6 +86,19 @@ func TestPublicationMentionIdentitySurvivesLegacyEditsAndCountsInRevisions(t *te
 	response = send(http.MethodPut, "/api/v1/publications/"+publication.ID+"/renditions", map[string]any{"expected_revision": publication.Revision, "renditions": []RenditionInput{{SocialAccountID: "bsky", Segments: []RenditionSegmentInput{{PublicationSegmentID: publication.Segments[0].ID, BodyOverride: &unsafeOverride}}}}})
 	require.Equal(t, http.StatusBadRequest, response.Code, response.Body.String())
 	require.Equal(t, publication.Revision, read().Revision)
+
+	seedHandlerAccount(t, db, "bsky-new", "bluesky")
+	response = send(http.MethodPut, "/api/v1/publications/"+publication.ID+"/renditions", map[string]any{"expected_revision": publication.Revision, "renditions": []RenditionInput{{SocialAccountID: "bsky-new", Segments: []RenditionSegmentInput{{PublicationSegmentID: publication.Segments[0].ID, BodyOverride: &override}}}}})
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	publication = read()
+	for _, destination := range publication.Renditions {
+		if destination.SocialAccountID == "bsky-new" {
+			own, err = posttext.Read(destination.Segments[0].Settings)
+		}
+	}
+	require.NoError(t, err)
+	require.NotNil(t, own, "new account detachment retains the inherited selection")
+	require.Equal(t, "did:plc:z72i7hdynmk6r22z27h6tvur", own.Spans[0].Target.ID)
 	create.Title = "Malformed"
 	create.Segments[0].Body = "short"
 	response = send(http.MethodPost, "/api/v1/publications", create)
@@ -92,4 +106,20 @@ func TestPublicationMentionIdentitySurvivesLegacyEditsAndCountsInRevisions(t *te
 	count, err := db.NewSelect().Model((*models.Publication)(nil)).Count(t.Context())
 	require.NoError(t, err)
 	require.Equal(t, 1, count, "failed authoring leaves no partial publication")
+	seedHandlerAccount(t, db, "linkedin", "linkedin")
+	company := &posttext.Mentions{Version: 1, Spans: []posttext.MentionSpan{{Start: 3, End: 7, Text: "Acme", Target: posttext.MentionTarget{Provider: "linkedin", Kind: "page", ID: "urn:li:organization:123"}}}}
+	first := "Hi Acme"
+	canonical := []PublicationSegmentInput{{ID: "first", Body: first, Settings: map[string]any{"mentions": company}}, {ID: "tail", Body: "Tail"}}
+	response = send(http.MethodPost, "/api/v1/publications", CreatePublicationBody{WorkspaceID: "workspace-1", Title: "Joined mentions", ContentProfile: "thread", SourceText: first, Segments: canonical, Renditions: []RenditionInput{{SocialAccountID: "linkedin", Segments: []RenditionSegmentInput{{PublicationSegmentID: "first", SourceOverrides: []publicationsource.RenditionSourceOverride{{PublicationSegmentID: "first", BodyOverride: &first, Mentions: company, MediaInherited: true}}}}}}})
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &publication))
+	publication = read()
+	returned := publication.Renditions[0].Segments[0]
+	inherited := returned.MediaInherited
+	response = send(http.MethodPut, "/api/v1/publications/"+publication.ID+"/renditions", map[string]any{"expected_revision": publication.Revision, "renditions": []RenditionInput{{SocialAccountID: "linkedin", Segments: []RenditionSegmentInput{{PublicationSegmentID: returned.PublicationSegmentID, BodyOverride: returned.BodyOverride, MediaInherited: &inherited, SourceOverrides: returned.SourceOverrides, Settings: returned.Settings}}}}})
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	afterJoined := read()
+	require.Equal(t, "Hi Acme\n\nTail", afterJoined.Renditions[0].Segments[0].Body)
+	require.Equal(t, company, afterJoined.Renditions[0].Segments[0].SourceOverrides[0].Mentions)
+	require.Nil(t, afterJoined.Renditions[0].Segments[0].Settings[posttext.SettingsKey], "joined selections remain per source")
 }

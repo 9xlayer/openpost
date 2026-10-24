@@ -16,6 +16,12 @@ import (
 type MentionLookupAdapter interface {
 	LookupMentions(context.Context, string, string) ([]MentionCandidate, error)
 }
+
+// MentionTargetValidator checks mutable identities before a multi-part write begins.
+type MentionTargetValidator interface {
+	ValidateMentionTargets(context.Context, string, *PublishRequest) error
+}
+
 type MentionCandidate struct {
 	Label  string                 `json:"label" doc:"Exact visible text inserted into the post"`
 	Detail string                 `json:"detail" doc:"Provider account address or company vanity name"`
@@ -133,25 +139,27 @@ func (l *LinkedInAdapter) LookupMentions(ctx context.Context, token, query strin
 
 // Mastodon addresses are mutable. Verify the selected local account identity
 // still owns that address before crossing the provider-write fence.
-func (m *MastodonAdapter) validateSelectedMentions(ctx context.Context, token string, req *PublishRequest) error {
+func (m *MastodonAdapter) ValidateMentionTargets(ctx context.Context, token string, req *PublishRequest) error {
 	projection, err := posttext.ReadProjection(req.Content, "mastodon", m.compat.instanceURL, req.Settings)
 	if err != nil || projection == nil {
 		return err
 	}
-	checked := map[string]bool{}
+	checked := map[string]mastodonMentionAccount{}
 	for _, span := range projection.Spans {
-		if checked[span.Target.ID] {
-			continue
+		account, found := checked[span.Target.ID]
+		if !found {
+			data, err := DoRequest(ctx, http.MethodGet, strings.TrimRight(m.compat.instanceURL, "/")+"/api/v1/accounts/"+url.PathEscape(span.Target.ID), nil, map[string]string{headerAuthorization: bearerPrefix + token})
+			if err != nil {
+				return err
+			}
+			if json.Unmarshal(data, &account) != nil {
+				return fmt.Errorf("%w: invalid mention account", posttext.ErrInvalid)
+			}
+			checked[span.Target.ID] = account
 		}
-		data, err := DoRequest(ctx, http.MethodGet, strings.TrimRight(m.compat.instanceURL, "/")+"/api/v1/accounts/"+url.PathEscape(span.Target.ID), nil, map[string]string{headerAuthorization: bearerPrefix + token})
-		if err != nil {
-			return err
-		}
-		var account mastodonMentionAccount
-		if json.Unmarshal(data, &account) != nil || account.ID != span.Target.ID || mastodonMentionHandle(account, m.compat.instanceURL) != span.Target.Handle {
+		if account.ID != span.Target.ID || mastodonMentionHandle(account, m.compat.instanceURL) != span.Target.Handle {
 			return fmt.Errorf("%w: selected mention changed; choose the account again", posttext.ErrInvalid)
 		}
-		checked[span.Target.ID] = true
 	}
 	return nil
 }

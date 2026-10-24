@@ -792,6 +792,20 @@ func (s *Service) publishRenditionSegments(
 		segment.SettingsJSON = mustPublisherJSON(settings)
 	}
 
+	if validator, ok := provider.(platform.MentionTargetValidator); ok {
+		for _, segment := range segments {
+			if segment.Status == models.RenditionStatusPublished {
+				continue
+			}
+			var settings map[string]any
+			_ = json.Unmarshal([]byte(segment.SettingsJSON), &settings)
+			request := &platform.PublishRequest{Content: segment.Body, Settings: mergePublisherSettings(destinationSettings, settings)}
+			if err := validator.ValidateMentionTargets(ctx, token, request); err != nil {
+				return fmt.Errorf("mention validation: %w", err)
+			}
+		}
+	}
+
 	parentExternalID := ""
 	rootExternalID := ""
 	rootExternalURL := ""

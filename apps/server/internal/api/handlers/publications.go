@@ -2052,6 +2052,10 @@ func (h *PublicationHandler) insertRenditionSegments(
 
 		authoredMentionsBody := publicationsource.AuthoredBody(canonical, canonicalSegments, mustJSON(input.SourceOverrides), bodyOverride, len(canonicalSegments) > 1 && len(inputs) == 1)
 		var mentionErr error
+		input, mentionErr = snapshotCanonicalMentionOverride(input, canonicalSegments, canonical.ID, bodyOverride, len(canonicalSegments) > 1 && len(inputs) == 1)
+		if mentionErr != nil {
+			return huma.Error400BadRequest(mentionErr.Error())
+		}
 		input, bodyOverride, mentionErr = prepareDestinationMentions(input, authoredMentionsBody, bodyOverride)
 		if mentionErr != nil {
 			return mentionErr
