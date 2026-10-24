@@ -2,6 +2,7 @@ package instancebackup
 
 import (
 	"archive/zip"
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -35,7 +36,7 @@ type Pending struct {
 	StagedAt time.Time
 }
 
-func Stage(paths Paths, current Current, upload io.Reader, now time.Time) (Manifest, error) {
+func Stage(ctx context.Context, paths Paths, current Current, upload io.Reader, now time.Time) (Manifest, error) {
 	pendingDir := paths.PendingDir()
 	if err := os.RemoveAll(pendingDir); err != nil {
 		return Manifest{}, fmt.Errorf("clear previous staged restore: %w", err)
@@ -43,7 +44,7 @@ func Stage(paths Paths, current Current, upload io.Reader, now time.Time) (Manif
 	if err := os.MkdirAll(pendingDir, 0o755); err != nil {
 		return Manifest{}, fmt.Errorf("create staging directory: %w", err)
 	}
-	manifest, err := stageInto(pendingDir, paths, current, upload, now)
+	manifest, err := stageInto(ctx, pendingDir, current, upload, now)
 	if err != nil {
 		_ = os.RemoveAll(pendingDir)
 		return Manifest{}, err
@@ -51,7 +52,7 @@ func Stage(paths Paths, current Current, upload io.Reader, now time.Time) (Manif
 	return manifest, nil
 }
 
-func stageInto(pendingDir string, paths Paths, current Current, upload io.Reader, now time.Time) (Manifest, error) {
+func stageInto(ctx context.Context, pendingDir string, current Current, upload io.Reader, now time.Time) (Manifest, error) {
 	uploadPath := filepath.Join(pendingDir, pendingUploadName)
 	uploadFile, err := os.Create(uploadPath)
 	if err != nil {
@@ -82,7 +83,7 @@ func stageInto(pendingDir string, paths Paths, current Current, upload io.Reader
 		return Manifest{}, err
 	}
 	databasePath := filepath.Join(pendingDir, filepath.FromSlash(databaseEntry))
-	if err := checkDatabase(databasePath, manifest); err != nil {
+	if err := checkDatabase(ctx, databasePath, manifest); err != nil {
 		return Manifest{}, err
 	}
 	if err := reader.Close(); err != nil {
@@ -225,7 +226,7 @@ func extractFile(file *zip.File, target string, maxBytes int64) (int64, string, 
 	return written, hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func checkDatabase(databasePath string, manifest Manifest) error {
+func checkDatabase(ctx context.Context, databasePath string, manifest Manifest) error {
 	handle, err := sql.Open(sqliteshim.ShimName, "file:"+filepath.ToSlash(databasePath)+"?mode=ro")
 	if err != nil {
 		return ErrInvalidArchive
@@ -233,11 +234,11 @@ func checkDatabase(databasePath string, manifest Manifest) error {
 	defer handle.Close()
 
 	var integrity string
-	if err := handle.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
+	if err := handle.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
 		return ErrInvalidArchive
 	}
 	var schemaVersion sql.NullInt64
-	if err := handle.QueryRow("SELECT MAX(version) FROM schema_migrations").Scan(&schemaVersion); err != nil {
+	if err := handle.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_migrations").Scan(&schemaVersion); err != nil {
 		return ErrInvalidArchive
 	}
 	if schemaVersion.Int64 != manifest.SchemaVersion {

@@ -99,7 +99,7 @@ func TestBackupRoundTripRestoresDatabaseAndMedia(t *testing.T) {
 	writeMedia(t, f.paths.MediaDir, "extra.png", "extra")
 
 	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	manifest, err := instancebackup.Stage(f.paths, f.current, bytes.NewReader(archive), now)
+	manifest, err := instancebackup.Stage(context.Background(), f.paths, f.current, bytes.NewReader(archive), now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func TestStageRejectsIncompatibleBackups(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			current := f.current
 			test.mutate(&current)
-			_, err := instancebackup.Stage(f.paths, current, bytes.NewReader(archive), time.Now())
+			_, err := instancebackup.Stage(context.Background(), f.paths, current, bytes.NewReader(archive), time.Now())
 			if !errors.Is(err, test.want) {
 				t.Fatalf("err = %v, want %v", err, test.want)
 			}
@@ -194,7 +194,7 @@ func TestStageRejectsMalformedArchives(t *testing.T) {
 	}
 	for name, archive := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := instancebackup.Stage(f.paths, f.current, bytes.NewReader(archive), time.Now())
+			_, err := instancebackup.Stage(context.Background(), f.paths, f.current, bytes.NewReader(archive), time.Now())
 			if !errors.Is(err, instancebackup.ErrInvalidArchive) {
 				t.Fatalf("err = %v, want ErrInvalidArchive", err)
 			}

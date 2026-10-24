@@ -121,7 +121,7 @@ func TestInstanceBackupExportAndStagedRestore(t *testing.T) {
 	require.Contains(t, export.Header().Get("Content-Disposition"), "openpost-backup-")
 	archive, err := zip.NewReader(bytes.NewReader(export.Body.Bytes()), int64(export.Body.Len()))
 	require.NoError(t, err)
-	var names []string
+	names := make([]string, 0, len(archive.File))
 	for _, file := range archive.File {
 		names = append(names, file.Name)
 	}

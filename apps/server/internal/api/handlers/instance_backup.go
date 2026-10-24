@@ -177,7 +177,7 @@ func (h *InstanceBackupHandler) export(c echo.Context) error {
 	}, response)
 	if err != nil {
 		c.Logger().Errorf("instance backup export failed: %v", err)
-		return errors.New("backup export failed")
+		panic(http.ErrAbortHandler)
 	}
 	return nil
 }
@@ -196,7 +196,7 @@ func (h *InstanceBackupHandler) upload(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to read the schema version"})
 	}
 	body := http.MaxBytesReader(c.Response(), c.Request().Body, instanceBackupMaxUploadBytes)
-	manifest, err := instancebackup.Stage(h.config.Paths, current, body, h.now())
+	manifest, err := instancebackup.Stage(c.Request().Context(), h.config.Paths, current, body, h.now())
 	if err != nil {
 		return h.stageFailure(c, err)
 	}

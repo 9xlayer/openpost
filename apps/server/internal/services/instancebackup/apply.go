@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 )
+
+var installMedia = moveContents
 
 type RestorePoint struct {
 	Name      string
@@ -30,65 +33,89 @@ func ApplyPending(paths Paths, now time.Time) (bool, error) {
 	}
 
 	restorePoint := filepath.Join(paths.dataDir(), restorePointPrefix+now.UTC().Format("20060102T150405Z"))
-	var undo []func()
-	rollback := func() {
-		for index := len(undo) - 1; index >= 0; index-- {
-			undo[index]()
-		}
-	}
-
 	if err := os.MkdirAll(restorePoint, 0o755); err != nil {
 		return false, err
 	}
 
-	stagedDatabase := filepath.Join(paths.PendingDir(), filepath.FromSlash(databaseEntry))
-	stagedMedia := filepath.Join(paths.PendingDir(), "media")
+	var undo undoStack
+	if err := setAsideCurrentData(paths, restorePoint, &undo); err != nil {
+		undo.run()
+		removeEmptyRestorePoint(restorePoint)
+		return false, err
+	}
+	if err := installStagedData(paths, &undo); err != nil {
+		undo.run()
+		removeEmptyRestorePoint(restorePoint)
+		return false, err
+	}
 
+	if err := os.Remove(filepath.Join(paths.PendingDir(), pendingMarkerName)); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return true, fmt.Errorf("restore applied but the staged marker could not be removed: %w", err)
+	}
+	if err := os.RemoveAll(paths.PendingDir()); err != nil {
+		log.Printf("restore applied but staging cleanup failed: %v", err)
+	}
+	return true, nil
+}
+
+func removeEmptyRestorePoint(restorePoint string) {
+	_ = os.Remove(filepath.Join(restorePoint, "media"))
+	_ = os.Remove(restorePoint)
+}
+
+type undoStack []func()
+
+func (u *undoStack) push(step func()) {
+	*u = append(*u, step)
+}
+
+func (u undoStack) run() {
+	for index := len(u) - 1; index >= 0; index-- {
+		u[index]()
+	}
+}
+
+func setAsideCurrentData(paths Paths, restorePoint string, undo *undoStack) error {
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		source := paths.DatabaseFile + suffix
 		destination := filepath.Join(restorePoint, filepath.Base(paths.DatabaseFile)+suffix)
 		moved, err := moveIfExists(source, destination)
 		if err != nil {
-			rollback()
-			return false, fmt.Errorf("set aside current database: %w", err)
+			return fmt.Errorf("set aside current database: %w", err)
 		}
 		if moved {
-			undo = append(undo, func() { _ = moveEntry(destination, source) })
+			undo.push(func() { _ = moveEntry(destination, source) })
 		}
 	}
-
-	if paths.MediaDir != "" {
-		moved, err := moveContents(paths.MediaDir, filepath.Join(restorePoint, "media"))
-		if err != nil {
-			rollback()
-			return false, fmt.Errorf("set aside current media: %w", err)
-		}
-		if len(moved) > 0 {
-			undo = append(undo, func() { _ = moveBack(moved) })
-		}
+	if paths.MediaDir == "" {
+		return nil
 	}
+	moved, err := moveContents(paths.MediaDir, filepath.Join(restorePoint, "media"))
+	if err != nil {
+		return fmt.Errorf("set aside current media: %w", err)
+	}
+	if len(moved) > 0 {
+		undo.push(func() { _ = moveBack(moved) })
+	}
+	return nil
+}
 
+func installStagedData(paths Paths, undo *undoStack) error {
+	stagedDatabase := filepath.Join(paths.PendingDir(), filepath.FromSlash(databaseEntry))
 	if err := moveEntry(stagedDatabase, paths.DatabaseFile); err != nil {
-		rollback()
-		return false, fmt.Errorf("install restored database: %w", err)
+		return fmt.Errorf("install restored database: %w", err)
 	}
-	undo = append(undo, func() { _ = os.Remove(paths.DatabaseFile) })
-
-	if paths.MediaDir != "" {
-		if err := os.MkdirAll(paths.MediaDir, 0o755); err != nil {
-			rollback()
-			return false, err
-		}
-		if _, err := moveContents(stagedMedia, paths.MediaDir); err != nil {
-			rollback()
-			return false, fmt.Errorf("install restored media: %w", err)
-		}
+	undo.push(func() { _ = moveEntry(paths.DatabaseFile, stagedDatabase) })
+	if paths.MediaDir == "" {
+		return nil
 	}
-
-	if err := os.RemoveAll(paths.PendingDir()); err != nil {
-		return true, fmt.Errorf("restore applied but staging cleanup failed: %w", err)
+	if err := os.MkdirAll(paths.MediaDir, 0o755); err != nil {
+		return err
 	}
-	return true, nil
+	if _, err := installMedia(filepath.Join(paths.PendingDir(), "media"), paths.MediaDir); err != nil {
+		return fmt.Errorf("install restored media: %w", err)
+	}
+	return nil
 }
 
 type movedEntry struct {

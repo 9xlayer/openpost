@@ -155,7 +155,17 @@
 		phase = 'restarting';
 		restartAbort = new AbortController();
 		const ready = await waitForRestart(restartAbort.signal);
-		phase = ready ? 'restarted' : 'timeout';
+		phase = ready && (await restoreWasApplied(restartAbort.signal)) ? 'restarted' : 'timeout';
+	}
+
+	async function restoreWasApplied(signal: AbortSignal) {
+		try {
+			const current = await fetchBackupStatus(signal);
+			status = current;
+			return current.pending === undefined;
+		} catch (cause) {
+			return cause instanceof InstanceBackupError && cause.status === 401;
+		}
 	}
 
 	async function removeRestorePoint(name: string) {

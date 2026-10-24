@@ -1337,6 +1337,9 @@ func capturePanics(recorder telemetry.Recorder, diagnosticsReporter *diagnostics
 		return func(c echo.Context) (err error) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
+					if abort, ok := recovered.(error); ok && errors.Is(abort, http.ErrAbortHandler) {
+						panic(recovered)
+					}
 					c.Set(telemetryPanicCapturedKey, true)
 					c.Set(diagnosticsCapturedKey, true)
 					if diagnosticsReporter != nil {
