@@ -72,7 +72,7 @@ func (h *MediaHandler) prepareImage(ctx context.Context, userID, mediaID string,
 	if err != nil {
 		return nil, err
 	}
-	fitted, mime, err := imageprepare.Fit(ctx, content, resolved.Media)
+	prepared, err := imageprepare.Prepare(ctx, content, resolved.Media)
 	if err != nil {
 		if errors.Is(err, imageprepare.ErrAnimated) {
 			return nil, huma.Error422UnprocessableEntity("Animated images cannot be fitted without losing frames")
@@ -83,7 +83,7 @@ func (h *MediaHandler) prepareImage(ctx context.Context, userID, mediaID string,
 	if input.AltText != nil {
 		altText = *input.AltText
 	}
-	derivative, err := h.saveFittedImage(ctx, original, fitted, mime, altText)
+	derivative, err := h.saveFittedImage(ctx, original, prepared, altText)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,8 @@ func (h *MediaHandler) prepareImage(ctx context.Context, userID, mediaID string,
 	return output, nil
 }
 
-func (h *MediaHandler) saveFittedImage(ctx context.Context, original models.MediaAttachment, fitted []byte, mime, altText string) (models.MediaAttachment, error) {
+func (h *MediaHandler) saveFittedImage(ctx context.Context, original models.MediaAttachment, prepared *imageprepare.Prepared, altText string) (models.MediaAttachment, error) {
+	fitted, mime := prepared.Content, prepared.MIME
 	hash := sha256.Sum256(fitted)
 	var derivative models.MediaAttachment
 	err := h.db.NewSelect().Model(&derivative).Where("workspace_id = ? AND parent_media_id = ? AND file_hash = ? AND source = 'image_fit' AND alt_text = ? AND trashed_at IS NULL", original.WorkspaceID, original.ID, hex.EncodeToString(hash[:]), altText).Scan(ctx)
@@ -102,7 +103,7 @@ func (h *MediaHandler) saveFittedImage(ctx context.Context, original models.Medi
 		if ext == "jpeg" {
 			ext = "jpg"
 		}
-		_, err = h.processUploadBytes(ctx, mediaUploadBytesInput{WorkspaceID: original.WorkspaceID, Filename: strings.TrimSuffix(original.OriginalFilename, filepath.Ext(original.OriginalFilename)) + "-fit." + ext, DeclaredMimeType: mime, Content: fitted, Size: int64(len(fitted)), AltText: altText, Source: "image_fit", AssetKind: "library", RetentionClass: "temporary", ParentMediaID: original.ID, DesignDocumentID: original.DesignDocumentID, DesignPageID: original.DesignPageID, OnCreated: func(media models.MediaAttachment) { derivative = media }})
+		_, err = h.processUploadBytes(ctx, mediaUploadBytesInput{WorkspaceID: original.WorkspaceID, Filename: strings.TrimSuffix(original.OriginalFilename, filepath.Ext(original.OriginalFilename)) + "-fit." + ext, DeclaredMimeType: mime, Content: fitted, Size: int64(len(fitted)), AltText: altText, Source: "image_fit", AssetKind: "library", RetentionClass: "temporary", ParentMediaID: original.ID, DesignDocumentID: original.DesignDocumentID, DesignPageID: original.DesignPageID, PreparedImage: prepared, OnCreated: func(media models.MediaAttachment) { derivative = media }})
 	}
 	if err != nil {
 		return models.MediaAttachment{}, huma.Error500InternalServerError("Could not save fitted copy")

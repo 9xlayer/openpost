@@ -34,8 +34,9 @@ func TestFitPadsWithoutCroppingAndRetainsSource(t *testing.T) {
 	before := bytes.Clone(source)
 	for _, mime := range []string{"image/png", "image/webp", "image/jpeg"} {
 		t.Run(mime, func(t *testing.T) {
-			data, actual, err := Fit(t.Context(), source, capabilities.MediaConstraint{AllowedMIMEs: []string{mime}, AspectRatios: []string{"1:1"}, MaxWidth: 120, MaxHeight: 120, MaxImageSizeBytes: 50000})
+			prepared, err := Prepare(t.Context(), source, capabilities.MediaConstraint{AllowedMIMEs: []string{mime}, AspectRatios: []string{"1:1"}, MaxWidth: 120, MaxHeight: 120, MaxImageSizeBytes: 50000})
 			require.NoError(t, err)
+			data, actual := prepared.Content, prepared.MIME
 			require.Equal(t, mime, actual)
 			require.LessOrEqual(t, len(data), 50000)
 			decoded, _, err := image.Decode(bytes.NewReader(data))
@@ -64,32 +65,32 @@ func TestFitRejectsAnimationUnsafeDimensionsAndImpossibleLimits(t *testing.T) {
 	binary.BigEndian.PutUint32(chunk[16:], crc32.ChecksumIEEE(chunk[4:16]))
 	animatedPNG := append(bytes.Clone(source[:33]), chunk...)
 	animatedPNG = append(animatedPNG, source[33:]...)
-	_, _, err := Fit(t.Context(), animatedPNG, capabilities.MediaConstraint{})
+	_, err := Prepare(t.Context(), animatedPNG, capabilities.MediaConstraint{})
 	require.ErrorIs(t, err, ErrAnimated)
 	huge := bytes.Clone(source)
 	binary.BigEndian.PutUint32(huge[16:], 100000)
 	binary.BigEndian.PutUint32(huge[20:], 100000)
 	binary.BigEndian.PutUint32(huge[29:], crc32.ChecksumIEEE(huge[12:29]))
-	_, _, err = Fit(t.Context(), huge, capabilities.MediaConstraint{})
+	_, err = Prepare(t.Context(), huge, capabilities.MediaConstraint{})
 	require.ErrorIs(t, err, ErrCannotFit)
 	for _, limits := range []capabilities.MediaConstraint{
 		{AllowedMIMEs: []string{"video/mp4"}}, {MinWidth: 200, MaxWidth: 100}, {MaxImageSizeBytes: 1},
 	} {
-		_, _, err = Fit(t.Context(), source, limits)
+		_, err = Prepare(t.Context(), source, limits)
 		require.ErrorIs(t, err, ErrCannotFit)
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	_, _, err = Fit(ctx, source, capabilities.MediaConstraint{})
+	_, err = Prepare(ctx, source, capabilities.MediaConstraint{})
 	require.ErrorIs(t, err, context.Canceled)
 }
 
 func TestFitNarrowImageRespectsPixelBudget(t *testing.T) {
 	var input bytes.Buffer
 	require.NoError(t, png.Encode(&input, image.NewNRGBA(image.Rect(0, 0, 10000, 1))))
-	data, _, err := Fit(t.Context(), input.Bytes(), capabilities.MediaConstraint{MaxPixels: 1000})
+	prepared, err := Prepare(t.Context(), input.Bytes(), capabilities.MediaConstraint{MaxPixels: 1000})
 	require.NoError(t, err)
-	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	config, _, err := image.DecodeConfig(bytes.NewReader(prepared.Content))
 	require.NoError(t, err)
 	require.LessOrEqual(t, config.Width*config.Height, 1000)
 }
@@ -110,7 +111,7 @@ func TestFitDeadlineTerminatesImageWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 	started := time.Now()
-	_, _, err := Fit(ctx, input.Bytes(), capabilities.MediaConstraint{AspectRatios: []string{"1:1"}})
+	_, err := Prepare(ctx, input.Bytes(), capabilities.MediaConstraint{AspectRatios: []string{"1:1"}})
 	require.ErrorIs(t, err, context.DeadlineExceeded)
 	require.Less(t, time.Since(started), time.Second)
 }

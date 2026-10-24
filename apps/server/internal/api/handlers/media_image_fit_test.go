@@ -52,6 +52,18 @@ func TestPrepareImageUsesDestinationAndPreservesOriginalAcrossRESTAndMCP(t *test
 		var fitted models.MediaAttachment
 		require.NoError(t, srv.db.NewSelect().Model(&fitted).Where("id = ?", output.Body.Media.ID).Scan(t.Context()))
 		require.LessOrEqual(t, fitted.Width*fitted.Height, 2048)
+		var thumbnails Thumbnails
+		require.NoError(t, json.Unmarshal([]byte(fitted.ThumbnailsJSON), &thumbnails))
+		require.NotEmpty(t, thumbnails.SM)
+		require.NotEmpty(t, thumbnails.MD)
+		thumbnailFile, err := storage.Open(t.Context(), thumbnails.MD)
+		require.NoError(t, err)
+		config, _, err := image.DecodeConfig(thumbnailFile)
+		require.NoError(t, err)
+		require.NoError(t, thumbnailFile.Close())
+		require.LessOrEqual(t, config.Width, 400)
+		require.LessOrEqual(t, config.Height, 400)
+
 		require.NotEqual(t, original.ID, output.Body.Media.ID)
 		require.Equal(t, original.ID, output.Body.Media.ParentMediaID)
 		require.Equal(t, "image_fit", output.Body.Media.Source)

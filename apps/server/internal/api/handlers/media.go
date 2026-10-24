@@ -30,6 +30,7 @@ import (
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/idempotency"
+	"github.com/openpost/backend/internal/imageprepare"
 	"github.com/openpost/backend/internal/mediacodec/ico"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/auth"
@@ -48,8 +49,8 @@ import (
 )
 
 const (
-	ThumbnailSizeSM                   = 150
-	ThumbnailSizeMD                   = 400
+	ThumbnailSizeSM                   = imageprepare.ThumbnailSizeSM
+	ThumbnailSizeMD                   = imageprepare.ThumbnailSizeMD
 	MaxBufferedMediaUploadBytes int64 = 50 * 1024 * 1024
 	MaxBrandFontUploadBytes     int64 = 10 * 1024 * 1024
 	mediaUploadMaxImagePixels   int64 = 64_000_000
@@ -80,6 +81,8 @@ type MediaHandler struct {
 }
 
 type mediaUploadBytesInput struct {
+	// PreparedImage is an internal worker receipt, never accepted from HTTP uploads.
+	PreparedImage *imageprepare.Prepared
 	// StableID is an internal durable import identity, never accepted from uploads.
 	StableID         string
 	WorkspaceID      string
@@ -3794,7 +3797,11 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 		}
 	}
 
-	if err := validateMediaImageContent(mimeType, input.Content); err != nil {
+	if input.PreparedImage != nil {
+		if source != "image_fit" || !input.PreparedImage.Matches(input.Content, mimeType) {
+			return nil, errors.New("invalid image preparation receipt")
+		}
+	} else if err := validateMediaImageContent(mimeType, input.Content); err != nil {
 		return nil, err
 	}
 
@@ -3872,9 +3879,14 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 	var thumbnails Thumbnails
 
 	if strings.HasPrefix(mimeType, "image/") {
-		width, height, thumbnails, err = h.processImage(ctx, input.Content, mediaID, mimeType)
-		if err != nil {
-			width, height = h.getImageDimensions(bytes.NewReader(input.Content), mimeType)
+		if input.PreparedImage != nil {
+			width, height = input.PreparedImage.Width, input.PreparedImage.Height
+			thumbnails = h.persistPreparedThumbnails(ctx, mediaID, input.PreparedImage)
+		} else {
+			width, height, thumbnails, err = h.processImage(ctx, input.Content, mediaID, mimeType)
+			if err != nil {
+				width, height = h.getImageDimensions(bytes.NewReader(input.Content), mimeType)
+			}
 		}
 		media.Width = width
 		media.Height = height
