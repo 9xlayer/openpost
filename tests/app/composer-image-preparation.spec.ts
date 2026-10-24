@@ -151,7 +151,12 @@ test("optimizes attachments automatically and fits one network while keeping bot
   await page.setViewportSize({ width: 1280, height: 1000 });
   await fit.scrollIntoViewIfNeeded();
   await page.screenshot({ path: info.outputPath("before-fit.png"), fullPage: true });
+  const preparation = page.waitForRequest(`**/api/v1/media/${originals[1].id}/prepare-image`);
   await fit.click();
+  expect((await preparation).postDataJSON()).toMatchObject({
+    account_id: accounts[0].id,
+    output_profile: "bluesky.post",
+  });
   await expect(
     page.getByText("Image fitted for this account. Original kept.", { exact: true }),
   ).toBeVisible();

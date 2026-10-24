@@ -130,6 +130,7 @@ func delegatedOperationAllowed(scopeSet, operationID string) bool {
 		"create-media-upload-session":          "media:write",
 		RESTOperationUploadMediaSessionContent: "media:write",
 		"complete-media-upload-session":        "media:write",
+		"prepare-media-image":                  "media:write",
 		"optimize-media-image":                 "media:write",
 		"schedule-publication":                 "publications:schedule",
 		"publish-publication-now":              "publications:publish",

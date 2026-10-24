@@ -221,6 +221,7 @@ var operations = []Operation{
 	writeDisabled("update-media-favorite", EffectLocalMutation),
 	writeDisabled("retry-media-analysis", EffectLocalMutation),
 	writeDisabled("optimize-media-image", EffectLocalMutation),
+	writeDisabled("prepare-media-image", EffectLocalMutation),
 	writeDisabled("create-social-set", EffectLocalMutation),
 	writeDisabled("update-social-set", EffectLocalMutation),
 	writeDisabled("delete-social-set", EffectDestructive),

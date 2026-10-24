@@ -3660,6 +3660,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/media/{id}/prepare-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a ready image copy fitted to a connected destination */
+        post: operations["prepare-media-image"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/media/{id}/restore": {
         parameters: {
             query?: never;
@@ -11963,6 +11980,11 @@ export interface components {
             max_image_size_bytes?: number;
             /**
              * Format: int64
+             * @description Maximum total decoded image pixels, width times height
+             */
+            max_pixels?: number;
+            /**
+             * Format: int64
              * @description Maximum image dimension on its shorter side
              */
             max_short_side?: number;
@@ -13166,6 +13188,38 @@ export interface components {
             preferences: {
                 [key: string]: components["schemas"]["ChannelPreference"];
             };
+        };
+        PrepareMediaImageBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/PrepareMediaImageBody.json
+             */
+            readonly $schema?: string;
+            /** @description Connected destination in the original image's Workspace */
+            account_id: string;
+            /** @description Optional alt text for the fitted copy */
+            alt_text?: string;
+            /** @description Explicit destination format from resolve-capabilities */
+            output_profile: string;
+            /** @description Destination settings used when resolving its limits */
+            settings?: {
+                [key: string]: unknown;
+            };
+        };
+        PrepareMediaImageOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/PrepareMediaImageOutputBody.json
+             */
+            readonly $schema?: string;
+            media: components["schemas"]["MediaUploadResult"];
+            /**
+             * @description The derivative is fully processed before returning. Select its media ID explicitly when authoring a post.
+             * @enum {string}
+             */
+            status: "ready";
         };
         PreviewMemeInputBody: {
             /**
@@ -31588,6 +31642,86 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "prepare-media-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareMediaImageBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepareMediaImageOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

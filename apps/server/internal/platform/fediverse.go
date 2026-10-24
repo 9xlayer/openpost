@@ -516,6 +516,7 @@ func compatV2InstanceCapabilities(ctx context.Context, instanceURL, accessToken 
 				MaxExpiration          int `json:"max_expiration"`
 			} `json:"polls"`
 			MediaAttachments struct {
+				ImageMatrixLimit   int64    `json:"image_matrix_limit"`
 				ImageSizeLimit     int64    `json:"image_size_limit"`
 				VideoSizeLimit     int64    `json:"video_size_limit"`
 				SupportedMIMETypes []string `json:"supported_mime_types"`
@@ -537,6 +538,15 @@ func compatV2InstanceCapabilities(ctx context.Context, instanceURL, accessToken 
 	}
 	if instance.Configuration.Statuses.MaxMediaAttachments > 0 {
 		constraints["media_max_count"] = instance.Configuration.Statuses.MaxMediaAttachments
+	}
+	// Mastodon Instance configuration documents image_size_limit in bytes and
+	// image_matrix_limit as width times height. Verified 2026-10-24:
+	// https://docs.joinmastodon.org/entities/Instance/#configurationmedia_attachments
+	if limit := instance.Configuration.MediaAttachments.ImageSizeLimit; limit > 0 {
+		constraints["max_image_size_bytes"] = limit
+	}
+	if limit := instance.Configuration.MediaAttachments.ImageMatrixLimit; limit > 0 {
+		constraints["max_image_pixels"] = limit
 	}
 	if instance.Configuration.MediaAttachments.VideoSizeLimit > 0 {
 		constraints["max_video_size_bytes"] = instance.Configuration.MediaAttachments.VideoSizeLimit

@@ -1402,6 +1402,7 @@ func mcpOperationCatalog() []mcpOperationDefinition {
 		mcpSuggestNextSlotTool(),
 		mcpUploadMediaFromURLTool(),
 		mcpUploadMediaBase64Tool(),
+		mcpPrepareMediaImageTool(),
 		mcpPostMetricsTool(),
 		mcpDashboardLinkTool(),
 		mcpSearchDocsTool(),
@@ -2705,6 +2706,8 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"media": mcpOpenObjectSchema(),
 		}, "media")
+	case mcpToolPrepareImage:
+		return mcpStructuredOutputSchema(map[string]any{"media": mcpOpenObjectSchema(), "status": map[string]any{"type": "string", "enum": []string{"ready"}}}, "media", "status")
 	case mcpToolDeleteMedia:
 		return mcpStructuredOutputSchema(map[string]any{
 			"message":  map[string]any{"type": "string"},
@@ -3337,7 +3340,7 @@ func (h *MCPHandler) callMCPOperation(ctx context.Context, userID, operation str
 		mcpToolValidatePub, mcpToolSchedulePub, mcpToolCancelPub, mcpToolPublishPubNow, mcpToolDeletePub,
 		mcpToolRetryFailed, mcpToolRetryOne, mcpToolPubEvents, mcpToolComments,
 		mcpToolReplyComment, mcpToolHideComment, mcpToolDeleteComment, mcpToolSuggestSlot, mcpToolUploadURL, mcpToolUploadBase64,
-		mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia:
+		mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia, mcpToolPrepareImage:
 		return h.callWorkspaceActionTool(ctx, userID, operation, args)
 	default:
 		return nil, &mcpError{Code: -32602, Message: fmt.Sprintf("unknown operation %q; call %s to discover supported operations", operation, mcpToolSearch)}
@@ -3352,7 +3355,7 @@ func (h *MCPHandler) callWorkspaceActionTool(ctx context.Context, userID, toolNa
 		mcpToolRetryFailed, mcpToolRetryOne, mcpToolPubEvents, mcpToolComments,
 		mcpToolReplyComment, mcpToolHideComment, mcpToolDeleteComment:
 		return h.callPublicationTool(ctx, userID, toolName, args)
-	case mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia:
+	case mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia, mcpToolPrepareImage:
 		return h.callMediaTool(ctx, userID, toolName, args)
 	case mcpToolSuggestSlot:
 		return h.suggestNextSlot(ctx, userID, args)
@@ -5527,6 +5530,8 @@ func (h *MCPHandler) callMediaTool(ctx context.Context, userID, toolName string,
 		return h.getMedia(ctx, userID, args)
 	case mcpToolUpdateMedia:
 		return h.updateMedia(ctx, userID, args)
+	case mcpToolPrepareImage:
+		return h.prepareMediaImage(ctx, userID, args)
 	case mcpToolDeleteMedia:
 		return h.deleteMedia(ctx, userID, args)
 	default:

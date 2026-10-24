@@ -67,15 +67,16 @@ const (
 )
 
 type MediaHandler struct {
-	db          *bun.DB
-	storage     mediastore.BlobStorage
-	auth        *auth.Service
-	authn       middleware.Authenticator
-	signer      *mediasigner.Signer
-	quota       entitlements.Service
-	usage       *usage.Service
-	video       *videoprocessing.Service
-	publicMedia *publicurl.MediaVerifier
+	capabilityResolver *CapabilityResolverHandler
+	db                 *bun.DB
+	storage            mediastore.BlobStorage
+	auth               *auth.Service
+	authn              middleware.Authenticator
+	signer             *mediasigner.Signer
+	quota              entitlements.Service
+	usage              *usage.Service
+	video              *videoprocessing.Service
+	publicMedia        *publicurl.MediaVerifier
 }
 
 type mediaUploadBytesInput struct {

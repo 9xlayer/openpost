@@ -12532,6 +12532,11 @@
 						"format": "int64",
 						"type": "integer"
 					},
+					"max_pixels": {
+						"description": "Maximum total decoded image pixels, width times height",
+						"format": "int64",
+						"type": "integer"
+					},
 					"max_short_side": {
 						"description": "Maximum image dimension on its shorter side",
 						"format": "int64",
@@ -15428,6 +15433,62 @@
 					}
 				},
 				"required": ["preferences", "digest_time", "digest_timezone"],
+				"type": "object"
+			},
+			"PrepareMediaImageBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/api/v1/schemas/PrepareMediaImageBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"account_id": {
+						"description": "Connected destination in the original image's Workspace",
+						"minLength": 1,
+						"type": "string"
+					},
+					"alt_text": {
+						"description": "Optional alt text for the fitted copy",
+						"maxLength": 2000,
+						"type": "string"
+					},
+					"output_profile": {
+						"description": "Explicit destination format from resolve-capabilities",
+						"minLength": 1,
+						"type": "string"
+					},
+					"settings": {
+						"additionalProperties": {},
+						"description": "Destination settings used when resolving its limits",
+						"type": "object"
+					}
+				},
+				"required": ["account_id", "output_profile"],
+				"type": "object"
+			},
+			"PrepareMediaImageOutputBody": {
+				"additionalProperties": false,
+				"properties": {
+					"$schema": {
+						"description": "A URL to the JSON Schema for this object.",
+						"examples": ["https://example.com/api/v1/schemas/PrepareMediaImageOutputBody.json"],
+						"format": "uri",
+						"readOnly": true,
+						"type": "string"
+					},
+					"media": {
+						"$ref": "#/components/schemas/MediaUploadResult"
+					},
+					"status": {
+						"description": "The derivative is fully processed before returning. Select its media ID explicitly when authoring a post.",
+						"enum": ["ready"],
+						"type": "string"
+					}
+				},
+				"required": ["media", "status"],
 				"type": "object"
 			},
 			"PreviewMemeInputBody": {
@@ -44883,6 +44944,112 @@
 					}
 				},
 				"summary": "Create a smaller lossless image copy while retaining the original",
+				"tags": ["Media"],
+				"x-openpost-automation": {
+					"access": "write",
+					"effect": "local-mutation",
+					"exposure": "disabled",
+					"idempotency": "none",
+					"retry": "never"
+				}
+			}
+		},
+		"/media/{id}/prepare-image": {
+			"post": {
+				"operationId": "prepare-media-image",
+				"parameters": [
+					{
+						"in": "path",
+						"name": "id",
+						"required": true,
+						"schema": {
+							"type": "string"
+						}
+					}
+				],
+				"requestBody": {
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/PrepareMediaImageBody"
+							}
+						}
+					},
+					"required": true
+				},
+				"responses": {
+					"200": {
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/PrepareMediaImageOutputBody"
+								}
+							}
+						},
+						"description": "OK"
+					},
+					"403": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Forbidden"
+					},
+					"404": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Not Found"
+					},
+					"413": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Request Entity Too Large"
+					},
+					"422": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Unprocessable Entity"
+					},
+					"500": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Internal Server Error"
+					},
+					"503": {
+						"content": {
+							"application/problem+json": {
+								"schema": {
+									"$ref": "#/components/schemas/ErrorModel"
+								}
+							}
+						},
+						"description": "Service Unavailable"
+					}
+				},
+				"summary": "Create a ready image copy fitted to a connected destination",
 				"tags": ["Media"],
 				"x-openpost-automation": {
 					"access": "write",

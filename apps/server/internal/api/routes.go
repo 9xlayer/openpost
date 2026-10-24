@@ -300,6 +300,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	handlers.NewTelegramConnectionHandler(deps.DB, deps.Authenticator, deps.BotIngressService, deps.TelegramService, deps.Entitlement).RegisterRoutes(api)
 	handlers.NewCapabilityHandler().RegisterRoutes(api)
 	capabilityResolverHandler := handlers.NewCapabilityResolverHandler(deps.DB, deps.Authenticator, deps.Providers, deps.TokenSource)
+	mediaHandler.SetCapabilityResolver(capabilityResolverHandler)
 	capabilityResolverHandler.SetPublicMediaVerifier(deps.PublicMediaVerifier)
 	capabilityResolverHandler.SetProviderReadiness(deps.ProviderReadinessService)
 	capabilityResolverHandler.SetConnectorRegistry(deps.ConnectorRegistry, deps.ConnectorStore)

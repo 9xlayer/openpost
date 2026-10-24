@@ -5124,7 +5124,7 @@
 					(n): n is number => !!n && n > 0
 				)
 			);
-			// Lossless preparation can fix a size-only issue without a browser re-encode.
+			// Lossless preparation can fix a size-only issue without re-encoding its pixels.
 			const sizeOnly = (resolved.issues ?? [])
 				.filter((issue) => issue.media_id === mediaId && issue.code.startsWith('media_'))
 				.every((issue) => issue.code === 'media_size');
@@ -5132,11 +5132,11 @@
 				optimized && optimized.size <= maxBytes && sizeOnly
 					? optimized
 					: await fitStoredImage({
-							workspaceId,
-							mediaId: optimized?.id ?? mediaId,
-							originalId: imagePreparationInput(mediaId),
+							mediaId: imagePreparationInput(mediaId),
+							accountId: account.id,
+							outputProfile: resolved.output_profile,
+							settings: settingsForAccount(account),
 							altText: alt,
-							limits: resolved.media,
 							signal: controller.signal
 						});
 			await hydrateMediaMetadata(workspaceId, [result.id], true);

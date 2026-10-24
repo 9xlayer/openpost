@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMastodonResolveAccountPublishingCapabilitiesReadsInstanceVideoLimits(t *testing.T) {
+func TestMastodonResolveAccountPublishingCapabilitiesReadsInstanceMediaLimits(t *testing.T) {
 	originalClient := httpClient
 	defer func() { httpClient = originalClient }()
 
@@ -29,6 +29,8 @@ func TestMastodonResolveAccountPublishingCapabilitiesReadsInstanceVideoLimits(t 
 				"statuses":{"max_characters":800,"max_media_attachments":6},
 				"media_attachments":{
 					"video_size_limit":209715200,
+                    "image_size_limit":1000000,
+                    "image_matrix_limit":12000000,
 					"supported_mime_types":["image/jpeg","video/mp4","video/webm"]
 				}
 			}
@@ -43,6 +45,8 @@ func TestMastodonResolveAccountPublishingCapabilitiesReadsInstanceVideoLimits(t 
 	if result.Constraints["max_video_size_bytes"] != int64(209715200) {
 		t.Fatalf("unexpected video size constraint: %#v", result.Constraints)
 	}
+	require.Equal(t, int64(1000000), result.Constraints["max_image_size_bytes"])
+	require.Equal(t, int64(12000000), result.Constraints["max_image_pixels"])
 	encoded, err := json.Marshal(result.Constraints["allowed_mimes"])
 	if err != nil {
 		t.Fatal(err)

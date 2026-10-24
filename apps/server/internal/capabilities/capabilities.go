@@ -139,6 +139,7 @@ type SettingDefinition struct {
 type SettingField = SettingDefinition
 
 type MediaConstraint struct {
+	MaxPixels              int64    `json:"max_pixels,omitempty" doc:"Maximum total decoded image pixels, width times height"`
 	VideoExclusive         bool     `json:"video_exclusive,omitempty" doc:"A video must be the only attachment in a segment"`
 	MinCount               int      `json:"min_count"`
 	MaxCount               int      `json:"max_count"`
@@ -1228,6 +1229,12 @@ func ApplyAccountConstraints(resolved *ResolvedCapability, input AccountConstrai
 }
 
 func applyResolvedConstraintValues(resolved *ResolvedCapability, constraints map[string]any) {
+	if value, ok := constraintInt64(constraints["max_image_size_bytes"]); ok && value > 0 {
+		resolved.Media.MaxImageSizeBytes = value
+	}
+	if value, ok := constraintInt64(constraints["max_image_pixels"]); ok && value > 0 {
+		resolved.Media.MaxPixels = value
+	}
 	if value, ok := constraintInt(constraints["text_limit"]); ok && value > 0 {
 		resolved.TextLimit = value
 	}
@@ -2317,6 +2324,9 @@ func validateMediaItem(capability Capability, item MediaItem) []ValidationIssue 
 			Parameters: map[string]any{"size_bytes": item.Size, "max_size_bytes": capability.Media.MaxImageSizeBytes},
 			Provider:   capability.Provider, Profile: capability.Profile, MediaID: item.ID,
 		})
+	}
+	if strings.HasPrefix(item.MimeType, "image/") && capability.Media.MaxPixels > 0 && item.Width > 0 && item.Height > 0 && int64(item.Width) > capability.Media.MaxPixels/int64(item.Height) {
+		issues = append(issues, ValidationIssue{Severity: "error", Code: "media_pixels_max", Message: fmt.Sprintf("Image exceeds the destination limit of %d pixels", capability.Media.MaxPixels), Parameters: map[string]any{"max_pixels": capability.Media.MaxPixels}, Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
 	}
 	for _, boundary := range []struct {
 		invalid bool

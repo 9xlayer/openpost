@@ -971,3 +971,11 @@ func TestYouTubeExplicitDescriptionWinsOverDestinationSetting(t *testing.T) {
 	issues := Validate(ProviderYouTube, models.ContentProfileLongVideo, "Body", "Title", strings.Repeat("😀", 1251), []MediaItem{{ID: "video", MimeType: "video/mp4", Size: 1024, AnalysisStatus: "ready"}}, map[string]any{"privacy": "private", "title": "Title", "category_id": "22", "description": "Default description"})
 	requireIssueCode(t, issues, "description_invalid")
 }
+
+func TestAccountImageLimitsReachMediaValidation(t *testing.T) {
+	resolved := Resolve(ProviderMastodon, ResolveInput{RequestedOutputProfile: "mastodon.post"})
+	ApplyAccountConstraints(&resolved, AccountConstraintInput{Constraints: map[string]any{"max_image_size_bytes": int64(1000), "max_image_pixels": int64(10000)}, Segments: []ResolveSegment{{Media: []MediaItem{{ID: "image", MimeType: "image/png", Size: 1001, Width: 200, Height: 100}}}}})
+	require.Equal(t, int64(1000), resolved.Media.MaxImageSizeBytes)
+	requireIssueCode(t, resolved.Issues, "media_size")
+	requireIssueCode(t, resolved.Issues, "media_pixels_max")
+}

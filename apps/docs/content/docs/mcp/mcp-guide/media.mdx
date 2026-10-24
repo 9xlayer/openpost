@@ -26,6 +26,12 @@ The local picker works only in clients that support MCP Apps UI and app-only too
 
 After an upload, ask the assistant to confirm the media item's ID, type, dimensions or duration, and analysis state. Add alt text before publishing an image when the destination supports it.
 
+## Fit an image to a destination
+
+With `mcp:full` and workspace editor access, ask the assistant to call `prepare_media_image` with `media_id`, `account_id`, and the destination's explicit `output_profile`. Pass destination `settings` when they affect its limits, and optionally `alt_text` for the copy.
+
+The operation returns a separate, fully processed image with `status: "ready"`. It uses connected-account limits to pad, downscale, or re-encode the image. It retains the original and rejects animated images instead of dropping frames. Ask the assistant to attach the returned media ID explicitly, then validate the complete post. Preparation never replaces an existing attachment or publishes a post.
+
 ## Edit an open project
 
 Sign in to the workspace and open an Image Editor or Video Editor project. Connect [Codex or Claude Code](/mcp/coding-assistants) with editing access, then ask the assistant to find that open project. No OpenPost desktop installation is needed.

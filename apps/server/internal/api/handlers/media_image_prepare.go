@@ -30,6 +30,7 @@ type OptimizeMediaImageOutput struct {
 }
 
 func (h *MediaHandler) registerMediaImagePreparation(api huma.API) {
+	h.registerMediaImageFit(api)
 	huma.Register(api, huma.Operation{OperationID: "optimize-media-image", Method: http.MethodPost, Path: "/media/{id}/optimize-image", Summary: "Create a smaller lossless image copy while retaining the original", Tags: []string{tagMedia}, Middlewares: huma.Middlewares{middleware.AuthMiddleware(api, h.authn)}, Errors: []int{403, 404, 413, 422, 500}}, h.optimizeMediaImage)
 }
 func (h *MediaHandler) optimizeMediaImage(ctx context.Context, input *OptimizeMediaImageInput) (*OptimizeMediaImageOutput, error) {
@@ -53,7 +54,7 @@ func (h *MediaHandler) optimizeMediaImage(ctx context.Context, input *OptimizeMe
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	content, err := h.readImageForOptimization(ctx, original)
+	content, err := h.readImageForPreparation(ctx, original)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,7 @@ func (h *MediaHandler) optimizeMediaImage(ctx context.Context, input *OptimizeMe
 	return output, nil
 }
 
-func (h *MediaHandler) readImageForOptimization(ctx context.Context, original models.MediaAttachment) ([]byte, error) {
+func (h *MediaHandler) readImageForPreparation(ctx context.Context, original models.MediaAttachment) ([]byte, error) {
 	file, err := h.storage.Open(ctx, filepath.Base(original.FilePath))
 	if err != nil {
 		return nil, huma.Error500InternalServerError("Could not open image")
@@ -96,7 +97,7 @@ func (h *MediaHandler) readImageForOptimization(ctx context.Context, original mo
 		return nil, huma.Error500InternalServerError("Could not read image")
 	}
 	if int64(len(content)) > MaxBufferedMediaUploadBytes {
-		return nil, huma.Error413RequestEntityTooLarge("Image is too large to optimize")
+		return nil, huma.Error413RequestEntityTooLarge("Image is too large to prepare")
 	}
 	return content, nil
 }
