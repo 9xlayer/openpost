@@ -18,17 +18,18 @@ import (
 )
 
 type postFlags struct {
-	content     string
-	file        string
-	accounts    string
-	schedule    string
-	media       []string
-	mediaAlt    []string
-	threadDraft string
-	randomDelay int
-	limit       int
-	offset      int
-	status      string
+	segmentsFile string
+	content      string
+	file         string
+	accounts     string
+	schedule     string
+	media        []string
+	mediaAlt     []string
+	threadDraft  string
+	randomDelay  int
+	limit        int
+	offset       int
+	status       string
 }
 
 func newPostCmd() *cobra.Command {
@@ -61,6 +62,13 @@ func newPostCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			segments, err := readOptionalPublicationSegments(flags.segmentsFile)
+			if err != nil {
+				return err
+			}
+			if len(segments) > 0 {
+				content = segments[0].Body
+			}
 			accountIDs, err := resolveAccounts(cmd, client, workspaceID, flags.accounts)
 			if err != nil {
 				return err
@@ -78,7 +86,7 @@ func newPostCreateCmd() *cobra.Command {
 			}
 			intent := "post"
 			profile := "short_text"
-			if flags.threadDraft != "" {
+			if flags.threadDraft != "" || len(segments) > 1 {
 				intent = "thread"
 				profile = "thread"
 			}
@@ -87,6 +95,7 @@ func newPostCreateCmd() *cobra.Command {
 				randomDelay = &flags.randomDelay
 			}
 			publication, err := client.CreatePublication(cmd.Context(), api.CreatePublicationInput{
+				Segments:           segments,
 				WorkspaceID:        workspaceID,
 				Title:              defaultString(firstLineCLI(content), "Untitled post"),
 				Intent:             intent,
@@ -214,8 +223,12 @@ func newPostUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			in := api.UpdatePublicationInput{ExpectedRevision: current.Revision}
-			changed := false
+			segments, err := readOptionalPublicationSegments(flags.segmentsFile)
+			if err != nil {
+				return err
+			}
+			in := api.UpdatePublicationInput{ExpectedRevision: current.Revision, Segments: segments}
+			changed := len(segments) > 0
 			if cmd.Flags().Changed("content") {
 				in.SourceText = &flags.content
 				title := defaultString(firstLineCLI(flags.content), "Untitled post")
@@ -227,7 +240,10 @@ func newPostUpdateCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				in.Renditions = renditionInputsForAccounts(accountIDs, current.SourceText)
+				in.Renditions, err = retainedRenditionsForAccounts(accountIDs, current)
+				if err != nil {
+					return err
+				}
 				changed = true
 			}
 			if cmd.Flags().Changed("schedule") {
@@ -257,7 +273,14 @@ func newPostUpdateCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				in.Renditions = renditionInputsWithMedia(current.Renditions, publicationMediaInputs(mediaIDs))
+				if len(in.Segments) == 0 {
+					in.Segments = canonicalSegmentInputs(current)
+				}
+				in.Segments[0].Media = publicationMediaInputs(mediaIDs)
+				if in.SourceText != nil {
+					in.Segments[0].Body = *in.SourceText
+					delete(in.Segments[0].Settings, "mentions")
+				}
 				changed = true
 			}
 			if !changed {
@@ -271,11 +294,13 @@ func newPostUpdateCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&flags.content, "content", "", "post content")
+	cmd.Flags().StringVar(&flags.segmentsFile, "segments-file", "", "Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language, RFC3339, next-slot, now, or draft; empty string unschedules")
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
 	cmd.Flags().StringArrayVar(&flags.media, "media", nil, "replacement media id or local file path; repeatable; pass an empty value to clear")
 	cmd.Flags().StringArrayVar(&flags.mediaAlt, "media-alt", nil, "alt text for the matching uploaded --media")
+	cmd.MarkFlagsMutuallyExclusive("segments-file", "content")
 	return cmd
 }
 
@@ -320,6 +345,7 @@ func newPostDeleteCmd() *cobra.Command {
 
 func addCreatePostFlags(cmd *cobra.Command, flags *postFlags) {
 	cmd.Flags().StringVar(&flags.content, "content", "", "post content")
+	cmd.Flags().StringVar(&flags.segmentsFile, "segments-file", "", "Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin")
 	cmd.Flags().StringVar(&flags.file, "file", "", "read post content from a file")
 	cmd.Flags().StringVar(&flags.accounts, "accounts", "", "comma-separated account selectors")
 	cmd.Flags().StringVar(&flags.schedule, "schedule", "", "natural-language, RFC3339, next-slot, now, or draft")
@@ -327,6 +353,7 @@ func addCreatePostFlags(cmd *cobra.Command, flags *postFlags) {
 	cmd.Flags().StringArrayVar(&flags.mediaAlt, "media-alt", nil, "alt text for the matching uploaded --media")
 	cmd.Flags().StringVar(&flags.threadDraft, "thread-draft", "", "encoded thread draft to attach")
 	cmd.Flags().IntVar(&flags.randomDelay, "random-delay", 0, "random delay in minutes")
+	cmd.MarkFlagsMutuallyExclusive("segments-file", "content", "file", "thread-draft")
 }
 
 func postRuntime(cmd *cobra.Command) (*config.Runtime, *api.Client, string, *api.WorkspaceSettings, error) {
@@ -543,28 +570,73 @@ func publicationMediaInputs(mediaIDs []string) []api.PublicationMediaInput {
 	return media
 }
 
-func renditionInputsForAccounts(accountIDs []string, body string) []api.RenditionInput {
-	renditions := make([]api.RenditionInput, 0, len(accountIDs))
-	for _, accountID := range accountIDs {
-		renditions = append(renditions, api.RenditionInput{SocialAccountID: accountID, Body: body})
+func canonicalSegmentInputs(current *api.Publication) []api.PublicationSegmentInput {
+	out := make([]api.PublicationSegmentInput, 0, len(current.Segments))
+	for _, segment := range current.Segments {
+		settings := make(map[string]any, len(segment.Settings))
+		for key, value := range segment.Settings {
+			settings[key] = value
+		}
+		out = append(out, api.PublicationSegmentInput{ID: segment.ID, Body: segment.Body, Title: segment.Title, Description: segment.Description, URL: segment.URL, Settings: settings, Media: authoredMediaInputs(segment.Media)})
 	}
-	return renditions
+	if len(out) == 0 {
+		out = append(out, api.PublicationSegmentInput{Body: current.SourceText, Media: authoredMediaInputs(current.Media)})
+	}
+	return out
 }
 
-func renditionInputsWithMedia(current []api.Rendition, media []api.PublicationMediaInput) []api.RenditionInput {
-	renditions := make([]api.RenditionInput, 0, len(current))
-	for _, rendition := range current {
-		renditions = append(renditions, api.RenditionInput{
-			SocialAccountID: rendition.SocialAccountID,
-			Profile:         rendition.Profile,
-			Body:            rendition.Body,
-			Title:           rendition.Title,
-			Description:     rendition.Description,
-			Settings:        rendition.Settings,
-			Media:           media,
-		})
+func authoredMediaInputs(media []api.MediaSummary) []api.PublicationMediaInput {
+	out := make([]api.PublicationMediaInput, 0, len(media))
+	for _, item := range media {
+		out = append(out, api.PublicationMediaInput{MediaID: item.ID, Role: item.Role, AltText: item.AltText, ThumbnailTimestampMS: item.ThumbnailTimestampMS, Settings: item.Settings})
 	}
-	return renditions
+	return out
+}
+
+func retainedRenditionsForAccounts(accountIDs []string, current *api.Publication) ([]api.RenditionInput, error) {
+	out := make([]api.RenditionInput, 0, len(current.Renditions))
+	for _, accountID := range accountIDs {
+		found := false
+		for _, rendition := range current.Renditions {
+			if rendition.SocialAccountID != accountID {
+				continue
+			}
+			found = true
+			input, err := authoredRenditionInput(rendition, current.Segments)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, input)
+		}
+		if !found {
+			out = append(out, api.RenditionInput{SocialAccountID: accountID})
+		}
+	}
+	return out, nil
+}
+
+func authoredRenditionInput(rendition api.Rendition, canonical []api.PublicationSegment) (api.RenditionInput, error) {
+	out := api.RenditionInput{SocialAccountID: rendition.SocialAccountID, TargetKey: rendition.TargetKey, Profile: rendition.Profile, OutputProfile: rendition.OutputProfile, FormatLocked: rendition.FormatLocked, Settings: rendition.Settings}
+	if rendition.ScheduleOverride != "" {
+		parsed, err := time.Parse(time.RFC3339Nano, rendition.ScheduleOverride)
+		if err != nil {
+			return out, fmt.Errorf("invalid stored variant schedule: %w", err)
+		}
+		out.ScheduleOverride = &parsed
+	}
+	for _, segment := range rendition.Segments {
+		if strings.HasPrefix(segment.ID, "legacy:") {
+			out.Body = rendition.Body
+			out.Title = rendition.Title
+			out.Description = rendition.Description
+			out.Media = authoredMediaInputs(rendition.Media)
+			continue
+		}
+		inherited := segment.MediaInherited
+		bodyOverride := retainedSegmentBody(segment, rendition, canonical)
+		out.Segments = append(out.Segments, api.RenditionSegmentInput{PublicationSegmentID: segment.PublicationSegmentID, BodyOverride: bodyOverride, TitleOverride: segment.TitleOverride, DescriptionOverride: segment.DescriptionOverride, URLOverride: segment.URLOverride, Settings: segment.Settings, SourceOverrides: segment.SourceOverrides, MediaInherited: &inherited, Media: authoredMediaInputs(segment.Media)})
+	}
+	return out, nil
 }
 
 func scheduleLabel(s string) string {
@@ -583,4 +655,24 @@ func preview(s string, n int) string {
 		return s[:n]
 	}
 	return s[:n-3] + "..."
+}
+
+// Legacy ordinary variants may own text without a persisted override. Preserve
+// that ownership when retaining accounts, before a canonical edit is applied.
+func retainedSegmentBody(segment api.RenditionSegment, rendition api.Rendition, canonical []api.PublicationSegment) *string {
+	if segment.BodyOverride != nil || len(segment.SourceOverrides) > 0 || (len(rendition.Segments) == 1 && len(canonical) > 1) {
+		return segment.BodyOverride
+	}
+	for _, source := range canonical {
+		if source.ID != segment.PublicationSegmentID {
+			continue
+		}
+		// Generated poll/link text belongs to their projection owners.
+		if source.Settings["poll"] != nil || source.Settings["link"] != nil || source.Body == segment.Body {
+			return nil
+		}
+		body := segment.Body
+		return &body
+	}
+	return nil
 }

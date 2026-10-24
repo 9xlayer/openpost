@@ -1,4 +1,6 @@
 <script lang="ts">
+	import AppBrandingRuntime from '$lib/components/app-branding-runtime.svelte';
+	import { appBranding } from '$lib/app-branding.svelte';
 	import './layout.css';
 	import PwaManager from '$lib/components/pwa-manager.svelte';
 	import NavigationProgress from '$lib/components/navigation-progress.svelte';
@@ -40,6 +42,17 @@
 
 	let { children } = $props();
 	provideUiMessages({
+		editor_permission_required: m.editor_permission_required,
+		editor_rate_limited: m.editor_rate_limited,
+		editor_mention_limit: m.editor_mention_limit,
+		editor_mention_account_required: m.editor_mention_account_required,
+
+		editor_mentions: m.editor_mentions,
+		editor_searching: m.editor_searching,
+		editor_no_matches: m.editor_no_matches,
+		editor_lookup_failed: m.editor_lookup_failed,
+		editor_retry: m.editor_retry,
+
 		calendar_next: m.calendar_next,
 		calendar_previous: m.calendar_previous,
 		calendar_label: m.calendar_label,
@@ -537,11 +550,23 @@
 <svelte:window onbeforeunload={warnBeforeUnload} />
 
 <svelte:head>
-	<title>OpenPost</title>
+	<title>{appBranding.profile.display_name}</title>
 </svelte:head>
 
 <QueryClientProvider client={queryClient}>
 	<ThemeAppShell publicDefault={isPublicRoute} />
+	<AppBrandingRuntime
+		enabled={!isPreviewRoute &&
+			!isPublicProfileRoute &&
+			!publicRoutes.some((route) => currentPath.startsWith(route)) &&
+			![
+				'/onboarding',
+				'/checkout',
+				'/ownership-transfer',
+				'/draft-import',
+				'/legal-acceptance'
+			].includes(currentPath)}
+	/>
 	<NavigationProgress />
 	{#if !isPreviewRoute}
 		<PwaManager />

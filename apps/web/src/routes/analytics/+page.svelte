@@ -6,6 +6,7 @@ FIRST VIEWPORT: The reporting window, refresh action, metric ledger, and unified
 FORM: Server-owned insights and content rows preserve source, period, sample, and provider context.
 -->
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import AnalyticsNumber from '$lib/components/analytics-number.svelte';
 	import AnalyticsExportDialog from '$lib/components/analytics-export-dialog.svelte';
 	import AsyncActionButton from '$lib/components/async-action-button.svelte';
@@ -622,7 +623,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 </script>
 
 <svelte:head>
-	<title>{m.analytics_title()} · OpenPost</title>
+	<title>{m.analytics_title()} · {appBranding.profile.display_name}</title>
 </svelte:head>
 
 <AnalyticsExportDialog

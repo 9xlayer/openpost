@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import SidebarCalendar from '$lib/components/sidebar-calendar.svelte';
 	import { sidebarPreferences } from '$lib/stores/sidebar-preferences.svelte';
 	import { publicationView } from '$lib/stores/publication-view.svelte';
@@ -196,7 +197,7 @@
 			<a
 				href={resolve('/')}
 				class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none"
-				aria-label={m.sidebar_openpost_home()}
+				aria-label={m.app_branding_home({ name: appBranding.profile.display_name })}
 				data-testid="sidebar-home-brand"
 			>
 				<Logo width={26} height={26} showText={sidebar.state !== 'collapsed'} decorative />

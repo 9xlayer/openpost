@@ -96,6 +96,7 @@
     {#if segmentMedia.length > 0}
       <PreviewMediaView
         media={segmentMedia}
+        {segment}
         layout={platform === "threads" ? "carousel" : "grid"}
       />
     {/if}

@@ -2,6 +2,7 @@ import { DitherPressable } from "@/components/dither-pressable";
 import { useState } from "react";
 import { View } from "react-native";
 
+import { NativeText } from "@/components/native-text";
 import { Brand } from "@/components/brand";
 import { WorkspaceAvatar } from "@/components/account-avatar";
 import { ThemeIcon } from "@/components/theme-icon";
@@ -47,7 +48,12 @@ export function WorkspaceHeader({ children }: { children?: React.ReactNode }) {
           color={workspace?.color}
           size={28}
         />
-        <Brand compact />
+        <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <Brand compact workspace />
+          <NativeText numberOfLines={1} style={{ color: colors.onSurfaceVariant, fontSize: 12 }}>
+            {name}
+          </NativeText>
+        </View>
         <ThemeIcon role="disclosure" size={14} tintColor={colors.onSurfaceVariant} />
       </DitherPressable>
       {children}

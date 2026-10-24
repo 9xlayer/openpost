@@ -139,6 +139,7 @@ type SettingDefinition struct {
 type SettingField = SettingDefinition
 
 type MediaConstraint struct {
+	MaxPixels              int64    `json:"max_pixels,omitempty" doc:"Maximum total decoded image pixels, width times height"`
 	VideoExclusive         bool     `json:"video_exclusive,omitempty" doc:"A video must be the only attachment in a segment"`
 	MinCount               int      `json:"min_count"`
 	MaxCount               int      `json:"max_count"`
@@ -399,7 +400,9 @@ func buildCatalog() []Capability {
 			c.OutputProfile = outputProfileFor(c.Provider, c.Profile, c.Media)
 		}
 		c.Intents = intentsFor(c.Profile)
-		c.MediaShapes = mediaShapesFor(c.Profile, c.Media)
+		if len(c.MediaShapes) == 0 {
+			c.MediaShapes = mediaShapesFor(c.Profile, c.Media)
+		}
 		if textcards.Supported(c.Provider, "") {
 			c.Settings = append(c.Settings, TextCardSettings()...)
 		}
@@ -411,7 +414,7 @@ func buildCatalog() []Capability {
 
 	return []Capability{
 		defaultQueued(Capability{Provider: ProviderX, Profile: models.ContentProfileShortText, Label: "X post", TextLimit: 25_000, Media: text, Settings: xSettings(), Caveats: []string{"Text limits are reduced unless the connected account reports an active X subscription."}}),
-		defaultQueued(Capability{Provider: ProviderX, Profile: models.ContentProfileThread, Label: "X thread", TextLimit: 25_000, Media: xThreadMedia, Settings: xSettings(), Caveats: []string{"Text and video limits are reduced unless the connected account reports an active X subscription."}}),
+		defaultQueued(Capability{Provider: ProviderX, Profile: models.ContentProfileThread, Label: "X thread", TextLimit: 25_000, Media: xThreadMedia, Settings: optionalLinkSettings(xSettings()), Caveats: []string{"Text and video limits are reduced unless the connected account reports an active X subscription."}}),
 		defaultQueued(Capability{Provider: ProviderX, Profile: models.ContentProfileLinkShare, Label: "X link", TextLimit: 25_000, Media: text, Settings: append(linkSettings(), xSettings()...), Caveats: []string{"Text limits are reduced unless the connected account reports an active X subscription."}}),
 		defaultQueued(Capability{Provider: ProviderX, Profile: models.ContentProfileImagePost, Label: "X image post", TextLimit: 25_000, Media: MediaConstraint{MinCount: 1, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif"}}, Settings: xSettings(), Caveats: []string{"Text limits are reduced unless the connected account reports an active X subscription."}}),
 		defaultQueued(Capability{Provider: ProviderX, Profile: models.ContentProfileShortVideo, Label: "X video", TextLimit: 25_000, Media: xVideo, Settings: xSettings(), Caveats: []string{"Text and video limits are reduced unless the connected account reports an active X subscription."}}),
@@ -429,14 +432,14 @@ func buildCatalog() []Capability {
 		defaultQueued(Capability{Provider: ProviderDevNull, Profile: models.ContentProfileImagePost, Label: "dev/null images", TextLimit: providerlimits.DevNullMaxBodyBytes, Media: devnullImages, Settings: devnullSettings()}),
 
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileShortText, Label: "Mastodon post", TextLimit: 500, Media: text, Settings: mastodonSettings()}),
-		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileThread, Label: "Mastodon thread", TextLimit: 500, Media: MediaConstraint{MinCount: 0, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"}}, Settings: mastodonSettings()}),
+		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileThread, Label: "Mastodon thread", TextLimit: 500, Media: MediaConstraint{MinCount: 0, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"}}, Settings: optionalLinkSettings(mastodonSettings())}),
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileLinkShare, Label: "Mastodon link", TextLimit: 500, Media: text, Settings: append(linkSettings(), mastodonSettings()...)}),
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileImagePost, Label: "Mastodon media", TextLimit: 500, Media: MediaConstraint{MinCount: 1, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif", "video/mp4"}}, Settings: mastodonSettings()}),
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileShortVideo, Label: "Mastodon video", TextLimit: 500, Media: mastodonVideo, Settings: mastodonSettings()}),
 		defaultQueued(Capability{Provider: ProviderMastodon, Profile: models.ContentProfileLongVideo, Label: "Mastodon video", TextLimit: 500, Media: mastodonVideo, Settings: mastodonSettings()}),
 
 		defaultQueued(Capability{Provider: ProviderPixelfed, Profile: models.ContentProfileShortText, Label: "Pixelfed post", TextLimit: 500, Media: text, Settings: pixelfedSettings()}),
-		defaultQueued(Capability{Provider: ProviderPixelfed, Profile: models.ContentProfileThread, Label: "Pixelfed thread", TextLimit: 500, Media: MediaConstraint{MinCount: 0, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif"}}, Settings: pixelfedSettings()}),
+		defaultQueued(Capability{Provider: ProviderPixelfed, Profile: models.ContentProfileThread, Label: "Pixelfed thread", TextLimit: 500, Media: MediaConstraint{MinCount: 0, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif"}}, Settings: optionalLinkSettings(pixelfedSettings())}),
 		defaultQueued(Capability{Provider: ProviderPixelfed, Profile: models.ContentProfileLinkShare, Label: "Pixelfed link", TextLimit: 500, Media: text, Settings: append(linkSettings(), pixelfedSettings()...)}),
 		defaultQueued(Capability{Provider: ProviderPixelfed, Profile: models.ContentProfileImagePost, Label: "Pixelfed photo", TextLimit: 500, Media: MediaConstraint{MinCount: 1, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp"}}, Settings: pixelfedSettings()}),
 		defaultQueued(Capability{Provider: ProviderPixelfed, Profile: models.ContentProfileCarousel, Label: "Pixelfed album", TextLimit: 500, Media: MediaConstraint{MinCount: 2, MaxCount: 4, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp"}}, Settings: pixelfedSettings()}),
@@ -452,14 +455,14 @@ func buildCatalog() []Capability {
 		defaultQueued(Capability{Provider: ProviderPieFed, Profile: models.ContentProfileImagePost, Label: "PieFed image", TextLimit: 50000, TitleRequired: true, Media: MediaConstraint{MinCount: 1, MaxCount: 1, AllowedMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif"}}, Settings: piefedSettings()}),
 
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileShortText, Label: "Threads post", TextLimit: 500, Media: text, Settings: threadsSettings()}),
-		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileThread, Label: "Threads thread", TextLimit: 500, Media: threadsThreadMedia, RequiresPublicMedia: true, Settings: threadsSettings()}),
+		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileThread, Label: "Threads thread", TextLimit: 500, Media: threadsThreadMedia, RequiresPublicMedia: true, Settings: optionalLinkSettings(threadsSettings())}),
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileLinkShare, Label: "Threads link", TextLimit: 500, Media: text, Settings: append(linkSettings(), threadsSettings()...)}),
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileImagePost, Label: "Threads media", TextLimit: 500, Media: publicImage, RequiresPublicMedia: true, Settings: threadsSettings()}),
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileCarousel, Label: "Threads carousel", TextLimit: 500, Media: threadsCarousel, RequiresPublicMedia: true, Settings: threadsSettings()}),
 		defaultQueued(Capability{Provider: ProviderThreads, Profile: models.ContentProfileShortVideo, Label: "Threads video", TextLimit: 500, Media: publicShortVideo, RequiresPublicMedia: true, Settings: threadsSettings()}),
 
-		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileShortText, Label: "LinkedIn post", TextLimit: 3000, Media: text, Settings: linkedinSettings()}),
-		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileThread, Label: "LinkedIn root plus comments", TextLimit: 1250, Media: text, Settings: linkedinSettings()}),
+		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileShortText, Label: "LinkedIn post", TextLimit: 3000, Media: text, MediaShapes: []string{MediaShapeText, MediaShapeLink}, Settings: optionalLinkSettings(linkedinSettings())}),
+		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileThread, Label: "LinkedIn root plus comments", TextLimit: 1250, Media: text, MediaShapes: []string{MediaShapeText, MediaShapeLink}, Settings: optionalLinkSettings(linkedinSettings())}),
 		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileLinkShare, Label: "LinkedIn article", TextLimit: 3000, Media: text, Settings: append(linkSettings(), linkedinSettings()...)}),
 		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileImagePost, Label: "LinkedIn image", TextLimit: 3000, Media: linkedinImage, Settings: linkedinSettings()}),
 		defaultQueued(Capability{Provider: ProviderLinkedIn, Profile: models.ContentProfileCarousel, Label: "LinkedIn document", TextLimit: 3000, Media: document, Settings: append([]SettingField{{Key: "document_title", Label: "Document title", Type: "text", Required: true}}, linkedinSettings()...)}),
@@ -1226,6 +1229,12 @@ func ApplyAccountConstraints(resolved *ResolvedCapability, input AccountConstrai
 }
 
 func applyResolvedConstraintValues(resolved *ResolvedCapability, constraints map[string]any) {
+	if value, ok := constraintInt64(constraints["max_image_size_bytes"]); ok && value > 0 {
+		resolved.Media.MaxImageSizeBytes = value
+	}
+	if value, ok := constraintInt64(constraints["max_image_pixels"]); ok && value > 0 {
+		resolved.Media.MaxPixels = value
+	}
 	if value, ok := constraintInt(constraints["text_limit"]); ok && value > 0 {
 		resolved.TextLimit = value
 	}
@@ -1510,7 +1519,7 @@ func NormalizeMediaTextLinkSettings(provider string, mediaCount int, settings ma
 		return settings
 	}
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case ProviderX, ProviderThreads, ProviderMastodon, ProviderLinkedIn, ProviderFacebook, ProviderInstagram:
+	case ProviderX, ProviderThreads, ProviderMastodon, ProviderPixelfed, ProviderLinkedIn, ProviderFacebook, ProviderInstagram:
 		if _, hasURL := settings["url"]; !hasURL {
 			if _, hasLinkURL := settings["link_url"]; !hasLinkURL {
 				return settings
@@ -1537,7 +1546,7 @@ func NormalizeResolvedSettings(provider, profile string, settings map[string]any
 		return settings
 	}
 	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case ProviderX, ProviderThreads, ProviderMastodon, ProviderLinkedIn, ProviderFacebook, ProviderInstagram:
+	case ProviderX, ProviderThreads, ProviderMastodon, ProviderPixelfed, ProviderLinkedIn, ProviderFacebook, ProviderInstagram:
 		var normalized map[string]any
 		for _, key := range []string{"url", "link_url", "link_title", "link_description"} {
 			if _, ok := settings[key]; !ok {
@@ -1568,7 +1577,7 @@ func ValidateOutput(provider, outputProfile, fallbackProfile, body, title, descr
 			return []ValidationIssue{validationIssue("text_card_invalid", err.Error(), provider, fallbackProfile, "text_card")}
 		}
 	}
-	shape := resolveMediaShape([]ResolveSegment{{Media: media}}, "")
+	shape := resolveMediaShape([]ResolveSegment{{Media: media}}, settingsValue(settings, "url"))
 	settings = NormalizeMediaTextLinkSettings(provider, len(media), settings)
 	if capability, ok := findOutputForValidation(provider, outputProfile, fallbackProfile, shape); ok {
 		intent := ""
@@ -2309,7 +2318,15 @@ func validateMediaItem(capability Capability, item MediaItem) []ValidationIssue 
 		issues = append(issues, ValidationIssue{Severity: "error", Code: "media_size", Message: "Media file is too large", Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
 	}
 	if strings.HasPrefix(item.MimeType, "image/") && capability.Media.MaxImageSizeBytes > 0 && item.Size > capability.Media.MaxImageSizeBytes {
-		issues = append(issues, ValidationIssue{Severity: "error", Code: "media_size", Message: fmt.Sprintf("Image is %d bytes; the maximum is %d bytes", item.Size, capability.Media.MaxImageSizeBytes), Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
+		issues = append(issues, ValidationIssue{
+			Severity: "error", Code: "media_size",
+			Message:    fmt.Sprintf("Image is %.2f MB; the maximum is %.2f MB. Resize or replace this image.", float64(item.Size)/1_000_000, float64(capability.Media.MaxImageSizeBytes)/1_000_000),
+			Parameters: map[string]any{"size_bytes": item.Size, "max_size_bytes": capability.Media.MaxImageSizeBytes},
+			Provider:   capability.Provider, Profile: capability.Profile, MediaID: item.ID,
+		})
+	}
+	if strings.HasPrefix(item.MimeType, "image/") && capability.Media.MaxPixels > 0 && item.Width > 0 && item.Height > 0 && int64(item.Width) > capability.Media.MaxPixels/int64(item.Height) {
+		issues = append(issues, ValidationIssue{Severity: "error", Code: "media_pixels_max", Message: fmt.Sprintf("Image exceeds the destination limit of %d pixels", capability.Media.MaxPixels), Parameters: map[string]any{"max_pixels": capability.Media.MaxPixels}, Provider: capability.Provider, Profile: capability.Profile, MediaID: item.ID})
 	}
 	for _, boundary := range []struct {
 		invalid bool
@@ -2535,9 +2552,14 @@ func linkSettings() []SettingField {
 	return []SettingField{{Key: "url", Label: "URL", Type: "url", Control: "url", Required: true}}
 }
 
+func optionalLinkSettings(settings []SettingField) []SettingField {
+	// Text posts may carry a link without requiring one or changing their format.
+	return append([]SettingField{{Key: "url", Label: "URL", Type: "url", Control: "url", MediaShapes: []string{MediaShapeText, MediaShapeLink}}}, settings...)
+}
+
 func xSettings() []SettingField {
 	return []SettingField{
-		{Key: "quote_url", Label: "Quote post", Type: "url", Control: "quote_url", MediaShapes: []string{MediaShapeText}, Conflicts: []SettingCondition{{Key: "poll_options", Operator: "present"}}, Capability: "enterprise_quote", UnavailableReason: "Quote publishing requires X Enterprise API access."},
+		{Key: "quote_url", Label: "Quote post", Type: "url", Control: "quote_url", MediaShapes: []string{MediaShapeText, MediaShapeLink}, Conflicts: []SettingCondition{{Key: "poll_options", Operator: "present"}}, Capability: "enterprise_quote", UnavailableReason: "Quote publishing requires X Enterprise API access."},
 		{Key: "poll_options", Label: "Poll", Type: "textarea", Control: "poll", Scope: SettingScopeSegment, MediaShapes: []string{MediaShapeText}, Constraints: SettingConstraint{MinItems: 2, MaxItems: 4, MinLength: 1, MaxLength: 25}, Conflicts: []SettingCondition{{Key: "media", Operator: "present"}, {Key: "quote_url", Operator: "present"}}, Help: "Add 2–4 options. Polls cannot include media or a quote."},
 		{Key: "poll_duration_minutes", Label: "Poll duration", Type: "number", Scope: SettingScopeSegment, Constraints: SettingConstraint{Minimum: float64Pointer(5), Maximum: float64Pointer(10080)}, Dependencies: []SettingCondition{{Key: "poll_options", Operator: "present"}}},
 		{Key: "reply_settings", Label: "Who can reply", Type: "select", Options: []string{"following", "mentionedUsers", "subscribers", "verified"}},

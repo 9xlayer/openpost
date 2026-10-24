@@ -102,6 +102,16 @@ func nativeURL(provider string, mode Mode, targetURL string, values map[string]a
 		}
 		return "", "", nil
 	}
+	if provider == "threads" {
+		textAttachment, _ := values["text_attachment_plaintext"].(string)
+		gifID, _ := values["gif_id"].(string)
+		if strings.TrimSpace(textAttachment) != "" || strings.TrimSpace(gifID) != "" {
+			if mode == ModeCustom {
+				return "", "", fmt.Errorf("threads link cards cannot be combined with a text attachment or GIF")
+			}
+			return "", "", nil
+		}
+	}
 	switch provider {
 	case "bluesky":
 		if quote, _ := values["quote_url"].(string); quote != "" {

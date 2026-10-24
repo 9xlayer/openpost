@@ -114,7 +114,8 @@ func TestMigrationChainAppliesCleanlyAndIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestMigrationChainAppliesCleanlyOnPostgres(t *testing.T) {
+func newPostgresMigrationTestDB(t *testing.T) *bun.DB {
+	t.Helper()
 	dsn := os.Getenv("OPENPOST_TEST_POSTGRES_URL")
 	if dsn == "" {
 		t.Skip("OPENPOST_TEST_POSTGRES_URL is not configured")
@@ -135,7 +136,11 @@ func TestMigrationChainAppliesCleanlyOnPostgres(t *testing.T) {
 	_, err = db.ExecContext(t.Context(), `SET search_path TO "`+schema+`"`)
 	require.NoError(t, err)
 	createMigrationBaseTables(t, db)
+	return db
+}
 
+func TestMigrationChainAppliesCleanlyOnPostgres(t *testing.T) {
+	db := newPostgresMigrationTestDB(t)
 	require.NoError(t, RunMigrations(db))
 	require.NoError(t, RunMigrations(db))
 

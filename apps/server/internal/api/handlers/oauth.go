@@ -29,6 +29,7 @@ import (
 	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/oauthstate"
+	"github.com/openpost/backend/internal/services/organizationguard"
 	"github.com/openpost/backend/internal/services/providerreadiness"
 	"github.com/openpost/backend/internal/services/tokenmanager"
 	"github.com/openpost/backend/internal/telemetry"
@@ -96,7 +97,7 @@ type OAuthHandler struct {
 	connectorRegistry            *connectors.Registry
 	connectorStore               *connectors.Store
 	tokenSource                  AccessTokenSource
-	accountAvatars               accountAvatarCache
+	accountAvatars               accountavatar.Cache
 	blueskyPDS                   func(context.Context, string) (string, string, error)
 	blueskyAdapter               func(string) blueskyLoginProvider
 	// frontendURL is the absolute base URL the SPA is served from
@@ -104,11 +105,6 @@ type OAuthHandler struct {
 	// here so they work behind reverse proxies and subpath mounts.
 	frontendURL string
 	telemetry   telemetry.Recorder
-}
-
-type accountAvatarCache interface {
-	CacheLinkedIn(context.Context, string, string) (string, error)
-	Delete(context.Context, string) error
 }
 
 func mastodonInstanceURL(adapter platform.Adapter) string {
@@ -452,7 +448,58 @@ const (
 
 var coreProviderCapabilities = []string{"Text posts", "Media posts", "Scheduling", "Platform variants", "MCP workflows"}
 
+// Curated connection-picker order: mainstream networks first, niche providers last.
 var providerCatalog = []ProviderInfo{
+	{
+		Platform:        "instagram",
+		DisplayName:     "Instagram",
+		AuthMode:        "oauth",
+		ConnectionModes: []string{platform.ConnectionModeInstagramLogin, platform.ConnectionModeOAuth},
+		Description:     "Connect a Business or Creator account directly with Instagram or through a linked Facebook Page.",
+		Capabilities:    []string{"Images", "Reels", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "facebook",
+		DisplayName:  "Facebook",
+		AuthMode:     "oauth",
+		Description:  "Meta OAuth connection for Facebook Pages publishing.",
+		Capabilities: []string{"Page posts", "Media posts", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "youtube",
+		DisplayName:  "YouTube",
+		AuthMode:     "oauth",
+		Description:  "Google OAuth connection for YouTube video and Shorts uploads.",
+		Capabilities: []string{"Shorts", "Video uploads", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "tiktok",
+		DisplayName:  "TikTok",
+		AuthMode:     "oauth",
+		Description:  "OAuth app connection for TikTok videos and photo posts.",
+		Capabilities: []string{"Short videos", "Photo posts", "Scheduling", "Platform variants", "MCP workflows"},
+	},
+	{
+		Platform:     "linkedin",
+		DisplayName:  "LinkedIn",
+		AuthMode:     "oauth",
+		Description:  "OAuth app connection for LinkedIn profile and organization publishing.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     "x",
+		DisplayName:  "X (Twitter)",
+		AuthMode:     "oauth",
+		Description:  "OAuth app connection for X publishing and threads.",
+		Capabilities: coreProviderCapabilities,
+	},
+	{
+		Platform:     "threads",
+		DisplayName:  "Threads",
+		AuthMode:     "oauth",
+		Description:  "Meta OAuth connection with public media URL requirements.",
+		Capabilities: coreProviderCapabilities,
+	},
 	{
 		Platform:        "bluesky",
 		DisplayName:     "Bluesky",
@@ -460,22 +507,6 @@ var providerCatalog = []ProviderInfo{
 		ConnectionModes: []string{"app_password"},
 		Description:     "Handle and app-password connection with no server app setup.",
 		Capabilities:    coreProviderCapabilities,
-	},
-	{
-		Platform:        "devnull",
-		DisplayName:     "dev/null",
-		AuthMode:        "ssh_signature",
-		ConnectionModes: []string{"ssh_signature"},
-		Description:     "Username and SSH key connection; commits are signed with the key on your GitHub account.",
-		Capabilities:    []string{"Text posts", "Image posts", "Replies", "Scheduling", "MCP workflows"},
-	},
-	{
-		Platform:        "discord",
-		DisplayName:     "Discord",
-		AuthMode:        "webhook",
-		ConnectionModes: []string{"webhook", "bot"},
-		Description:     "Post to a channel with a bot, or connect a webhook for a fixed destination.",
-		Capabilities:    []string{"Text posts", "Media attachments", "Scheduling", "Message deletion", "MCP workflows"},
 	},
 	{
 		Platform:        "pinterest",
@@ -493,11 +524,19 @@ var providerCatalog = []ProviderInfo{
 		Description:     "Connect a bot to post in Telegram channels and groups.",
 	},
 	{
-		Platform:     "x",
-		DisplayName:  "X (Twitter)",
+		Platform:        "discord",
+		DisplayName:     "Discord",
+		AuthMode:        "webhook",
+		ConnectionModes: []string{"webhook", "bot"},
+		Description:     "Post to a channel with a bot, or connect a webhook for a fixed destination.",
+		Capabilities:    []string{"Text posts", "Media attachments", "Scheduling", "Message deletion", "MCP workflows"},
+	},
+	{
+		Platform:     "googlebusiness",
+		DisplayName:  "Google Business",
 		AuthMode:     "oauth",
-		Description:  "OAuth app connection for X publishing and threads.",
-		Capabilities: coreProviderCapabilities,
+		Description:  "Google OAuth connection for Business Profile local posts; location selection and publishing require Google API access and current live certification.",
+		Capabilities: []string{"Location selection", "Local posts", "Scheduling", "Platform variants", "MCP workflows"},
 	},
 	{
 		Platform:     mastodonProvider,
@@ -538,54 +577,12 @@ var providerCatalog = []ProviderInfo{
 		Capabilities:    []string{"Community posts", "Comments", "Scheduling", "Platform variants", "MCP workflows"},
 	},
 	{
-		Platform:     "linkedin",
-		DisplayName:  "LinkedIn",
-		AuthMode:     "oauth",
-		Description:  "OAuth app connection for LinkedIn profile and organization publishing.",
-		Capabilities: coreProviderCapabilities,
-	},
-	{
-		Platform:     "threads",
-		DisplayName:  "Threads",
-		AuthMode:     "oauth",
-		Description:  "Meta OAuth connection with public media URL requirements.",
-		Capabilities: coreProviderCapabilities,
-	},
-	{
-		Platform:        "instagram",
-		DisplayName:     "Instagram",
-		AuthMode:        "oauth",
-		ConnectionModes: []string{platform.ConnectionModeInstagramLogin, platform.ConnectionModeOAuth},
-		Description:     "Connect a Business or Creator account directly with Instagram or through a linked Facebook Page.",
-		Capabilities:    []string{"Images", "Reels", "Scheduling", "Platform variants", "MCP workflows"},
-	},
-	{
-		Platform:     "facebook",
-		DisplayName:  "Facebook",
-		AuthMode:     "oauth",
-		Description:  "Meta OAuth connection for Facebook Pages publishing.",
-		Capabilities: []string{"Page posts", "Media posts", "Scheduling", "Platform variants", "MCP workflows"},
-	},
-	{
-		Platform:     "youtube",
-		DisplayName:  "YouTube",
-		AuthMode:     "oauth",
-		Description:  "Google OAuth connection for YouTube video and Shorts uploads.",
-		Capabilities: []string{"Shorts", "Video uploads", "Scheduling", "Platform variants", "MCP workflows"},
-	},
-	{
-		Platform:     "googlebusiness",
-		DisplayName:  "Google Business",
-		AuthMode:     "oauth",
-		Description:  "Google OAuth connection for Business Profile local posts; location selection and publishing require Google API access and current live certification.",
-		Capabilities: []string{"Location selection", "Local posts", "Scheduling", "Platform variants", "MCP workflows"},
-	},
-	{
-		Platform:     "tiktok",
-		DisplayName:  "TikTok",
-		AuthMode:     "oauth",
-		Description:  "OAuth app connection for TikTok videos and photo posts.",
-		Capabilities: []string{"Short videos", "Photo posts", "Scheduling", "Platform variants", "MCP workflows"},
+		Platform:        "devnull",
+		DisplayName:     "dev/null",
+		AuthMode:        "ssh_signature",
+		ConnectionModes: []string{"ssh_signature"},
+		Description:     "Username and SSH key connection; commits are signed with the key on your GitHub account.",
+		Capabilities:    []string{"Text posts", "Image posts", "Replies", "Scheduling", "MCP workflows"},
 	},
 }
 
@@ -2431,6 +2428,7 @@ func (h *OAuthHandler) persistAccountSelection(ctx context.Context, userID strin
 	saver := h.accountSaver
 	if saver == nil {
 		saver = account_saver.NewAccountSaver(h.db, h.crypto)
+		saver.SetAvatarCache(h.accountAvatars)
 	}
 	if err := h.requireProviderConnectionCompletion(
 		ctx, pending.Platform, pending.InstanceURL, pending.ExecutionIntent, userID,
@@ -2861,10 +2859,10 @@ func (h *OAuthHandler) refreshAccountProfile(ctx context.Context, account models
 		return models.SocialAccount{}, huma.Error409Conflict("the provider returned a different account identity; reconnect this account instead")
 	}
 	cachedAvatarURL := ""
-	if account.Platform == "linkedin" && h.accountAvatars != nil && strings.TrimSpace(profile.AvatarURL) != "" {
-		cachedAvatarURL, err = h.accountAvatars.CacheLinkedIn(ctx, account.ID, profile.AvatarURL)
+	if h.accountAvatars != nil && strings.TrimSpace(profile.AvatarURL) != "" {
+		cachedAvatarURL, err = h.accountAvatars.CacheAvatar(ctx, account.ID, profile.AvatarURL)
 		if err != nil {
-			log.Printf("failed to cache LinkedIn avatar for account %s: %v", account.ID, err)
+			log.Printf("failed to cache %s avatar for account %s", account.Platform, account.ID)
 			return models.SocialAccount{}, huma.Error502BadGateway("the provider profile photo could not be saved")
 		}
 		cachedProfile := *profile
@@ -2887,9 +2885,15 @@ func (h *OAuthHandler) refreshAccountProfile(ctx context.Context, account models
 func (h *OAuthHandler) SetAccountAvatarStorage(storage mediastore.BlobStorage) {
 	if storage == nil {
 		h.accountAvatars = nil
+		if h.accountSaver != nil {
+			h.accountSaver.SetAvatarCache(nil)
+		}
 		return
 	}
 	h.accountAvatars = accountavatar.New(storage)
+	if h.accountSaver != nil {
+		h.accountSaver.SetAvatarCache(h.accountAvatars)
+	}
 }
 
 func (h *OAuthHandler) updateAccountProfileMetadata(ctx context.Context, account models.SocialAccount, profile *platform.UserProfile) error {
@@ -2899,26 +2903,32 @@ func (h *OAuthHandler) updateAccountProfileMetadata(ctx context.Context, account
 		return nil
 	}
 
-	query := h.db.NewUpdate().Model((*models.SocialAccount)(nil)).
-		Where("id = ? AND workspace_id = ? AND account_id = ? AND is_active = ?", account.ID, account.WorkspaceID, account.AccountID, true)
-	if username != "" {
-		query = query.Set("account_username = ?", username)
-	}
-	if avatarURL != "" {
-		query = query.Set("account_avatar_url = ?", avatarURL)
-	}
-	result, err := query.Exec(ctx)
-	if err != nil {
-		return huma.Error500InternalServerError("failed to update account metadata")
-	}
-	updated, err := result.RowsAffected()
-	if err != nil {
-		return huma.Error500InternalServerError("failed to verify account metadata update")
-	}
-	if updated != 1 {
-		return huma.Error409Conflict("the account changed while its profile was refreshing; try again")
-	}
-	return nil
+	// Share the connection transaction's fence. Fetching the provider profile and
+	// photo stays outside the lock, then the revision predicates reject stale work.
+	return organizationguard.WithWorkspace(ctx, h.db, account.WorkspaceID, func(ctx context.Context, db bun.IDB) error {
+		query := db.NewUpdate().Model((*models.SocialAccount)(nil)).
+			Where("id = ? AND workspace_id = ? AND account_id = ? AND is_active = ?", account.ID, account.WorkspaceID, account.AccountID, true).
+			Where("account_avatar_url = ?", account.AccountAvatarURL).
+			Where("account_username = ? AND oauth_grant_id = ?", account.AccountUsername, account.OAuthGrantID)
+		if username != "" {
+			query = query.Set("account_username = ?", username)
+		}
+		if avatarURL != "" {
+			query = query.Set("account_avatar_url = ?", avatarURL)
+		}
+		result, err := query.Exec(ctx)
+		if err != nil {
+			return huma.Error500InternalServerError("failed to update account metadata")
+		}
+		updated, err := result.RowsAffected()
+		if err != nil {
+			return huma.Error500InternalServerError("failed to verify account metadata update")
+		}
+		if updated != 1 {
+			return huma.Error409Conflict("the account changed while its profile was refreshing; try again")
+		}
+		return nil
+	})
 }
 
 func refreshProviderAccountMetadata(ctx context.Context, adapter platform.Adapter, accessToken string, account models.SocialAccount) (*platform.UserProfile, error) {

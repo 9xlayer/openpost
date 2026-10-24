@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { ThemeIcon } from '$lib/themes/icons';
 	import { resolve } from '$app/paths';
@@ -50,7 +51,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.impersonation_page_title()}</title>
+	<title>{appBranding.title(m.impersonation_page_title())}</title>
 </svelte:head>
 
 {#snippet impersonationIcon()}

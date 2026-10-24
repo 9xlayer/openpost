@@ -635,6 +635,9 @@ func (c *Client) DisconnectAccount(ctx context.Context, accountID string) error 
 // ----- Media -----
 
 type Media struct {
+	ParentMediaID    string `json:"parent_media_id,omitempty"`
+	Source           string `json:"source,omitempty"`
+	ProcessingStatus string `json:"processing_status,omitempty"`
 	ID               string `json:"id"`
 	MimeType         string `json:"mime_type"`
 	URL              string `json:"url"`
@@ -866,19 +869,26 @@ func (c *Client) GetMediaUsage(ctx context.Context, mediaID string) (*MediaUsage
 // ----- Publications -----
 
 type PublicationMediaInput struct {
-	MediaID string `json:"media_id"`
-	Role    string `json:"role,omitempty"`
-	AltText string `json:"alt_text,omitempty"`
+	ThumbnailTimestampMS int64          `json:"thumbnail_timestamp_ms,omitempty"`
+	Settings             map[string]any `json:"settings,omitempty"`
+	MediaID              string         `json:"media_id"`
+	Role                 string         `json:"role,omitempty"`
+	AltText              string         `json:"alt_text,omitempty"`
 }
 
 type RenditionInput struct {
-	SocialAccountID string                  `json:"social_account_id"`
-	Profile         string                  `json:"profile,omitempty"`
-	Body            string                  `json:"body,omitempty"`
-	Title           string                  `json:"title,omitempty"`
-	Description     string                  `json:"description,omitempty"`
-	Settings        map[string]interface{}  `json:"settings,omitempty"`
-	Media           []PublicationMediaInput `json:"media,omitempty"`
+	TargetKey        string                  `json:"target_key,omitempty"`
+	OutputProfile    string                  `json:"output_profile,omitempty"`
+	FormatLocked     bool                    `json:"format_locked,omitempty"`
+	ScheduleOverride *time.Time              `json:"schedule_override,omitempty"`
+	Segments         []RenditionSegmentInput `json:"segments,omitempty"`
+	SocialAccountID  string                  `json:"social_account_id"`
+	Profile          string                  `json:"profile,omitempty"`
+	Body             string                  `json:"body,omitempty"`
+	Title            string                  `json:"title,omitempty"`
+	Description      string                  `json:"description,omitempty"`
+	Settings         map[string]interface{}  `json:"settings,omitempty"`
+	Media            []PublicationMediaInput `json:"media,omitempty"`
 }
 
 type CreatePublicationInput struct {
@@ -901,25 +911,30 @@ type CreatePublicationInput struct {
 }
 
 type UpdatePublicationInput struct {
-	ExpectedRevision   int                    `json:"expected_revision"`
-	Force              bool                   `json:"force,omitempty"`
-	Title              *string                `json:"title,omitempty"`
-	ContentProfile     *string                `json:"content_profile,omitempty"`
-	SourceText         *string                `json:"source_text,omitempty"`
-	SourceURL          *string                `json:"source_url,omitempty"`
-	Goal               *string                `json:"goal,omitempty"`
-	Audience           *string                `json:"audience,omitempty"`
-	ScheduledAt        *time.Time             `json:"scheduled_at,omitempty"`
-	ClearSchedule      bool                   `json:"clear_schedule,omitempty"`
-	RandomDelayMinutes *int                   `json:"random_delay_minutes,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
-	Renditions         []RenditionInput       `json:"renditions,omitempty"`
+	Segments           []PublicationSegmentInput `json:"segments,omitempty"`
+	ExpectedRevision   int                       `json:"expected_revision"`
+	Force              bool                      `json:"force,omitempty"`
+	Title              *string                   `json:"title,omitempty"`
+	ContentProfile     *string                   `json:"content_profile,omitempty"`
+	SourceText         *string                   `json:"source_text,omitempty"`
+	SourceURL          *string                   `json:"source_url,omitempty"`
+	Goal               *string                   `json:"goal,omitempty"`
+	Audience           *string                   `json:"audience,omitempty"`
+	ScheduledAt        *time.Time                `json:"scheduled_at,omitempty"`
+	ClearSchedule      bool                      `json:"clear_schedule,omitempty"`
+	RandomDelayMinutes *int                      `json:"random_delay_minutes,omitempty"`
+	Metadata           map[string]interface{}    `json:"metadata,omitempty"`
+	Renditions         []RenditionInput          `json:"renditions,omitempty"`
 }
 
 type PublicationSegmentInput struct {
-	ID    string                  `json:"id,omitempty"`
-	Body  string                  `json:"body,omitempty"`
-	Media []PublicationMediaInput `json:"media,omitempty"`
+	Title       string                  `json:"title,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	URL         string                  `json:"url,omitempty"`
+	Settings    map[string]any          `json:"settings,omitempty"`
+	ID          string                  `json:"id,omitempty"`
+	Body        string                  `json:"body,omitempty"`
+	Media       []PublicationMediaInput `json:"media,omitempty"`
 }
 
 type PublicationCreationSource string
@@ -1044,8 +1059,9 @@ type ProviderDelivery struct {
 // RenditionSourceOverride is one caller-authored per-source decision
 // inside a joined rendition segment. It mirrors RenditionSourceOverride.
 type RenditionSourceOverride struct {
+	Mentions             *Mentions               `json:"mentions,omitempty"`
 	PublicationSegmentID string                  `json:"publication_segment_id"`
-	BodyOverride         string                  `json:"body_override,omitempty"`
+	BodyOverride         *string                 `json:"body_override,omitempty"`
 	MediaInherited       bool                    `json:"media_inherited"`
 	Media                []PublicationMediaInput `json:"media,omitempty"`
 }
@@ -1057,13 +1073,13 @@ type RenditionSegment struct {
 	PublicationSegmentID string                    `json:"publication_segment_id"`
 	Position             int                       `json:"position"`
 	Body                 string                    `json:"body"`
-	BodyOverride         string                    `json:"body_override,omitempty"`
+	BodyOverride         *string                   `json:"body_override,omitempty"`
 	Title                string                    `json:"title"`
-	TitleOverride        string                    `json:"title_override,omitempty"`
+	TitleOverride        *string                   `json:"title_override,omitempty"`
 	Description          string                    `json:"description"`
-	DescriptionOverride  string                    `json:"description_override,omitempty"`
+	DescriptionOverride  *string                   `json:"description_override,omitempty"`
 	URL                  string                    `json:"url,omitempty"`
-	URLOverride          string                    `json:"url_override,omitempty"`
+	URLOverride          *string                   `json:"url_override,omitempty"`
 	MediaInherited       bool                      `json:"media_inherited"`
 	Settings             map[string]interface{}    `json:"settings"`
 	Status               string                    `json:"status"`
@@ -1519,4 +1535,90 @@ func (c *Client) CheckToken() error {
 		return ErrAuthRequired
 	}
 	return nil
+}
+
+type MentionTarget struct {
+	Provider  string `json:"provider"`
+	Kind      string `json:"kind"`
+	ID        string `json:"id"`
+	Authority string `json:"authority,omitempty"`
+	Handle    string `json:"handle,omitempty"`
+}
+type MentionSpan struct {
+	Start  int           `json:"start"`
+	End    int           `json:"end"`
+	Text   string        `json:"text"`
+	Target MentionTarget `json:"target"`
+}
+type Mentions struct {
+	Version int           `json:"version"`
+	Spans   []MentionSpan `json:"spans"`
+}
+type MentionCandidate struct {
+	Label  string        `json:"label"`
+	Detail string        `json:"detail"`
+	Target MentionTarget `json:"target"`
+}
+type MentionLookup struct {
+	Candidates []MentionCandidate `json:"candidates"`
+	Mode       string             `json:"mode"`
+}
+type RenditionSegmentInput struct {
+	PublicationSegmentID string                    `json:"publication_segment_id,omitempty"`
+	Body                 string                    `json:"body,omitempty"`
+	Title                string                    `json:"title,omitempty"`
+	Description          string                    `json:"description,omitempty"`
+	URL                  string                    `json:"url,omitempty"`
+	BodyOverride         *string                   `json:"body_override,omitempty"`
+	TitleOverride        *string                   `json:"title_override,omitempty"`
+	DescriptionOverride  *string                   `json:"description_override,omitempty"`
+	URLOverride          *string                   `json:"url_override,omitempty"`
+	MediaInherited       *bool                     `json:"media_inherited,omitempty"`
+	Settings             map[string]any            `json:"settings,omitempty"`
+	SourceOverrides      []RenditionSourceOverride `json:"source_overrides,omitempty"`
+	Media                []PublicationMediaInput   `json:"media,omitempty"`
+}
+
+func (c *Client) LookupAccountMentions(ctx context.Context, accountID, query string) (*MentionLookup, error) {
+	var result MentionLookup
+	err := c.GetJSON(ctx, "/api/v1/accounts/"+url.PathEscape(accountID)+"/mentions?query="+url.QueryEscape(query), &result)
+	return &result, err
+}
+
+type PrepareMediaImageInput struct {
+	AccountID     string         `json:"account_id"`
+	OutputProfile string         `json:"output_profile"`
+	Settings      map[string]any `json:"settings,omitempty"`
+	AltText       *string        `json:"alt_text,omitempty"`
+}
+type PreparedMediaImage struct {
+	Media  MediaUploadResult `json:"media"`
+	Status string            `json:"status"`
+}
+
+func (c *Client) PrepareMediaImage(ctx context.Context, id string, input PrepareMediaImageInput) (*PreparedMediaImage, error) {
+	var result PreparedMediaImage
+	err := c.PostJSON(ctx, "/api/v1/media/"+url.PathEscape(id)+"/prepare-image", input, &result)
+	return &result, err
+}
+
+type MediaUploadResult struct {
+	ID                 string `json:"id"`
+	MimeType           string `json:"mime_type"`
+	URL                string `json:"url"`
+	Size               int64  `json:"size"`
+	Deduped            bool   `json:"deduped"`
+	AltText            string `json:"alt_text"`
+	OriginalFilename   string `json:"original_filename"`
+	Source             string `json:"source"`
+	AssetKind          string `json:"asset_kind"`
+	RetentionClass     string `json:"retention_class"`
+	ParentMediaID      string `json:"parent_media_id,omitempty"`
+	DesignDocumentID   string `json:"design_document_id,omitempty"`
+	DesignPageID       string `json:"design_page_id,omitempty"`
+	ProcessingStatus   string `json:"processing_status"`
+	ProcessingProgress int    `json:"processing_progress"`
+	AnalysisStatus     string `json:"analysis_status"`
+	AnalysisError      string `json:"analysis_error,omitempty"`
+	PosterThumbnailURL string `json:"poster_thumbnail_url,omitempty"`
 }

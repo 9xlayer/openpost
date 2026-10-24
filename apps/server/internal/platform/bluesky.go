@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/openpost/backend/internal/netguard"
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/providerlimits"
 	"github.com/rivo/uniseg"
 )
@@ -869,9 +870,16 @@ func (b *BlueskyAdapter) resolveBlueskyComposerReferences(ctx context.Context, a
 		req.Settings["quote_uri"] = uri
 		req.Settings["quote_cid"] = cid
 	}
+	projection, err := posttext.ReadProjection(req.Content, "bluesky", "", req.Settings)
+	if err != nil {
+		return err
+	}
 	mentions := map[string]string{}
-	for _, match := range blueskyMentionPattern.FindAllString(req.Content, -1) {
-		handle := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(match), "@"))
+	for _, match := range blueskyMentionPattern.FindAllStringIndex(req.Content, -1) {
+		if !posttext.LegacyMentionAllowed(projection, match[0], match[1]) {
+			continue
+		}
+		handle := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(req.Content[match[0]:match[1]]), "@"))
 		if handle == "" {
 			continue
 		}
@@ -1054,6 +1062,15 @@ type blueskyFacetCandidate struct {
 
 func buildBlueskyFacets(text string, settings map[string]interface{}) []map[string]interface{} {
 	candidates := []blueskyFacetCandidate{}
+	projection, err := posttext.ReadProjection(text, "bluesky", "", settings)
+	if err != nil {
+		return nil
+	}
+	if projection != nil {
+		for _, span := range projection.Spans {
+			candidates = append(candidates, blueskyFacetCandidate{start: span.Start, end: span.End, facet: blueskyFacet(span.Start, span.End, map[string]string{bskyRecordTypeField: "app.bsky.richtext.facet#mention", "did": span.Target.ID})})
+		}
+	}
 	for _, match := range blueskyURLPattern.FindAllStringIndex(text, -1) {
 		start, end := match[0], match[1]
 		uri := strings.TrimRight(text[start:end], ".,;:!?\")']}")
@@ -1094,6 +1111,9 @@ func buildBlueskyFacets(text string, settings map[string]interface{}) []map[stri
 	mentionDIDs := blueskyMentionDIDs(settings)
 	for _, match := range blueskyMentionPattern.FindAllStringIndex(text, -1) {
 		start, end := match[0], match[1]
+		if !posttext.LegacyMentionAllowed(projection, start, end) {
+			continue
+		}
 		handle := strings.ToLower(strings.TrimPrefix(text[start:end], "@"))
 		did := mentionDIDs[handle]
 		if did == "" || !blueskyDIDPattern.MatchString(did) {

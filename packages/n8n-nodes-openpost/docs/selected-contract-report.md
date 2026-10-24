@@ -3,8 +3,8 @@
 Generated from the canonical OpenAPI `x-openpost-automation` metadata.
 
 - Source version: 1.0.0
-- Actions emitted: 21
-- Checksum: 4ec731ce799b39764410f3a2359448dd3403b4e4c59ba6d27ba0b1598b9c2200
+- Actions emitted: 22
+- Checksum: 3824390aa6b182af8b196d457a4139491ba861c0d2e1e58faeaafba6e1b0ff7e
 
 ## Actions
 
@@ -13,6 +13,7 @@ Generated from the canonical OpenAPI `x-openpost-automation` metadata.
 | Workspace        | Get Many                | list-workspaces                                            | query           | transient            | none        |
 | Account          | Get Many                | list-accounts                                              | query           | transient            | none        |
 | Account          | Get Destination Options | get-account-destination-options                            | query           | transient            | none        |
+| Account          | Lookup Mentions         | lookup-account-mentions                                    | query           | transient            | none        |
 | Account          | Get Provider Readiness  | get-provider-readiness                                     | query           | transient            | none        |
 | Social Set       | Get Many                | list-social-sets                                           | query           | transient            | none        |
 | Social Set       | Get                     | get-social-set                                             | query           | transient            | none        |

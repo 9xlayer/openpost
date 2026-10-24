@@ -145,9 +145,13 @@ export const PLATFORM_LIMITS = {
   },
 } satisfies Record<string, PlatformLimitDefinition>;
 
+export function countUTF8Bytes(text: string): number {
+  return new TextEncoder().encode(text).length;
+}
+
 export function countPlatformText(platformKey: string, text: string): number {
-  if (platformKey === "youtube") return new TextEncoder().encode(text.trim()).length;
-  if (platformKey === "threads") return new TextEncoder().encode(text).length;
+  if (platformKey === "youtube") return countUTF8Bytes(text.trim());
+  if (platformKey === "threads") return countUTF8Bytes(text);
   if (platformKey === "bluesky") return graphemeSegments(text).length;
   if (platformKey === "mastodon") return Array.from(mastodonCountableText(text)).length;
   if (platformKey !== "x") return Array.from(text).length;

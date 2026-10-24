@@ -34,4 +34,18 @@ describe("Accounts", () => {
     const [url] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain("target_key=profile_main");
   });
+  it("encodes account-scoped mention lookup and preserves permission failures", async () => {
+    let requested = "";
+    const fetch = vi.fn(async (url: string | URL | Request) => {
+      requested = String(url);
+      return jsonResponse({ detail: "Mention search permission required" }, 403);
+    });
+    const client = new OpenPost({ baseUrl: "https://example.test", token: "tok", fetch });
+    await expect(client.accounts.lookupMentions("account/id", "A & B")).rejects.toMatchObject({
+      status: 403,
+    });
+    const url = new URL(requested);
+    expect(url.pathname).toBe("/api/v1/accounts/account%2Fid/mentions");
+    expect(url.searchParams.get("query")).toBe("A & B");
+  });
 });

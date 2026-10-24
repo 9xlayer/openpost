@@ -34,13 +34,13 @@ var xProviderURLPattern = regexp.MustCompile(
 	`(?i)(?:https?://|www\.)[^\s<>{}\[\]"']+|(?:^|[\s(])(?:[\p{L}\p{N}](?:[\p{L}\p{N}-]{0,61}[\p{L}\p{N}])?\.)+[\p{L}]{2,63}(?:[/?#][^\s<>{}\[\]"']*)?`,
 )
 
-func WithJobExecution(ctx context.Context, jobID string, attempt int, lockedAt time.Time) context.Context {
+func WithJobExecution(ctx context.Context, jobID string, attempt int, lockedAt time.Time, generation ...int64) context.Context {
 	ctx = context.WithValue(ctx, jobExecutionContextKey{}, jobExecution{
 		ID:       strings.TrimSpace(jobID),
 		Attempt:  attempt,
 		LockedAt: lockedAt.UTC(),
 	})
-	return providerwrite.WithJobExecution(ctx, jobID, attempt, lockedAt)
+	return providerwrite.WithJobExecution(ctx, jobID, attempt, lockedAt, generation...)
 }
 
 func (s *Service) reserveProviderPublishCost(

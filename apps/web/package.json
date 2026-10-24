@@ -135,7 +135,7 @@
 		"shell-quote": "^1.11.0",
 		"svelte-sonner": "^1.1.1",
 		"torph": "^0.1.1",
-		"zod": "^4.4.3",
+		"zod": "^4.6.7",
 		"@openpost/draft-transfer": "workspace:*",
 		"idb-keyval": "^6.2.2",
 		"@openpost/ui": "workspace:*"

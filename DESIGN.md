@@ -156,13 +156,13 @@ Documentation uses a quiet reading layout with a compact icon sidebar, persisten
 
 ## Theme contract
 
-Organization themes are versioned visual documents. They may control semantic colors, approved typography, density, spacing, shape, elevation, motion, shell recipes, component recipes, one complete icon pack, and decorative assets. They cannot change product structure, permissions, copy, data, provider truth, or protected identity.
+Organization themes are versioned visual documents. They may control semantic colors, approved typography, density, spacing, shape, elevation, motion, shell recipes, component recipes, one complete icon pack, and decorative assets. They cannot change product structure, permissions, copy, data, provider truth, or app identity. App branding is a separate organization setting with policy-controlled workspace overrides; see `docs/development/app-branding.md`.
 
 - Components declare intent such as `focal`, `primary`, `ordinary`, `quiet`, `destructive`, or `link`. They do not choose a brand color or theme family.
 - `chart1` through `chart5` are categorical data colors. Every supported scheme keeps all five chromatic and visibly distinct against its chart surfaces; neutral gray is reserved for the aggregated "other" series. Charts also expose labels or tooltips so color is never the only identifier.
 - Published revisions and built-in versions are complete and immutable. Drafts may be incomplete while editing, but runtime output may not.
 - Web and native consume the same resolved semantic contract through platform renderers. Neither client reconstructs organization defaults, workspace overrides, locks, revisions, or fallback.
-- Workspace name, avatar, and color remain workspace identity. The Converge mark keeps its geometry and follows the active theme's focal color in the app. Provider marks, status meaning, media, and specialized editor glyphs retain their protected colors or geometry.
+- Workspace name, avatar, and color remain workspace identity. The default Converge mark keeps its geometry and follows the active theme's focal color in the app. Explicit app-branding images keep their uploaded colors, aspect ratio, and light/dark variants. Provider marks, status meaning, media, and specialized editor glyphs retain their protected colors or geometry.
 - Protected editor roles follow the active light or dark scheme. Protection preserves contrast, signal meaning, and authored output. It does not force dark chrome inside a light theme.
 - Uploaded fonts are local static WOFF2 resources. The backend derives a validated TTF or OTF copy for native clients. Remote font and asset URLs are not theme values.
 - Theme application is atomic. Fonts, icons, assets, and tokens are staged before one complete presentation replaces the prior workspace presentation.
@@ -181,7 +181,7 @@ Organization themes are versioned visual documents. They may control semantic co
 
 ### Hierarchy
 
-- **Wordmark** (`wordmark`): The fixed OpenPost brand name beside the Converge mark, set at Semibold with restrained negative tracking.
+- **Wordmark** (`wordmark`): The resolved app display name beside its mark, defaulting to OpenPost and Converge, set at Semibold with restrained negative tracking.
 - **Display** (`display`): Public hero and major campaign headings, with strong contrast and tight tracking.
 - **App title** (`app-title`): Authenticated route `h1` headings through the shared page header.
 - **Body** (`body`): Controls, app copy, descriptions, and most supporting text; long prose should stay near 65–75 characters per line.

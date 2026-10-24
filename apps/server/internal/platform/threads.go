@@ -37,6 +37,7 @@ func NewThreadsAdapter(clientID, clientSecret, redirectURI string) *ThreadsAdapt
 				"threads_basic",
 				"threads_content_publish",
 				threadsReadRepliesScope,
+				"threads_manage_mentions",
 				"threads_manage_replies",
 				"threads_manage_insights",
 				"threads_location_tagging",

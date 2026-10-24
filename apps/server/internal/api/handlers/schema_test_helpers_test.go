@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/openpost/backend/internal/database"
+	"github.com/openpost/backend/internal/imageprepare"
 	"github.com/stretchr/testify/require"
 	"github.com/uptrace/bun"
 )
@@ -14,6 +15,13 @@ import (
 var handlerTestSchemaPath string
 
 func TestMain(m *testing.M) {
+	if handled, err := imageprepare.RunWorker(os.Args[1:], os.Stdin, os.Stdout); handled {
+		if err != nil {
+			os.Exit(1)
+		}
+		return
+	}
+
 	templateDir, err := os.MkdirTemp("", "openpost-handler-tests-")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "create handler test template directory: %v\n", err)

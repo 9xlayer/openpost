@@ -38,7 +38,7 @@ test("composer history identifies the authored fields changed by a text edit", a
     .poll(async () => (await (await request.get(path, { headers })).json()).source_text)
     .toBe("Audit normalized baseline");
   await page.reload();
-  await expect(textbox).toHaveValue("Audit normalized baseline");
+  await expect(textbox).toHaveText("Audit normalized baseline", { useInnerText: true });
   await textbox.fill("Audit corrected text");
   await expect
     .poll(async () => (await (await request.get(path, { headers })).json()).source_text)
@@ -83,7 +83,7 @@ test("composer history identifies the authored fields changed by a text edit", a
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
       await page.reload();
-      await expect(textbox).toHaveValue("Audit corrected text");
+      await expect(textbox).toHaveText("Audit corrected text", { useInnerText: true });
       await page.getByRole("button", { name: "Post settings", exact: true }).focus();
       await page.keyboard.press("Enter");
       await page.getByRole("button", { name: "Version history", exact: true }).click();

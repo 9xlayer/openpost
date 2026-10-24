@@ -86,3 +86,26 @@ func TestConfirmedModerationAppearsInDurableInboxFeed(t *testing.T) {
 		})
 	}
 }
+
+type mentionReplyProvider struct{ moderationProvider }
+
+func (p *mentionReplyProvider) ReplyToComment(context.Context, string, string, string, string) (string, error) {
+	p.calls++
+	return "reply", nil
+}
+func TestQueuedMentionReplyHonorsRoleRevocationBeforeSend(t *testing.T) {
+	s := admissionTestService(t)
+	s.tokenSource = moderationTokens{}
+	provider := &mentionReplyProvider{}
+	s.SetProvider("bluesky", provider)
+	_, err := s.db.NewUpdate().Model((*models.EngagementItem)(nil)).Set("kind='mention'").Where("id='c'").Exec(t.Context())
+	require.NoError(t, err)
+	jobID, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "c", "reply", "Queued reply", "revoke")
+	require.NoError(t, err)
+	_, err = s.db.NewUpdate().Model((*models.WorkspaceMember)(nil)).Set("role=?", models.WorkspaceRoleViewer).Where("workspace_id='w' AND user_id='u'").Exec(t.Context())
+	require.NoError(t, err)
+	var job models.Job
+	require.NoError(t, s.db.NewSelect().Model(&job).Where("id=?", jobID).Scan(t.Context()))
+	require.ErrorIs(t, s.HandleJob(t.Context(), job.Type, job.Payload), ErrAccessDenied)
+	require.Zero(t, provider.calls)
+}

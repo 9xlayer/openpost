@@ -1,3 +1,11 @@
+import { renditionReadinessSegments } from "@/lib/publication-image-choices";
+import { AccountImageFit, type AccountImageChoice } from "@/components/account-image-fit";
+import { PostEditor } from "@/components/post-editor";
+import {
+  readMentionMetadata,
+  remapMentionMetadata,
+  type PostTextValue,
+} from "@openpost/platform-text/mentions";
 import { NativeText as Text } from "@/components/native-text";
 import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
 import { nativeTelemetry } from "@/lib/telemetry";
@@ -15,7 +23,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
 
@@ -48,6 +55,7 @@ import {
   readinessRequestSignature,
   resolveDestinationCapabilities,
   type ReadinessSegment,
+  type ReadinessRequestInput,
   type ResolvedDestinationCapability,
 } from "@/lib/destination-readiness";
 import { formatDateTime, platformLabel } from "@/lib/format";
@@ -64,7 +72,9 @@ import { publicationContentUpdate } from "@/lib/publication-content";
 import {
   attachmentRequirement,
   mobileRenditionInput,
+  mobileRenditionGeneratedText,
   mobileRenditionTextFields,
+  mobileRenditionTextValue,
   renditionImages,
   type RenditionTextEdits,
 } from "@/lib/publication-renditions";
@@ -133,15 +143,6 @@ function bodyFromPublication(pub: PublicationDetail): string {
 function selectedAccountsFromPublication(pub: PublicationDetail): Set<string> {
   return new Set(
     (pub.renditions ?? []).map((rendition) => rendition.social_account_id).filter(Boolean),
-  );
-}
-
-function renditionFieldsFromPublication(pub: PublicationDetail) {
-  return Object.fromEntries(
-    (pub.renditions ?? []).map((rendition) => [
-      rendition.social_account_id,
-      mobileRenditionTextFields(pub, rendition.social_account_id),
-    ]),
   );
 }
 
@@ -253,7 +254,10 @@ function Composer({
   const theme = useNativeTheme();
   const { colors, editor, typography, spacing } = theme.manifest;
   const queryClient = useQueryClient();
-  const bodyInputRef = useRef<TextInput | null>(null);
+  const [canonicalTextEdits, setCanonicalTextEdits] = useState<Record<string, PostTextValue>>({});
+  const [annotatedRenditionEdits, setAnnotatedRenditionEdits] = useState<
+    Record<string, Record<string, PostTextValue>>
+  >({});
   const [initialPendingAttachments] = useState(() => takePendingAttachments());
   const editorDirty = useRef(initialPendingAttachments.length > 0);
   const contentSnapshot = useRef(pub);
@@ -274,8 +278,8 @@ function Composer({
   const [renditionTextEdits, setRenditionTextEdits] = useState<Record<string, RenditionTextEdits>>(
     {},
   );
-  const [renditionFields, setRenditionFields] = useState(() => renditionFieldsFromPublication(pub));
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
+  const [imageChoices, setImageChoices] = useState<Record<string, AccountImageChoice>>({});
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [readinessByAccount, setReadinessByAccount] = useState<
@@ -313,7 +317,9 @@ function Composer({
     setSelectionTouched((pub.renditions?.length ?? 0) > 0);
     setSelectedAccounts(selectedAccountsFromPublication(pub));
     setRenditionTextEdits({});
-    setRenditionFields(renditionFieldsFromPublication(pub));
+    setCanonicalTextEdits({});
+    setAnnotatedRenditionEdits({});
+    setImageChoices({});
     setAttachments((current) => [
       ...attachmentsFromPublication(pub),
       ...current.filter((attachment) => !attachment.mediaId),
@@ -354,20 +360,54 @@ function Composer({
     }));
   }
 
-  function computeReadinessInput(firstSegmentMediaIds: string[]) {
+  function selectedImageIDs(accountId: string, resolvedProfile?: string) {
+    const profile =
+      contentSnapshot.current.renditions?.find((r) => r.social_account_id === accountId)
+        ?.output_profile ||
+      resolvedProfile ||
+      readinessByAccount[accountId]?.output_profile;
+    return Object.fromEntries(
+      Object.values(imageChoices)
+        .filter(
+          (choice) =>
+            choice.accountId === accountId && choice.selected && choice.profile === profile,
+        )
+        .map((choice) => [choice.originalId, choice.prepared.id]),
+    );
+  }
+
+  function computeReadinessInput(
+    firstSegmentMediaIds: string[],
+    accountIds = [...selectableAccountIds].sort(),
+  ) {
     const segments = buildReadinessSegments(firstSegmentMediaIds);
-    const accountIds = [...selectableAccountIds].sort();
-    return {
-      accountIds,
-      segments,
-      signature: readinessRequestSignature({ accountIds, segments }),
-    };
+    const snapshot = contentSnapshot.current;
+    const accountSegments = Object.fromEntries(
+      accountIds.map((accountId) => {
+        const stored = snapshot.renditions?.find((item) => item.social_account_id === accountId);
+        const strategy =
+          stored?.segments?.length === 1 && (snapshot.segments?.length ?? 0) > 1
+            ? "join"
+            : (readinessByAccount[accountId]?.segment_strategy ?? "preserve");
+        const input = mobileRenditionInput(
+          snapshot,
+          accountId,
+          renditionTextEdits[accountId],
+          attachments,
+          annotatedRenditionEdits[accountId],
+          strategy,
+          selectedImageIDs(accountId),
+        );
+        return [accountId, renditionReadinessSegments(snapshot, input, segments, strategy)];
+      }),
+    );
+    const input = { accountIds, segments, accountSegments };
+    return { ...input, signature: readinessRequestSignature(input) };
   }
 
   async function runReadinessResolve(
     signature: string,
-    accountIds: string[],
-    segments: ReadinessSegment[],
+    input: ReadinessRequestInput,
   ): Promise<void> {
     const workspaceId = getWorkspaceId();
     if (!workspaceId) return;
@@ -377,11 +417,7 @@ function Composer({
     const controller = new AbortController();
     readinessAbort.current = controller;
     try {
-      const resolved = await resolveDestinationCapabilities(
-        api(),
-        { accountIds, segments },
-        controller.signal,
-      );
+      const resolved = await resolveDestinationCapabilities(api(), input, controller.signal);
       requireCurrentQueryActor(scope);
       if (sequence !== readinessSequence.current) return;
       if (!workspaceScopeIsCurrent(scope)) return;
@@ -408,7 +444,8 @@ function Composer({
     .map((attachment) => `${attachment.localId}:${attachment.mediaId ?? ""}`)
     .join(",");
   useEffect(() => {
-    const { accountIds, segments, signature } = computeReadinessInput(readyMediaIds);
+    const input = computeReadinessInput(readyMediaIds);
+    const { accountIds, signature } = input;
     if (readinessTimer.current) {
       clearTimeout(readinessTimer.current);
       readinessTimer.current = null;
@@ -424,7 +461,7 @@ function Composer({
     if (signature === lastReadinessSignature.current) return;
     readinessTimer.current = setTimeout(() => {
       readinessTimer.current = null;
-      void runReadinessResolve(signature, accountIds, segments);
+      void runReadinessResolve(signature, input);
     }, readinessDebounceMs());
     return () => {
       if (readinessTimer.current) {
@@ -434,7 +471,16 @@ function Composer({
       readinessAbort.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [body, readinessAccountsKey, readinessAttachmentsKey, readinessNonce, pub]);
+  }, [
+    body,
+    readinessAccountsKey,
+    readinessAttachmentsKey,
+    readinessNonce,
+    pub,
+    imageChoices,
+    renditionTextEdits,
+    annotatedRenditionEdits,
+  ]);
 
   // Readiness describes the destinations selected now. Clearing the last one
   // leaves earlier results in state, so consumers read these derived values and
@@ -454,10 +500,11 @@ function Composer({
     scope: EditorMutationScope,
     firstSegmentMediaIds: string[],
   ): Promise<string | null> {
-    const { accountIds, segments } = computeReadinessInput(firstSegmentMediaIds);
+    const input = computeReadinessInput(firstSegmentMediaIds);
+    const { accountIds } = input;
     if (accountIds.length === 0) return null;
     try {
-      const resolved = await resolveDestinationCapabilities(api(), { accountIds, segments });
+      const resolved = await resolveDestinationCapabilities(api(), input);
       requireCurrentQueryActor(scope);
       if (!workspaceScopeIsCurrent(scope)) return null;
       return firstPublishBlocker(resolved, accountIds);
@@ -604,6 +651,23 @@ function Composer({
         rendition.social_account_id && !activeAccounts.has(rendition.social_account_id),
     );
 
+    const addedAccounts = desired.filter(
+      (accountId) =>
+        !(contentSnapshot.current.renditions ?? []).some(
+          (rendition) => rendition.social_account_id === accountId,
+        ),
+    );
+    const addedCapabilities = addedAccounts.length
+      ? await resolveDestinationCapabilities(
+          requestApi,
+          computeReadinessInput(
+            media.flatMap((item) => (item.mediaId ? [item.mediaId] : [])),
+            addedAccounts,
+          ),
+        )
+      : {};
+    requireCurrentQueryActor(scope);
+
     const initialScheduled = pub.scheduled_at ? new Date(pub.scheduled_at).getTime() : 0;
     const effectiveScheduledAt = scheduleOverride ?? scheduledAt;
     const scheduledChanged = (effectiveScheduledAt?.getTime() ?? 0) !== initialScheduled;
@@ -621,6 +685,7 @@ function Composer({
           body,
           media.map((item) => item.mediaId),
           altOverrides,
+          canonicalTextEdits,
         ),
         ...(activeSocialSetId ? { social_set_id: activeSocialSetId } : {}),
         ...(scheduledChanged
@@ -649,6 +714,9 @@ function Composer({
               accountId,
               renditionTextEdits[accountId],
               renditionMedia,
+              annotatedRenditionEdits[accountId],
+              addedCapabilities[accountId]?.segment_strategy,
+              selectedImageIDs(accountId, addedCapabilities[accountId]?.output_profile),
             ),
           ),
         },
@@ -899,22 +967,55 @@ function Composer({
       if (error || !data)
         throw new Error(await errorMessage(response, "Could not generate this draft", error));
       requireCurrentQueryActor(scope);
-      return data;
+      const key = contentSnapshot.current.segments?.[0]?.id ?? "first";
+      const previous = canonicalTextEdits[key] ?? {
+        body,
+        mentions: readMentionMetadata(
+          body,
+          contentSnapshot.current.segments?.[0]?.settings?.mentions,
+        )?.spans,
+      };
+      try {
+        const metadata = remapMentionMetadata(
+          previous.body,
+          data.source_text,
+          previous.mentions === undefined ? undefined : { version: 1, spans: previous.mentions },
+        );
+        const annotated: Record<string, Record<string, PostTextValue>> = {
+          ...annotatedRenditionEdits,
+        };
+        const textEdits = { ...renditionTextEdits };
+        for (const rendition of data.renditions ?? []) {
+          const next = mobileRenditionGeneratedText(
+            contentSnapshot.current,
+            rendition.social_account_id,
+            rendition.body,
+            textEdits[rendition.social_account_id],
+            annotated[rendition.social_account_id],
+          );
+          textEdits[rendition.social_account_id] = next.textEdits;
+          annotated[rendition.social_account_id] = next.annotated;
+        }
+        return {
+          generated: data,
+          key,
+          canonical: { body: data.source_text, mentions: metadata?.spans },
+          annotated,
+          textEdits,
+        };
+      } catch {
+        throw new Error(
+          "The generated text changes a selected mention. Edit its mention choices before generating again.",
+        );
+      }
     },
-    onSuccess: (generated, scope) => {
+    onSuccess: ({ generated, key, canonical, annotated, textEdits }, scope) => {
       if (!workspaceScopeIsCurrent(scope)) return;
       markEditorDirty();
       setBody(generated.source_text);
-      setRenditionTextEdits(
-        Object.fromEntries(
-          (generated.renditions ?? []).map((rendition) => [
-            rendition.social_account_id,
-            {
-              [renditionFields[rendition.social_account_id]?.[0]?.key ?? "body"]: rendition.body,
-            },
-          ]),
-        ),
-      );
+      setCanonicalTextEdits((current) => ({ ...current, [key]: canonical }));
+      setAnnotatedRenditionEdits(annotated);
+      setRenditionTextEdits(textEdits);
       setStatusMessage("Generated draft ready. Review it before you queue it.");
       setActionError(null);
       void successHaptic();
@@ -1098,42 +1199,77 @@ function Composer({
     const platform = accounts.data?.find((account) => account.id === accountId)?.platform ?? "";
     return (
       <View style={{ gap: spacing.small }}>
-        {(pub.renditions ?? [])
-          .filter((rendition) => rendition.social_account_id === accountId)
-          .flatMap(renditionImages)
-          .map((media) => (
-            <MediaImage
-              key={media.id}
-              uri={media.url}
-              contentFit="contain"
-              accessibilityLabel={media.alt_text || "Post image"}
-              style={{
-                width: "100%",
-                aspectRatio: media.width && media.height ? media.width / media.height : 1,
+        {(() => {
+          const rendition = contentSnapshot.current.renditions?.find(
+            (item) => item.social_account_id === accountId,
+          );
+          const profile =
+            rendition?.output_profile ||
+            effectiveReadinessByAccount[accountId]?.output_profile ||
+            "";
+          const images = rendition
+            ? renditionImages(rendition)
+            : [
+                ...new Map(
+                  (contentSnapshot.current.segments ?? [])
+                    .flatMap((source) => source.media ?? [])
+                    .filter((media) => media.mime_type?.startsWith("image/"))
+                    .map((media) => [media.id, media]),
+                ).values(),
+              ];
+          return images.map((media) => (
+            <AccountImageFit
+              key={`${accountId}:${profile}:${media.id}`}
+              accountId={accountId}
+              media={media}
+              profile={profile}
+              settings={rendition?.settings ?? {}}
+              choice={imageChoices[`${accountId}:${media.id}`]}
+              onChange={(choice) => {
+                if (choice.selected || imageChoices[`${accountId}:${media.id}`]?.selected)
+                  markEditorDirty();
+                setImageChoices((current) => ({
+                  ...current,
+                  [`${accountId}:${media.id}`]: choice,
+                }));
               }}
             />
-          ))}
-        {(renditionFields[accountId] ?? [{ key: "body", value: body }]).map(
+          ));
+        })()}
+
+        {mobileRenditionTextFields(contentSnapshot.current, accountId).map(
           (field, index, fields) => (
             <View key={field.key} style={{ gap: spacing.extraSmall }}>
               {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
-              <TextField
-                value={renditionTextEdits[accountId]?.[field.key] ?? field.value}
-                accessibilityLabel={`Custom text ${index + 1} for ${platformLabel(platform)}`}
-                onChangeText={(text) => {
+              <PostEditor
+                value={
+                  annotatedRenditionEdits[accountId]?.[field.key] ??
+                  mobileRenditionTextValue(
+                    contentSnapshot.current,
+                    accountId,
+                    field.key,
+                    renditionTextEdits[accountId]?.[field.key] ?? field.value,
+                  )
+                }
+                accountId={accountId}
+                platform={platform}
+                instanceURL={
+                  accounts.data?.find((account) => account.id === accountId)?.instance_url
+                }
+                workspaceId={pub.workspace_id}
+                label={`Custom text ${index + 1} for ${platformLabel(platform)}`}
+                placeholder="Account version"
+                onChange={(value) => {
                   markEditorDirty();
+                  setAnnotatedRenditionEdits((current) => ({
+                    ...current,
+                    [accountId]: { ...current[accountId], [field.key]: value },
+                  }));
                   setRenditionTextEdits((current) => ({
                     ...current,
-                    [accountId]: {
-                      ...current[accountId],
-                      [field.key]: text,
-                    },
+                    [accountId]: { ...current[accountId], [field.key]: value.body },
                   }));
                 }}
-                placeholder="Account version"
-                multiline
-                textAlignVertical="top"
-                style={styles.overrideField}
               />
             </View>
           ),
@@ -1209,35 +1345,47 @@ function Composer({
         ) : null}
 
         <DitherPanel style={{ backgroundColor: "transparent", borderWidth: 0, padding: 0 }}>
-          <TextField
-            ref={bodyInputRef}
-            value={body}
-            onChangeText={(text) => {
+          <PostEditor
+            workspaceId={pub.workspace_id}
+            value={
+              canonicalTextEdits[pub.segments?.[0]?.id ?? "first"] ?? {
+                body,
+                mentions: readMentionMetadata(body, pub.segments?.[0]?.settings?.mentions)?.spans,
+              }
+            }
+            onChange={(value) => {
               markEditorDirty();
-              setBody(text);
-              if (text.trim()) void recordNativeFirstComposition("text");
+              setBody(value.body);
+              setCanonicalTextEdits((current) => ({
+                ...current,
+                [pub.segments?.[0]?.id ?? "first"]: value,
+              }));
+              if (value.body.trim()) void recordNativeFirstComposition("text");
             }}
-            accessibilityLabel="Post text"
+            label="Post text"
             placeholder="What do you want to say?"
-            multiline
-            textAlignVertical="top"
-            imageKeyboard={{
-              onImageReceived: (attachment, context) =>
-                appendAttachments([attachment], context.focus),
-              onError: (message, context) => {
-                setActionError(message);
-                void errorHaptic();
-                context.focus();
-              },
-            }}
-            style={[
-              styles.writingField,
-              {
-                backgroundColor: "transparent",
-                borderColor: "transparent",
-              },
-            ]}
+            onImages={(images, focus) => appendAttachments(images, focus)}
           />
+          {(pub.segments ?? []).slice(1).map((segment, index) => (
+            <View key={segment.id} style={{ gap: spacing.extraSmall }}>
+              <BodyText>Text {index + 2}</BodyText>
+              <PostEditor
+                workspaceId={pub.workspace_id}
+                label={`Post text ${index + 2}`}
+                placeholder="Add to the thread"
+                value={
+                  canonicalTextEdits[segment.id] ?? {
+                    body: segment.body,
+                    mentions: readMentionMetadata(segment.body, segment.settings?.mentions)?.spans,
+                  }
+                }
+                onChange={(value) => {
+                  markEditorDirty();
+                  setCanonicalTextEdits((current) => ({ ...current, [segment.id]: value }));
+                }}
+              />
+            </View>
+          ))}
 
           <View style={styles.attachRow}>
             <Button

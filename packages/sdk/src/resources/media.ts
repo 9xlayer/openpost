@@ -1,6 +1,11 @@
 import { HttpClient } from "../client.js";
 import { OpenPostError } from "../errors.js";
-import type { MediaPage, MediaUploadResult } from "../types.js";
+import type {
+  MediaPage,
+  MediaUploadResult,
+  PrepareMediaImageInput,
+  PreparedMediaImage,
+} from "../types.js";
 
 export type MediaSource =
   | "upload"
@@ -95,6 +100,14 @@ export class Media {
       query: { workspace_id: workspaceId, limit },
     })) as MediaPage;
     return { media: page.media ?? [], total: page.total ?? 0 };
+  }
+
+  /** Creates a separate derivative. Attach its returned ID explicitly. */
+  async prepareImage(id: string, input: PrepareMediaImageInput): Promise<PreparedMediaImage> {
+    return (await this.http.post(
+      `/api/v1/media/${encodeURIComponent(id)}/prepare-image`,
+      input,
+    )) as PreparedMediaImage;
   }
 
   async remove(id: string): Promise<void> {

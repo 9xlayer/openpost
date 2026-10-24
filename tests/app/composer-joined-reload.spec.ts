@@ -74,8 +74,8 @@ test("a customized joined thread preserves each authored source after a cold rel
   await page.screenshot({ path: testInfo.outputPath("before-reload.png") });
   await page.reload();
   await page.locator(`#composer-destination-${accountID}`).click();
-  await expect(editors.nth(0)).toHaveValue("Custom first 東京");
-  await expect(editors.nth(1)).toHaveValue("Continuation once");
+  await expect(editors.nth(0)).toHaveText("Custom first 東京", { useInnerText: true });
+  await expect(editors.nth(1)).toHaveText("Continuation once", { useInnerText: true });
   await editors.nth(0).fill("Custom first edited");
   await expect
     .poll(async () => {
@@ -90,8 +90,8 @@ test("a customized joined thread preserves each authored source after a cold rel
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       await page.reload();
       await page.locator(`#composer-destination-${accountID}`).click();
-      await expect(editors.nth(0)).toHaveValue("Custom first edited");
-      await expect(editors.nth(1)).toHaveValue("Continuation once");
+      await expect(editors.nth(0)).toHaveText("Custom first edited", { useInnerText: true });
+      await expect(editors.nth(1)).toHaveText("Continuation once", { useInnerText: true });
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
         .toBe(true);
@@ -190,7 +190,7 @@ test("a joined Facebook caption edits the delivered description without flatteni
   await page.locator(`#composer-destination-${accountID}`).click();
   const editor = page.getByRole("textbox", { name: "Post text", exact: true });
   await expect(editor).toHaveCount(1);
-  await expect(editor).toHaveValue("Authored first\n\nContinuation once");
+  await expect(editor).toHaveText("Authored first\n\nContinuation once", { useInnerText: true });
   await editor.fill("Caption first\n\nContinuation edited");
   await expect
     .poll(async () => {
@@ -208,13 +208,13 @@ test("a joined Facebook caption edits the delivered description without flatteni
     });
   await page.reload();
   await page.locator(`#composer-destination-${accountID}`).click();
-  await expect(editor).toHaveValue("Caption first\n\nContinuation edited");
+  await expect(editor).toHaveText("Caption first\n\nContinuation edited", { useInnerText: true });
   await page
     .getByTestId("composer-variant-toolbar")
     .getByRole("button", { name: "More", exact: true })
     .click();
   await page.getByRole("menuitem", { name: "Reset", exact: true }).click();
-  await expect(editor).toHaveValue("Authored first\n\nContinuation once");
+  await expect(editor).toHaveText("Authored first\n\nContinuation once", { useInnerText: true });
   await expect
     .poll(async () => {
       const saved = await (
@@ -231,7 +231,7 @@ test("a joined Facebook caption edits the delivered description without flatteni
     .getByRole("button", { name: "More", exact: true })
     .click();
   await page.getByRole("menuitem", { name: "Use shared", exact: true }).click();
-  await expect(editor).toHaveValue("Shared first\n\nContinuation once");
+  await expect(editor).toHaveText("Shared first\n\nContinuation once", { useInnerText: true });
   await expect(page.getByRole("button", { name: "Shared content", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",

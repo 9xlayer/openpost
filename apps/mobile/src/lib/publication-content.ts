@@ -1,3 +1,8 @@
+import {
+  readMentionMetadata,
+  remapMentionMetadata,
+  type PostTextValue,
+} from "@openpost/platform-text/mentions";
 import type { components } from "@openpost/api-contract";
 
 type Media = Pick<components["schemas"]["MediaSummary"], "id"> &
@@ -41,6 +46,7 @@ export function publicationContentUpdate(
   body: string,
   mediaIds: readonly string[],
   altTexts?: ReadonlyMap<string, string>,
+  textEdits?: Readonly<Record<string, PostTextValue>>,
 ): Pick<components["schemas"]["PublicationUpdateBody"], "source_text" | "segments"> {
   const segments = publication.segments?.length
     ? publication.segments
@@ -65,17 +71,26 @@ export function publicationContentUpdate(
         return existing ? (existing.alt_text ?? "") !== alt : alt !== "";
       })
     : false;
-  if (body === first.body && !mediaChanged && !altChanged) return { source_text: body };
+  if (body === first.body && !mediaChanged && !altChanged && !Object.keys(textEdits ?? {}).length)
+    return { source_text: body };
 
   return {
     source_text: body,
     segments: segments.map((segment, index) => ({
       ...("id" in segment ? { id: segment.id } : {}),
-      body: index === 0 ? body : segment.body,
+      body:
+        textEdits?.[("id" in segment ? segment.id : undefined) ?? "first"]?.body ??
+        (index === 0 ? body : segment.body),
       title: segment.title,
       description: segment.description,
       ...(segment.url === undefined ? {} : { url: segment.url }),
-      settings: segment.settings,
+      settings: authoredTextSettings(
+        segment.body,
+        textEdits?.[("id" in segment ? segment.id : undefined) ?? "first"]?.body ??
+          (index === 0 ? body : segment.body),
+        segment.settings,
+        textEdits?.[("id" in segment ? segment.id : undefined) ?? "first"],
+      ),
       media:
         index === 0
           ? mediaIds.map((id) => {
@@ -89,4 +104,23 @@ export function publicationContentUpdate(
           : (segment.media ?? []).map((media) => mediaInput(media, altTexts)),
     })),
   };
+}
+
+function authoredTextSettings(
+  before: string,
+  after: string,
+  settings: components["schemas"]["PublicationSegmentInput"]["settings"],
+  edited?: PostTextValue,
+) {
+  const result = { ...settings };
+  if (edited?.mentions !== undefined) result.mentions = { version: 1, spans: edited.mentions };
+  else {
+    const mentions = remapMentionMetadata(
+      before,
+      after,
+      readMentionMetadata(before, settings?.mentions),
+    );
+    if (mentions) result.mentions = mentions;
+  }
+  return result;
 }

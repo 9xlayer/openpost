@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/appbranding"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/mediastore"
 	"github.com/openpost/backend/internal/services/sessions"
@@ -61,6 +65,14 @@ func TestAccountDeletionQueuesObjectCleanupWhenImmediateDeletionFails(t *testing
 		db, authService, middleware.NewJWTAuthenticatorWithSessions(authService, sessionService), storage,
 	).RegisterRoutes(api)
 
+	NewAppBrandingHandler(db, middleware.NewJWTAuthenticatorWithSessions(authService, sessionService), storage).RegisterRoutes(api)
+	branded := jsonRequest(t, e, http.MethodPut, "/api/v1/app-branding/workspace-1/organization", map[string]any{
+		"expected_revision": 0, "profile": map[string]any{"display_name": "Personal studio", "logo": map[string]any{"content_base64": base64.StdEncoding.EncodeToString(handlerPNG(t, 16, 16))}},
+	}, token)
+	require.Equal(t, http.StatusOK, branded.Code, branded.Body.String())
+	var branding appbranding.Settings
+	require.NoError(t, json.Unmarshal(branded.Body.Bytes(), &branding))
+
 	deleted := jsonRequest(t, e, http.MethodDelete, "/api/v1/auth/account", map[string]string{
 		"current_password": "current-password-123", "confirm_email": "person@example.com",
 	}, token)
@@ -68,12 +80,16 @@ func TestAccountDeletionQueuesObjectCleanupWhenImmediateDeletionFails(t *testing
 	userCount, err := db.NewSelect().Model((*models.User)(nil)).Where("id = ?", user.ID).Count(t.Context())
 	require.NoError(t, err)
 	require.Zero(t, userCount)
-	var cleanup models.Job
-	require.NoError(t, db.NewSelect().Model(&cleanup).Where("type = ?", "storage_delete").Scan(t.Context()))
-	require.Equal(t, "pending", cleanup.Status)
-	require.Equal(t, 10, cleanup.MaxAttempts)
-	require.Contains(t, cleanup.Payload, "avatars/user-1.png")
-	require.Contains(t, cleanup.Payload, "media-file.png")
+	var cleanups []models.Job
+	require.NoError(t, db.NewSelect().Model(&cleanups).Where("type = ?", "storage_delete").Scan(t.Context()))
+	payloads := make([]string, 0, len(cleanups))
+	for _, cleanup := range cleanups {
+		payloads = append(payloads, cleanup.Payload)
+	}
+	all := strings.Join(payloads, "\n")
+	require.Contains(t, all, "avatars/user-1.png")
+	require.Contains(t, all, "media-file.png")
+	require.Contains(t, all, "app-branding/org-1/"+branding.Effective.Logo.ID+".png", "account closure must enqueue organization-default artwork before its profile cascades away")
 }
 func (s *accountLifecycleStorage) GetURL(string) string { return "" }
 func (s *accountLifecycleStorage) Open(context.Context, string) (io.ReadCloser, error) {

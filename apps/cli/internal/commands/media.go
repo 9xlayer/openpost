@@ -2,11 +2,14 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/openpost/cli/internal/accountpicker"
 	"github.com/openpost/cli/internal/api"
 )
 
@@ -17,6 +20,7 @@ func newMediaCmd() *cobra.Command {
 	}
 	cmd.AddCommand(newMediaUploadCmd())
 	cmd.AddCommand(newMediaListCmd())
+	cmd.AddCommand(newMediaPrepareCmd())
 	cmd.AddCommand(newMediaUpdateCmd())
 	cmd.AddCommand(newMediaUsageCmd())
 	cmd.AddCommand(newMediaStorageCmd())
@@ -241,5 +245,52 @@ func newMediaListCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().IntVar(&limit, "limit", 0, "maximum number of media items to return")
+	return cmd
+}
+
+func newMediaPrepareCmd() *cobra.Command {
+	var account, format, settingsFile, alt string
+	cmd := &cobra.Command{Use: "prepare-image <media-id>", Short: "Fit a separate image copy for one destination", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, client, workspaceID, _, err := postRuntime(cmd)
+		if err != nil {
+			return err
+		}
+		accounts, err := client.ListAccounts(cmd.Context(), workspaceID)
+		if err != nil {
+			return err
+		}
+		ids, err := accountpicker.Resolve(workspaceID, []string{account}, accounts)
+		if err != nil {
+			return err
+		}
+		input := api.PrepareMediaImageInput{AccountID: ids[0], OutputProfile: format}
+		if cmd.Flags().Changed("alt") {
+			input.AltText = &alt
+		}
+		if strings.TrimSpace(settingsFile) != "" {
+			data, err := contentFromFlags("", settingsFile)
+			if err != nil {
+				return err
+			}
+			if err := json.Unmarshal([]byte(data), &input.Settings); err != nil {
+				return fmt.Errorf("decode destination settings: %w", err)
+			}
+		}
+		result, err := client.PrepareMediaImage(cmd.Context(), args[0], input)
+		if err != nil {
+			return err
+		}
+		if cfg.AsJSON {
+			return printerFrom(cfg).PrintJSON(result)
+		}
+		printerFrom(cfg).Printf("Ready image copy: %s. Attach this media ID explicitly. Original retained.", result.Media.ID)
+		return nil
+	}}
+	cmd.Flags().StringVar(&account, "account", "", "Connected account ID or slug")
+	cmd.Flags().StringVar(&format, "output-profile", "", "Explicit destination format from capabilities")
+	cmd.Flags().StringVar(&settingsFile, "settings-file", "", "Destination settings JSON file, or - for stdin")
+	cmd.Flags().StringVar(&alt, "alt", "", "Alt text for the fitted copy; pass an empty value to clear")
+	_ = cmd.MarkFlagRequired("account")
+	_ = cmd.MarkFlagRequired("output-profile")
 	return cmd
 }

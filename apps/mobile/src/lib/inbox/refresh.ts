@@ -12,7 +12,10 @@ export function lastSuccessfulSync(
   return states
     ?.filter((state) => !accountId || state.social_account_id === accountId)
     .map((state) => state.last_success_at)
-    .filter((value): value is string => !!value && Number.isFinite(Date.parse(value)))
+    .filter(
+      (value): value is string =>
+        !!value && !value.startsWith("0001-") && Number.isFinite(Date.parse(value)),
+    )
     .sort((a, b) => Date.parse(b) - Date.parse(a))[0];
 }
 /** Pull-to-refresh owns collection admission; ordinary page reads remain stored-only. */

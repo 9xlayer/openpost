@@ -115,8 +115,9 @@ func TestGoogleBusinessLocationFilteringAcrossAccounts(t *testing.T) {
 	}
 	require.ElementsMatch(t, []string{
 		"accounts/111/locations/aaa",
+		"accounts/111/locations/bbb",
 		"accounts/222/locations/zzz",
-	}, ids, "only operable locations across every account are selectable; rejected and unverified-signal locations are filtered")
+	}, ids, "locations supporting local posts or verified reviews are selectable; malformed and unverified-only locations stay excluded")
 }
 
 func TestGoogleBusinessOptionsUnknownCursorDoesNotRestartPagination(t *testing.T) {
@@ -130,7 +131,7 @@ func TestGoogleBusinessOptionsUnknownCursorDoesNotRestartPagination(t *testing.T
 	require.Empty(t, missing.NextCursor)
 }
 
-func TestGoogleBusinessSelectAccountRequiresOperability(t *testing.T) {
+func TestGoogleBusinessSelectAccountSeparatesReviewAndPublishingEligibility(t *testing.T) {
 	stubGoogleBusinessDirectory(t, `{"locations": []}`)
 
 	adapter := NewGoogleBusinessAdapter("gbp-client", "gbp-secret", "https://app.test/callback")
@@ -143,8 +144,13 @@ func TestGoogleBusinessSelectAccountRequiresOperability(t *testing.T) {
 	require.Equal(t, "accounts/111/locations/aaa", selected.Token.Extra["location_id"])
 	require.Equal(t, "business.manage", selected.Token.Extra["scope"])
 
-	_, err = adapter.SelectAccount(context.Background(), token, "accounts/111/locations/bbb")
-	require.ErrorContains(t, err, "not operable")
+	selected, err = adapter.SelectAccount(context.Background(), token, "accounts/111/locations/bbb")
+	require.NoError(t, err)
+	require.Equal(t, "accounts/111/locations/bbb", selected.AccountID)
+	require.Equal(t, "true", selected.CapabilityState["googlebusiness_location_verified"])
+	require.ErrorContains(t, adapter.ValidatePublishingTarget(context.Background(), "access", selected.AccountID, nil), "no longer operable")
+	_, err = adapter.SelectAccount(context.Background(), token, "accounts/111/locations/ccc")
+	require.ErrorContains(t, err, "not available")
 
 	_, err = adapter.SelectAccount(context.Background(), token, "not-a-location")
 	require.ErrorContains(t, err, "not a valid location")

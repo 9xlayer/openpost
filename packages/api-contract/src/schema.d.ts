@@ -383,6 +383,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{account_id}/mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find native mention targets for one destination */
+        get: operations["lookup-account-mentions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/accounts/{account_id}/messaging/x": {
         parameters: {
             query?: never;
@@ -957,6 +974,74 @@ export interface paths {
         post?: never;
         /** Revoke an API token */
         delete: operations["revoke-api-token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/app-branding/{workspace_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get effective app branding and inheritance */
+        get: operations["get-app-branding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/app-branding/{workspace_id}/images/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an authorized app branding image */
+        get: operations["get-app-branding-image"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/app-branding/{workspace_id}/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set organization app branding and workspace policy */
+        put: operations["update-organization-app-branding"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/app-branding/{workspace_id}/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set workspace app branding or restore inheritance */
+        put: operations["update-workspace-app-branding"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2568,6 +2653,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/engagement/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark all matching engagement read across every page */
+        post: operations["mark-engagement-read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/engagement/refresh": {
         parameters: {
             query?: never;
@@ -3624,6 +3726,40 @@ export interface paths {
         head?: never;
         /** Toggle favorite status of a media attachment */
         patch: operations["update-media-favorite"];
+        trace?: never;
+    };
+    "/media/{id}/optimize-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a smaller lossless image copy while retaining the original */
+        post: operations["optimize-media-image"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/{id}/prepare-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a ready image copy fitted to a connected destination */
+        post: operations["prepare-media-image"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/media/{id}/restore": {
@@ -7294,6 +7430,63 @@ export interface components {
             /** Format: int64 */
             week_start: number;
         } | null;
+        AppBrandingImage: {
+            id: string;
+            url?: string;
+        };
+        AppBrandingImageInput: {
+            /** @description PNG, JPEG or WebP, at most 1 MiB; normalized to PNG */
+            content_base64?: string;
+            /** @description Retain an image from this profile or copy the current organization image */
+            id?: string;
+        };
+        AppBrandingProfile: {
+            dark_logo?: components["schemas"]["AppBrandingImage"];
+            dark_wordmark?: components["schemas"]["AppBrandingImage"];
+            display_name: string;
+            logo?: components["schemas"]["AppBrandingImage"];
+            wordmark?: components["schemas"]["AppBrandingImage"];
+        };
+        AppBrandingProfileInput: {
+            dark_logo?: components["schemas"]["AppBrandingImageInput"];
+            dark_wordmark?: components["schemas"]["AppBrandingImageInput"];
+            display_name: string;
+            logo?: components["schemas"]["AppBrandingImageInput"];
+            wordmark?: components["schemas"]["AppBrandingImageInput"];
+        };
+        AppBrandingSettings: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/AppBrandingSettings.json
+             */
+            readonly $schema?: string;
+            allow_workspace_override: boolean;
+            can_manage_organization: boolean;
+            can_manage_workspace: boolean;
+            effective: components["schemas"]["AppBrandingProfile"];
+            organization_default: components["schemas"]["AppBrandingProfile"];
+            organization_id: string;
+            /** Format: int64 */
+            organization_revision: number;
+            workspace_id: string;
+            workspace_override?: components["schemas"]["AppBrandingProfile"];
+            /** Format: int64 */
+            workspace_revision: number;
+        };
+        AppBrandingUpdate: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/AppBrandingUpdate.json
+             */
+            readonly $schema?: string;
+            allow_workspace_override?: boolean;
+            /** Format: int64 */
+            expected_revision: number;
+            /** @description Null restores OpenPost for an organization or inheritance for a workspace */
+            profile?: components["schemas"]["AppBrandingProfileInput"];
+        };
         AppendProviderApprovalReviewInputBody: {
             /**
              * Format: uri
@@ -8752,7 +8945,7 @@ export interface components {
              * @description Media provenance
              * @enum {string}
              */
-            source?: "upload" | "media_copy" | "camera" | "image_editor_export" | "image_editor_edit" | "background_removal" | "video_editor_source" | "video_editor_export" | "stock_import" | "meme_generator" | "screenshot_template" | "image_generation";
+            source?: "upload" | "media_copy" | "image_optimization" | "image_fit" | "camera" | "image_editor_export" | "image_editor_edit" | "background_removal" | "video_editor_source" | "video_editor_export" | "stock_import" | "meme_generator" | "screenshot_template" | "image_generation";
             /** @description License and creator provenance for a selected stock asset */
             stock_provenance?: components["schemas"]["StockMediaProvenance"];
             /** @description Optional tag to assign to this upload */
@@ -9884,7 +10077,7 @@ export interface components {
              */
             readonly $schema?: string;
             /** @enum {string} */
-            action: "reply" | "hide" | "delete" | "like" | "unlike";
+            action: "reply" | "delete_reply" | "hide" | "delete" | "like" | "unlike";
             client_operation_id?: string;
             message?: string;
             workspace_id: string;
@@ -9927,6 +10120,7 @@ export interface components {
             author_remote_id: string;
             body: string;
             can_delete: boolean;
+            can_delete_reply?: boolean;
             can_hide: boolean;
             can_like: boolean;
             can_reply: boolean;
@@ -9941,6 +10135,7 @@ export interface components {
             hidden: boolean;
             id: string;
             is_ours: boolean;
+            kind?: string;
             /** Format: date-time */
             last_seen_at: string;
             liked: boolean;
@@ -9955,8 +10150,11 @@ export interface components {
             /** Format: date-time */
             remote_created_at?: string;
             remote_id: string;
-            rendition_id: string;
+            rendition_id?: string;
+            reply_job_id?: string;
+            reply_operation_state?: string;
             social_account_id: string;
+            subject?: components["schemas"]["EngagementSubject"];
             /** Format: date-time */
             updated_at: string;
             workspace_id: string;
@@ -9974,9 +10172,19 @@ export interface components {
             /** Format: int64 */
             total: number;
         };
+        EngagementSubject: {
+            kind: string;
+            parent?: components["schemas"]["PostReference"];
+            remote_id: string;
+            review?: components["schemas"]["ReviewContext"];
+            root?: components["schemas"]["PostReference"];
+            url?: string;
+            visibility?: string;
+        };
         EngagementSyncState: {
             error_code: string;
             error_message: string;
+            feed?: string;
             id: string;
             /** Format: date-time */
             last_success_at?: string;
@@ -11878,6 +12086,34 @@ export interface components {
             /** @description Workspace associated with the call, when provided */
             workspace_id?: string;
         };
+        MarkEngagementReadInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/MarkEngagementReadInputBody.json
+             */
+            readonly $schema?: string;
+            account_id?: string;
+            archived?: boolean;
+            /** @enum {string} */
+            kind?: "comment" | "mention" | "review";
+            platform?: string;
+            publication_id?: string;
+            workspace_id: string;
+        };
+        MarkEngagementReadOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/MarkEngagementReadOutputBody.json
+             */
+            readonly $schema?: string;
+            /**
+             * Format: int64
+             * @description Number of matching unread items marked read across all pages. Read state is shared by the Workspace.
+             */
+            updated_count: number;
+        };
         MastodonServerInfo: {
             /** @description Mastodon instance URL */
             instance_url: string;
@@ -11901,6 +12137,11 @@ export interface components {
             max_height?: number;
             /** Format: int64 */
             max_image_size_bytes?: number;
+            /**
+             * Format: int64
+             * @description Maximum total decoded image pixels, width times height
+             */
+            max_pixels?: number;
             /**
              * Format: int64
              * @description Maximum image dimension on its shorter side
@@ -12150,6 +12391,11 @@ export interface components {
             design_document_id?: string;
             /** @description Producing OpenPost Image Editor page ID */
             design_page_id?: string;
+            /**
+             * Format: int64
+             * @description Known image height in pixels
+             */
+            height?: number;
             /** @description Media ID */
             id: string;
             /** @description MIME type */
@@ -12181,6 +12427,11 @@ export interface components {
             source: string;
             /** @description URL to access the media */
             url: string;
+            /**
+             * Format: int64
+             * @description Known image width in pixels
+             */
+            width?: number;
         };
         MediaUsageItem: {
             /** @description Publication content (truncated) */
@@ -12265,6 +12516,59 @@ export interface components {
             rationale: string;
             template: components["schemas"]["Template"];
             template_id: string;
+        };
+        MentionCandidate: {
+            /** @description Provider account address or company vanity name */
+            detail: string;
+            /** @description Exact visible text inserted into the post */
+            label: string;
+            target: components["schemas"]["MentionTarget"];
+        };
+        MentionLookupOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/MentionLookupOutputBody.json
+             */
+            readonly $schema?: string;
+            candidates: components["schemas"]["MentionCandidate"][] | null;
+            /** @enum {string} */
+            mode: "accounts" | "exact_company";
+        };
+        MentionSpan: {
+            /**
+             * Format: int64
+             * @description Exclusive UTF-8 byte offset
+             */
+            end: number;
+            /**
+             * Format: int64
+             * @description Inclusive UTF-8 byte offset in the exact authored text
+             */
+            start: number;
+            target: components["schemas"]["MentionTarget"];
+            /** @description Exact visible text covered by the range */
+            text: string;
+        };
+        MentionTarget: {
+            /** @description Connected instance origin for Mastodon; empty for global identity namespaces */
+            authority?: string;
+            /** @description Native account address returned by the provider lookup */
+            handle?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "person" | "page";
+            /** @enum {string} */
+            provider: "bluesky" | "mastodon" | "linkedin";
+        };
+        Mentions: {
+            /** @description Ordered, nonoverlapping native mention selections; an empty list explicitly contains no selected mentions */
+            spans: components["schemas"]["MentionSpan"][];
+            /**
+             * Format: int64
+             * @enum {integer}
+             */
+            version: 1;
         };
         MessageHistoryInputBody: {
             /**
@@ -12616,6 +12920,17 @@ export interface components {
             title: string;
             why_it_fits: string;
             why_now: string;
+        };
+        OptimizeMediaImageOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/OptimizeMediaImageOutputBody.json
+             */
+            readonly $schema?: string;
+            media: components["schemas"]["MediaUploadResult"];
+            /** @description True only when a smaller lossless copy was created or reused */
+            optimized: boolean;
         };
         Option: {
             label: string;
@@ -12994,6 +13309,10 @@ export interface components {
             review_flags: components["schemas"]["ReviewFlag"][] | null;
             skipped: components["schemas"]["SkippedDestination"][] | null;
         };
+        PostReference: {
+            cid: string;
+            uri: string;
+        };
         PostingScheduleResponse: {
             /**
              * Format: uri
@@ -13095,6 +13414,38 @@ export interface components {
             preferences: {
                 [key: string]: components["schemas"]["ChannelPreference"];
             };
+        };
+        PrepareMediaImageBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/PrepareMediaImageBody.json
+             */
+            readonly $schema?: string;
+            /** @description Connected destination in the original image's Workspace */
+            account_id: string;
+            /** @description Optional alt text for the fitted copy */
+            alt_text?: string;
+            /** @description Explicit destination format from resolve-capabilities */
+            output_profile: string;
+            /** @description Destination settings used when resolving its limits */
+            settings?: {
+                [key: string]: unknown;
+            };
+        };
+        PrepareMediaImageOutputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/PrepareMediaImageOutputBody.json
+             */
+            readonly $schema?: string;
+            media: components["schemas"]["MediaUploadResult"];
+            /**
+             * @description The derivative is fully processed before returning. Select its media ID explicitly when authoring a post.
+             * @enum {string}
+             */
+            status: "ready";
         };
         PreviewMemeInputBody: {
             /**
@@ -13718,6 +14069,8 @@ export interface components {
             media?: components["schemas"]["PublicationMediaInput"][] | null;
             /** @description Canonical segment settings */
             settings?: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             /** @description Canonical segment title */
@@ -13733,6 +14086,8 @@ export interface components {
             /** Format: int64 */
             position: number;
             settings: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             title: string;
@@ -14365,6 +14720,8 @@ export interface components {
             publication_segment_id?: string;
             /** @description Segment-scoped destination settings */
             settings?: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             /** @description Authored canonical-source overrides for a single joined destination output */
@@ -14402,6 +14759,8 @@ export interface components {
             position: number;
             publication_segment_id: string;
             settings: {
+                mentions?: components["schemas"]["Mentions"];
+            } & {
                 [key: string]: unknown;
             };
             source_overrides?: components["schemas"]["RenditionSourceOverride"][] | null;
@@ -14418,6 +14777,8 @@ export interface components {
             media?: components["schemas"]["PublicationMediaInput"][] | null;
             /** @description Whether this source contributes its canonical media */
             media_inherited: boolean;
+            /** @description Mention selections paired with this explicit source body; omit to inherit */
+            mentions?: components["schemas"]["Mentions"];
             /** @description Canonical source segment ID, or matching client reference in the same request */
             publication_segment_id: string;
         };
@@ -14945,11 +15306,24 @@ export interface components {
             message_id: string;
             workspace_id: string;
         };
+        ReviewContext: {
+            anonymous: boolean;
+            owner_reply?: components["schemas"]["ReviewReply"];
+            /** Format: int64 */
+            stars?: number;
+        };
         ReviewFlag: {
             account_id?: string;
             field: string;
             message: string;
             severity: string;
+        };
+        ReviewReply: {
+            policy_violation?: string;
+            state: string;
+            text: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         "Revoke-organization-ownership-transferResponse": {
             /**
@@ -19143,6 +19517,95 @@ export interface operations {
             };
         };
     };
+    "lookup-account-mentions": {
+        parameters: {
+            query?: {
+                /** @description Account search, or exact LinkedIn company vanity name */
+                query?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Connected destination account */
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MentionLookupOutputBody"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "get-x-messaging-readiness": {
         parameters: {
             query: {
@@ -21308,6 +21771,291 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-app-branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppBrandingSettings"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "get-app-branding-image": {
+        parameters: {
+            query?: {
+                organization_default?: boolean;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PNG branding image */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    "Content-Type"?: string;
+                    "X-Content-Type-Options"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-organization-app-branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppBrandingUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppBrandingSettings"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "update-workspace-app-branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AppBrandingUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppBrandingSettings"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -27097,6 +27845,8 @@ export interface operations {
     "list-engagement": {
         parameters: {
             query: {
+                /** @description Filter account activity by kind; omit for all engagement */
+                kind?: "comment" | "mention" | "review";
                 workspace_id: string;
                 platform?: string;
                 account_id?: string;
@@ -27158,6 +27908,66 @@ export interface operations {
             };
             /** @description Error */
             default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "mark-engagement-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkEngagementReadInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkEngagementReadOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -31389,6 +32199,154 @@ export interface operations {
             };
             /** @description Internal Server Error */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "optimize-media-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Original image ID */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OptimizeMediaImageOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "prepare-media-image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareMediaImageBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrepareMediaImageOutputBody"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

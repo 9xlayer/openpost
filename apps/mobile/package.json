@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "0.2.65",
+  "version": "0.2.66",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -23,6 +23,7 @@
     "@noble/hashes": "^2.4.0",
     "@openpost/api-contract": "file:../../packages/api-contract",
     "@openpost/dither": "file:../../packages/dither",
+    "@openpost/platform-text": "file:../../packages/platform-text",
     "@openpost/query-catalog": "file:../../packages/query-catalog",
     "@openpost/telemetry": "file:../../packages/telemetry",
     "@openpost/video-project": "file:../../packages/video-project",
@@ -54,11 +55,13 @@
     "expo-system-ui": "~57.0.4",
     "expo-video": "~57.0.5",
     "expo-web-browser": "~57.0.3",
+    "htmlparser2": "10.0.0",
     "openapi-fetch": "^0.17.0",
     "posthog-react-native": "^4.81.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
+    "react-native-enriched-html": "1.1.1",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-keyboard-controller": "1.21.9",
     "react-native-reanimated": "4.5.1",
@@ -83,6 +86,7 @@
   "packageManager": "bun@1.3.11",
   "patchedDependencies": {
     "braces@3.0.3": "../../patches/braces@3.0.3.patch",
-    "expo-modules-core@57.0.24": "patches/expo-modules-core@57.0.24.patch"
+    "expo-modules-core@57.0.24": "patches/expo-modules-core@57.0.24.patch",
+    "react-native-enriched-html@1.1.1": "patches/react-native-enriched-html@1.1.1.patch"
   }
 }

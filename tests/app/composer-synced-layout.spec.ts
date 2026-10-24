@@ -83,7 +83,7 @@ for (const width of [1280, 390, 320]) {
       await expect(editor).toHaveCSS("direction", "rtl");
       await page.locator(`#composer-destination-${accountID}`).click();
       await expect(editor).toBeEnabled();
-      await expect(editor).toHaveValue(text);
+      await expect(editor).toHaveText(text, { useInnerText: true });
       await expect(page.getByText("Using shared text", { exact: true })).toHaveCount(0);
       const preview = page.getByRole("region", {
         name: "Preview",
@@ -97,7 +97,7 @@ for (const width of [1280, 390, 320]) {
       const revised = "שלום OpenPost! זהו טקסט מותאם ליעד.";
       await editor.fill(revised);
       await expect(editor).toHaveCSS("direction", "rtl");
-      await expect(editor).toHaveValue(revised);
+      await expect(editor).toHaveText(revised, { useInnerText: true });
       await expect(page.locator(`#composer-destination-${accountID}`)).toHaveAccessibleName(
         /, custom$/,
       );
@@ -131,7 +131,7 @@ for (const width of [1280, 390, 320]) {
       const finalText = "The open full-page preview also follows my edits.";
       await editor.fill(finalText);
       await expect(editor).toHaveCSS("direction", "ltr");
-      await expect(editor).toHaveValue(finalText);
+      await expect(editor).toHaveText(finalText, { useInnerText: true });
       await expect(fullPreview.getByText(finalText, { exact: true })).toBeVisible();
       await fullPreview.screenshot({
         path: testInfo.outputPath("full-preview.png"),

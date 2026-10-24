@@ -15,8 +15,14 @@ type CapabilityRequest = {
   account_segments?: Record<string, { media?: MediaInput[] }[]>;
 };
 
-for (const destinationOnly of [false, true]) {
-  test(`saved publication media survives composer hydration (destination only: ${destinationOnly})`, async ({
+for (const { destinationOnly, provider, outputProfile, count } of [
+  { destinationOnly: false, provider: "instagram", outputProfile: "instagram.feed", count: 1 },
+  { destinationOnly: true, provider: "instagram", outputProfile: "instagram.feed", count: 1 },
+  { destinationOnly: true, provider: "instagram", outputProfile: "instagram.story", count: 1 },
+  { destinationOnly: true, provider: "linkedin", outputProfile: "linkedin.multi_image", count: 6 },
+  { destinationOnly: true, provider: "threads", outputProfile: "threads.post", count: 2 },
+]) {
+  test(`saved publication media stays editable (${outputProfile}, ${count}, destination only: ${destinationOnly})`, async ({
     page,
     request,
   }, testInfo) => {
@@ -37,16 +43,21 @@ for (const destinationOnly of [false, true]) {
       width: 1080,
       height: 1080,
     };
+    const attachments = Array.from({ length: count }, (_, index) => ({
+      ...media,
+      id: index === count - 1 ? media.id : `${media.id}-${index}`,
+      url: `/media/${index === count - 1 ? media.id : `${media.id}-${index}`}`,
+    }));
     const segment = {
       id: "segment-report",
       position: 0,
       body: created.source_text,
-      media: destinationOnly ? [] : [media],
+      media: destinationOnly ? [] : attachments,
     };
     const account = {
       id: "instagram-report",
       workspace_id: workspace.id,
-      platform: "instagram",
+      platform: provider,
       account_id: "instagram-report",
       account_name: "Instagram report",
       account_username: "report",
@@ -56,25 +67,25 @@ for (const destinationOnly of [false, true]) {
       ...created,
       content_profile: "image_post",
       segments: [segment],
-      media: destinationOnly ? [] : [media],
+      media: destinationOnly ? [] : attachments,
       renditions: [
         {
           id: "rendition-report",
           social_account_id: account.id,
-          platform: "instagram",
+          platform: provider,
           profile: "image_post",
-          output_profile: "instagram.feed",
+          output_profile: outputProfile,
           format_locked: true,
           body: segment.body,
           settings: {},
-          media: [media],
+          media: attachments,
           segments: [
             {
               ...segment,
               id: "rendition-segment-report",
               publication_segment_id: segment.id,
               media_inherited: !destinationOnly,
-              media: [media],
+              media: attachments,
             },
           ],
         },
@@ -99,7 +110,9 @@ for (const destinationOnly of [false, true]) {
       return route.fulfill({ json: { ...publication, revision: 2 } });
     });
     await page.route("**/api/v1/media/metadata**", (route) =>
-      route.fulfill({ json: { media: [{ ...media, alt_text: "Library description" }] } }),
+      route.fulfill({
+        json: { media: attachments.map((item) => ({ ...item, alt_text: "Library description" })) },
+      }),
     );
     const requests: CapabilityRequest[] = [];
     await page.route("**/api/v1/capabilities/resolve", (route) => {
@@ -109,13 +122,24 @@ for (const destinationOnly of [false, true]) {
           accounts: [
             {
               account_id: account.id,
-              provider: "instagram",
+              provider,
               profile: "image_post",
-              output_profile: "instagram.feed",
+              output_profile: outputProfile,
               label: "Instagram feed",
               compatible: true,
               settings: [],
-              issues: [],
+              issues:
+                count > 1 || outputProfile === "instagram.story"
+                  ? [
+                      {
+                        severity: "error",
+                        code: "media_size",
+                        message: "Replace this image.",
+                        provider,
+                        media_id: media.id,
+                      },
+                    ]
+                  : [],
               media: { min_count: 1, max_count: 1, allowed_mimes: ["image/png"] },
               content: {},
               active_constraints: {},
@@ -142,13 +166,36 @@ for (const destinationOnly of [false, true]) {
     await page.screenshot({ path: testInfo.outputPath("loaded-composer.png"), fullPage: true });
     if (destinationOnly) {
       const request = requests.at(-1)!;
-      expect(request.account_segments?.[account.id]?.[0]?.media).toEqual([
-        { media_id: media.id, alt_text: media.alt_text },
-      ]);
+      expect(request.account_segments?.[account.id]?.[0]?.media).toEqual(
+        attachments.map((item) => ({ media_id: item.id, alt_text: item.alt_text })),
+      );
       await page.locator(`#composer-destination-${account.id}`).click();
-      await page.getByRole("button", { name: "Add media", exact: true }).click();
+      if (provider === "threads") {
+        const remove = page.getByRole("button", { name: "Remove media", exact: true }).first();
+        await remove.scrollIntoViewIfNeeded();
+        expect(
+          await remove.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            return element.contains(
+              document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2),
+            );
+          }),
+        ).toBe(true);
+      }
+      if (count > 1 || outputProfile === "instagram.story") {
+        await page.getByTestId("composer-validation-control").click();
+        await page.getByRole("button", { name: /^Edit:.*Replace this image/ }).click();
+        const inventory = page.getByTestId("composer-media-editor");
+        await expect(inventory.locator("[data-composer-media-id]")).toHaveCount(count);
+        await expect(inventory.locator(`[data-composer-media-id="${media.id}"]`)).toBeFocused();
+      } else {
+        await expect(page.getByRole("button", { name: "Remove media", exact: true })).toBeVisible();
+      }
     }
-    await page.getByRole("button", { name: /^(Add alt text|Alt text)$/ }).click();
+    await page
+      .locator(`[data-composer-media-id="${media.id}"]`)
+      .getByRole("button", { name: /^(Add alt text|Alt text)$/ })
+      .click();
     await expect(page.getByPlaceholder("Alt text...")).toHaveValue(media.alt_text);
     for (const colorScheme of ["light", "dark"] as const) {
       await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
@@ -158,6 +205,9 @@ for (const destinationOnly of [false, true]) {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
+        await page
+          .getByRole("button", { name: "Done", exact: true })
+          .evaluate((element) => element.scrollIntoView({ block: "center" }));
         await page.screenshot({
           path: testInfo.outputPath(`alt-text-${width}-${colorScheme}.png`),
           fullPage: true,

@@ -12,6 +12,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/lifecycle"
@@ -385,7 +386,13 @@ func (s *publisherLifecycleTestServer) authorizedPublicationJobWithIntent(
 		"readiness_intent":           string(intent),
 	})
 	require.NoError(t, err)
-	return WithJobExecution(ctx, s.jobID, 1, time.Now().UTC()), string(payload)
+	job := models.Job{ID: s.jobID, Type: "publish_publication", Payload: string(payload), RunAt: s.runAt, Status: "pending"}
+	_, err = s.db.NewInsert().Model(&job).On("CONFLICT (id) DO NOTHING").Exec(ctx)
+	require.NoError(t, err)
+	_, err = s.db.NewUpdate().Model(&job).Set("status='processing'").Set("locked_at=?", time.Now().UTC()).Set("lease_generation=lease_generation+1").WherePK().Exec(ctx)
+	require.NoError(t, err)
+	require.NoError(t, s.db.NewSelect().Model(&job).WherePK().Scan(ctx))
+	return WithJobExecution(ctx, s.jobID, job.Attempts, job.LockedAt, job.LeaseGeneration), string(payload)
 }
 
 func TestCertificationIntentJobPayloadCannotEscalateProductionReceipt(t *testing.T) {
@@ -462,4 +469,27 @@ func TestConfirmedPublicationSurvivesQuotaSettlementFailure(t *testing.T) {
 	var receipt models.MonthlyUsageReservation
 	require.NoError(t, srv.db.NewSelect().Model(&receipt).Scan(t.Context()))
 	require.Equal(t, "held", receipt.State, "failed accounting must retain conservative quota exposure")
+}
+
+type mentionPreflightPublisher struct{ *fakePublisherAdapter }
+
+func (p *mentionPreflightPublisher) ValidateMentionTargets(_ context.Context, _ string, req *platform.PublishRequest) error {
+	if req.Content == "Second mention" {
+		return fmt.Errorf("%w: selected mention changed", posttext.ErrInvalid)
+	}
+	return nil
+}
+func TestThreadMentionPreflightRejectsLaterSegmentBeforeFirstWrite(t *testing.T) {
+	adapter := &fakePublisherAdapter{externalID: "must-not-publish"}
+	srv := newPublisherLifecycleTestServer(t, adapter)
+	srv.service.SetProvider("x", &mentionPreflightPublisher{adapter})
+	canonical := []models.PublicationSegment{{ID: "first", PublicationID: "publication-1", Body: "First mention", SettingsJSON: "{}"}, {ID: "second", PublicationID: "publication-1", Position: 1, Body: "Second mention", SettingsJSON: "{}"}}
+	_, err := srv.db.NewInsert().Model(&canonical).Exec(t.Context())
+	require.NoError(t, err)
+	segments := []models.RenditionSegment{{ID: "out-first", RenditionID: "rendition-1", PublicationSegmentID: "first", Body: "First mention", SettingsJSON: "{}", Status: models.RenditionStatusReady}, {ID: "out-second", RenditionID: "rendition-1", PublicationSegmentID: "second", Position: 1, Body: "Second mention", SettingsJSON: "{}", Status: models.RenditionStatusReady}}
+	_, err = srv.db.NewInsert().Model(&segments).Exec(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, srv.publishPublication(t))
+	require.Zero(t, adapter.publishCalls)
+	require.Zero(t, adapter.uploadCalls)
 }

@@ -77,6 +77,8 @@ func TestTextCardsResolveTheDeliveredMediaShape(t *testing.T) {
 			withPhoto := Resolve(provider, ResolveInput{Settings: map[string]any{"text_card": "always"}, Segments: []ResolveSegment{{ID: "source", Body: "A small release worth sharing.", Media: []MediaItem{{ID: "photo", MimeType: "image/jpeg", Width: 1080, Height: 1350, PublicURLReady: true}}}}})
 			require.True(t, withPhoto.Compatible, "%+v", withPhoto.Issues)
 			require.Equal(t, provider+".carousel", withPhoto.OutputProfile)
+			withLink := Resolve(provider, ResolveInput{Settings: map[string]any{"text_card": "always", "url": "https://example.com/post"}, Segments: []ResolveSegment{{ID: "source", Body: "Read https://example.com/post"}}})
+			require.True(t, withLink.Compatible, "%+v", withLink.Issues)
 		})
 	}
 }

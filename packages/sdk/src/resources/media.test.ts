@@ -111,4 +111,33 @@ describe("Media uploads", () => {
     const putHeaders = putInit.headers as Record<string, string>;
     expect(putHeaders["Authorization"]).toBe("Bearer tok");
   });
+  it("prepares a separate destination image and retains explicit empty alt text", async () => {
+    let requested = "";
+    let payload: unknown;
+    const fetch = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      requested = String(url);
+      payload = JSON.parse(String(init?.body));
+      return jsonResponse({
+        status: "ready",
+        media: { id: "fitted", parent_media_id: "original", processing_status: "ready" },
+      });
+    });
+    const client = new OpenPost({ baseUrl: "https://example.test", token: "tok", fetch });
+    const prepared = await client.media.prepareImage("original", {
+      account_id: "account-1",
+      output_profile: "linkedin.post",
+      alt_text: "",
+    });
+    expect(requested).toBe("https://example.test/api/v1/media/original/prepare-image");
+    expect(payload).toEqual({
+      account_id: "account-1",
+      output_profile: "linkedin.post",
+      alt_text: "",
+    });
+    expect(prepared).toMatchObject({
+      status: "ready",
+      media: { id: "fitted", parent_media_id: "original" },
+    });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
 });

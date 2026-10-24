@@ -305,7 +305,7 @@ func (s *jobsTestServer) getJSONWithToken(t *testing.T, path, token string) *htt
 
 func TestInboxCollectionAndReplyJobReceiptsStayWorkspaceScoped(t *testing.T) {
 	srv := newJobsTestServerWithAuthenticator(t, jobsAuthenticator{})
-	for _, kind := range []string{"messages_sync", "message_send", "engagement_sync", "engagement_action"} {
+	for _, kind := range []string{"messages_sync", "message_send", "engagement_sync", "engagement_action", "engagement_review_action"} {
 		job := models.Job{ID: "inbox-" + kind, Type: kind, ScopeID: "ws-1", Status: "pending", Payload: `{"body":"private reply"}`, RunAt: time.Now().UTC()}
 		_, err := srv.db.NewInsert().Model(&job).Exec(t.Context())
 		require.NoError(t, err)
@@ -322,5 +322,5 @@ func TestInboxCollectionAndReplyJobReceiptsStayWorkspaceScoped(t *testing.T) {
 	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 	var receipts []JobResponse
 	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &receipts))
-	require.Len(t, receipts, 4)
+	require.Len(t, receipts, 5)
 }

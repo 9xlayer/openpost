@@ -1,6 +1,17 @@
 import { getContext, setContext } from "svelte";
 
 export type UiMessages = {
+  editor_mention_limit: () => string;
+  editor_mention_account_required: () => string;
+  editor_permission_required: () => string;
+  editor_rate_limited: () => string;
+
+  editor_mentions: () => string;
+  editor_searching: () => string;
+  editor_no_matches: () => string;
+  editor_lookup_failed: () => string;
+  editor_retry: () => string;
+
   calendar_next: () => string;
   calendar_previous: () => string;
   calendar_label: () => string;
@@ -19,6 +30,19 @@ export type UiMessages = {
 };
 const messagesKey = Symbol("openpost-ui-messages");
 const english: UiMessages = {
+  editor_mention_limit: () => "A post can include at most 50 selected mentions.",
+  editor_mention_account_required: () => "Choose mentions for this account, or paste plain text.",
+
+  editor_permission_required: () =>
+    "The provider has not granted mention search access. Check the account and app permissions.",
+  editor_rate_limited: () => "Mention search is rate limited. Try again later.",
+
+  editor_mentions: () => "Mentions",
+  editor_searching: () => "Searching\u2026",
+  editor_no_matches: () => "No matching accounts",
+  editor_lookup_failed: () => "Could not search mentions. Try again.",
+  editor_retry: () => "Try again",
+
   calendar_next: () => "Next month",
   calendar_previous: () => "Previous month",
   calendar_label: () => "Calendar",

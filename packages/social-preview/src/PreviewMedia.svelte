@@ -1,11 +1,12 @@
 <script lang="ts">
+  import { previewEditing } from "./editing";
   import { previewVideoFrame } from "./video-frame";
   import PreviewDocument from "./PreviewDocument.svelte";
   import ChevronLeft from "@lucide/svelte/icons/chevron-left";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import FileText from "@lucide/svelte/icons/file-text";
   import Play from "@lucide/svelte/icons/play";
-  import type { PreviewMedia } from "./model";
+  import type { PreviewMedia, PreviewSegment } from "./model";
 
   type Layout =
     | "grid"
@@ -18,6 +19,7 @@
 
   interface Props {
     media: PreviewMedia[];
+    segment?: PreviewSegment;
     layout?: Layout;
     class?: string;
     emptyLabel?: string;
@@ -25,10 +27,12 @@
 
   let {
     media,
+    segment,
     layout = "grid",
     class: className = "",
     emptyLabel = "",
   }: Props = $props();
+  const editing = previewEditing();
   const MAX_VISIBLE_POSITION_DOTS = 5;
   let currentIndex = $state(0);
   let measuredRatios = $state<Record<string, number>>({});
@@ -79,41 +83,48 @@
     class={["media-tile", `kind-${item.kind}`, extraClass]}
     style:--media-ratio={aspectRatio(item) ?? 16 / 9}
   >
-    {#if item.kind === "video"}
-      {#key JSON.stringify([item.src, item.poster, item.previewFrameSeconds])}
-      <video
-        src={item.src}
-        poster={item.poster}
-        {@attach previewVideoFrame(item.previewFrameSeconds)}
-        aria-label={item.alt || "Video preview"}
-        muted
-        playsinline
-        preload="metadata"
-        onloadedmetadata={(event) =>
-          measure(
-            item,
-            event.currentTarget.videoWidth,
-            event.currentTarget.videoHeight,
-          )}
-      ></video>
-      {/key}
-      <span class="video-play" aria-hidden="true"
-        ><Play fill="currentColor" /></span
-      >
-      {#if item.durationLabel}<span class="duration">{item.durationLabel}</span
-        >{/if}
-    {:else if item.kind === "document"}
-      <PreviewDocument media={item} />
+    {#snippet display()}
+      {#if item.kind === "video"}
+        {#key JSON.stringify([item.src, item.poster, item.previewFrameSeconds])}
+        <video
+          src={item.src}
+          poster={item.poster}
+          {@attach previewVideoFrame(item.previewFrameSeconds)}
+          aria-label={item.alt || "Video preview"}
+          muted
+          playsinline
+          preload="metadata"
+          onloadedmetadata={(event) =>
+            measure(
+              item,
+              event.currentTarget.videoWidth,
+              event.currentTarget.videoHeight,
+            )}
+        ></video>
+        {/key}
+        <span class="video-play" aria-hidden="true"
+          ><Play fill="currentColor" /></span
+        >
+        {#if item.durationLabel}<span class="duration">{item.durationLabel}</span
+          >{/if}
+      {:else if item.kind === "document"}
+        <PreviewDocument media={item} />
+      {:else}
+        <img
+          src={item.src}
+          style:object-position={item.focalPoint ? `${(item.focalPoint.x + 1) * 50}% ${(1 - item.focalPoint.y) * 50}%` : undefined}
+          alt={item.alt || ""}
+          onload={(event) => {
+            const image = event.currentTarget as HTMLImageElement;
+            measure(item, image.naturalWidth, image.naturalHeight);
+          }}
+        />
+      {/if}
+    {/snippet}
+    {#if editing()?.media}
+      {@render editing()!.media!(item, display, segment)}
     {:else}
-      <img
-        src={item.src}
-        style:object-position={item.focalPoint ? `${(item.focalPoint.x + 1) * 50}% ${(1 - item.focalPoint.y) * 50}%` : undefined}
-        alt={item.alt || ""}
-        onload={(event) => {
-          const image = event.currentTarget as HTMLImageElement;
-          measure(item, image.naturalWidth, image.naturalHeight);
-        }}
-      />
+      {@render display()}
     {/if}
     {#if overflow > 0}<span class="overflow-count">+{overflow}</span>{/if}
   </div>
@@ -129,6 +140,7 @@
 {:else if layout === "carousel" && active}
   <div
     class={["media-carousel", className]}
+    class:editing={Boolean(editing()?.media)}
     style:--carousel-ratio={Math.max(
       0.75,
       Math.min(1.91, aspectRatio(media[0]) ?? 1),
@@ -292,6 +304,12 @@
     font-size: 0.7rem;
     font-weight: 650;
     font-variant-numeric: tabular-nums;
+  }
+
+  .media-carousel.editing .carousel-count {
+    right: auto;
+    left: 0.7rem;
+    pointer-events: none;
   }
 
   .duration {
@@ -459,6 +477,7 @@
     inset: 0;
     display: grid;
     place-items: center;
+    pointer-events: none;
     background: rgb(0 0 0 / 48%);
     color: white;
     font-size: 2rem;

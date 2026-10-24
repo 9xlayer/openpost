@@ -911,3 +911,47 @@ func TestYouTubeUploadApprovalBlocksWritesButAllowsAcceptedVideoRecovery(t *test
 		t.Fatalf("revoked resumed chunk: err=%v writes=%d", err, writes)
 	}
 }
+
+func TestYouTubeUploadDistinguishesDailyQuotaFromTransientRateLimits(t *testing.T) {
+	originalClient := httpClient
+	t.Cleanup(func() { httpClient = originalClient })
+	tests := []struct{ name, body, wantCode string }{
+		{"daily upload quota", `{"error":{"code":429,"message":"private project and token","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"RATE_LIMIT_EXCEEDED","domain":"googleapis.com","metadata":{"service":"youtube.googleapis.com","quota_limit":"defaultVideoInsertPerDayPerProject","consumer":"private-project"}}]}}`, "youtube:daily_upload_quota_exceeded"},
+		{"ordinary rate limit", `{"error":{"code":429,"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","metadata":{"service":"youtube.googleapis.com","quota_limit":"RequestsPerMinutePerProject"}}]}}`, "429"},
+		{"message alone is insufficient", `{"error":{"code":429,"message":"defaultVideoInsertPerDayPerProject"}}`, "429"},
+		{"another service", `{"error":{"code":429,"details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","metadata":{"service":"other.googleapis.com","quota_limit":"defaultVideoInsertPerDayPerProject"}}]}}`, "429"},
+		{"untyped metadata", `{"error":{"code":429,"details":[{"metadata":{"service":"youtube.googleapis.com","quota_limit":"defaultVideoInsertPerDayPerProject"}}]}}`, "429"},
+		{"malformed body", `{"error":`, ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				calls++
+				if req.URL.Path != "/upload/youtube/v3/videos" {
+					t.Fatalf("unexpected upload request: %s", req.URL.Path)
+				}
+				response := jsonResponseWithStatus(req, http.StatusTooManyRequests, test.body)
+				response.Header.Set("Retry-After", "60")
+				return response, nil
+			})}
+			_, err := NewYouTubeAdapter("client", "secret", "https://app.example/callback").UploadMediaWithMetadata(t.Context(), "token", "channel", UploadMediaRequest{
+				Reader: strings.NewReader("video"), MimeType: "video/mp4", Size: 5, Title: "Quota test", Settings: map[string]interface{}{"privacy": "public", "category_id": "22"},
+			})
+			var providerErr *HTTPError
+			if !errors.As(err, &providerErr) || providerErr.Code != test.wantCode {
+				t.Fatalf("upload error = %v, want code %q", err, test.wantCode)
+			}
+			wantRetryAfter := time.Minute
+			if test.wantCode == "youtube:daily_upload_quota_exceeded" {
+				wantRetryAfter = 0
+			}
+			if calls != 1 || providerErr.StatusCode != 429 || providerErr.RetryAfter != wantRetryAfter {
+				t.Fatalf("unexpected quota handling: calls=%d error=%#v", calls, providerErr)
+			}
+			if strings.Contains(err.Error(), "private") {
+				t.Fatalf("provider details leaked: %v", err)
+			}
+		})
+	}
+}

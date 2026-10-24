@@ -196,3 +196,19 @@ func TestNotificationDedupKeyIsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, count)
 }
+
+func TestEngagementOutcomesRetainMissingOptionalContext(t *testing.T) {
+	db := notificationsTestDB(t)
+	service := NewService(db)
+	for _, kind := range []string{"", "mention", "review"} {
+		outcome, err := NewEngagementReceivedOutcome(EngagementReceivedFacts{RecipientUserID: "user-1", WorkspaceID: "workspace-1", EngagementID: "item-" + kind, Provider: "bluesky", Kind: kind})
+		require.NoError(t, err, "anonymous/native activity and legacy comments need no fabricated context")
+		require.NoError(t, service.Record(t.Context(), outcome))
+	}
+	var rows []models.UserNotification
+	require.NoError(t, db.NewSelect().Model(&rows).Order("title ASC").Scan(t.Context()))
+	require.Len(t, rows, 3)
+	titles := []string{rows[0].Title, rows[1].Title, rows[2].Title}
+	require.Contains(t, titles, "New mention")
+	require.Contains(t, titles, "New review")
+}

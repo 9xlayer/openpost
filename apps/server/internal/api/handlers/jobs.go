@@ -281,7 +281,7 @@ func (h *JobHandler) getWorkspaceScopedJob(ctx context.Context, jobID string) (m
 		ColumnExpr("COALESCE(inbox_workspace.id, publication.workspace_id, sa.workspace_id, '')").
 		Join("LEFT JOIN publications AS publication ON job.type IN (?, ?) AND publication.id = "+publicationScopeExpr, jobTypePublishPublication, jobTypePublishPost).
 		Join("LEFT JOIN social_accounts AS sa ON sa.id = "+safeJobPayloadTextExpr(h.db, "account_id")).
-		Join("LEFT JOIN workspaces AS inbox_workspace ON job.type IN (?, ?, ?, ?) AND inbox_workspace.id = NULLIF(TRIM(job.scope_id), '')", jobregistry.TypeMessagesSync, jobregistry.TypeMessageSend, jobregistry.TypeEngagementSync, jobregistry.TypeEngagementAction).
+		Join("LEFT JOIN workspaces AS inbox_workspace ON job.type IN (?, ?, ?, ?, ?) AND inbox_workspace.id = NULLIF(TRIM(job.scope_id), '')", jobregistry.TypeMessagesSync, jobregistry.TypeMessageSend, jobregistry.TypeEngagementSync, jobregistry.TypeEngagementAction, jobregistry.TypeEngagementReviewAction).
 		Where("job.id = ?", jobID).
 		Scan(ctx, &workspaceID)
 	if err != nil {
@@ -305,7 +305,7 @@ func (h *JobHandler) listJobsQuery(
 		ModelTableExpr("jobs AS job").
 		Join("LEFT JOIN publications AS publication ON job.type IN (?, ?) AND publication.id = "+publicationScopeExpr, jobTypePublishPublication, jobTypePublishPost).
 		Join("LEFT JOIN social_accounts AS sa ON sa.id = "+safeJobPayloadTextExpr(h.db, "account_id")).
-		Join("LEFT JOIN workspaces AS inbox_workspace ON job.type IN (?, ?, ?, ?) AND inbox_workspace.id = NULLIF(TRIM(job.scope_id), '')", jobregistry.TypeMessagesSync, jobregistry.TypeMessageSend, jobregistry.TypeEngagementSync, jobregistry.TypeEngagementAction)
+		Join("LEFT JOIN workspaces AS inbox_workspace ON job.type IN (?, ?, ?, ?, ?) AND inbox_workspace.id = NULLIF(TRIM(job.scope_id), '')", jobregistry.TypeMessagesSync, jobregistry.TypeMessageSend, jobregistry.TypeEngagementSync, jobregistry.TypeEngagementAction, jobregistry.TypeEngagementReviewAction)
 
 	if input.Status != "" {
 		query = query.Where("job.status = ?", input.Status)

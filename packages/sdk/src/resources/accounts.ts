@@ -1,6 +1,7 @@
 import type { HttpClient } from "../client.js";
 import type {
   DestinationOptionGroups,
+  MentionLookup,
   ProviderInfo,
   ProviderReadiness,
   SocialAccount,
@@ -13,6 +14,12 @@ export class Accounts {
     return (await this.http.get("/api/v1/accounts", {
       query: { workspace_id: workspaceId },
     })) as SocialAccount[];
+  }
+
+  async lookupMentions(accountId: string, query: string): Promise<MentionLookup> {
+    return (await this.http.get(`/api/v1/accounts/${encodeURIComponent(accountId)}/mentions`, {
+      query: { query },
+    })) as MentionLookup;
   }
 
   async providers(): Promise<ProviderInfo[]> {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { page } from '$app/state';
 	import { workspaceCtx } from '$lib/stores/workspace.svelte';
 	import PageContainer from '$lib/components/page-container.svelte';
@@ -11,7 +12,10 @@
 	const workspaceID = $derived(workspaceCtx.currentWorkspace?.id ?? '');
 </script>
 
-<svelte:head><title>{m.repost_heading()} · {m.workflows_title()} · OpenPost</title></svelte:head>
+<svelte:head
+	><title>{m.repost_heading()} · {m.workflows_title()} · {appBranding.profile.display_name}</title
+	></svelte:head
+>
 <PageContainer title={m.workflows_title()} themeIconRole="repeat">
 	{#snippet navigation()}
 		<div class="flex flex-wrap items-center justify-between gap-3 border-b pb-3">

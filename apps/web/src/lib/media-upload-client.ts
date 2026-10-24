@@ -15,6 +15,8 @@ export interface UploadMediaFileOptions {
 	source?:
 		| 'upload'
 		| 'media_copy'
+		| 'image_optimization'
+		| 'image_fit'
 		| 'camera'
 		| 'image_editor_export'
 		| 'image_editor_edit'

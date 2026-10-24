@@ -9,6 +9,7 @@ export const SETTINGS_INITIAL_LOAD_PARTICIPANT = {
 	apiTokens: 'developer.tokens',
 	mcpActivity: 'developer.mcp-activity',
 	brand: 'workspace.brand',
+	appBranding: 'workspace.app-branding',
 	accounts: 'workspace.accounts',
 	accountProviders: 'workspace.account-providers',
 	reposts: 'workspace.reposts',
@@ -71,6 +72,8 @@ export function getSettingsInitialLoadPlan(
 				SETTINGS_INITIAL_LOAD_PARTICIPANT.apiTokens,
 				SETTINGS_INITIAL_LOAD_PARTICIPANT.mcpActivity
 			]);
+		case 'app-branding':
+			return scopedPlan(tab, scope.workspaceID, [SETTINGS_INITIAL_LOAD_PARTICIPANT.appBranding]);
 		case 'brand':
 			return scopedPlan(tab, scope.workspaceID, [SETTINGS_INITIAL_LOAD_PARTICIPANT.brand]);
 		case 'accounts':

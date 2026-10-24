@@ -20,6 +20,7 @@ import (
 	"github.com/openpost/backend/internal/jobregistry"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/posttext"
 	servicecrypto "github.com/openpost/backend/internal/services/crypto"
 	"github.com/openpost/backend/internal/services/entitlements"
 	"github.com/openpost/backend/internal/services/lifecycle"
@@ -537,6 +538,7 @@ func (s *Service) publishRendition(
 	}
 	settings := map[string]interface{}{}
 	_ = json.Unmarshal([]byte(rendition.SettingsJSON), &settings)
+	delete(settings, posttext.NativeSettingsKey)
 	if err := validatePublishingTarget(ctx, provider, token, account.AccountID, settings); err != nil {
 		return err
 	}
@@ -679,6 +681,7 @@ func (s *Service) publishRenditionSegments(
 	}
 	destinationSettings := map[string]interface{}{}
 	_ = json.Unmarshal([]byte(rendition.SettingsJSON), &destinationSettings)
+	delete(destinationSettings, posttext.NativeSettingsKey)
 	if err := validatePublishingTarget(ctx, provider, token, account.AccountID, destinationSettings); err != nil {
 		return err
 	}
@@ -756,6 +759,7 @@ func (s *Service) publishRenditionSegments(
 			body := publicationsource.AuthoredBody(source, canonical, segment.SourceOverridesJSON, segment.BodyOverride, len(segments) == 1 && len(canonical) > 1)
 			var destinationSettings map[string]any
 			_ = json.Unmarshal([]byte(rendition.SettingsJSON), &destinationSettings)
+			delete(destinationSettings, posttext.NativeSettingsKey)
 			mediaCount, countErr := s.db.NewSelect().Model((*models.RenditionSegmentMedia)(nil)).Where("rendition_segment_id = ?", segment.ID).Count(ctx)
 			if countErr != nil {
 				return countErr
@@ -766,6 +770,39 @@ func (s *Service) publishRenditionSegments(
 			}
 			segment.SettingsJSON = mustPublisherJSON(settings)
 			break
+		}
+	}
+
+	// Resolve selected identities for every segment before any provider write.
+	for i := range segments {
+		segment := &segments[i]
+		var settings map[string]any
+		_ = json.Unmarshal([]byte(segment.SettingsJSON), &settings)
+		projection, err := publicationsource.DeliveryMentions(canonical, segment.PublicationSegmentID, segment.SourceOverridesJSON, segment.BodyOverride, settings, len(segments) == 1 && len(canonical) > 1, segment.Body, rendition.Platform, account.InstanceURL)
+		if err != nil {
+			return fmt.Errorf("mention validation: %w", err)
+		}
+		if settings == nil {
+			settings = map[string]any{}
+		}
+		delete(settings, posttext.NativeSettingsKey)
+		if projection != nil {
+			settings[posttext.NativeSettingsKey] = projection
+		}
+		segment.SettingsJSON = mustPublisherJSON(settings)
+	}
+
+	if validator, ok := provider.(platform.MentionTargetValidator); ok {
+		for _, segment := range segments {
+			if segment.Status == models.RenditionStatusPublished {
+				continue
+			}
+			var settings map[string]any
+			_ = json.Unmarshal([]byte(segment.SettingsJSON), &settings)
+			request := &platform.PublishRequest{Content: segment.Body, Settings: mergePublisherSettings(destinationSettings, settings)}
+			if err := validator.ValidateMentionTargets(ctx, token, request); err != nil {
+				return fmt.Errorf("mention validation: %w", err)
+			}
 		}
 	}
 
@@ -1454,6 +1491,10 @@ func (s *Service) recordRenditionMediaUploadFailure(
 		state.RetryClassification = platform.MediaRetryReconcile
 	case state.OpaqueState != "":
 		state.RetryClassification = platform.MediaRetrySafeResume
+	case ClassifyFailure(uploadErr).Code == "youtube:daily_upload_quota_exceeded":
+		// The provider rejected creation before accepting media. Keep a later
+		// explicit attempt possible while the publication policy stops retries.
+		state.RetryClassification = platform.MediaRetrySafeResume
 	default:
 		state.RetryClassification = platform.MediaRetryTerminal
 	}
@@ -2128,6 +2169,7 @@ func providerPublishFingerprint(
 func (s *Service) uploadRenditionMediaToPlatform(ctx context.Context, account *models.SocialAccount, provider platform.Publisher, token string, rendition *models.Rendition, media models.MediaAttachment) (string, error) {
 	settings := map[string]interface{}{}
 	_ = json.Unmarshal([]byte(rendition.SettingsJSON), &settings)
+	delete(settings, posttext.NativeSettingsKey)
 
 	if requiresPublicMedia(account.Platform, rendition.Profile) && !usesTikTokFileUpload(account.Platform, settings) {
 		return s.getPublicMediaURL(media), nil
@@ -2171,6 +2213,7 @@ func (s *Service) uploadRenditionMediaResumable(
 ) (string, error) {
 	settings := map[string]interface{}{}
 	_ = json.Unmarshal([]byte(rendition.SettingsJSON), &settings)
+	delete(settings, posttext.NativeSettingsKey)
 	req, closeReaders, err := s.renditionUploadRequest(ctx, rendition, media, settings, false)
 	if err != nil {
 		return "", err

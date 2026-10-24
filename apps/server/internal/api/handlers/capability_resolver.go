@@ -94,6 +94,8 @@ func (h *CapabilityResolverHandler) publicationBuildAccountConstraints(
 	}
 	for _, key := range []string{
 		"media_max_count",
+		"max_image_size_bytes",
+		"max_image_pixels",
 		"max_video_duration_seconds",
 		"max_video_size_bytes",
 		"allowed_mimes",

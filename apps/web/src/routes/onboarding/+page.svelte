@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import { get } from 'svelte/store';
@@ -324,7 +325,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.onboarding_title()}</title>
+	<title>{appBranding.title(m.onboarding_title())}</title>
 </svelte:head>
 
 <StandaloneShell

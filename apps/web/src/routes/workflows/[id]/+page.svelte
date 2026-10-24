@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import {
@@ -34,7 +35,7 @@
 	);
 </script>
 
-<svelte:head><title>{m.workflows_title()} · OpenPost</title></svelte:head>
+<svelte:head><title>{m.workflows_title()} · {appBranding.profile.display_name}</title></svelte:head>
 {#if workflowQuery.data && !loading}
 	{#key `${workspaceID}:${workflowQuery.data.id}`}<Editor
 			initial={workflowQuery.data}

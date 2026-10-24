@@ -41,12 +41,12 @@ test("scheduled edits survive cancelled navigation and require an explicit disca
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await authenticatePage(page, auth.token);
   await page.goto(editorURL);
-  await expect(input).toHaveValue(original);
+  await expect(input).toHaveText(original, { useInnerText: true });
   await page.getByRole("button", { name: "Posts", exact: true }).click();
   await expect(page).toHaveURL(/\/publications$/);
   expect(messages).toEqual([]);
   await page.goto(editorURL);
-  await expect(input).toHaveValue(original);
+  await expect(input).toHaveText(original, { useInnerText: true });
 
   for (const width of [1280, 390, 320]) {
     for (const scheme of ["light", "dark"] as const) {
@@ -57,7 +57,7 @@ test("scheduled edits survive cancelled navigation and require an explicit disca
       await page.getByRole("button", { name: "Posts", exact: true }).click();
       expect(messages.slice(previousPrompts)).toEqual(["confirm"]);
       await expect(page).toHaveURL(new RegExp(`/publications/${publication.id}`));
-      await expect(input).toHaveValue(edited);
+      await expect(input).toHaveText(edited, { useInnerText: true });
       expect((await read()).source_text).toBe(original);
       await page.screenshot({ path: info.outputPath(`protected-${width}-${scheme}.png`) });
     }
@@ -68,7 +68,7 @@ test("scheduled edits survive cancelled navigation and require an explicit disca
   await page.evaluate(() => window.location.reload());
   await expect.poll(() => messages.slice(beforeReload)).toEqual(["beforeunload"]);
   expect(messages.slice(beforeReload)).toEqual(["beforeunload"]);
-  await expect(input).toHaveValue(edited);
+  await expect(input).toHaveText(edited, { useInnerText: true });
 
   await page.setViewportSize({ width: 1280, height: 1000 });
   const beforeSwitch = messages.length;
@@ -81,7 +81,7 @@ test("scheduled edits survive cancelled navigation and require an explicit disca
   await expect(workspaceDialog).toBeVisible();
   expect(messages.length).toBe(beforeSwitch);
   await workspaceDialog.getByRole("button", { name: "Stay here", exact: true }).click();
-  await expect(input).toHaveValue(edited);
+  await expect(input).toHaveText(edited, { useInnerText: true });
 
   await input.fill(original);
   const beforeCleanExit = messages.length;
@@ -90,7 +90,7 @@ test("scheduled edits survive cancelled navigation and require an explicit disca
   expect(messages.length).toBe(beforeCleanExit);
 
   await page.goto(editorURL);
-  await expect(input).toHaveValue(original);
+  await expect(input).toHaveText(original, { useInnerText: true });
   await input.fill(edited);
   discard = true;
   const beforeDiscard = messages.length;
@@ -102,7 +102,7 @@ test("scheduled edits survive cancelled navigation and require an explicit disca
   expect(stored.revision).toBe(publication.revision);
 
   await page.goto(editorURL);
-  await expect(input).toHaveValue(original);
+  await expect(input).toHaveText(original, { useInnerText: true });
   await input.fill(edited);
   const beforeWorkspaceDiscard = messages.length;
   await page
@@ -132,7 +132,7 @@ test("draft edits still autosave when navigating to Posts", async ({ page, reque
   const editorURL = `/publications/${publication.id}?workspace_id=${workspace.id}`;
   await page.goto(editorURL);
   const input = page.getByRole("textbox", { name: "Post text", exact: true });
-  await expect(input).toHaveValue("Original draft");
+  await expect(input).toHaveText("Original draft", { useInnerText: true });
   await input.fill(edited);
   await page.getByRole("button", { name: "Posts", exact: true }).click();
   await expect(page).toHaveURL(/\/publications$/);
@@ -145,5 +145,5 @@ test("draft edits still autosave when navigating to Posts", async ({ page, reque
   expect(stored.revision).toBeGreaterThan(publication.revision);
   expect(messages).toEqual([]);
   await page.goto(editorURL);
-  await expect(input).toHaveValue(edited);
+  await expect(input).toHaveText(edited, { useInnerText: true });
 });

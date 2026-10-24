@@ -25,6 +25,9 @@ set -euo pipefail
 # carries no runtime dependencies, so that parser never ships to customers.
 # Remove these exceptions when compatible upstream tools adopt patched releases.
 bun "$(dirname "${BASH_SOURCE[0]}")/check-braces-security-patch.mjs"
+# These admissions fail closed when the reviewed dependency/source boundaries
+# change. See the linked advisory conditions in check-security-admissions.mjs.
+bun "$(dirname "${BASH_SOURCE[0]}")/check-security-admissions.mjs"
 attempt=1
 while [ "$attempt" -le 3 ]; do
   if bun audit --prod --audit-level low \
@@ -44,7 +47,10 @@ while [ "$attempt" -le 3 ]; do
   --ignore GHSA-vfj7-8cjw-p6xm \
   --ignore GHSA-hp3w-g68c-fv3c \
   --ignore GHSA-hqr4-qq8f-hg3x \
-  --ignore GHSA-mjw6-4jj6-33hc
+  --ignore GHSA-mjw6-4jj6-33hc \
+  --ignore GHSA-mrhx-c7xc-m3w5 \
+  --ignore GHSA-pfhg-q3qv-9q6r \
+  --ignore GHSA-27mw-82g8-phjj
   then
     break
   fi

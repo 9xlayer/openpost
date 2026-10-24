@@ -97,6 +97,7 @@ func NewRoot(version string) *cobra.Command {
 	root.AddCommand(newPublicationCmd())
 	root.AddCommand(newThreadCmd())
 	root.AddCommand(newJobsCmd())
+	root.AddCommand(newInboxCmd())
 	root.AddCommand(newBillingCmd())
 	root.AddCommand(newCompletionCmd())
 	root.AddCommand(newDoctorCmd())

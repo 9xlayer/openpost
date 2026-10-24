@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { untrack } from 'svelte';
 	import { ProtectedIcon } from '$lib/themes/icons';
 	import { page } from '$app/state';
@@ -224,7 +225,7 @@
 
 <svelte:head>
 	{#if loading || migrationBusy || error || !design}
-		<title>{m.image_editor_title()}</title>
+		<title>{appBranding.title(m.image_editor_title())}</title>
 	{/if}
 </svelte:head>
 

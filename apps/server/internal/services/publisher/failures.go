@@ -12,6 +12,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/diagnostics"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/providerwrite"
 )
 
@@ -111,6 +112,9 @@ func ClassifyFailure(err error) Failure {
 }
 
 func classifyLocalPublicationFailure(err error) (Failure, bool) {
+	if errors.Is(err, posttext.ErrInvalid) || errors.Is(err, posttext.ErrMetadataRequired) {
+		return failureForKind(FailureValidation, "mention_choice_invalid", 0, 0), true
+	}
 	var recovery *renditionRecoveryError
 	if errors.As(err, &recovery) {
 		return Failure{Kind: FailureUnknown, Code: "publication_recovery_pending", Retryable: true, Action: FailureActionRetry, Message: "Publishing was interrupted. OpenPost will check the saved delivery before sending again."}, true
@@ -144,7 +148,7 @@ func classifyProviderHTTPFailure(err error) (Failure, bool) {
 	if !errors.As(err, &providerErr) {
 		return Failure{}, false
 	}
-	if failure, ok := classifyMetaFailure(providerErr); ok {
+	if failure, ok := classifyProviderSpecificFailure(providerErr); ok {
 		return failure, true
 	}
 	code := strings.ToLower(providerErr.Code)
@@ -194,6 +198,17 @@ func classifyProviderHTTPFailure(err error) (Failure, bool) {
 	failure.Subcode = providerErr.Subcode
 	failure.TraceID = providerErr.TraceID
 	return failure, true
+}
+
+func classifyProviderSpecificFailure(providerErr *platform.HTTPError) (Failure, bool) {
+	if providerErr.Code == "youtube:daily_upload_quota_exceeded" {
+		failure := failureForKind(FailureRateLimited, providerErr.Code, providerErr.StatusCode, 0)
+		failure.Message = "YouTube's daily upload quota for this application is exhausted. Reschedule this post after the daily quota resets."
+		failure.Retryable = false
+		failure.Action = FailureActionEdit
+		return failure, true
+	}
+	return classifyMetaFailure(providerErr)
 }
 
 func providerFailureKindByStatus(status int, code string) string {

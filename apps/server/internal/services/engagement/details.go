@@ -30,7 +30,7 @@ func (s *Service) GetEngagement(ctx context.Context, actor Actor, workspaceID, i
 	parentID := result.Item.ParentRemoteID
 	for len(all) < 20 && parentID != "" && !seen[parentID] {
 		var parent models.EngagementItem
-		err := s.db.NewSelect().Model(&parent).Where("workspace_id=? AND social_account_id=? AND rendition_id=? AND remote_id=?", workspaceID, result.Item.SocialAccountID, result.Item.RenditionID, parentID).Scan(ctx)
+		err := s.db.NewSelect().Model(&parent).Where("workspace_id=? AND social_account_id=? AND remote_id=?", workspaceID, result.Item.SocialAccountID, parentID).Scan(ctx)
 		if errors.Is(err, sql.ErrNoRows) {
 			break
 		}

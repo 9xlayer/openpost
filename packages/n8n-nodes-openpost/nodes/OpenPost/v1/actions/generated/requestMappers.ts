@@ -113,6 +113,52 @@ export const generatedActionRequestMappers = [
     synthetic: false,
   },
   {
+    actionKey: "account.lookupMentions",
+    effect: "query",
+    fields: [
+      {
+        apiName: "account_id",
+        body: false,
+        location: "path",
+        name: "accountId",
+      },
+      {
+        apiName: "query",
+        body: false,
+        location: "query",
+        name: "query",
+      },
+    ],
+    idempotency: "none",
+    method: "GET",
+    operationIDs: ["lookup-account-mentions"],
+    pagination: null,
+    path: "/accounts/{account_id}/mentions",
+    request: {
+      bodyRequired: false,
+      bodySchemaRef: "",
+      parameters: [
+        {
+          in: "path",
+          name: "account_id",
+          required: true,
+          type: "string",
+        },
+        {
+          in: "query",
+          name: "query",
+          required: false,
+          type: "string",
+        },
+      ],
+    },
+    result: {
+      id_path: "id",
+    },
+    retry: "transient",
+    synthetic: false,
+  },
+  {
     actionKey: "account.getProviderReadiness",
     effect: "query",
     fields: [

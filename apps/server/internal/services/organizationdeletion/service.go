@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/appbranding"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/identity"
 	"github.com/openpost/backend/internal/services/workspacedeletion"
@@ -201,6 +202,11 @@ func prepareBoundaryDeletion(ctx context.Context, tx bun.Tx, organizationID stri
 	if err != nil {
 		return err
 	}
+	brandingKeys, err := appbranding.StoredObjectKeys(ctx, tx, organizationID, "")
+	if err != nil {
+		return err
+	}
+	keys = append(keys, brandingKeys...)
 	var themeAssets []struct {
 		ObjectKey       string `bun:"object_key"`
 		NativeObjectKey string `bun:"native_object_key"`
@@ -330,6 +336,7 @@ func deleteOrganizationThemeRows(ctx context.Context, tx bun.Tx, organizationID 
 		`DELETE FROM organization_theme_drafts WHERE organization_id = ?`,
 		`DELETE FROM organization_theme_revisions WHERE organization_id = ?`,
 		`DELETE FROM organization_theme_assets WHERE organization_id = ?`,
+		`DELETE FROM app_branding_profiles WHERE organization_id = ?`,
 		`DELETE FROM workspace_theme_assignments WHERE organization_id = ?`,
 		`DELETE FROM organization_theme_settings WHERE organization_id = ?`,
 		`DELETE FROM organization_themes WHERE organization_id = ?`,

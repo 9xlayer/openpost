@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { onDestroy, onMount, untrack } from 'svelte';
 	import type { Snapshot } from '@sveltejs/kit';
 	import { auth } from '$lib/stores/auth';
@@ -1372,7 +1373,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.media_library_title()} - {m.common_openpost()}</title>
+	<title>{m.media_library_title()} - {appBranding.profile.display_name}</title>
 </svelte:head>
 
 {#if toastMessage}

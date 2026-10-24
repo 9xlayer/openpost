@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { publicationMasonry } from '$lib/publication-masonry';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
@@ -1002,7 +1003,7 @@
 {/snippet}
 
 <svelte:head>
-	<title>{m.activity_title()} — {m.common_openpost()}</title>
+	<title>{m.activity_title()} — {appBranding.profile.display_name}</title>
 </svelte:head>
 
 <Tabs value={activeTab} onValueChange={selectActivityTab} class="min-w-0 flex-1">

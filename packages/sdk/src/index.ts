@@ -1,6 +1,7 @@
 import { HttpClient, type OpenPostClientOptions } from "./client.js";
 import { OpenPostError } from "./errors.js";
 import { Accounts } from "./resources/accounts.js";
+import { Inbox } from "./resources/inbox.js";
 import { Jobs } from "./resources/jobs.js";
 import { Media } from "./resources/media.js";
 import { Publications } from "./resources/publications.js";
@@ -30,6 +31,7 @@ export class OpenPost {
   readonly publications: Publications;
   readonly media: Media;
   readonly jobs: Jobs;
+  readonly inbox: Inbox;
 
   private readonly defaultWorkspaceId: string | undefined;
 
@@ -41,6 +43,7 @@ export class OpenPost {
     this.publications = new Publications(http);
     this.media = new Media(http);
     this.jobs = new Jobs(http);
+    this.inbox = new Inbox(http);
     this.defaultWorkspaceId =
       options.workspaceId ?? env("OPENPOST_WORKSPACE_ID") ?? env("OPENPOST_WORKSPACE");
   }
@@ -112,3 +115,29 @@ export type {
 } from "./outcomes.js";
 export { iterateOffsetPages } from "./pagination.js";
 export type { OffsetPageOptions } from "./pagination.js";
+
+export type {
+  MentionTarget,
+  MentionSpan,
+  Mentions,
+  MentionCandidate,
+  MentionLookup,
+  PublicationSegmentSettings,
+  RenditionSourceOverride,
+} from "./types.js";
+
+export type { PrepareMediaImageInput, PreparedMediaImage } from "./types.js";
+
+export type { InboxFilters, InboxListQuery, InboxActionInput } from "./resources/inbox.js";
+export type {
+  EngagementItem,
+  EngagementAttachment,
+  EngagementSubject,
+  ReviewContext,
+  ReviewReply,
+  PostReference,
+  EngagementPage,
+  EngagementDetail,
+  EngagementSyncState,
+  RefreshCapabilityOutcome,
+} from "./types.js";

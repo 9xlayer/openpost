@@ -1,24 +1,69 @@
 ---
 title: Inbox and notifications
-description: Read comments, reply to conversations, and choose the alerts you receive.
+description: Answer comments, incoming mentions, business reviews and conversations.
 icon: Inbox
 ---
 
-Use **Inbox** to read and answer activity from connected accounts. Comments, direct messages, and notifications have separate controls. Turn on only the account features you need; a provider may support one without supporting another.
+Use **Inbox** to read and answer activity from connected accounts. Activity, direct messages, and notifications have separate controls. Turn on only the account features you need; a provider may support one without supporting another.
 
-## Turn on comments or messages
+## Turn on account activity or messages
 
-Open **Settings → Workspace → Social accounts** and select an account. Inspect **Comments and replies** and **Direct messages**, then enable each supported feature separately. If an option is unavailable, read its explanation. You may need another provider permission or a supported account type.
+Open **Settings → Workspace → Social accounts** and select an account. Inspect **Inbox activity** and **Direct messages**, then enable each supported feature separately. If an option is unavailable, read its explanation. You may need another provider permission or a supported account type.
 
 Turning a feature off stops its future activity. Saved history stays available and the social account remains connected.
 
 ## Read and reply to comments
 
-On mobile, open **Inbox → Comments**. On web, choose **Inbox → Engagement**. Filter by account, unread state, or archived activity, then select a comment. Its detail shows the original post and the known parent replies. Check both the selected person and the receiving account above the public reply field before sending. A public reply is visible on the social network.
+On mobile, open **Inbox → Activity**. On web, choose **Inbox → Engagement**. Choose **Comments**, then filter by account, unread state, or archived activity and select a comment. Its detail shows the original post and the known parent replies. Check both the selected person and the receiving account above the public reply field before sending. A public reply is visible on the social network.
 
 OpenPost queues the action and keeps a receipt so retrying an interrupted request does not create another reply. If the provider rejects it, the app keeps the failed reply and receipt after a restart. Check the original thread before choosing **Start a new reply**. That explicit action preserves the failed receipt and prepares an editable draft; sending it creates a separate intentional reply. Unconfirmed delivery keeps the original request identity. Marking a comment read does not mean you have replied or resolved it.
 
 **Archive comment** has an Undo action. Reopen it from **Archived** to reply again. Moderation actions depend on the provider. Use the actions shown for that comment to hide, delete, or respond. Use **Load older** to reach saved history beyond the first page.
+
+## Read incoming mentions
+
+Open **Inbox → Activity** on mobile or **Inbox → Engagement** on web, then choose **Mentions**. These are posts that mention a connected account, including posts created outside OpenPost. They do not need a matching OpenPost post. The receiving account and the author are shown separately.
+
+Incoming mentions are available through Bluesky notifications, Mastodon mention notifications, and the Threads mentions endpoint. Mastodon needs `read:notifications`; Threads needs `threads_manage_mentions`. Older authorizations may need reconnection. Mastodon direct posts stay in Chats. Reply actions depend on the account's write permissions and the network; Mastodon replies retain the original visibility.
+
+Selecting people or pages while writing a post is a separate action. Use the [post editor's mention search](/guides/publishing#mention-people-and-company-pages) and choose the provider identity for each account version.
+
+## Answer Google Business reviews
+
+Choose **Reviews** to read feedback for a connected Google Business location. The location must be verified and the Google grant must include `business.manage`. A location may support reviews even when local-post publishing is unavailable. Provider approval and account permissions still apply.
+
+Reviews may contain only a rating, or come from an anonymous reviewer. OpenPost keeps those reviews visible. The review shows your current owner reply and its Google moderation state:
+
+- **Pending review** means Google has accepted the reply for moderation.
+- **Approved** means Google reports approval.
+- **Rejected** means Google reports rejection. Any supplied policy code stays visible.
+
+Google allows one owner reply per review, with a limit of **4096 UTF-8 bytes**. Editing the reply replaces that value. **Remove your reply** removes only the owner reply; the customer's review stays visible. OpenPost cannot delete customer reviews.
+
+Inspect the reply receipt before replacing a reply whose outcome is still being checked. OpenPost reconciles an uncertain send before sending again. Provider acceptance and a completed delivery job do not establish public visibility; check the separate moderation state. Pending moderation is checked independently of the review's own update time. See [Google's review contract](https://developers.google.com/my-business/reference/rest/v4/accounts.locations.reviews) for the provider's current rules.
+
+## Keep shared read state
+
+Read and archive state is shared by everyone in the Workspace. **Mark all matching read** applies the selected activity, account, platform, post and archive filters across every page, including items that are not loaded on the device. A post filter limits results to activity associated with that OpenPost post.
+
+Use Refresh or pull to refresh to request collection. Feed health distinguishes comments, mentions and reviews. Saved pages remain visible when a later provider page fails, and collection resumes its unfinished cursor. Missing provider results do not mark an item deleted. Read-only Workspace roles can inspect and refresh activity; editing read state or sending replies requires editor access.
+
+## Automate saved activity
+
+The API uses `/api/v1/engagement` for comments, mentions and reviews. Use `kind=comment`, `kind=mention` or `kind=review` with the same account, platform, post and archive filters shown in Inbox. Reading saved activity never collects from the provider.
+
+| Action                               | HTTP operation                         |
+| ------------------------------------ | -------------------------------------- |
+| List saved items                     | `GET /api/v1/engagement`               |
+| Read one item and its context        | `GET /api/v1/engagement/{id}`          |
+| Request collection                   | `POST /api/v1/engagement/refresh`      |
+| Mark every matching unread item read | `POST /api/v1/engagement/read`         |
+| Change shared read or archive state  | `POST /api/v1/engagement/state`        |
+| Queue a reply or supported action    | `POST /api/v1/engagement/{id}/actions` |
+
+Supply the Workspace ID and keep one `client_operation_id` for retries of the same action. Wait for its job before replacing a review reply, then read the item to check Google's separate moderation state. Mutations require Workspace editing permission.
+
+The [CLI](/automate/cli/inspect-and-recover), [TypeScript SDK](/automate/sdk), and [MCP tools](/mcp/mcp-guide/use-cases) expose the same stored activity and durable actions.
 
 ## Work with direct messages
 

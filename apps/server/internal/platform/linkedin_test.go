@@ -490,6 +490,27 @@ func TestLinkedInCreatePostEscapesPlaintextCommentary(t *testing.T) {
 	}
 }
 
+func TestLinkedInCreatePostPreservesHashtagsWithoutAcceptingMarkup(t *testing.T) {
+	tests := []struct{ name, content, want string }{
+		{"tags and punctuation", "Launch (#OpenPost), #Go2026!", `Launch \({hashtag|\#|OpenPost}\), {hashtag|\#|Go2026}!`},
+		{"unicode", "#café #日本語 #cafe\u0301 ＃中文", "{hashtag|\\#|café} {hashtag|\\#|日本語} {hashtag|\\#|cafe\u0301} {hashtag|＃|中文}"},
+		{"emoji boundary", "❤️#love 1️⃣#first", `❤️{hashtag|\#|love} 1️⃣{hashtag|\#|first}`},
+		{"ordinary hashes", "C# C#Sharp # #123 foo#bar ##tag", `C\# C\#Sharp \# \#123 foo\#bar \#\#tag`},
+		{"unicode spaces after urls", "https://example.com\u00a0#OpenPost www.example.com\u3000#Go", "https://example.com\u00a0{hashtag|\\#|OpenPost} www.example.com\u3000{hashtag|\\#|Go}"},
+		{"urls", "https://example.com/#docs HTTPS://example.com?q=#tag www.example.com/#guide /page#section", `https://example.com/\#docs HTTPS://example.com?q=\#tag www.example.com/\#guide /page\#section`},
+		{"reserved markup", `@[Name](urn:li:person:123) {hashtag|#|fake} <x> *bold* _word_ ~hi~ \`, `\@\[Name\]\(urn:li:person:123\) \{hashtag\|\#\|fake\} \<x\> \*bold\* \_word\_ \~hi\~ \\`},
+		{"underscore ends tag", "#machine_learning", `{hashtag|\#|machine}\_learning`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			payload := captureLinkedInCreatePostPayload(t, &PublishRequest{Content: test.content})
+			if got := payload["commentary"]; got != test.want {
+				t.Fatalf("commentary = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
 func TestLinkedInHideCommentUnsupported(t *testing.T) {
 	err := NewLinkedInAdapter("", "", "", false).HideComment(context.Background(), "li-token", "abc", "urn:li:comment:(urn:li:activity:123,789)")
 	if !errors.Is(err, ErrUnsupportedCommentAction) {

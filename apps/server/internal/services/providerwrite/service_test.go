@@ -255,3 +255,38 @@ func TestTikTokInboxReceiptRetainsUserActionAcrossReconciliation(t *testing.T) {
 	require.Equal(t, "741234", result.ExternalID)
 	require.Equal(t, DeliveryLive, deliveryState(latestProviderWriteAttempt(t, service.db, input.OperationID)))
 }
+
+func TestProviderWriteFenceAcceptsHeartbeatButRejectsAReclaimedLease(t *testing.T) {
+	for _, reclaimed := range []bool{false, true} {
+		t.Run(fmt.Sprint(reclaimed), func(t *testing.T) {
+			db := newProviderWriteTestDB(t)
+			input := providerWriteTestInput(t, "lease")
+			input.JobID = "lease-job"
+			started := time.Now().UTC().Add(-6 * time.Minute)
+			_, err := db.NewInsert().Model(&models.Job{ID: input.JobID, Type: "publish_publication", Status: "processing", LockedAt: started, LockedBy: "worker", LeaseGeneration: 1}).Exec(t.Context())
+			require.NoError(t, err)
+			ctx := WithJobExecution(t.Context(), input.JobID, 0, started, 1)
+			generation := 1
+			if reclaimed {
+				generation = 2
+			}
+			_, err = db.NewUpdate().Model((*models.Job)(nil)).Set("locked_at=?", time.Now().UTC()).Set("lease_generation=?", generation).Where("id=?", input.JobID).Exec(t.Context())
+			require.NoError(t, err)
+			calls := 0
+			_, err = New(db).Execute(ctx, input, func(_ context.Context, control *Control) (platform.PublishResult, error) {
+				if err := control.Begin(platform.PublishResult{RetrySafety: platform.PublishRetryNever}); err != nil {
+					return platform.PublishResult{}, err
+				}
+				calls++
+				return platform.AcceptedPublishResult("native-id"), nil
+			}, nil)
+			if reclaimed {
+				require.Error(t, err)
+				require.Zero(t, calls)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, 1, calls)
+			}
+		})
+	}
+}

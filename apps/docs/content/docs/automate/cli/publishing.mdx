@@ -34,6 +34,25 @@ It now checks every row before saving.
 openpost thread create ./thread.md --accounts x --schedule next-slot
 ```
 
+## Selected mentions and structured threads
+
+Look up a person or company through the destination account:
+
+```sh
+openpost account mentions acc_bluesky --query alice --json
+```
+
+Save ordered segment objects in `segments.json`, including each body and its `settings.mentions`. Use the [HTTP mention contract](/docs/automate/api/publications#select-people-and-company-mentions) for UTF-8 byte ranges and stable targets.
+
+```sh
+openpost post create --segments-file segments.json --accounts acc_bluesky
+openpost post update pub_... --segments-file segments.json
+```
+
+Keep server segment IDs when replacing an existing thread. `publication create` and `publication update` accept the same flag. Use `--segments-file -` for standard input. Ordinary `--content` edits remain available; edits that would ambiguously change a selected identity require structured input.
+
+Changing shared attachments with `post update --media` preserves the other thread parts and independent account versions.
+
 ## Media and provider-specific formats
 
 `--media` accepts an existing media ID or a local file path. Repeat it for multiple attachments:

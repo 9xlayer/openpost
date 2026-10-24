@@ -65,6 +65,11 @@ export const generatedDescriptionProperties = [
         name: "Get Provider Readiness",
         value: "getProviderReadiness",
       },
+      {
+        action: "Lookup mentions account",
+        name: "Lookup Mentions",
+        value: "lookupMentions",
+      },
     ],
     default: "getDestinationOptions",
   },
@@ -363,6 +368,84 @@ export const generatedDescriptionProperties = [
       },
     },
     description: "Optional provider language code",
+  },
+  {
+    displayName: "Workspace",
+    name: "workspaceId",
+    type: "resourceLocator",
+    default: {
+      mode: "list",
+      value: "",
+    },
+    displayOptions: {
+      show: {
+        resource: ["account"],
+        operation: ["lookupMentions"],
+      },
+    },
+    description: "Workspace ID",
+    required: true,
+    modes: [
+      {
+        displayName: "From List",
+        name: "list",
+        type: "list",
+        typeOptions: {
+          searchListMethod: "searchWorkspaces",
+        },
+      },
+      {
+        displayName: "By ID",
+        name: "id",
+        type: "string",
+      },
+    ],
+  },
+  {
+    displayName: "Account",
+    name: "accountId",
+    type: "resourceLocator",
+    default: {
+      mode: "list",
+      value: "",
+    },
+    displayOptions: {
+      show: {
+        resource: ["account"],
+        operation: ["lookupMentions"],
+      },
+    },
+    description: "Connected account ID",
+    required: true,
+    modes: [
+      {
+        displayName: "From List",
+        name: "list",
+        type: "list",
+        typeOptions: {
+          searchListMethod: "searchAccounts",
+        },
+      },
+      {
+        displayName: "By ID",
+        name: "id",
+        type: "string",
+      },
+    ],
+  },
+  {
+    displayName: "Search",
+    name: "query",
+    type: "string",
+    default: "",
+    displayOptions: {
+      show: {
+        resource: ["account"],
+        operation: ["lookupMentions"],
+      },
+    },
+    description: "Account search, or exact LinkedIn company vanity name",
+    required: true,
   },
   {
     displayName: "Workspace",

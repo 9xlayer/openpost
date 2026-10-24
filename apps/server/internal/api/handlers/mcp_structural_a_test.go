@@ -342,6 +342,8 @@ func TestMCPAnnotationsSafetySplit(t *testing.T) {
 	t.Parallel()
 
 	external := map[string]bool{
+		mcpToolInboxRefresh:   true,
+		mcpToolInboxAction:    true,
 		mcpToolReplyRendition: true,
 		mcpToolSchedulePub:    true,
 		mcpToolCancelPub:      true,

@@ -679,16 +679,27 @@ func (s *Service) supportForMessaging(account models.SocialAccount, adapter plat
 }
 
 func (s *Service) supportForEngagement(account models.SocialAccount, adapter platform.Adapter) ([]string, []string, string, bool) {
-	e, ok := adapter.(engagementSupporter)
-	if !ok {
-		return nil, nil, "", false
+	var choices []platform.EngagementSupport
+	if comments, ok := adapter.(engagementSupporter); ok {
+		support := comments.EngagementSupport()
+		if support.Enabled {
+			choices = append(choices, support)
+		}
 	}
-	sup := e.EngagementSupport()
-	if !sup.Enabled {
-		return sup.RequiredScopes, nil, sup.Unavailable, false
+	if activity, ok := adapter.(platform.AccountActivityAdapter); ok {
+		for _, feed := range activity.AccountActivitySupport() {
+			choices = append(choices, platform.EngagementSupport{Enabled: true, RequiredScopes: feed.RequiredScopes})
+		}
 	}
-	missing := missingScopes(account.GrantedScopes, sup.RequiredScopes)
-	return sup.RequiredScopes, missing, sup.Unavailable, true
+	for _, support := range choices {
+		if len(missingScopes(account.GrantedScopes, support.RequiredScopes)) == 0 {
+			return support.RequiredScopes, nil, support.Unavailable, true
+		}
+	}
+	if len(choices) > 0 {
+		return choices[0].RequiredScopes, missingScopes(account.GrantedScopes, choices[0].RequiredScopes), choices[0].Unavailable, true
+	}
+	return nil, nil, "", false
 }
 
 func (s *Service) supportForAnalytics(account models.SocialAccount, adapter any) ([]string, []string, string, bool) {

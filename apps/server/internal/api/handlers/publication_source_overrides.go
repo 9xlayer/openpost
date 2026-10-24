@@ -7,6 +7,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/posttext"
 	publicationservice "github.com/openpost/backend/internal/services/publications"
 	"github.com/uptrace/bun"
 )
@@ -93,6 +94,28 @@ func normalizeJoinedSourceOverrides(input RenditionSegmentInput, canonical []mod
 		}
 		if _, exists := overrides[matched.ID]; exists {
 			return input, huma.Error400BadRequest("each joined source may appear only once")
+		}
+		authoredBody := matched.Body
+		if source.BodyOverride != nil {
+			authoredBody = *source.BodyOverride
+		}
+		if source.BodyOverride != nil && source.Mentions == nil {
+			var settings map[string]any
+			_ = json.Unmarshal([]byte(matched.SettingsJSON), &settings)
+			inherited, err := posttext.Read(settings)
+			if err != nil {
+				return input, huma.Error400BadRequest(err.Error())
+			}
+			source.Mentions, err = posttext.Remap(matched.Body, authoredBody, inherited)
+			if err != nil {
+				return input, huma.Error400BadRequest(err.Error())
+			}
+		}
+		if err := posttext.Validate(authoredBody, source.Mentions); err != nil {
+			return input, huma.Error400BadRequest(err.Error())
+		}
+		if source.Mentions != nil && source.BodyOverride == nil {
+			source.BodyOverride = &authoredBody
 		}
 		source.PublicationSegmentID = matched.ID
 		if source.MediaInherited {

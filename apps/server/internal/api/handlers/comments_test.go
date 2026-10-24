@@ -211,7 +211,10 @@ func (s *commentsTestServer) runQueuedCommentJob(t *testing.T) error {
 			service.SetProvider(name, engagementAdapter)
 		}
 	}
-	ctx := providerwrite.WithJobExecution(t.Context(), job.ID, 1, time.Now().UTC())
+	job.Status, job.Attempts, job.LockedAt = "processing", 1, time.Now().UTC()
+	_, err := s.db.NewUpdate().Model(&job).Column("status", "attempts", "locked_at").WherePK().Exec(t.Context())
+	require.NoError(t, err)
+	ctx := providerwrite.WithJobExecution(t.Context(), job.ID, job.Attempts, job.LockedAt)
 	return service.HandleJob(ctx, job.Type, job.Payload)
 }
 

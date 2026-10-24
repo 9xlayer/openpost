@@ -4,7 +4,209 @@ import {
   attachmentRequirement,
   mobileRenditionInput,
   mobileRenditionTextFields,
+  mobileRenditionTextValue,
+  mobileRenditionGeneratedText,
 } from "./publication-renditions";
+
+test("a new annotated destination retains every source and inherited media", () => {
+  const publication: Pick<components["schemas"]["PublicationResponse"], "renditions" | "segments"> =
+    {
+      renditions: [],
+      segments: [
+        {
+          id: "first",
+          position: 0,
+          body: "Hello",
+          title: "",
+          description: "",
+          settings: {},
+          media: [],
+        },
+        {
+          id: "tail",
+          position: 1,
+          body: "Continuation",
+          title: "",
+          description: "",
+          settings: {},
+          media: [
+            {
+              id: "tail-image",
+              mime_type: "image/png",
+              url: "/media/tail",
+              original_filename: "tail.png",
+              analysis_status: "ready",
+              alt_text: "Original tail image",
+              aspect_ratio: "1:1",
+              dominant_type: "image",
+              duration_ms: 0,
+              frame_rate: 0,
+              height: 100,
+              width: 100,
+              size: 100,
+              public_url_ready: false,
+              public_url_status: 0,
+            },
+          ],
+        },
+      ],
+    };
+  const selected = {
+    body: "Hi @alice",
+    mentions: [
+      {
+        start: 3,
+        end: 9,
+        text: "@alice",
+        target: {
+          provider: "bluesky" as const,
+          kind: "person" as const,
+          id: "did:plc:ewvi7nxzyoun6zhxrhs64oiz",
+        },
+      },
+    ],
+  };
+  const input = mobileRenditionInput(publication, "new-account", { body: selected.body }, [], {
+    body: selected,
+  });
+  expect(input.segments?.map((segment) => segment.publication_segment_id)).toEqual([
+    "first",
+    "tail",
+  ]);
+  expect(input.segments?.[0]?.settings?.mentions).toEqual({ version: 1, spans: selected.mentions });
+  expect(input.segments?.[1]?.body_override).toBeUndefined();
+  expect(input.segments?.[1]?.media_inherited).toBe(true);
+  const joined = mobileRenditionInput(
+    publication,
+    "new-account",
+    { body: selected.body },
+    [],
+    { body: selected },
+    "join",
+  );
+  expect(joined.segments).toHaveLength(1);
+  expect(joined.segments?.[0]?.source_overrides).toEqual([
+    {
+      publication_segment_id: "first",
+      body_override: "Hi @alice",
+      mentions: { version: 1, spans: selected.mentions },
+      media_inherited: true,
+    },
+    {
+      publication_segment_id: "tail",
+      body_override: undefined,
+      mentions: undefined,
+      media_inherited: true,
+    },
+  ]);
+});
+
+test("generated text for an added account is the text reviewed and saved", () => {
+  const publication = {
+    renditions: [],
+    segments: [
+      {
+        id: "first",
+        position: 0,
+        body: "Original",
+        title: "",
+        description: "",
+        settings: {},
+        media: [],
+      },
+      {
+        id: "tail",
+        position: 1,
+        body: "Continuation",
+        title: "",
+        description: "",
+        settings: {},
+        media: [],
+      },
+    ],
+  };
+  const generated = mobileRenditionGeneratedText(publication, "new", "Reviewed generated version");
+  const visible = mobileRenditionTextFields(publication, "new").map(
+    (field) => generated.textEdits[field.key] ?? field.value,
+  );
+  expect(visible).toEqual(["Reviewed generated version", "Continuation"]);
+  const saved = mobileRenditionInput(
+    publication,
+    "new",
+    generated.textEdits,
+    [],
+    generated.annotated,
+  );
+  expect(saved.segments?.map((segment) => segment.body_override)).toEqual([
+    "Reviewed generated version",
+    undefined,
+  ]);
+});
+
+test("editing inherited joined text keeps selections from every canonical source", () => {
+  const acme = {
+    start: 3,
+    end: 7,
+    text: "Acme",
+    target: { provider: "linkedin" as const, kind: "page" as const, id: "urn:li:organization:123" },
+  };
+  const beta = {
+    start: 3,
+    end: 7,
+    text: "Beta",
+    target: { provider: "linkedin" as const, kind: "page" as const, id: "urn:li:organization:456" },
+  };
+  const publication = {
+    renditions: [
+      {
+        ...rendition,
+        segments: [
+          {
+            ...rendition.segments![0],
+            publication_segment_id: "first",
+            body: "Hi Acme\n\nHi Beta",
+            body_override: undefined,
+            source_overrides: undefined,
+            settings: {},
+          },
+        ],
+      },
+    ],
+    segments: [
+      {
+        id: "first",
+        position: 0,
+        body: "Hi Acme",
+        title: "",
+        description: "",
+        media: [],
+        settings: { mentions: { version: 1 as const, spans: [acme] } },
+      },
+      {
+        id: "tail",
+        position: 1,
+        body: "Hi Beta",
+        title: "",
+        description: "",
+        media: [],
+        settings: { mentions: { version: 1 as const, spans: [beta] } },
+      },
+    ],
+  };
+  const value = mobileRenditionTextValue(publication, "founder", "segment:0", "Hi Acme\n\nHi Beta");
+  expect(value.mentions).toEqual([acme, { ...beta, start: 12, end: 16 }]);
+  const saved = mobileRenditionInput(
+    publication,
+    "founder",
+    { "segment:0": value.body + "!" },
+    [],
+    { "segment:0": { ...value, body: value.body + "!" } },
+  );
+  expect(saved.segments?.[0]?.settings?.mentions).toEqual({
+    version: 1,
+    spans: [acme, { ...beta, start: 12, end: 16 }],
+  });
+});
 
 const rendition: components["schemas"]["RenditionResponse"] = {
   id: "destination",
@@ -339,3 +541,36 @@ for (const settings of [null, undefined, {}]) {
     expect(attachmentRequirement(settings)).toBeUndefined();
   });
 }
+
+test("legacy destination text edits remap selected identities without stale annotations", () => {
+  const target = {
+    provider: "bluesky" as const,
+    kind: "person" as const,
+    id: "did:plc:ewvi7nxzyoun6zhxrhs64oiz",
+  };
+  const chosen = {
+    ...rendition,
+    platform: "bluesky",
+    segments: [
+      {
+        ...rendition.segments![0]!,
+        source_overrides: undefined,
+        body: "Hi @alice",
+        body_override: "Hi @alice",
+        settings: {
+          mentions: { version: 1 as const, spans: [{ start: 3, end: 9, text: "@alice", target }] },
+        },
+      },
+    ],
+  };
+  const input = mobileRenditionInput(
+    { segments: [], renditions: [chosen] },
+    "founder",
+    { "segment:0": "🚀 Hi @alice" },
+    [],
+  );
+  expect(input.segments?.[0]?.settings?.mentions).toEqual({
+    version: 1,
+    spans: [{ start: 8, end: 14, text: "@alice", target }],
+  });
+});

@@ -4,6 +4,12 @@ This page is for operators configuring TikTok and users connecting an account.
 
 TikTok supports video and photo posts through OAuth and the Content Posting API.
 
+## Check Direct Post eligibility first
+
+TikTok's [Content Sharing Guidelines](https://developers.tiktok.com/doc/content-sharing-guidelines/) require Direct Post applications to serve a broad audience. An app used only to publish to accounts you or your team manage is not eligible for approval. A self-hosted app can qualify if its actual intended use meets TikTok's requirements; self-hosting alone does not decide eligibility.
+
+Unaudited Direct Post apps can publish only with `SELF_ONLY` visibility, and their posting accounts must be private. Public Direct Post requires a successful TikTok audit. Connecting an account or saving valid credentials does not grant this approval. Upload sends videos to the creator's TikTok inbox for completion and has separate product and scope requirements.
+
 ## What you need
 
 - TikTok developer app

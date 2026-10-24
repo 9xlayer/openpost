@@ -252,6 +252,10 @@ function mediaMetadataItem(
 	id: string
 ): MediaMetadataItem {
 	const item: ParsedMediaMetadataItem = { id };
+	const source = stringValue(fields.get('source'));
+	if (source !== undefined) item.source = source;
+	const parent = stringValue(fields.get('parent_media_id'));
+	if (parent !== undefined) item.parent_media_id = parent;
 	const filename = stringValue(fields.get('original_filename'));
 	if (filename !== undefined) item.original_filename = filename;
 	const mimeType = stringValue(fields.get('mime_type'));

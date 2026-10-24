@@ -343,6 +343,7 @@ func TestPrincipalCanAccessREST(t *testing.T) {
 		"restore-media",
 		"update-media-favorite",
 		"retry-media-analysis",
+		"optimize-media-image",
 	} {
 		require.True(t, PrincipalCanAccessREST(&Principal{Scope: apitokens.ScopeAPIWrite}, operationID), operationID)
 	}
@@ -363,6 +364,10 @@ func TestExternalApplicationRESTAccessRequiresExactGrant(t *testing.T) {
 	require.True(t, PrincipalCanAccessREST(principal, "create-external-webhook"))
 	require.False(t, PrincipalCanAccessREST(principal, "list-publications"))
 	require.False(t, PrincipalCanAccessREST(principal, "delete-publication"))
+	require.False(t, PrincipalCanAccessREST(principal, "optimize-media-image"))
+	principal.DelegatedScopes += " media:write"
+	require.True(t, PrincipalCanAccessREST(principal, "optimize-media-image"))
+	require.False(t, PrincipalCanAccessREST(&Principal{Scope: apitokens.ScopeAPIRead}, "optimize-media-image"))
 	require.False(t, PrincipalCanAccessREST(principal))
 	require.False(t, PrincipalCanAccessREST(&Principal{
 		Scope:           apitokens.ScopeExternalApp,

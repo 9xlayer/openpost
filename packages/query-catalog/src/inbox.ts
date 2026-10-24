@@ -12,7 +12,10 @@ export type InboxSummary = components["schemas"]["InboxSummary"];
 export type MessagePage = components["schemas"]["MessagePage"];
 export type InboxPublication = components["schemas"]["PublicationResponse"];
 
+export type EngagementKind = "comment" | "mention" | "review";
+
 export interface EngagementFilters {
+  readonly kind?: EngagementKind | undefined;
   readonly platform?: string;
   readonly accountId?: string;
   readonly publicationId?: string;
@@ -207,6 +210,7 @@ export type NormalizedInboxPublicationSearch = ReturnType<typeof normalizeInboxP
 
 export function normalizeEngagementFilters(filters: EngagementFilters) {
   return {
+    kind: filters.kind,
     platform: filters.platform?.trim() ?? "",
     accountId: filters.accountId?.trim() ?? "",
     publicationId: filters.publicationId?.trim() ?? "",

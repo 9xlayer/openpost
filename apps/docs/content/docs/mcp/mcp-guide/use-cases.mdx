@@ -36,6 +36,14 @@ Create an unpublished launch draft for the Company workspace and its connected L
 
 Inspect the saved Post in OpenPost. Check each destination Variant before asking the assistant to schedule it. To adapt one message for several channels, use the `adapt_post_variants` prompt with the saved `post_id` and the `variants[]` arguments.
 
+## Select mentions
+
+Use `lookup_mentions` with `workspace_id`, `account_id` and `query` before drafting a selected mention. It requires read access and searches through that account's grant. For LinkedIn, supply the exact company page vanity name.
+
+Pass the returned target and label in publication segment `settings.mentions`, with version 1 and UTF-8 byte ranges. `create_post` and `update_post` accept ordered `segments` and structured rendition segments, including joined source overrides. Keep selected identities paired with their text when changing a thread. See the [HTTP mention contract](/docs/automate/api/publications#select-people-and-company-mentions).
+
+Choose identities separately for each network. Ask the user to choose when search returns several plausible accounts, and report provider permission or rate-limit errors. Do not substitute an account with a similar name.
+
 ## Schedule approved work
 
 Use `mcp:full` and provide an exact time or ask for an available posting slot:
@@ -69,3 +77,11 @@ Grant `mcp:full` only if you then want the assistant to make a correction or ret
 | Bridge command missing     | Configure the absolute path returned by `command -v openpost-mcp`. Run it as the user who saved the CLI profile. |
 
 Inspect recent calls under **Settings > Personal > Developer access** for the client, tool, workspace, result, and failure reason.
+
+## Review Inbox mentions and business reviews
+
+Use `list_inbox` with `workspace_id` and `kind: "mention"` or `kind: "review"`. Follow its `next_cursor`, and use `get_inbox_item` for native context, moderation and operation receipts. These tools read stored state and work with `mcp:read`.
+
+With `mcp:full`, `refresh_inbox` queues collection, `set_inbox_state` changes shared read/archive state, and `mark_inbox_read` marks all matching unread items across every page. `act_on_inbox_item` queues only supported actions. Supply a stable `client_operation_id` for that exact intent.
+
+A Google review reply replaces the location owner's one reply. `delete_reply` removes only that reply. Never infer delivery from admission, or approval from delivery. Inspect the job and Google moderation state before another replacement. See the [Inbox guide](/guides/inbox) for account permissions and recovery.

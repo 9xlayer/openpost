@@ -1726,10 +1726,19 @@ type EngagementItem struct {
 
 	ID                   string                 `bun:",pk" json:"id"`
 	WorkspaceID          string                 `bun:"workspace_id,notnull" json:"workspace_id"`
-	RenditionID          string                 `bun:"rendition_id,notnull" json:"rendition_id"`
+	RenditionID          string                 `bun:"rendition_id,nullzero" json:"rendition_id,omitempty"`
+	Kind                 string                 `bun:"kind,notnull,default:'comment'" json:"kind,omitempty"`
+	SubjectJSON          string                 `bun:"subject_json,notnull,default:'{}'" json:"-"`
+	Subject              *EngagementSubject     `bun:"-" json:"subject,omitempty"`
+	ReviewReplyCheckAt   time.Time              `bun:"review_reply_check_at,nullzero" json:"-"`
+	ReviewReplyWrittenAt time.Time              `bun:"review_reply_written_at,nullzero" json:"-"`
+	CanDeleteReply       bool                   `bun:"-" json:"can_delete_reply,omitempty"`
+	ReplyJobID           string                 `bun:"-" json:"reply_job_id,omitempty"`
+	ReplyOperationState  string                 `bun:"-" json:"reply_operation_state,omitempty"`
 	SocialAccountID      string                 `bun:"social_account_id,notnull" json:"social_account_id"`
 	Platform             string                 `bun:",notnull" json:"platform"`
 	RemoteID             string                 `bun:"remote_id,notnull" json:"remote_id"`
+	NativeRemoteID       string                 `bun:"native_remote_id,notnull,default:''" json:"-"`
 	ParentRemoteID       string                 `bun:"parent_remote_id,notnull,default:''" json:"parent_remote_id"`
 	ConversationRemoteID string                 `bun:"conversation_remote_id,notnull,default:''" json:"conversation_remote_id"`
 	AuthorRemoteID       string                 `bun:"author_remote_id,notnull,default:''" json:"author_remote_id"`
@@ -1813,6 +1822,7 @@ type DirectMessage struct {
 // EngagementSyncState is the latest safe cursor and collection state for one rendition.
 type EngagementSyncState struct {
 	bun.BaseModel `bun:"table:engagement_sync_states"`
+	Feed          string `bun:"-" json:"feed,omitempty"`
 
 	ID               string    `bun:",pk" json:"id"`
 	WorkspaceID      string    `bun:"workspace_id,notnull" json:"workspace_id"`
@@ -2602,18 +2612,19 @@ type TelegramPublishReceipt struct {
 type Job struct {
 	bun.BaseModel `bun:"table:jobs"`
 
-	ID          string    `bun:",pk" json:"id"`
-	Type        string    `bun:",notnull" json:"type"` // 'publish_post', 'refresh_token', 'media_cleanup', 'storage_delete'
-	ScopeID     string    `bun:"scope_id,notnull,default:''" json:"scope_id,omitempty"`
-	DedupeKey   string    `bun:"dedupe_key,notnull,default:''" json:"dedupe_key,omitempty"`
-	Payload     string    `bun:",notnull" json:"payload"`
-	Status      string    `bun:",default:'pending'" json:"status"` // 'pending', 'processing', 'completed', 'failed'
-	RunAt       time.Time `bun:",notnull" json:"run_at"`
-	Attempts    int       `bun:",default:0" json:"attempts"`
-	MaxAttempts int       `bun:",default:3" json:"max_attempts"`
-	LastError   string    `json:"last_error"`
-	LockedAt    time.Time `bun:"locked_at,nullzero" json:"locked_at"`
-	LockedBy    string    `json:"locked_by"`
+	ID              string    `bun:",pk" json:"id"`
+	Type            string    `bun:",notnull" json:"type"` // 'publish_post', 'refresh_token', 'media_cleanup', 'storage_delete'
+	ScopeID         string    `bun:"scope_id,notnull,default:''" json:"scope_id,omitempty"`
+	DedupeKey       string    `bun:"dedupe_key,notnull,default:''" json:"dedupe_key,omitempty"`
+	Payload         string    `bun:",notnull" json:"payload"`
+	Status          string    `bun:",default:'pending'" json:"status"` // 'pending', 'processing', 'completed', 'failed'
+	RunAt           time.Time `bun:",notnull" json:"run_at"`
+	Attempts        int       `bun:",default:0" json:"attempts"`
+	MaxAttempts     int       `bun:",default:3" json:"max_attempts"`
+	LastError       string    `json:"last_error"`
+	LockedAt        time.Time `bun:"locked_at,nullzero" json:"locked_at"`
+	LockedBy        string    `json:"locked_by"`
+	LeaseGeneration int64     `bun:"lease_generation,notnull,default:0" json:"-"`
 }
 
 type PostVariant struct {

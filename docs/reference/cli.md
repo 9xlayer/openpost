@@ -37,23 +37,24 @@ openpost [flags]
 
 **Subcommands**
 
-| Command                | Description                                                  |
-| ---------------------- | ------------------------------------------------------------ |
-| `openpost account`     | Manage connected social accounts                             |
-| `openpost auth`        | Authenticate with an OpenPost instance                       |
-| `openpost billing`     | Manage Hosted service billing                                |
-| `openpost completion`  | Generate shell completion script                             |
-| `openpost doctor`      | Check local CLI configuration without contacting an instance |
-| `openpost instance`    | Manage OpenPost instance profiles                            |
-| `openpost jobs`        | List background jobs                                         |
-| `openpost media`       | Upload and list media attachments                            |
-| `openpost post`        | Create, list, view, update, and delete posts                 |
-| `openpost provider`    | Inspect provider availability and publishing support         |
-| `openpost publication` | Create, list, validate, and publish publications             |
-| `openpost schedule`    | Manage reusable posting schedule slots                       |
-| `openpost thread`      | Create multi-post threads                                    |
-| `openpost version`     | Print the openpost CLI version                               |
-| `openpost workspace`   | Manage the active OpenPost workspace                         |
+| Command                | Description                                                      |
+| ---------------------- | ---------------------------------------------------------------- |
+| `openpost account`     | Manage connected social accounts                                 |
+| `openpost auth`        | Authenticate with an OpenPost instance                           |
+| `openpost billing`     | Manage Hosted service billing                                    |
+| `openpost completion`  | Generate shell completion script                                 |
+| `openpost doctor`      | Check local CLI configuration without contacting an instance     |
+| `openpost inbox`       | Read and act on comments, incoming mentions and business reviews |
+| `openpost instance`    | Manage OpenPost instance profiles                                |
+| `openpost jobs`        | List background jobs                                             |
+| `openpost media`       | Upload and list media attachments                                |
+| `openpost post`        | Create, list, view, update, and delete posts                     |
+| `openpost provider`    | Inspect provider availability and publishing support             |
+| `openpost publication` | Create, list, validate, and publish publications                 |
+| `openpost schedule`    | Manage reusable posting schedule slots                           |
+| `openpost thread`      | Create multi-post threads                                        |
+| `openpost version`     | Print the openpost CLI version                                   |
+| `openpost workspace`   | Manage the active OpenPost workspace                             |
 
 ### `openpost account`
 
@@ -82,11 +83,12 @@ openpost account
 
 **Subcommands**
 
-| Command                       | Description                    |
-| ----------------------------- | ------------------------------ |
-| `openpost account disconnect` | Disconnect a social account    |
-| `openpost account list`       | List connected social accounts |
-| `openpost account rename`     | Rename a social account slug   |
+| Command                       | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| `openpost account disconnect` | Disconnect a social account                   |
+| `openpost account list`       | List connected social accounts                |
+| `openpost account mentions`   | Find native mention identities for an account |
+| `openpost account rename`     | Rename a social account slug                  |
 
 ### `openpost account disconnect`
 
@@ -128,6 +130,35 @@ openpost account list [flags]
 | Flag         | Default | Description        |
 | ------------ | ------- | ------------------ |
 | `--platform` | `-`     | filter by platform |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost account mentions`
+
+Find native mention identities for an account
+
+**Usage**
+
+```text
+openpost account mentions &lt;account&gt; [flags]
+```
+
+**Flags**
+
+| Flag      | Default | Description                                           |
+| --------- | ------- | ----------------------------------------------------- |
+| `--query` | `-`     | Account search, or exact LinkedIn company vanity name |
 
 **Inherited Flags**
 
@@ -517,6 +548,218 @@ openpost doctor
 | `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
 | `--yes`       | `false` | skip interactive confirmations                                     |
 
+### `openpost inbox`
+
+Read and act on comments, incoming mentions and business reviews
+
+**Usage**
+
+```text
+openpost inbox
+```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+**Subcommands**
+
+| Command                    | Description                                                     |
+| -------------------------- | --------------------------------------------------------------- |
+| `openpost inbox act`       | Queue a supported reply or moderation action                    |
+| `openpost inbox get`       | Read an Inbox item, native context and review reply receipt     |
+| `openpost inbox list`      | Read stored Inbox items and feed health, without provider calls |
+| `openpost inbox mark-read` | Mark every matching unread item read across all pages           |
+| `openpost inbox refresh`   | Queue durable collection for enabled accounts                   |
+| `openpost inbox state`     | Update shared Workspace read and archive state                  |
+
+### `openpost inbox act`
+
+Queue a supported reply or moderation action
+
+Queue an action supported by the item's can_* capabilities. For a Google review, reply replaces the owner reply and delete_reply removes only that reply. Reviews cannot be deleted. Inspect the returned job and the item's moderation state before replacing a review reply again. Reuse --operation-id only for the same intent.
+
+**Usage**
+
+```text
+openpost inbox act &lt;item-id&gt; [flags]
+```
+
+**Flags**
+
+| Flag             | Default | Description                                                |
+| ---------------- | ------- | ---------------------------------------------------------- |
+| `--action`       | `reply` | reply, delete_reply, hide, delete, like or unlike          |
+| `--message`      | `-`     | reply text; Google owner replies allow 4096 UTF-8 bytes    |
+| `--operation-id` | `-`     | stable ID for this exact intent, required for safe retries |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox get`
+
+Read an Inbox item, native context and review reply receipt
+
+**Usage**
+
+```text
+openpost inbox get &lt;item-id&gt;
+```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox list`
+
+Read stored Inbox items and feed health, without provider calls
+
+**Usage**
+
+```text
+openpost inbox list [flags]
+```
+
+**Flags**
+
+| Flag               | Default | Description                                                     |
+| ------------------ | ------- | --------------------------------------------------------------- |
+| `--account-id`     | `-`     | connected account ID                                            |
+| `--archived`       | `false` | read archived items instead of active items                     |
+| `--cursor`         | `-`     | next_cursor from the previous response                          |
+| `--kind`           | `-`     | comment, mention or review; omit for all                        |
+| `--limit`          | `50`    | page size, from 1 to 100                                        |
+| `--platform`       | `-`     | filter by provider                                              |
+| `--publication-id` | `-`     | filter by an OpenPost post, excluding unrelated native activity |
+| `--unread`         | `false` | only unread items                                               |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox mark-read`
+
+Mark every matching unread item read across all pages
+
+**Usage**
+
+```text
+openpost inbox mark-read [flags]
+```
+
+**Flags**
+
+| Flag               | Default | Description                                                     |
+| ------------------ | ------- | --------------------------------------------------------------- |
+| `--account-id`     | `-`     | connected account ID                                            |
+| `--archived`       | `false` | read archived items instead of active items                     |
+| `--kind`           | `-`     | comment, mention or review; omit for all                        |
+| `--platform`       | `-`     | filter by provider                                              |
+| `--publication-id` | `-`     | filter by an OpenPost post, excluding unrelated native activity |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox refresh`
+
+Queue durable collection for enabled accounts
+
+**Usage**
+
+```text
+openpost inbox refresh
+```
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost inbox state`
+
+Update shared Workspace read and archive state
+
+**Usage**
+
+```text
+openpost inbox state &lt;item-id&gt;... [flags]
+```
+
+**Flags**
+
+| Flag         | Default | Description                               |
+| ------------ | ------- | ----------------------------------------- |
+| `--archived` | `false` | archive, or --archived=false to reopen    |
+| `--read`     | `false` | mark read, or --read=false to mark unread |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
 ### `openpost instance`
 
 Manage OpenPost instance profiles
@@ -782,14 +1025,15 @@ openpost media
 
 **Subcommands**
 
-| Command                  | Description                               |
-| ------------------------ | ----------------------------------------- |
-| `openpost media delete`  | Delete an unused media attachment         |
-| `openpost media list`    | List media attachments                    |
-| `openpost media storage` | Show media storage usage                  |
-| `openpost media update`  | Update media alt text                     |
-| `openpost media upload`  | Upload a media file                       |
-| `openpost media usage`   | List content that uses a media attachment |
+| Command                        | Description                                   |
+| ------------------------------ | --------------------------------------------- |
+| `openpost media delete`        | Delete an unused media attachment             |
+| `openpost media list`          | List media attachments                        |
+| `openpost media prepare-image` | Fit a separate image copy for one destination |
+| `openpost media storage`       | Show media storage usage                      |
+| `openpost media update`        | Update media alt text                         |
+| `openpost media upload`        | Upload a media file                           |
+| `openpost media usage`         | List content that uses a media attachment     |
 
 ### `openpost media delete`
 
@@ -829,6 +1073,38 @@ openpost media list [flags]
 | Flag      | Default | Description                             |
 | --------- | ------- | --------------------------------------- |
 | `--limit` | `0`     | maximum number of media items to return |
+
+**Inherited Flags**
+
+| Flag          | Default | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `--instance`  | `-`     | OpenPost instance URL (default: profile or $OPENPOST_INSTANCE)     |
+| `--json`      | `false` | emit machine-readable JSON instead of tables/prose                 |
+| `--no-color`  | `false` | disable ANSI colors                                                |
+| `--profile`   | `-`     | profile name from config (default: $OPENPOST_PROFILE or 'default') |
+| `--quiet`     | `false` | suppress non-error output                                          |
+| `--token`     | `-`     | API token override (default: keyring or $OPENPOST_TOKEN)           |
+| `--workspace` | `-`     | workspace name or ID (default: profile or $OPENPOST_WORKSPACE)     |
+| `--yes`       | `false` | skip interactive confirmations                                     |
+
+### `openpost media prepare-image`
+
+Fit a separate image copy for one destination
+
+**Usage**
+
+```text
+openpost media prepare-image &lt;media-id&gt; [flags]
+```
+
+**Flags**
+
+| Flag               | Default | Description                                                |
+| ------------------ | ------- | ---------------------------------------------------------- |
+| `--account`        | `-`     | Connected account ID or slug                               |
+| `--alt`            | `-`     | Alt text for the fitted copy; pass an empty value to clear |
+| `--output-profile` | `-`     | Explicit destination format from capabilities              |
+| `--settings-file`  | `-`     | Destination settings JSON file, or - for stdin             |
 
 **Inherited Flags**
 
@@ -995,16 +1271,17 @@ openpost post create [flags]
 
 **Flags**
 
-| Flag             | Default | Description                                         |
-| ---------------- | ------- | --------------------------------------------------- |
-| `--accounts`     | `-`     | comma-separated account selectors                   |
-| `--content`      | `-`     | post content                                        |
-| `--file`         | `-`     | read post content from a file                       |
-| `--media`        | `[]`    | media id or local file path; repeatable             |
-| `--media-alt`    | `[]`    | alt text for the matching uploaded --media          |
-| `--random-delay` | `0`     | random delay in minutes                             |
-| `--schedule`     | `-`     | natural-language, RFC3339, next-slot, now, or draft |
-| `--thread-draft` | `-`     | encoded thread draft to attach                      |
+| Flag              | Default | Description                                                                        |
+| ----------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--accounts`      | `-`     | comma-separated account selectors                                                  |
+| `--content`       | `-`     | post content                                                                       |
+| `--file`          | `-`     | read post content from a file                                                      |
+| `--media`         | `[]`    | media id or local file path; repeatable                                            |
+| `--media-alt`     | `[]`    | alt text for the matching uploaded --media                                         |
+| `--random-delay`  | `0`     | random delay in minutes                                                            |
+| `--schedule`      | `-`     | natural-language, RFC3339, next-slot, now, or draft                                |
+| `--segments-file` | `-`     | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin |
+| `--thread-draft`  | `-`     | encoded thread draft to attach                                                     |
 
 **Inherited Flags**
 
@@ -1114,14 +1391,15 @@ openpost post update &lt;post-id&gt; [flags]
 
 **Flags**
 
-| Flag             | Default | Description                                                                       |
-| ---------------- | ------- | --------------------------------------------------------------------------------- |
-| `--accounts`     | `-`     | comma-separated account selectors                                                 |
-| `--content`      | `-`     | post content                                                                      |
-| `--media`        | `[]`    | replacement media id or local file path; repeatable; pass an empty value to clear |
-| `--media-alt`    | `[]`    | alt text for the matching uploaded --media                                        |
-| `--random-delay` | `0`     | random delay in minutes                                                           |
-| `--schedule`     | `-`     | natural-language, RFC3339, next-slot, now, or draft; empty string unschedules     |
+| Flag              | Default | Description                                                                        |
+| ----------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--accounts`      | `-`     | comma-separated account selectors                                                  |
+| `--content`       | `-`     | post content                                                                       |
+| `--media`         | `[]`    | replacement media id or local file path; repeatable; pass an empty value to clear  |
+| `--media-alt`     | `[]`    | alt text for the matching uploaded --media                                         |
+| `--random-delay`  | `0`     | random delay in minutes                                                            |
+| `--schedule`      | `-`     | natural-language, RFC3339, next-slot, now, or draft; empty string unschedules      |
+| `--segments-file` | `-`     | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin |
 
 **Inherited Flags**
 
@@ -1382,6 +1660,7 @@ openpost publication create [flags]
 | `--media-alt`         | `[]`          | alt text for uploaded media                                                                           |
 | `--privacy`           | `-`           | YouTube privacy status: private, unlisted, or public                                                  |
 | `--schedule`          | `-`           | schedule time                                                                                         |
+| `--segments-file`     | `-`           | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin                    |
 | `--tiktok-method`     | `DIRECT_POST` | TikTok content posting method                                                                         |
 | `--tiktok-privacy`    | `SELF_ONLY`   | TikTok privacy level                                                                                  |
 | `--title`             | `-`           | publication title                                                                                     |
@@ -1751,15 +2030,16 @@ openpost publication update &lt;publication-id&gt; [flags]
 
 **Flags**
 
-| Flag                | Default | Description                                   |
-| ------------------- | ------- | --------------------------------------------- |
-| `--content`         | `-`     | shared post or caption text                   |
-| `--content-profile` | `-`     | content profile                               |
-| `--file`            | `-`     | read shared text from file or '-' for stdin   |
-| `--force`           | `false` | overwrite after reviewing a revision conflict |
-| `--schedule`        | `-`     | new schedule time; use draft to clear         |
-| `--title`           | `-`     | publication title                             |
-| `--url`             | `-`     | source URL; pass an empty value to clear      |
+| Flag                | Default | Description                                                                        |
+| ------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `--content`         | `-`     | shared post or caption text                                                        |
+| `--content-profile` | `-`     | content profile                                                                    |
+| `--file`            | `-`     | read shared text from file or '-' for stdin                                        |
+| `--force`           | `false` | overwrite after reviewing a revision conflict                                      |
+| `--schedule`        | `-`     | new schedule time; use draft to clear                                              |
+| `--segments-file`   | `-`     | Ordered segment JSON with settings.mentions and UTF-8 byte ranges; use - for stdin |
+| `--title`           | `-`     | publication title                                                                  |
+| `--url`             | `-`     | source URL; pass an empty value to clear                                           |
 
 **Inherited Flags**
 

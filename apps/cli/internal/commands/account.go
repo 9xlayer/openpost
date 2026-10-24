@@ -22,6 +22,7 @@ func newAccountCmd() *cobra.Command {
 			"OpenPost web UI at <instance>/settings?tab=accounts.",
 	}
 	cmd.AddCommand(newAccountListCmd())
+	cmd.AddCommand(newAccountMentionsCmd())
 	cmd.AddCommand(newAccountRenameCmd())
 	cmd.AddCommand(newAccountDisconnectCmd())
 	return cmd
@@ -232,4 +233,30 @@ func confirm(prompt string) (bool, error) {
 	default:
 		return false, nil
 	}
+}
+
+func newAccountMentionsCmd() *cobra.Command {
+	var query string
+	cmd := &cobra.Command{Use: "mentions <account>", Short: "Find native mention identities for an account", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, client, workspaceID, _, err := postRuntime(cmd)
+		if err != nil {
+			return err
+		}
+		accounts, err := client.ListAccounts(cmd.Context(), workspaceID)
+		if err != nil {
+			return err
+		}
+		ids, err := accountpicker.Resolve(workspaceID, []string{args[0]}, accounts)
+		if err != nil {
+			return err
+		}
+		result, err := client.LookupAccountMentions(cmd.Context(), ids[0], query)
+		if err != nil {
+			return err
+		}
+		return printerFrom(cfg).PrintJSON(result)
+	}}
+	cmd.Flags().StringVar(&query, "query", "", "Account search, or exact LinkedIn company vanity name")
+	_ = cmd.MarkFlagRequired("query")
+	return cmd
 }

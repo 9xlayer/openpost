@@ -59,3 +59,21 @@ func TestDestinationQuoteSuppressesInheritedCardWithoutMovingSettingsOwnership(t
 	_, err = ResolveEffective(source, "account", "bluesky", "Caption", destination, segment, 0)
 	require.ErrorContains(t, err, "cannot be combined with a quote")
 }
+
+func TestThreadsAttachmentsSuppressInheritedCardsButRejectExplicitCards(t *testing.T) {
+	for _, key := range []string{"text_attachment_plaintext", "gif_id"} {
+		t.Run(key, func(t *testing.T) {
+			source := map[string]any{"link": map[string]any{"destinations": map[string]any{"account": map[string]any{"mode": "post"}}}}
+			destination := map[string]any{key: "Attachment"}
+			segment := map[string]any{"url": "https://stale.example"}
+			values, err := ResolveEffective(source, "account", "threads", "Read https://example.com", destination, segment, 0)
+			require.NoError(t, err)
+			require.Empty(t, values["url"])
+			require.NotContains(t, values, key)
+			require.Equal(t, "https://stale.example", segment["url"])
+			source["link"].(map[string]any)["destinations"].(map[string]any)["account"] = map[string]any{"mode": "custom", "url": "https://example.com"}
+			_, err = ResolveEffective(source, "account", "threads", "Caption", destination, segment, 0)
+			require.ErrorContains(t, err, "cannot be combined")
+		})
+	}
+}

@@ -290,6 +290,7 @@ type MCPHandler struct {
 	readiness         *providerreadiness.Service
 	serverVersion     string
 	featureGate       engagementservice.FeatureGate
+	engagement        *engagementservice.Service
 	toolMode          mcpToolMode
 }
 
@@ -1374,10 +1375,11 @@ type mcpOperationDefinition struct {
 }
 
 func mcpOperationCatalog() []mcpOperationDefinition {
-	return []mcpOperationDefinition{
+	return append(mcpInboxTools(), []mcpOperationDefinition{
 		mcpListWorkspacesTool(),
 		mcpListProviderCatalogTool(),
 		mcpListAccountsTool(),
+		mcpLookupMentionsTool(),
 		mcpListMediaTool(),
 		mcpProviderReadinessTool(),
 		mcpCreatePublicationTool(),
@@ -1402,6 +1404,7 @@ func mcpOperationCatalog() []mcpOperationDefinition {
 		mcpSuggestNextSlotTool(),
 		mcpUploadMediaFromURLTool(),
 		mcpUploadMediaBase64Tool(),
+		mcpPrepareMediaImageTool(),
 		mcpPostMetricsTool(),
 		mcpDashboardLinkTool(),
 		mcpSearchDocsTool(),
@@ -1452,7 +1455,7 @@ func mcpOperationCatalog() []mcpOperationDefinition {
 		mcpEditorHistoryInspectTool(),
 		mcpEditorHistoryUndoTool(),
 		mcpEditorHistoryRedoTool(),
-	}
+	}...)
 }
 
 func mcpSearchTool() map[string]any {
@@ -1827,6 +1830,7 @@ func mcpCreatePublicationTool() mcpOperationDefinition {
 				},
 				"title":       map[string]any{"type": "string", "description": "Internal post title."},
 				"source_text": map[string]any{"type": "string", "description": "Canonical source text. Compute from description, caption, or title; do not expose this term to users."},
+				"segments":    map[string]any{"type": "array", "items": mcpAuthoringSchema[PublicationSegmentInput](), "description": "Ordered authored thread segments, including settings.mentions with UTF-8 byte ranges."},
 				"source_url":  map[string]any{"type": "string", "description": "Optional source URL for link shares."},
 				"scheduled_at": map[string]any{
 					"type":        "string",
@@ -1910,6 +1914,7 @@ func mcpUpdatePublicationTool() mcpOperationDefinition {
 		"inputSchema": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
+				"segments":        map[string]any{"type": "array", "items": mcpAuthoringSchema[PublicationSegmentInput]()},
 				"post_id":         map[string]any{"type": "string", "description": "Post ID returned by create_post or list_posts."},
 				"idempotency_key": mcpIdempotencyKeySchema(),
 				"detail":          mcpDetailSchema(),
@@ -2013,25 +2018,7 @@ func mcpPublicationMediaSchema() map[string]any {
 	}
 }
 
-func mcpPublicationRenditionSchema() map[string]any {
-	return map[string]any{
-		"type": "object", "properties": map[string]any{
-			"id":                map[string]any{"type": "string", "description": "Optional existing variant ID when replacing a previously stored output."},
-			"social_account_id": map[string]any{"type": "string", "description": "Destination account ID returned by list_accounts."},
-			"profile": map[string]any{
-				"type": "string", "description": "Optional content profile override for this destination.",
-				"enum": []string{"short_text", "thread", "link_share", "image_post", "carousel", "story", "short_video", "long_video"},
-			},
-			"output_profile": map[string]any{"type": "string", "description": "Exact provider format ID returned by capability resolution."},
-			"format_locked":  map[string]any{"type": "boolean", "description": "Preserve the explicitly selected format when source content changes."},
-			"body":           map[string]any{"type": "string", "description": "Provider-native post text or caption."},
-			"title":          map[string]any{"type": "string", "description": "Provider-native title, especially for YouTube videos."},
-			"description":    map[string]any{"type": "string", "description": "Provider-native long description, especially for YouTube videos."},
-			"settings":       map[string]any{"type": "object", "description": "Provider settings, e.g. {\"privacy\":\"public\"}.", "additionalProperties": true},
-			"media":          map[string]any{"type": "array", "description": "Ordered media attachments for this destination output.", "items": mcpPublicationMediaSchema()},
-		}, "required": []string{"social_account_id"}, "additionalProperties": false,
-	}
-}
+func mcpPublicationRenditionSchema() map[string]any { return mcpAuthoringSchema[RenditionInput]() }
 
 func mcpValidatePublicationTool() mcpOperationDefinition {
 	return mcpOperationDescriptor(map[string]any{
@@ -2705,6 +2692,22 @@ func mcpToolOutputSchema(toolName string) map[string]any {
 		return mcpStructuredOutputSchema(map[string]any{
 			"media": mcpOpenObjectSchema(),
 		}, "media")
+	case mcpToolInboxList:
+		return mcpAuthoringSchema[EngagementPage]()
+	case mcpToolInboxGet:
+		return mcpAuthoringSchema[engagementservice.EngagementDetail]()
+	case mcpToolInboxRefresh:
+		return mcpAuthoringSchema[RefreshCapabilityOutcome]()
+	case mcpToolInboxState:
+		return mcpStructuredOutputSchema(map[string]any{"updated": map[string]any{"type": "boolean"}}, "updated")
+	case mcpToolInboxRead:
+		return mcpStructuredOutputSchema(map[string]any{"updated_count": map[string]any{"type": "integer"}}, "updated_count")
+	case mcpToolInboxAction:
+		return mcpStructuredOutputSchema(map[string]any{"job_id": map[string]any{"type": "string"}}, "job_id")
+	case mcpToolLookupMentions:
+		return mcpStructuredOutputSchema(map[string]any{"candidates": mcpArraySchema(mcpAuthoringSchema[platform.MentionCandidate]()), "mode": map[string]any{"type": "string", "enum": []string{"accounts", "exact_company"}}}, "candidates", "mode")
+	case mcpToolPrepareImage:
+		return mcpStructuredOutputSchema(map[string]any{"media": mcpOpenObjectSchema(), "status": map[string]any{"type": "string", "enum": []string{"ready"}}}, "media", "status")
 	case mcpToolDeleteMedia:
 		return mcpStructuredOutputSchema(map[string]any{
 			"message":  map[string]any{"type": "string"},
@@ -3321,9 +3324,11 @@ func (h *MCPHandler) callDiscoveredMCPOperation(ctx context.Context, userID stri
 func (h *MCPHandler) callMCPOperation(ctx context.Context, userID, operation string, args map[string]any) (any, *mcpError) {
 	operation = normalizeMCPOperationName(operation)
 	switch operation {
+	case mcpToolInboxList, mcpToolInboxGet, mcpToolInboxRefresh, mcpToolInboxState, mcpToolInboxRead, mcpToolInboxAction:
+		return h.callInboxTool(ctx, userID, operation, args)
 	case mcpToolWorkspaces, mcpToolProviders, mcpToolSearchDocs:
 		return h.callReadOnlyGlobalTool(ctx, userID, operation, args)
-	case mcpToolAccounts, mcpToolListMedia, mcpToolReadiness, mcpToolPostMetrics, mcpToolDashboardLink:
+	case mcpToolLookupMentions, mcpToolAccounts, mcpToolListMedia, mcpToolReadiness, mcpToolPostMetrics, mcpToolDashboardLink:
 		return h.callReadOnlyWorkspaceTool(ctx, userID, operation, args)
 	case mcpToolRenderWidget:
 		return h.renderSchedulerWidget(args)
@@ -3337,7 +3342,7 @@ func (h *MCPHandler) callMCPOperation(ctx context.Context, userID, operation str
 		mcpToolValidatePub, mcpToolSchedulePub, mcpToolCancelPub, mcpToolPublishPubNow, mcpToolDeletePub,
 		mcpToolRetryFailed, mcpToolRetryOne, mcpToolPubEvents, mcpToolComments,
 		mcpToolReplyComment, mcpToolHideComment, mcpToolDeleteComment, mcpToolSuggestSlot, mcpToolUploadURL, mcpToolUploadBase64,
-		mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia:
+		mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia, mcpToolPrepareImage:
 		return h.callWorkspaceActionTool(ctx, userID, operation, args)
 	default:
 		return nil, &mcpError{Code: -32602, Message: fmt.Sprintf("unknown operation %q; call %s to discover supported operations", operation, mcpToolSearch)}
@@ -3352,7 +3357,7 @@ func (h *MCPHandler) callWorkspaceActionTool(ctx context.Context, userID, toolNa
 		mcpToolRetryFailed, mcpToolRetryOne, mcpToolPubEvents, mcpToolComments,
 		mcpToolReplyComment, mcpToolHideComment, mcpToolDeleteComment:
 		return h.callPublicationTool(ctx, userID, toolName, args)
-	case mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia:
+	case mcpToolGetMedia, mcpToolUpdateMedia, mcpToolDeleteMedia, mcpToolPrepareImage:
 		return h.callMediaTool(ctx, userID, toolName, args)
 	case mcpToolSuggestSlot:
 		return h.suggestNextSlot(ctx, userID, args)
@@ -3410,6 +3415,8 @@ func (h *MCPHandler) callPublicationTool(ctx context.Context, userID, toolName s
 
 func (h *MCPHandler) callReadOnlyWorkspaceTool(ctx context.Context, userID, toolName string, args map[string]any) (any, *mcpError) {
 	switch toolName {
+	case mcpToolLookupMentions:
+		return h.lookupMCPMentions(ctx, userID, args)
 	case mcpToolAccounts:
 		return h.listAccounts(ctx, userID, args)
 	case mcpToolListMedia:
@@ -3764,19 +3771,20 @@ func (h *MCPHandler) listAccounts(ctx context.Context, userID string, args map[s
 }
 
 type mcpCreatePublicationInput struct {
-	WorkspaceID        string                  `json:"workspace_id"`
-	ContentProfile     string                  `json:"content_profile"`
-	Title              string                  `json:"title"`
-	SourceText         string                  `json:"source_text"`
-	SourceURL          string                  `json:"source_url"`
-	ScheduledAt        *time.Time              `json:"scheduled_at"`
-	RandomDelayMinutes *int                    `json:"random_delay_minutes"`
-	SocialAccountIDs   []string                `json:"social_account_ids"`
-	MediaIDs           []string                `json:"media_ids"`
-	Media              []PublicationMediaInput `json:"media"`
-	Renditions         []RenditionInput        `json:"variants"`
-	IdempotencyKey     string                  `json:"idempotency_key"`
-	Detail             string                  `json:"detail"`
+	Segments           []PublicationSegmentInput `json:"segments"`
+	WorkspaceID        string                    `json:"workspace_id"`
+	ContentProfile     string                    `json:"content_profile"`
+	Title              string                    `json:"title"`
+	SourceText         string                    `json:"source_text"`
+	SourceURL          string                    `json:"source_url"`
+	ScheduledAt        *time.Time                `json:"scheduled_at"`
+	RandomDelayMinutes *int                      `json:"random_delay_minutes"`
+	SocialAccountIDs   []string                  `json:"social_account_ids"`
+	MediaIDs           []string                  `json:"media_ids"`
+	Media              []PublicationMediaInput   `json:"media"`
+	Renditions         []RenditionInput          `json:"variants"`
+	IdempotencyKey     string                    `json:"idempotency_key"`
+	Detail             string                    `json:"detail"`
 }
 
 type mcpPublicationStatus struct {
@@ -3851,7 +3859,7 @@ func (h *MCPHandler) createPublication(ctx context.Context, userID string, args 
 		return nil, rpcErr
 	}
 	body := CreatePublicationBody{
-		WorkspaceID:        input.WorkspaceID,
+		Segments: input.Segments, WorkspaceID: input.WorkspaceID,
 		Title:              input.Title,
 		ContentProfile:     input.ContentProfile,
 		SourceText:         input.SourceText,
@@ -4003,21 +4011,22 @@ func (h *MCPHandler) getPublication(ctx context.Context, userID string, args map
 }
 
 type mcpPublicationUpdateInput struct {
-	PublicationID      string                  `json:"post_id"`
-	ExpectedRevision   int                     `json:"expected_revision"`
-	Title              *string                 `json:"title"`
-	ContentProfile     *string                 `json:"content_profile"`
-	SourceText         *string                 `json:"source_text"`
-	SourceURL          *string                 `json:"source_url"`
-	Goal               *string                 `json:"goal"`
-	Audience           *string                 `json:"audience"`
-	ScheduledAt        *time.Time              `json:"scheduled_at"`
-	ClearSchedule      bool                    `json:"clear_schedule"`
-	RandomDelayMinutes *int                    `json:"random_delay_minutes"`
-	InheritRandomDelay bool                    `json:"inherit_random_delay"`
-	Metadata           *map[string]interface{} `json:"metadata"`
-	IdempotencyKey     string                  `json:"idempotency_key"`
-	Detail             string                  `json:"detail"`
+	Segments           []PublicationSegmentInput `json:"segments"`
+	PublicationID      string                    `json:"post_id"`
+	ExpectedRevision   int                       `json:"expected_revision"`
+	Title              *string                   `json:"title"`
+	ContentProfile     *string                   `json:"content_profile"`
+	SourceText         *string                   `json:"source_text"`
+	SourceURL          *string                   `json:"source_url"`
+	Goal               *string                   `json:"goal"`
+	Audience           *string                   `json:"audience"`
+	ScheduledAt        *time.Time                `json:"scheduled_at"`
+	ClearSchedule      bool                      `json:"clear_schedule"`
+	RandomDelayMinutes *int                      `json:"random_delay_minutes"`
+	InheritRandomDelay bool                      `json:"inherit_random_delay"`
+	Metadata           *map[string]interface{}   `json:"metadata"`
+	IdempotencyKey     string                    `json:"idempotency_key"`
+	Detail             string                    `json:"detail"`
 }
 
 func (h *MCPHandler) updatePublication(ctx context.Context, userID string, args map[string]any) (any, *mcpError) {
@@ -4028,7 +4037,7 @@ func (h *MCPHandler) updatePublication(ctx context.Context, userID string, args 
 		return nil, &mcpError{Code: -32602, Message: "invalid update_post arguments"}
 	}
 	body := PublicationUpdateBody{
-		ExpectedRevision:   input.ExpectedRevision,
+		Segments: input.Segments, ExpectedRevision: input.ExpectedRevision,
 		Title:              input.Title,
 		ContentProfile:     input.ContentProfile,
 		SourceText:         input.SourceText,
@@ -5527,6 +5536,8 @@ func (h *MCPHandler) callMediaTool(ctx context.Context, userID, toolName string,
 		return h.getMedia(ctx, userID, args)
 	case mcpToolUpdateMedia:
 		return h.updateMedia(ctx, userID, args)
+	case mcpToolPrepareImage:
+		return h.prepareMediaImage(ctx, userID, args)
 	case mcpToolDeleteMedia:
 		return h.deleteMedia(ctx, userID, args)
 	default:

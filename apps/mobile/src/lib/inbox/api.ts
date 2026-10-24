@@ -86,6 +86,7 @@ export const mobileInboxAPI: InboxQueryAPI &
               platform: filters.platform || undefined,
               account_id: filters.accountId || undefined,
               publication_id: filters.publicationId || undefined,
+              kind: filters.kind,
               unread_only: filters.unreadOnly,
               archived: filters.archived,
               limit: filters.limit,
@@ -265,6 +266,19 @@ export async function setCommentState(
     );
 }
 
+export function markMatchingCommentsRead(
+  workspaceId: string,
+  accountId: string,
+  archived: boolean,
+  kind?: "comment" | "mention" | "review",
+) {
+  return result(
+    api().POST("/engagement/read", {
+      body: { workspace_id: workspaceId, account_id: accountId || undefined, archived, kind },
+    }),
+  );
+}
+
 export function queueInboxRefresh(
   workspaceId: string,
   view: "chats" | "comments",
@@ -278,7 +292,7 @@ export function queueInboxRefresh(
 export async function commentAction(
   workspaceId: string,
   itemId: string,
-  action: "reply" | "hide" | "delete" | "like" | "unlike",
+  action: "reply" | "delete_reply" | "hide" | "delete" | "like" | "unlike",
   message?: string,
   clientOperationId?: string,
 ) {

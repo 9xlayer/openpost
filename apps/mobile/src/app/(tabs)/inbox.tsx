@@ -27,6 +27,7 @@ import {
   mobileInboxAPI,
   setConversationState,
   setCommentState,
+  markMatchingCommentsRead,
   type Conversation,
   type Comment,
 } from "@/lib/inbox/api";
@@ -53,8 +54,11 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
   const [view, setView] = useState<"chats" | "comments">("chats");
   const [filter, setFilter] = useState<"all" | "unread" | "archived">("all");
   const [accountId, setAccountId] = useState("");
+  const [kind, setKind] = useState<"" | "comment" | "mention" | "review">("");
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  const [bulkReading, setBulkReading] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [undo, setUndo] = useState<{
     kind: "chat" | "comment";
@@ -97,7 +101,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
     enabled: !!workspaceId && view === "chats",
   });
   const comments = useInfiniteQuery({
-    ...engagementQueryOptions(mobileInboxAPI, workspaceId, filters),
+    ...engagementQueryOptions(mobileInboxAPI, workspaceId, { ...filters, kind: kind || undefined }),
     enabled: !!workspaceId && view === "comments",
   });
   const activeQuery = view === "chats" ? chats : comments;
@@ -120,7 +124,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
   const refresh = useInboxRefresh({
     workspaceId,
     view,
-    viewKey: `${view}:${filter}:${accountId}`,
+    viewKey: `${view}:${filter}:${accountId}:${kind}`,
     canEdit,
     previousSuccess: successfulAt,
     reloadStored: async () => {
@@ -159,6 +163,32 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
       if (apiRequestIdentityIsCurrent(identity)) setArchiving(null);
     }
   }
+  async function markAllRead() {
+    if (!canEdit || bulkReading || !workspaceId) return;
+    const identity = captureApiRequestIdentity();
+    setBulkReading(true);
+    setError(null);
+    setBulkNotice("");
+    try {
+      const result = await markMatchingCommentsRead(
+        workspaceId,
+        accountId,
+        filter === "archived",
+        kind || undefined,
+      );
+      if (!apiRequestIdentityIsCurrent(identity)) return;
+      await queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) });
+      if (apiRequestIdentityIsCurrent(identity))
+        setBulkNotice(
+          `${result.updated_count} matching items marked read for everyone in this Workspace.`,
+        );
+    } catch (cause) {
+      if (apiRequestIdentityIsCurrent(identity))
+        setError(cause instanceof Error ? cause.message : "Could not mark comments read");
+    } finally {
+      if (apiRequestIdentityIsCurrent(identity)) setBulkReading(false);
+    }
+  }
   function accountName(id: string) {
     const account = accounts.data?.find((account) => account.id === id);
     return account?.alias || account?.account_username || "Connected account";
@@ -174,7 +204,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
       <InboxSegments
         values={[
           { value: "chats", label: "Chats" },
-          { value: "comments", label: "Comments" },
+          { value: "comments", label: "Activity" },
         ]}
         selected={view}
         onSelect={(value) => {
@@ -206,9 +236,33 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
         selected={filter}
         onSelect={setFilter}
       />
+      {view === "comments" ? (
+        <InboxStatusTabs
+          values={[
+            { value: "", label: "All activity" },
+            { value: "comment", label: "Comments" },
+            { value: "mention", label: "Mentions" },
+            { value: "review", label: "Reviews" },
+          ]}
+          selected={kind}
+          onSelect={setKind}
+        />
+      ) : null}
       <AccountFilter accounts={accounts.data ?? []} value={accountId} onChange={setAccountId} />
       {accounts.data?.some((account) => account.id === accountId && account.platform === "x") ? (
         <XMessagingRecovery accountId={accountId} workspaceId={workspaceId} />
+      ) : null}
+      {view === "comments" && canEdit ? (
+        <View style={{ gap: 8 }}>
+          <Button
+            title="Mark all matching read"
+            intent="ordinary"
+            disabled={bulkReading}
+            onPress={() => void markAllRead()}
+          />
+          <BodyText>Read status is shared by everyone in this Workspace.</BodyText>
+          {bulkNotice ? <BodyText accessibilityLiveRegion="polite">{bulkNotice}</BodyText> : null}
+        </View>
       ) : null}
       {undo && canEdit ? (
         <View
@@ -307,12 +361,12 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
                       ? "Nothing archived"
                       : view === "chats"
                         ? "No chats yet"
-                        : "No comments yet"
+                        : "No activity yet"
               }
               body={
                 view === "chats"
                   ? "Conversations from enabled accounts appear here. Availability depends on the network and account permissions."
-                  : "Public comments and replies from enabled accounts appear here."
+                  : "Comments, incoming mentions and business reviews from enabled accounts appear here."
               }
             />
           ) : null
@@ -376,7 +430,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
               <View style={{ paddingHorizontal: spacing.large }}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`${item.author_name || item.author_handle}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}, ${item.body ? `${item.body}, ` : ""}On: ${item.publication_title || item.publication_excerpt || "Public post"}`}
+                  accessibilityLabel={`${activityAuthor(item)}${item.read_at ? "" : ", unread"}, ${platformLabel(item.platform)}, received by ${accountName(item.social_account_id)}, ${item.body ? `${item.body}, ` : ""}${activityContext(item)}`}
                   onPress={() => openComment(item)}
                   style={({ pressed }) => ({
                     flexDirection: "row",
@@ -386,7 +440,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
                   })}
                 >
                   <AccountAvatar
-                    name={item.author_name || item.author_handle}
+                    name={activityAuthor(item)}
                     platform={item.platform}
                     avatarUrl={item.author_avatar_url}
                     size={36}
@@ -394,7 +448,7 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
                   <View style={{ flex: 1, gap: 3 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <ContentTitle numberOfLines={1} style={{ flex: 1 }}>
-                        {item.author_name || item.author_handle}
+                        {activityAuthor(item)}
                       </ContentTitle>
                       <BodyText>{relativeTime(item.remote_created_at || item.created_at)}</BodyText>
                       {item.read_at ? null : <UnreadBadge />}
@@ -403,11 +457,10 @@ function InboxContent({ workspaceId }: { workspaceId: string }) {
                       numberOfLines={2}
                       style={item.read_at ? null : { color: colors.onSurface }}
                     >
-                      {item.body}
+                      {item.body ||
+                        (item.kind === "review" ? "Rating without written feedback" : "")}
                     </BodyText>
-                    <BodyText numberOfLines={1}>
-                      On: {item.publication_title || item.publication_excerpt || "Public post"}
-                    </BodyText>
+                    <BodyText numberOfLines={1}>{activityContext(item)}</BodyText>
                   </View>
                 </Pressable>
               </View>
@@ -484,4 +537,17 @@ function SwipeableRow({
       {children}
     </Swipeable>
   );
+}
+
+function activityContext(item: Comment) {
+  if (item.kind === "review")
+    return `Business review${item.subject?.review?.stars == null ? "" : ` · ${item.subject.review.stars}/5`}`;
+  if (item.kind === "mention") return "Incoming mention";
+  return `On: ${item.publication_title || item.publication_excerpt || "Public post"}`;
+}
+
+function activityAuthor(item: Comment): string {
+  return item.subject?.review?.anonymous
+    ? "Anonymous reviewer"
+    : item.author_name || item.author_handle || "Unknown author";
 }

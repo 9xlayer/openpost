@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import Logo from '$lib/components/Logo.svelte';
@@ -43,7 +44,7 @@
 			<a
 				href={resolve(logoHref as '/')}
 				class="inline-flex size-16 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-				aria-label="OpenPost"
+				aria-label={appBranding.profile.display_name}
 			>
 				<Logo width={64} height={50} decorative />
 			</a>

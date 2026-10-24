@@ -30,6 +30,7 @@ import (
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/idempotency"
+	"github.com/openpost/backend/internal/imageprepare"
 	"github.com/openpost/backend/internal/mediacodec/ico"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/services/auth"
@@ -48,8 +49,8 @@ import (
 )
 
 const (
-	ThumbnailSizeSM                   = 150
-	ThumbnailSizeMD                   = 400
+	ThumbnailSizeSM                   = imageprepare.ThumbnailSizeSM
+	ThumbnailSizeMD                   = imageprepare.ThumbnailSizeMD
 	MaxBufferedMediaUploadBytes int64 = 50 * 1024 * 1024
 	MaxBrandFontUploadBytes     int64 = 10 * 1024 * 1024
 	mediaUploadMaxImagePixels   int64 = 64_000_000
@@ -67,18 +68,21 @@ const (
 )
 
 type MediaHandler struct {
-	db          *bun.DB
-	storage     mediastore.BlobStorage
-	auth        *auth.Service
-	authn       middleware.Authenticator
-	signer      *mediasigner.Signer
-	quota       entitlements.Service
-	usage       *usage.Service
-	video       *videoprocessing.Service
-	publicMedia *publicurl.MediaVerifier
+	capabilityResolver *CapabilityResolverHandler
+	db                 *bun.DB
+	storage            mediastore.BlobStorage
+	auth               *auth.Service
+	authn              middleware.Authenticator
+	signer             *mediasigner.Signer
+	quota              entitlements.Service
+	usage              *usage.Service
+	video              *videoprocessing.Service
+	publicMedia        *publicurl.MediaVerifier
 }
 
 type mediaUploadBytesInput struct {
+	// PreparedImage is an internal worker receipt, never accepted from HTTP uploads.
+	PreparedImage *imageprepare.Prepared
 	// StableID is an internal durable import identity, never accepted from uploads.
 	StableID         string
 	WorkspaceID      string
@@ -297,6 +301,8 @@ type GetMediaUsageOutput struct {
 }
 
 type MediaMetadataItem struct {
+	Source             string  `json:"source" doc:"Media provenance"`
+	ParentMediaID      string  `json:"parent_media_id,omitempty" doc:"Input image for this derivative"`
 	OriginalFilename   string  `json:"original_filename,omitempty" doc:"Original uploaded filename"`
 	ID                 string  `json:"id" doc:"Media ID"`
 	MimeType           string  `json:"mime_type" doc:"MIME type"`
@@ -414,7 +420,7 @@ type CreateMediaUploadSessionInput struct {
 		MimeType         string                `json:"mime_type,omitempty" doc:"Declared MIME type"`
 		Size             int64                 `json:"size" doc:"Expected upload size in bytes"`
 		AltText          string                `json:"alt_text,omitempty" doc:"Alt text for accessibility"`
-		Source           string                `json:"source,omitempty" enum:"upload,media_copy,camera,image_editor_export,image_editor_edit,background_removal,video_editor_source,video_editor_export,stock_import,meme_generator,screenshot_template,image_generation" doc:"Media provenance"`
+		Source           string                `json:"source,omitempty" enum:"upload,media_copy,image_optimization,image_fit,camera,image_editor_export,image_editor_edit,background_removal,video_editor_source,video_editor_export,stock_import,meme_generator,screenshot_template,image_generation" doc:"Media provenance"`
 		AssetKind        string                `json:"asset_kind,omitempty" enum:"library,brand_asset,brand_font,design_preview,template_preview,project_asset" doc:"Media library role"`
 		RetentionClass   string                `json:"retention_class,omitempty" enum:"library,temporary" doc:"Keep in the library or manage as temporary post media"`
 		TagID            string                `json:"tag_id,omitempty" doc:"Optional tag to assign to this upload"`
@@ -456,6 +462,8 @@ type CompleteMediaUploadSessionInput struct {
 
 type MediaUploadResult struct {
 	ID                 string `json:"id" doc:"Media ID"`
+	Width              int    `json:"width,omitempty" doc:"Known image width in pixels"`
+	Height             int    `json:"height,omitempty" doc:"Known image height in pixels"`
 	MimeType           string `json:"mime_type" doc:"MIME type"`
 	URL                string `json:"url" doc:"URL to access the media"`
 	Size               int64  `json:"size" doc:"File size in bytes"`
@@ -483,6 +491,7 @@ type CompleteMediaUploadSessionOutput struct {
 func (h *MediaHandler) RegisterRoutes(api huma.API) {
 	h.registerMediaReadRoutes(api)
 	h.registerMediaMutationRoutes(api)
+	h.registerMediaImagePreparation(api)
 	h.registerMediaAnalysisRoutes(api)
 	h.registerMediaUploadSessionRoutes(api)
 }
@@ -1292,7 +1301,13 @@ func (h *MediaHandler) createMediaUploadSession(ctx context.Context, input *Crea
 		return nil, err
 	}
 	params.idempotencyRequest = idempotencyRequest
-	reusable, err := h.reusableMediaForClientHash(ctx, params.workspaceID, input.Body.ClientSHA256, input.Body.Size, params.mimeType, params.assetKind)
+	// Prepared images need their own input lineage, even when encoded bytes match
+	// an unrelated library asset.
+	clientHash := input.Body.ClientSHA256
+	if params.source == "image_optimization" || params.source == "image_fit" {
+		clientHash = ""
+	}
+	reusable, err := h.reusableMediaForClientHash(ctx, params.workspaceID, clientHash, input.Body.Size, params.mimeType, params.assetKind)
 	if err != nil {
 		return nil, err
 	}
@@ -2378,7 +2393,8 @@ func (h *MediaHandler) markMediaUploadFailed(ctx context.Context, mediaID string
 
 func mediaUploadResultFromAttachment(media models.MediaAttachment, deduped bool) MediaUploadResult {
 	return MediaUploadResult{
-		ID:                 media.ID,
+		ID:    media.ID,
+		Width: media.Width, Height: media.Height,
 		MimeType:           media.MimeType,
 		URL:                "/media/" + media.ID,
 		Size:               media.Size,
@@ -2451,7 +2467,7 @@ func mediaSourceSupportsDeduplication(source string) bool {
 func normalizeMediaProvenance(source, assetKind string) (string, string, error) {
 	source = defaultMediaSource(source)
 	switch source {
-	case "upload", "media_copy", "camera", "image_editor_export", "image_editor_edit", "background_removal", "image_generation",
+	case "upload", "media_copy", "image_optimization", "image_fit", "camera", "image_editor_export", "image_editor_edit", "background_removal", "image_generation",
 		"video_editor_source", "video_editor_export", "stock_import", "meme_generator", "screenshot_template":
 	default:
 		return "", "", errors.New("invalid media source")
@@ -3047,6 +3063,8 @@ func (h *MediaHandler) mediaMetadata(c echo.Context) error {
 	result := make([]MediaMetadataItem, 0, len(media))
 	for _, m := range media {
 		item := MediaMetadataItem{
+			Source:             m.Source,
+			ParentMediaID:      m.ParentMediaID,
 			OriginalFilename:   m.OriginalFilename,
 			ID:                 m.ID,
 			MimeType:           m.MimeType,
@@ -3782,7 +3800,11 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 		}
 	}
 
-	if err := validateMediaImageContent(mimeType, input.Content); err != nil {
+	if input.PreparedImage != nil {
+		if source != "image_fit" || !input.PreparedImage.Matches(input.Content, mimeType) {
+			return nil, errors.New("invalid image preparation receipt")
+		}
+	} else if err := validateMediaImageContent(mimeType, input.Content); err != nil {
 		return nil, err
 	}
 
@@ -3860,9 +3882,14 @@ func (h *MediaHandler) processUploadBytes(ctx context.Context, input mediaUpload
 	var thumbnails Thumbnails
 
 	if strings.HasPrefix(mimeType, "image/") {
-		width, height, thumbnails, err = h.processImage(ctx, input.Content, mediaID, mimeType)
-		if err != nil {
-			width, height = h.getImageDimensions(bytes.NewReader(input.Content), mimeType)
+		if input.PreparedImage != nil {
+			width, height = input.PreparedImage.Width, input.PreparedImage.Height
+			thumbnails = h.persistPreparedThumbnails(ctx, mediaID, input.PreparedImage)
+		} else {
+			width, height, thumbnails, err = h.processImage(ctx, input.Content, mediaID, mimeType)
+			if err != nil {
+				width, height = h.getImageDimensions(bytes.NewReader(input.Content), mimeType)
+			}
 		}
 		media.Width = width
 		media.Height = height

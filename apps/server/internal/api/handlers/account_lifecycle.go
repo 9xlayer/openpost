@@ -16,9 +16,11 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/openpost/backend/internal/api/middleware"
 	"github.com/openpost/backend/internal/models"
+	"github.com/openpost/backend/internal/services/appbranding"
 	"github.com/openpost/backend/internal/services/auth"
 	"github.com/openpost/backend/internal/services/identity"
 	"github.com/openpost/backend/internal/services/mediastore"
+	"github.com/openpost/backend/internal/services/organizationguard"
 	"github.com/openpost/backend/internal/services/workspacedeletion"
 	"github.com/uptrace/bun"
 )
@@ -922,6 +924,21 @@ func deletePersonalOrganizations(ctx context.Context, tx bun.Tx, organizationIDs
 	if len(organizationIDs) == 0 {
 		return nil
 	}
+	// Account closure removes sole-owner Organizations without the separate
+	// Organization deletion flow, so it owns their final branding cleanup.
+	for _, organizationID := range organizationIDs {
+		if err := organizationguard.LockOrganization(ctx, tx, organizationID); err != nil {
+			return err
+		}
+		keys, err := appbranding.StoredObjectKeys(ctx, tx, organizationID, "")
+		if err != nil {
+			return err
+		}
+		if _, err = workspacedeletion.EnqueueStorageCleanup(ctx, tx, keys); err != nil {
+			return err
+		}
+	}
+
 	for _, deletion := range []struct {
 		model any
 		where string

@@ -56,10 +56,14 @@ func validatePublicationPoll(rendition models.Rendition, segment RenditionSegmen
 }
 
 // Canonical-only API updates must refresh the same output as a composer save.
-func refreshPublicationPolls(ctx context.Context, db bun.IDB, publicationID string, previous []models.PublicationSegment) error {
+func refreshPublicationText(ctx context.Context, db bun.IDB, publicationID string, previous []models.PublicationSegment) error {
 	var canonical []models.PublicationSegment
 	if err := db.NewSelect().Model(&canonical).Where("publication_id = ?", publicationID).Order("position ASC").Scan(ctx); err != nil {
 		return err
+	}
+	previousBodies := make(map[string]string, len(previous))
+	for _, source := range previous {
+		previousBodies[source.ID] = source.Body
 	}
 	owned := map[string]*publicationpoll.Draft{}
 	for _, source := range append(append([]models.PublicationSegment{}, previous...), canonical...) {
@@ -75,14 +79,14 @@ func refreshPublicationPolls(ctx context.Context, db bun.IDB, publicationID stri
 		return err
 	}
 	for _, rendition := range renditions {
-		if err := refreshRenditionPolls(ctx, db, rendition, canonical, owned); err != nil {
+		if err := refreshRenditionText(ctx, db, rendition, canonical, owned, previousBodies); err != nil {
 			return err
 		}
 	}
 	return refreshPublicationLinks(ctx, db, publicationID, previous)
 }
 
-func refreshRenditionPolls(ctx context.Context, db bun.IDB, rendition models.Rendition, canonical []models.PublicationSegment, owned map[string]*publicationpoll.Draft) error {
+func refreshRenditionText(ctx context.Context, db bun.IDB, rendition models.Rendition, canonical []models.PublicationSegment, owned map[string]*publicationpoll.Draft, previousBodies map[string]string) error {
 	var segments []models.RenditionSegment
 	if err := db.NewSelect().Model(&segments).Where("rendition_id = ?", rendition.ID).Order("position ASC").Scan(ctx); err != nil {
 		return err
@@ -97,27 +101,25 @@ func refreshRenditionPolls(ctx context.Context, db bun.IDB, rendition models.Ren
 		segment := &segments[i]
 		previousPoll, wasOwned := owned[segment.PublicationSegmentID]
 		joinedSource := joined || len(readRenditionSourceOverrides(segment.SourceOverridesJSON)) > 0
-		if !joinedSource && !wasOwned {
-			continue
-		}
 		source, ok := byID[segment.PublicationSegmentID]
 		if !ok {
 			continue
 		}
-		refreshPollSegment(segment, rendition, source, canonical, previousPoll, joinedSource)
+		if !joinedSource && !wasOwned {
+			if !refreshOrdinaryRenditionText(segment, source, previousBodies) {
+				continue
+			}
+		} else {
+			refreshPollSegment(segment, rendition, source, canonical, previousPoll, joinedSource)
+		}
 		if publicationsource.HasSourceOverrides(segment.SourceOverridesJSON) {
 			if err := refreshJoinedSourceMedia(ctx, db, segment, canonical); err != nil {
 				return err
 			}
 			mediaChanged = true
 		}
-		if _, err := db.NewUpdate().Model(segment).Column("body", "body_override", "settings_json").Where("id = ?", segment.ID).Exec(ctx); err != nil {
+		if err := persistRenditionTextProjection(ctx, db, segment, i == 0); err != nil {
 			return err
-		}
-		if i == 0 {
-			if _, err := db.NewUpdate().Model((*models.Rendition)(nil)).Set("body = ?", segment.Body).Where("id = ?", rendition.ID).Exec(ctx); err != nil {
-				return err
-			}
 		}
 	}
 	if mediaChanged {
@@ -156,4 +158,39 @@ func refreshPollSegment(segment *models.RenditionSegment, rendition models.Rendi
 	}
 	segment.Body = body
 	segment.SettingsJSON = mustJSON(values)
+}
+
+func persistRenditionTextProjection(ctx context.Context, db bun.IDB, segment *models.RenditionSegment, first bool) error {
+	if _, err := db.NewUpdate().Model(segment).Column("body", "body_override", "settings_json").WherePK().Exec(ctx); err != nil {
+		return err
+	}
+	if !first {
+		return nil
+	}
+	_, err := db.NewUpdate().Model((*models.Rendition)(nil)).Set("body = ?", segment.Body).Where("id = ?", segment.RenditionID).Exec(ctx)
+	return err
+}
+
+func inheritedRenditionText(segment *models.RenditionSegment, source models.PublicationSegment, previous map[string]string) bool {
+	before, found := previous[source.ID]
+	if !found {
+		before = source.Body
+	}
+	return segment.BodyOverride == nil && segment.Body == before
+}
+
+// Ordinary text has one owner even when older storage omitted its override.
+func refreshOrdinaryRenditionText(segment *models.RenditionSegment, source models.PublicationSegment, previous map[string]string) bool {
+	if inheritedRenditionText(segment, source, previous) {
+		segment.Body = source.Body
+		return true
+	}
+	if segment.BodyOverride != nil {
+		return false
+	}
+	// Snapshot legacy independent text before new canonical annotations can leak
+	// into it during validation or delivery. Its existing settings remain its own.
+	body := segment.Body
+	segment.BodyOverride = &body
+	return true
 }

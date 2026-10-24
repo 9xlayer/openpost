@@ -6,6 +6,7 @@ import (
 
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/publicationlink"
 	"github.com/stretchr/testify/require"
 )
 
@@ -274,6 +275,70 @@ func TestValidateInstagramStoryWarnsWhenCollaboratorsWillBeOmitted(t *testing.T)
 	}
 }
 
+func TestValidateOutputAcceptsResolvedLinkURL(t *testing.T) {
+	// Every format that allows text without attachments must accept the URI
+	// projection produced by the composer's canonical link choice.
+	for _, capability := range All() {
+		if capability.Media.MinCount > 0 {
+			continue
+		}
+		for _, mode := range []string{"post", "custom"} {
+			t.Run(capability.Provider+"/"+capability.Profile+"/"+mode, func(t *testing.T) {
+				body := "Read this: https://example.com/post"
+				source := map[string]any{"link": map[string]any{"destinations": map[string]any{"account": map[string]any{"mode": mode, "url": "https://example.com/custom"}}}}
+				settings, err := publicationlink.Resolve(source, "account", capability.Provider, body, nil, 0)
+				require.NoError(t, err)
+				issues := ValidateOutput(capability.Provider, capability.OutputProfile, capability.Profile, body, "A title", "", nil, settings)
+				for _, issue := range issues {
+					require.NotEqual(t, "unsupported_setting", issue.Code, issue.Message)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateOutputPreservesTextFormatLinkChoices(t *testing.T) {
+	for _, profile := range []string{models.ContentProfileShortText, models.ContentProfileThread} {
+		for _, mode := range []string{"post", "custom", "no link"} {
+			t.Run(profile+"/"+mode, func(t *testing.T) {
+				body := "Read https://example.com/post"
+				choiceMode := mode
+				if mode == "no link" {
+					body, choiceMode = "A text update", "post"
+				}
+				source := map[string]any{"link": map[string]any{"destinations": map[string]any{"account": map[string]any{"mode": choiceMode, "url": "https://example.com/custom"}}}}
+				settings, err := publicationlink.Resolve(source, "account", ProviderLinkedIn, body, nil, 0)
+				require.NoError(t, err)
+				wantURL := "https://example.com/post"
+				switch mode {
+				case "custom":
+					wantURL = "https://example.com/custom"
+				case "no link":
+					wantURL = ""
+				}
+				require.Equal(t, wantURL, settings["url"])
+				output := "linkedin.post"
+				if profile == models.ContentProfileThread {
+					output = "linkedin.thread"
+				}
+				resolved := Resolve(ProviderLinkedIn, ResolveInput{RequestedOutputProfile: output, SourceURL: wantURL, Segments: []ResolveSegment{{Body: body}}})
+				require.True(t, resolved.Compatible, "%v", resolved.Issues)
+				require.Equal(t, output, resolved.OutputProfile)
+				for _, issue := range ValidateOutput(ProviderLinkedIn, output, profile, body, "", "", nil, settings) {
+					require.NotEqual(t, "error", issue.Severity, issue.Message)
+				}
+			})
+		}
+	}
+}
+
+func TestValidateOutputQuoteWithURLRetainsEntitlementError(t *testing.T) {
+	issues := ValidateOutput(ProviderX, "x.post", models.ContentProfileShortText, "Read https://example.com/post", "", "", nil,
+		map[string]any{"url": "https://example.com/post", "quote_url": "https://x.com/person/status/123"})
+	requireNoIssueCode(t, issues, "unsupported_setting")
+	requireIssueCode(t, issues, "setting_unavailable")
+}
+
 func TestResolveRequiresFormatOnlyForGenuinelyAmbiguousDestinations(t *testing.T) {
 	image := MediaItem{ID: "image-1", MimeType: "image/jpeg", Size: 1024, Width: 1080, Height: 1080, PublicURLReady: true, PublicURLStatus: 200}
 	video := MediaItem{ID: "video-1", MimeType: "video/mp4", Size: 1024, Width: 1080, Height: 1920, DurationMS: 20_000, AnalysisStatus: "ready", PublicURLReady: true, PublicURLStatus: 200}
@@ -325,6 +390,7 @@ func TestBlueskyImageValidationEnforcesProviderByteLimit(t *testing.T) {
 	}{
 		{name: "at limit", size: 2_000_000},
 		{name: "over limit", size: 2_000_001, wantIssue: true},
+		{name: "screenshot", size: 4_203_031, wantIssue: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			issues := Validate(
@@ -339,6 +405,12 @@ func TestBlueskyImageValidationEnforcesProviderByteLimit(t *testing.T) {
 
 			if test.wantIssue {
 				requireIssueCode(t, issues, "media_size")
+				for _, issue := range issues {
+					if issue.Code == "media_size" {
+						require.Equal(t, map[string]any{"size_bytes": test.size, "max_size_bytes": int64(2_000_000)}, issue.Parameters)
+						require.Contains(t, issue.Message, "MB")
+					}
+				}
 				return
 			}
 			requireNoIssueCode(t, issues, "media_size")
@@ -635,6 +707,7 @@ func TestValidateAllowsInlineURLsWithMedia(t *testing.T) {
 		{ProviderThreads, "threads.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
 		{ProviderX, "x.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
 		{ProviderMastodon, "mastodon.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
+		{ProviderPixelfed, "pixelfed.post", models.ContentProfileImagePost, []MediaItem{{ID: "image-1", MimeType: "image/jpeg", Size: 1024}}},
 		{ProviderLinkedIn, "linkedin.multi_image", models.ContentProfileCarousel, []MediaItem{
 			{ID: "image-1", MimeType: "image/jpeg", Size: 1024},
 			{ID: "image-2", MimeType: "image/jpeg", Size: 1024},
@@ -897,4 +970,12 @@ func TestYouTubeDescriptionValidationMatchesUploadContract(t *testing.T) {
 func TestYouTubeExplicitDescriptionWinsOverDestinationSetting(t *testing.T) {
 	issues := Validate(ProviderYouTube, models.ContentProfileLongVideo, "Body", "Title", strings.Repeat("😀", 1251), []MediaItem{{ID: "video", MimeType: "video/mp4", Size: 1024, AnalysisStatus: "ready"}}, map[string]any{"privacy": "private", "title": "Title", "category_id": "22", "description": "Default description"})
 	requireIssueCode(t, issues, "description_invalid")
+}
+
+func TestAccountImageLimitsReachMediaValidation(t *testing.T) {
+	resolved := Resolve(ProviderMastodon, ResolveInput{RequestedOutputProfile: "mastodon.post"})
+	ApplyAccountConstraints(&resolved, AccountConstraintInput{Constraints: map[string]any{"max_image_size_bytes": int64(1000), "max_image_pixels": int64(10000)}, Segments: []ResolveSegment{{Media: []MediaItem{{ID: "image", MimeType: "image/png", Size: 1001, Width: 200, Height: 100}}}}})
+	require.Equal(t, int64(1000), resolved.Media.MaxImageSizeBytes)
+	requireIssueCode(t, resolved.Issues, "media_size")
+	requireIssueCode(t, resolved.Issues, "media_pixels_max")
 }

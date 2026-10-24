@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { appBranding } from '$lib/app-branding.svelte';
 	import { goto } from '$app/navigation';
 	import { ThemeIcon, ProtectedIcon } from '$lib/themes/icons';
 	import { resolve } from '$app/paths';
@@ -247,7 +248,7 @@
 </script>
 
 <svelte:head>
-	<title>{m.cli_authorize_title()}</title>
+	<title>{appBranding.title(m.cli_authorize_title())}</title>
 </svelte:head>
 
 {#snippet clientIcon()}

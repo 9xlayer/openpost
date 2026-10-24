@@ -6,7 +6,7 @@ icon: Braces
 
 Use `@getopenpost/sdk` for JavaScript or TypeScript services, scripts, and CI jobs. It runs on Node.js 20 or newer, Bun, and Cloudflare Workers. It has no runtime dependencies and uses the platform `fetch` implementation.
 
-The SDK covers workspaces, accounts, Social Sets, Publications, Renditions, media, and jobs. Use the [HTTP API](/automate/api) when another language or an operation outside the SDK is a better fit.
+The SDK covers workspaces, accounts, Social Sets, Publications, Renditions, media, Inbox activity, and jobs. Use the [HTTP API](/automate/api) when another language or an operation outside the SDK is a better fit.
 
 ## Install
 
@@ -64,3 +64,26 @@ New records store `creation_source: "sdk"`. The SDK sends its client identity to
 
 - [Create and publish content](/automate/sdk/publications)
 - [Handle jobs and errors](/automate/sdk/reliability)
+
+## Read Inbox activity
+
+```ts
+const workspaceId = openpost.workspaceId();
+const reviews = await openpost.inbox.list({
+  workspace_id: workspaceId,
+  kind: "review",
+  limit: 50,
+});
+
+const receipt = await openpost.inbox.act("REVIEW_ID", {
+  workspace_id: workspaceId,
+  action: "reply",
+  message: "Thanks for your feedback",
+  client_operation_id: crypto.randomUUID(),
+});
+await openpost.jobs.wait(receipt.job_id);
+const current = await openpost.inbox.get(workspaceId, "REVIEW_ID");
+console.log(current.item.subject?.review?.owner_reply?.state);
+```
+
+Keep the operation ID if admission is interrupted, and reuse it only for the same intent. Review submission and moderation are separate. `list` and `get` read saved state; `refresh` queues collection. `setState` updates shared read/archive state, and `markRead` applies its filters across all pages. Follow `next_cursor` to read older saved activity. See the [Inbox guide](/guides/inbox).

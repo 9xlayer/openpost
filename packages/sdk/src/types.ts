@@ -1,3 +1,40 @@
+export interface MentionTarget {
+  provider: "bluesky" | "mastodon" | "linkedin";
+  kind: "person" | "page";
+  id: string;
+  authority?: string;
+  handle?: string;
+}
+export interface MentionSpan {
+  start: number;
+  end: number;
+  text: string;
+  target: MentionTarget;
+}
+export interface Mentions {
+  version: 1;
+  spans: MentionSpan[];
+}
+export interface PublicationSegmentSettings {
+  mentions?: Mentions;
+  [key: string]: unknown;
+}
+export interface MentionCandidate {
+  label: string;
+  detail: string;
+  target: MentionTarget;
+}
+export interface MentionLookup {
+  candidates: MentionCandidate[];
+  mode: "accounts" | "exact_company";
+}
+export interface RenditionSourceOverride {
+  publication_segment_id: string;
+  body_override?: string;
+  mentions?: Mentions;
+  media_inherited: boolean;
+  media?: PublicationMediaInput[];
+}
 // Hand-written shapes for the SDK v1 surface. Response types mirror the wire
 // format served by the API (apps/web/openapi.json components.schemas); new
 // contract fields are added as optional so widening never breaks consumers.
@@ -48,7 +85,7 @@ export interface PublicationSegmentInput {
   title?: string;
   description?: string;
   url?: string;
-  settings?: Record<string, unknown>;
+  settings?: PublicationSegmentSettings;
   media?: PublicationMediaInput[];
 }
 
@@ -63,6 +100,10 @@ export interface RenditionSegmentInput {
   title_override?: string | null;
   description_override?: string | null;
   url_override?: string | null;
+  source_overrides?: RenditionSourceOverride[];
+  settings?: PublicationSegmentSettings;
+  media_inherited?: boolean;
+  media?: PublicationMediaInput[];
 }
 
 export interface RenditionInput {
@@ -138,7 +179,7 @@ export interface RenditionSegment {
   title: string;
   description: string;
   media_inherited: boolean;
-  settings: Record<string, unknown>;
+  settings: PublicationSegmentSettings;
   status: string;
   error_retryable: boolean;
   media: MediaSummary[];
@@ -153,6 +194,7 @@ export interface RenditionSegment {
   error_message?: string;
   error_kind?: string;
   error_code?: string;
+  source_overrides?: RenditionSourceOverride[];
 }
 
 export interface PublicationSegment {
@@ -161,7 +203,7 @@ export interface PublicationSegment {
   body: string;
   title: string;
   description: string;
-  settings: Record<string, unknown>;
+  settings: PublicationSegmentSettings;
   media: MediaSummary[];
   url?: string;
 }
@@ -414,6 +456,12 @@ export interface MediaPage {
 }
 
 export interface MediaUploadResult {
+  width?: number;
+  height?: number;
+  parent_media_id?: string;
+  source?: string;
+  asset_kind?: string;
+  retention_class?: "library" | "temporary";
   id: string;
   mime_type: string;
   url: string;
@@ -470,4 +518,119 @@ export interface Workspace {
 export interface WaitOptions {
   timeoutMs?: number;
   intervalMs?: number;
+}
+
+export interface PrepareMediaImageInput {
+  account_id: string;
+  output_profile: string;
+  settings?: Record<string, unknown>;
+  alt_text?: string;
+}
+export interface PreparedMediaImage {
+  media: MediaUploadResult;
+  status: "ready";
+}
+
+// Stored Inbox activity, shared with the REST contract.
+export interface EngagementItem {
+  account_username?: string;
+  archived_at?: string;
+  attachments: EngagementAttachment[] | null;
+  author_avatar_url: string;
+  author_handle: string;
+  author_name: string;
+  author_remote_id: string;
+  body: string;
+  can_delete: boolean;
+  can_delete_reply?: boolean;
+  can_hide: boolean;
+  can_like: boolean;
+  can_reply: boolean;
+  can_unlike: boolean;
+  conversation_remote_id: string;
+  created_at: string;
+  deleted_at?: string;
+  edited_at?: string;
+  hidden: boolean;
+  id: string;
+  is_ours: boolean;
+  kind?: string;
+  last_seen_at: string;
+  liked: boolean;
+  parent_remote_id: string;
+  platform: string;
+  provider_post_url?: string;
+  publication_excerpt?: string;
+  publication_id?: string;
+  publication_title?: string;
+  read_at?: string;
+  remote_created_at?: string;
+  remote_id: string;
+  rendition_id?: string;
+  reply_job_id?: string;
+  reply_operation_state?: string;
+  social_account_id: string;
+  subject?: EngagementSubject;
+  updated_at: string;
+  workspace_id: string;
+}
+export interface EngagementAttachment {
+  alt_text?: string;
+  mime_type?: string;
+  name?: string;
+  thumbnail?: string;
+  type: string;
+  url: string;
+}
+export interface EngagementSubject {
+  kind: string;
+  parent?: PostReference;
+  remote_id: string;
+  review?: ReviewContext;
+  root?: PostReference;
+  url?: string;
+  visibility?: string;
+}
+export interface ReviewContext {
+  anonymous: boolean;
+  owner_reply?: ReviewReply;
+  stars?: number;
+}
+export interface ReviewReply {
+  policy_violation?: string;
+  state: string;
+  text: string;
+  updated_at?: string;
+}
+export interface PostReference {
+  cid: string;
+  uri: string;
+}
+export interface EngagementPage {
+  items: EngagementItem[] | null;
+  next_cursor?: string;
+  sync_states: EngagementSyncState[] | null;
+  total: number;
+}
+export interface EngagementDetail {
+  item: EngagementItem;
+  parents: EngagementItem[] | null;
+}
+export interface EngagementSyncState {
+  error_code: string;
+  error_message: string;
+  feed?: string;
+  id: string;
+  last_success_at?: string;
+  next_sync_at?: string;
+  platform: string;
+  rendition_id: string;
+  social_account_id: string;
+  status: string;
+}
+export interface RefreshCapabilityOutcome {
+  error_code?: string;
+  job_ids?: string[] | null;
+  queued: number;
+  status: "queued" | "failed" | "unavailable";
 }
