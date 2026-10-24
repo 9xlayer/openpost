@@ -65,6 +65,7 @@ function AnalyticsDashboard() {
   const [trend, setTrend] = useState<"views" | "engagement" | "followers">("views");
   const [accountId, setAccountId] = useState("");
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
+  const selectedRangeLabel = from && to ? `${from} – ${to}` : rangeLabel(days);
   const query = useAnalytics({ days, from, to, accountId });
   const overview = query.data?.pages[0];
   // The filter offers exactly the accounts the overview describes, using the
@@ -100,7 +101,7 @@ function AnalyticsDashboard() {
         }}
       >
         <Button
-          title={from && to ? `${from} – ${to}` : rangeLabel(days)}
+          title={selectedRangeLabel}
           intent="ordinary"
           accessibilityHint="Choose the analytics date range"
           onPress={() => {
@@ -265,7 +266,7 @@ function AnalyticsDashboard() {
               <Metric
                 label="Published"
                 value={number.format(overview.summary.published)}
-                detail={`${days} days`}
+                detail={selectedRangeLabel}
               />
             </View>
             <View style={{ gap: spacing.small }}>
