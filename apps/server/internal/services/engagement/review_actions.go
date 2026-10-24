@@ -319,7 +319,8 @@ func acceptedReviewContinuation(cause error) error {
 
 // Prerequisites can fail before Execute reloads an earlier provider receipt.
 // Keep recovering accepted or uncertain sends, including while tokens refresh.
-func (s *Service) continueKnownReviewReceipt(ctx context.Context, jobID string, failure error) error {
+func (s *Service) continueReviewOperation(ctx context.Context, input engagementActionJob, failure error) error {
+	jobID := input.ReviewJobID
 	if _, pending := providerwrite.IsPending(failure); pending || errors.Is(failure, providerwrite.ErrReconciliationExpired) || errors.Is(failure, sql.ErrNoRows) || jobID == "" {
 		return failure
 	}
@@ -327,13 +328,21 @@ func (s *Service) continueKnownReviewReceipt(ctx context.Context, jobID string, 
 	defer cancel()
 	var attempt models.ProviderWriteAttempt
 	err := s.db.NewSelect().Model(&attempt).Where("operation_id=?", "engagement-review:"+jobID).Order("attempt_number DESC").Limit(1).Scan(recordCtx)
-	if errors.Is(err, sql.ErrNoRows) {
-		return failure
-	}
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return acceptedReviewContinuation(errors.Join(failure, err))
 	}
 	if attempt.Status == providerwrite.StatusAccepted || (attempt.RetrySafety == string(platform.PublishRetryReconcileOnly) && attempt.ProviderReference != "") {
+		return acceptedReviewContinuation(failure)
+	}
+	// An early dispatch failure can precede the inner release defer. Keep an
+	// admitted, still-active intent recoverable even when no send was attempted.
+	// Definitively rejected or unsent failures released by the action stay terminal.
+	var operation models.EngagementReviewOperation
+	err = s.db.NewSelect().Model(&operation).Where("item_id=?", input.ItemID).Where("job_id=?", jobID).Scan(recordCtx)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return acceptedReviewContinuation(errors.Join(failure, err))
+	}
+	if err == nil && operation.State == "active" {
 		return acceptedReviewContinuation(failure)
 	}
 	return failure

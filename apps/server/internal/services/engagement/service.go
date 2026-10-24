@@ -868,7 +868,7 @@ func (s *Service) performEngagementAction(ctx context.Context, input engagementA
 	if input.ReviewJobID != "" {
 		defer func() {
 			if resultErr != nil {
-				resultErr = s.continueKnownReviewReceipt(ctx, input.ReviewJobID, resultErr)
+				resultErr = s.continueReviewOperation(ctx, input, resultErr)
 			}
 		}()
 	}

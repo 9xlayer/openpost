@@ -14,6 +14,7 @@ import (
 	"github.com/openpost/backend/internal/platform"
 	"github.com/openpost/backend/internal/services/providerwrite"
 	"github.com/stretchr/testify/require"
+	"github.com/uptrace/bun"
 )
 
 const reviewLocation = "accounts/123/locations/456"
@@ -330,4 +331,34 @@ func TestAcceptedReviewRecoversFromReadAndLocalCommitFailuresWithoutResending(t 
 			require.Equal(t, "complete", detail.Item.ReplyOperationState)
 		})
 	}
+}
+
+type cancelOneReviewQuery struct{ next bool }
+
+func (h *cancelOneReviewQuery) BeforeQuery(ctx context.Context, _ *bun.QueryEvent) context.Context {
+	if h.next {
+		h.next = false
+		unavailable, cancel := context.WithCancel(ctx)
+		cancel()
+		return unavailable
+	}
+	return ctx
+}
+func (*cancelOneReviewQuery) AfterQuery(context.Context, *bun.QueryEvent) {}
+func TestUnsentReviewDispatchFailureRetainsItsActiveIntent(t *testing.T) {
+	s, provider := reviewTestService(t)
+	id, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "Thanks", "initial-read")
+	require.NoError(t, err)
+	var job models.Job
+	require.NoError(t, s.db.NewSelect().Model(&job).Where("id=?", id).Scan(t.Context()))
+	job.Status, job.Attempts, job.LockedAt = "processing", 1, time.Now().UTC()
+	_, err = s.db.NewUpdate().Model(&job).Column("status", "attempts", "locked_at").WherePK().Exec(t.Context())
+	require.NoError(t, err)
+	s.db.AddQueryHook(&cancelOneReviewQuery{next: true})
+	err = s.HandleJob(providerwrite.WithJobExecution(t.Context(), id, job.Attempts, job.LockedAt), job.Type, job.Payload)
+	_, pending := providerwrite.IsPending(err)
+	require.True(t, pending, "a transient first read cannot strand an admitted unsent review: %v", err)
+	require.Zero(t, provider.writes)
+	require.NoError(t, runReviewAction(t, s, id))
+	require.Equal(t, 1, provider.writes)
 }
