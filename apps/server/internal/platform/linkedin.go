@@ -850,7 +850,7 @@ var linkedInPlaintextEscaper = strings.NewReplacer(
 	`~`, `\~`,
 )
 
-var linkedInTextToken = regexp.MustCompile(`(?i)https?://[^\s]+|www\.[^\s]+|[#＃][\p{L}\p{M}\p{N}]+`)
+var linkedInTextToken = regexp.MustCompile(`(?i)https?://[^\s\p{Z}\x{0085}]+|www\.[^\s\p{Z}\x{0085}]+|[#＃][\p{L}\p{M}\p{N}]+`)
 
 // encodeLinkedInPlaintext escapes ordinary text and emits native hashtags.
 // URLs and user-supplied mention/template syntax remain plaintext.

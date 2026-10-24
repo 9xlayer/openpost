@@ -496,6 +496,7 @@ func TestLinkedInCreatePostPreservesHashtagsWithoutAcceptingMarkup(t *testing.T)
 		{"unicode", "#café #日本語 #cafe\u0301 ＃中文", "{hashtag|\\#|café} {hashtag|\\#|日本語} {hashtag|\\#|cafe\u0301} {hashtag|＃|中文}"},
 		{"emoji boundary", "❤️#love 1️⃣#first", `❤️{hashtag|\#|love} 1️⃣{hashtag|\#|first}`},
 		{"ordinary hashes", "C# C#Sharp # #123 foo#bar ##tag", `C\# C\#Sharp \# \#123 foo\#bar \#\#tag`},
+		{"unicode spaces after urls", "https://example.com\u00a0#OpenPost www.example.com\u3000#Go", "https://example.com\u00a0{hashtag|\\#|OpenPost} www.example.com\u3000{hashtag|\\#|Go}"},
 		{"urls", "https://example.com/#docs HTTPS://example.com?q=#tag www.example.com/#guide /page#section", `https://example.com/\#docs HTTPS://example.com?q=\#tag www.example.com/\#guide /page\#section`},
 		{"reserved markup", `@[Name](urn:li:person:123) {hashtag|#|fake} <x> *bold* _word_ ~hi~ \`, `\@\[Name\]\(urn:li:person:123\) \{hashtag\|\#\|fake\} \<x\> \*bold\* \_word\_ \~hi\~ \\`},
 		{"underscore ends tag", "#machine_learning", `{hashtag|\#|machine}\_learning`},
