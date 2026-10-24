@@ -34,6 +34,8 @@
     "apps/web/static/pwa-cache-cleanup.js",
     "apps/marketing/src/routes/**/+*.{js,ts,svelte}",
     "apps/marketing/functions/**/*.{js,jsx,ts,tsx}",
+    // The launch film is loaded by its HTML page and run by its renderer.
+    "apps/marketing/launch-film/*.{js,mjs}",
     // Fumadocs content roots (MDX pages are entries, not dead files).
     "apps/docs/content/docs/**/*.mdx",
     "apps/docs/*.{mjs,ts}",

@@ -16,6 +16,7 @@
     pkgs.sqlite
     pkgs.ffmpeg
     pkgs.gifsicle
+    pkgs.uv
     pkgs.wget
     pkgs.docker
     pkgs.actionlint
