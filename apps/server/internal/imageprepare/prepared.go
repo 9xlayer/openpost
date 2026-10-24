@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/disintegration/imaging"
+	"github.com/openpost/backend/internal/imagethumbnail"
 )
 
 const ThumbnailSizeSM = 150
@@ -51,7 +52,7 @@ func completePreparation(content []byte, mime string) (*Prepared, error) {
 		name string
 		size int
 	}{{"sm", ThumbnailSizeSM}, {"md", ThumbnailSizeMD}} {
-		thumbnail := imaging.Thumbnail(decoded, variant.size, variant.size, imaging.Lanczos)
+		thumbnail := imagethumbnail.Square(decoded, variant.size)
 		var encoded bytes.Buffer
 		if err := imaging.Encode(&encoded, thumbnail, thumbnailFormat); err != nil {
 			return nil, err

@@ -4,6 +4,52 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.29.4] - 2026-10-24
+
+### Fixed
+
+- LinkedIn text posts and root-plus-comment posts accept inherited and custom links without changing the selected format. X quotes containing a link retain the quote access check instead of reporting an unsupported setting.
+- Links no longer block X, Threads, Mastodon, or Pixelfed threads. Pixelfed also accepts URL text alongside media and generated text cards.
+- Threads keeps links in the caption when a text or GIF attachment is selected, rather than adding a conflicting link card. Explicit conflicting cards still require correction.
+- Keep connected-account profile pictures in OpenPost storage so Facebook, Instagram, Threads, and other provider image links cannot expire underneath them. New connections and reconnects save pictures locally, and Refresh profile repairs existing expired pictures without reconnecting the account. Failed downloads preserve the previous picture.
+- Add, remove, and edit image alt text from account previews, including Stories, carousel images, and attachments beyond a preview's visible limit. Account changes preserve shared images and thread segments.
+- Keep image descriptions, tags, and focal points when preparing or restoring images. Editing image settings creates an account variant without changing its text.
+- Show readable image size limits and a direct media editing action when reviewing publishing issues.
+- Text posts with a link in them publish to Threads, Mastodon and other providers that take a native link again. Publish checks rejected the link the composer had attached with "url is not supported for Threads post" (or Mastodon post), so posts without media that contained a URL were blocked.
+- Preserve native LinkedIn hashtags while keeping URLs, ordinary hash characters, and user-supplied markup safely escaped.
+- Respect Mastodon instance image byte and pixel limits during capability validation and image preparation.
+- Avoid oversized intermediate images when creating previews of very narrow or tall media, including fitted images and text-card avatars.
+- The TypeScript SDK reports its installed package version in HTTP request headers.
+- Plain-text clients retain unchanged selected mentions and safely remap surrounding edits. Ambiguous edits fail atomically, and publication revisions include identity changes.
+- Canonical-only edits refresh inherited destination text while keeping independent legacy variants. Structured CLI creation retains every source when a destination joins a thread.
+- Added web and native mention editors with keyboard suggestions, stable selections, structured copying, undo and exact thread text. Updated API, CLI, MCP, SDK and n8n contracts, plus authoring guides.
+- Native AI assist keeps generated destination text in the fields people review, and rendition summaries mirror their first saved output.
+- Show a visible keyboard focus indicator on tab panels, including appearance settings.
+- Keep keyboard focus on the correct thread part after reordering post editors.
+- Explain exhausted YouTube daily upload quotas and ask users to reschedule instead of repeatedly retrying them as short-term rate limits.
+
+### Added
+
+- Optimize PNG attachments automatically in the web composer without quality loss. Fit oversized images for one account when resizing or quality reduction is needed, while retaining the original.
+- Mark all matching Inbox comments read across every page on web, mobile, and the API. The action respects the current filters and shared Workspace read state.
+- Collect incoming Bluesky, Mastodon and Threads mentions independently of posts created in OpenPost. Collect Google Business reviews, including anonymous and rating-only reviews, with durable pagination and account permission checks.
+- Google Business owner replies use durable, serialized operations and expose moderation state separately from submission acceptance. Review collection preserves existing Inbox read and archive state.
+- Web, mobile, API, CLI, SDK and MCP expose incoming mentions and reviews with matching filters, shared read state and inspectable action receipts. Mobile can explicitly select a fitted image copy for one account without replacing the original.
+- Fit images to connected destination limits through the API and MCP, using the same server operation as the composer. Each ready copy retains its original and must be selected explicitly. Animated images are rejected instead of flattened.
+- Selected people and company mentions carry stable provider identities through publication segments, destination versions and joined threads. HTTP, MCP and typed contracts support the same UTF-8 byte annotations and account-scoped lookup for Bluesky, Mastodon and LinkedIn company pages.
+
+### Security
+
+- Update Echo to v4.16.1 for fixes to WebSocket proxy handling and bounded request-body middleware.
+- Update the application's Zod validation dependency to 4.6.7. Check the remaining legacy toolchain dependencies and unused SvelteKit APIs before admitting their advisory exceptions in release audits.
+- Update Undici and serialize-javascript in the build toolchain for newly disclosed denial-of-service, integrity-check and serialization issues. Re-review the dependency admission while retaining its exact lockfile and editor-boundary checks.
+
+### Changed
+
+- Update the pinned SEO audit toolkit to v2.5.0, including bounded fetches, browser request isolation, and hardened Google OAuth handling.
+- Social account connection choices show mainstream networks first, with smaller networks later and dev/null last in the built-in provider list.
+- Explain TikTok Direct Post approval restrictions in self-hosting guides and the provider app form, including internal-use ineligibility and private-only posting before audit.
+
 ## [7.27.2] - 2026-10-22
 
 ### Fixed

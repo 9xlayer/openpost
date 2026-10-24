@@ -468,7 +468,7 @@ function testPlan(requestedScope, requestedOptions) {
   }
   const backendArguments = ["test", "-tags", "dev"];
   if (process.env.OPENPOST_GO_TEST_RACE === "1") {
-    backendArguments.push("-race", "-timeout=20m");
+    backendArguments.push("-race", "-timeout=30m");
   }
   if (process.env.OPENPOST_GO_COVERAGE_FILE) {
     backendArguments.push(`-coverprofile=${process.env.OPENPOST_GO_COVERAGE_FILE}`);

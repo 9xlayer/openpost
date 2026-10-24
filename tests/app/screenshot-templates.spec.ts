@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, createWorkspace, registerUser, expectPostText } from "./helpers";
 
 async function openTemplates(page: Page) {
   const { token } = await registerUser(
@@ -177,7 +177,8 @@ test("composer round trip preserves text and attaches the template export", asyn
   await page.getByRole("button", { name: "Messages", exact: true }).click();
   await page.getByRole("textbox", { name: "Message 1", exact: true }).fill("A custom screenshot.");
   await page.getByRole("button", { name: "Return to post", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+  await expectPostText(
+    page.getByRole("textbox", { name: "Post text", exact: true }),
     "Keep this publication and its text.",
     { timeout: 15000 },
   );
@@ -588,7 +589,8 @@ test("animated meme returns to its publication through Templates", async ({ page
   });
   await page.getByRole("button", { name: "Try again", exact: true }).click();
 
-  await expect(page.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+  await expectPostText(
+    page.getByRole("textbox", { name: "Post text", exact: true }),
     "An animated launch joke.",
     { timeout: 30000 },
   );

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspace, registerUser } from "./helpers";
+import { createWorkspace, registerUser, expectPostText } from "./helpers";
 
 test.describe.configure({ timeout: 60_000 });
 
@@ -95,8 +95,8 @@ test("a reviewed thread survives sign-in and becomes an editable draft with its 
   await popup.reload();
   const editors = popup.getByRole("textbox", { name: "Post text", exact: true });
   await expect(editors).toHaveCount(2);
-  await expect(editors.nth(0)).toHaveValue(`${first}\n\n1/2`);
-  await expect(editors.nth(1)).toHaveValue(`${second}\n\n2/2`);
+  await expectPostText(editors.nth(0), `${first}\n\n1/2`);
+  await expectPostText(editors.nth(1), `${second}\n\n2/2`);
   await expect(popup).toHaveURL(/\/publications\//);
   const id = new URL(popup.url()).pathname.split("/").at(-1);
   const headers = { Authorization: `Bearer ${auth.token}` };
@@ -183,7 +183,8 @@ test("preview files and alt text reach the same draft after a failed upload is r
   await expect(popup.getByRole("alert")).toContainText("The draft could not be prepared");
   rejectUpload = false;
   await popup.getByRole("button", { name: "Try again", exact: true }).click();
-  await expect(popup.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+  await expectPostText(
+    popup.getByRole("textbox", { name: "Post text", exact: true }),
     "A preview with our original image.",
   );
   await expect(popup).toHaveURL(/\/publications\//);
@@ -209,10 +210,10 @@ test("preview files and alt text reach the same draft after a failed upload is r
   );
   await nextPopup.getByRole("link", { name: "New post", exact: true }).click();
   const emptyEditor = nextPopup.getByRole("textbox", { name: "Post text", exact: true });
-  await expect(emptyEditor).toHaveValue("");
+  await expectPostText(emptyEditor, "");
   releaseUpload();
   await expect(
     nextPopup.getByRole("img", { name: "A yellow tram in Lisbon.", exact: true }),
   ).toHaveCount(0);
-  await expect(emptyEditor).toHaveValue("");
+  await expectPostText(emptyEditor, "");
 });
