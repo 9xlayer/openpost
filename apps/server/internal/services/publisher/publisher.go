@@ -1454,6 +1454,10 @@ func (s *Service) recordRenditionMediaUploadFailure(
 		state.RetryClassification = platform.MediaRetryReconcile
 	case state.OpaqueState != "":
 		state.RetryClassification = platform.MediaRetrySafeResume
+	case ClassifyFailure(uploadErr).Code == "youtube:daily_upload_quota_exceeded":
+		// The provider rejected creation before accepting media. Keep a later
+		// explicit attempt possible while the publication policy stops retries.
+		state.RetryClassification = platform.MediaRetrySafeResume
 	default:
 		state.RetryClassification = platform.MediaRetryTerminal
 	}
