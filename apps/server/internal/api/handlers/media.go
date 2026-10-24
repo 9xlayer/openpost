@@ -462,6 +462,8 @@ type CompleteMediaUploadSessionInput struct {
 
 type MediaUploadResult struct {
 	ID                 string `json:"id" doc:"Media ID"`
+	Width              int    `json:"width,omitempty" doc:"Known image width in pixels"`
+	Height             int    `json:"height,omitempty" doc:"Known image height in pixels"`
 	MimeType           string `json:"mime_type" doc:"MIME type"`
 	URL                string `json:"url" doc:"URL to access the media"`
 	Size               int64  `json:"size" doc:"File size in bytes"`
@@ -2391,7 +2393,8 @@ func (h *MediaHandler) markMediaUploadFailed(ctx context.Context, mediaID string
 
 func mediaUploadResultFromAttachment(media models.MediaAttachment, deduped bool) MediaUploadResult {
 	return MediaUploadResult{
-		ID:                 media.ID,
+		ID:    media.ID,
+		Width: media.Width, Height: media.Height,
 		MimeType:           media.MimeType,
 		URL:                "/media/" + media.ID,
 		Size:               media.Size,

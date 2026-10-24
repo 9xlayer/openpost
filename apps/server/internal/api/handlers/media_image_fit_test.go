@@ -48,6 +48,16 @@ func TestPrepareImageUsesDestinationAndPreservesOriginalAcrossRESTAndMCP(t *test
 		var output PrepareMediaImageOutput
 		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &output.Body))
 		require.Equal(t, "ready", output.Body.Status)
+		var dimensions struct {
+			Media struct {
+				Width  int `json:"width"`
+				Height int `json:"height"`
+			} `json:"media"`
+		}
+		require.NoError(t, json.Unmarshal(response.Body.Bytes(), &dimensions))
+		require.Positive(t, dimensions.Media.Width)
+		require.Positive(t, dimensions.Media.Height)
+		require.LessOrEqual(t, dimensions.Media.Width*dimensions.Media.Height, 2048)
 		require.Equal(t, "image/jpeg", output.Body.Media.MimeType)
 		var fitted models.MediaAttachment
 		require.NoError(t, srv.db.NewSelect().Model(&fitted).Where("id = ?", output.Body.Media.ID).Scan(t.Context()))
