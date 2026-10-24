@@ -113,6 +113,7 @@ exports.createInboxSamples = ({ workspace, accounts, media, now, SystemDate }) =
       remote_id: "accounts/1/locations/2/reviews/3",
       kind: "review",
       social_account_id: "google-account",
+      account_username: "Studio",
       platform: "googlebusiness",
       rendition_id: undefined,
       publication_id: undefined,

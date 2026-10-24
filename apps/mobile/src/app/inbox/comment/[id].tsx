@@ -49,6 +49,10 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
   const queryClient = useQueryClient();
   const online = useInboxOnline();
   const isReview = comment?.kind === "review";
+  const activityName = isReview ? "review" : comment?.kind === "mention" ? "mention" : "comment";
+  const authorName = comment?.subject?.review?.anonymous
+    ? "Anonymous reviewer"
+    : comment?.author_name || comment?.author_handle || "Unknown author";
   const reviewActive = isReview && comment?.reply_operation_state === "active";
   const replyable = canEdit && !!comment?.can_reply && !comment.deleted_at && !comment.archived_at;
   const reply = usePublicReply(workspaceId, id, replyable);
@@ -110,7 +114,9 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
       await setCommentState(workspaceId, id, { archived }, canEdit);
       if (!mounted.current || !apiRequestIdentityIsCurrent(identity)) return;
       setUndoArchive(undo ? null : !!comment.archived_at);
-      setNotice(archived ? "Comment archived" : "Comment reopened");
+      setNotice(
+        `${activityName[0].toUpperCase()}${activityName.slice(1)} ${archived ? "archived" : "reopened"}`,
+      );
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: inboxQueryKeys.engagementRoot(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: inboxQueryKeys.summary(workspaceId) }),
@@ -308,15 +314,17 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                   }}
                 >
                   <AccountAvatar
-                    name={comment.author_name || comment.author_handle}
+                    name={authorName}
                     platform={comment.platform}
                     avatarUrl={comment.author_avatar_url}
                     size={40}
                   />
                   <View style={{ flex: 1 }}>
-                    <ContentTitle>{comment.author_name || comment.author_handle}</ContentTitle>
+                    <ContentTitle>{authorName}</ContentTitle>
                     <BodyText>
-                      {comment.author_handle} · {platformLabel(comment.platform)}
+                      {[comment.author_handle, platformLabel(comment.platform)]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </BodyText>
                   </View>
                 </View>
@@ -345,7 +353,7 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
               {canEdit ? (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                   <Button
-                    title={comment.archived_at ? "Reopen comment" : "Archive comment"}
+                    title={`${comment.archived_at ? "Reopen" : "Archive"} ${activityName}`}
                     intent="ordinary"
                     disabled={busy || moderation.checking}
                     onPress={() => void archive(!comment.archived_at)}
@@ -473,7 +481,8 @@ function CommentContent({ workspaceId, id }: { workspaceId: string; id: string }
                 ? reply.history.map((receipt) => (
                     <View key={receipt.operationId} style={{ gap: 6, paddingVertical: 8 }}>
                       <ContentTitle>
-                        Failed reply · {new Date(receipt.createdAt).toLocaleString()}
+                        {receipt.state === "confirmed" ? "Accepted reply" : "Failed reply"} ·{" "}
+                        {new Date(receipt.createdAt).toLocaleString()}
                       </ContentTitle>
                       <BodyText selectable>{receipt.body}</BodyText>
                       {receipt.error ? <BodyText>{receipt.error}</BodyText> : null}
