@@ -15,6 +15,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -848,10 +850,50 @@ var linkedInPlaintextEscaper = strings.NewReplacer(
 	`~`, `\~`,
 )
 
-// encodeLinkedInPlaintext prevents LinkedIn's little text parser from treating
-// ordinary post content as mentions, templates, or other markup.
+var linkedInTextToken = regexp.MustCompile(`(?i)https?://[^\s]+|www\.[^\s]+|[#＃][\p{L}\p{M}\p{N}]+`)
+
+// encodeLinkedInPlaintext escapes ordinary text and emits native hashtags.
+// URLs and user-supplied mention/template syntax remain plaintext.
 func encodeLinkedInPlaintext(content string) string {
-	return linkedInPlaintextEscaper.Replace(content)
+	var encoded strings.Builder
+	previous := 0
+	for _, match := range linkedInTextToken.FindAllStringIndex(content, -1) {
+		start, end := match[0], match[1]
+		encoded.WriteString(linkedInPlaintextEscaper.Replace(content[previous:start]))
+		token := content[start:end]
+		if linkedInHashtag(content, start, token) {
+			sign, size := utf8.DecodeRuneInString(token)
+			encoded.WriteString("{hashtag|")
+			encoded.WriteString(linkedInPlaintextEscaper.Replace(string(sign)))
+			encoded.WriteByte('|')
+			encoded.WriteString(token[size:])
+			encoded.WriteByte('}')
+		} else {
+			encoded.WriteString(linkedInPlaintextEscaper.Replace(token))
+		}
+		previous = end
+	}
+	encoded.WriteString(linkedInPlaintextEscaper.Replace(content[previous:]))
+	return encoded.String()
+}
+
+func linkedInHashtag(content string, start int, token string) bool {
+	sign, _ := utf8.DecodeRuneInString(token)
+	if sign != '#' && sign != '＃' {
+		return false
+	}
+	if start > 0 {
+		preceding, _ := utf8.DecodeLastRuneInString(content[:start])
+		if unicode.IsLetter(preceding) || unicode.IsNumber(preceding) || (unicode.IsMark(preceding) && preceding != '\ufe0f' && preceding != '\u20e3') || strings.ContainsRune("/=&＃#\\", preceding) {
+			return false
+		}
+	}
+	for _, char := range token {
+		if unicode.IsLetter(char) {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *LinkedInAdapter) postComment(ctx context.Context, accessToken, actorURN, activityURN, content string) (string, error) {
