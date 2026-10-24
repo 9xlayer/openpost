@@ -1313,7 +1313,41 @@ func youtubeAPIError(response *youtubeHTTPResponse) error {
 	if response.statusCode >= 200 && response.statusCode < 300 {
 		return nil
 	}
-	return NewHTTPError(response.statusCode, response.header, response.body)
+	err := NewHTTPError(response.statusCode, response.header, response.body)
+	if (response.statusCode == http.StatusTooManyRequests || response.statusCode == http.StatusForbidden) && youtubeDailyUploadQuota(response.body) {
+		providerErr := err.(*HTTPError)
+		providerErr.Code = "youtube:daily_upload_quota_exceeded"
+		providerErr.RetryAfter = 0
+	}
+	return err
+}
+
+// Inspect only Google's typed quota identity, never provider messages or project
+// identifiers. Keep this mapping local to YouTube responses.
+func youtubeDailyUploadQuota(body []byte) bool {
+	if len(body) > 256*1024 {
+		return false
+	}
+	var payload struct {
+		Error struct {
+			Details []struct {
+				Type     string `json:"@type"`
+				Metadata struct {
+					Service    string `json:"service"`
+					QuotaLimit string `json:"quota_limit"`
+				} `json:"metadata"`
+			} `json:"details"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return false
+	}
+	for _, detail := range payload.Error.Details {
+		if detail.Type == "type.googleapis.com/google.rpc.ErrorInfo" && detail.Metadata.Service == "youtube.googleapis.com" && detail.Metadata.QuotaLimit == "defaultVideoInsertPerDayPerProject" {
+			return true
+		}
+	}
+	return false
 }
 
 func youtubeNextUploadOffset(rangeHeader string) int64 {

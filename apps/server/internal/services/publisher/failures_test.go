@@ -131,3 +131,13 @@ func TestProviderPrerequisiteFailuresGiveProviderGuidance(t *testing.T) {
 		require.NotEqual(t, FailureActionBilling, failure.Action)
 	}
 }
+
+func TestYouTubeDailyUploadQuotaRequiresRescheduling(t *testing.T) {
+	failure := ClassifyFailure(&platform.HTTPError{StatusCode: 429, Code: "youtube:daily_upload_quota_exceeded", RetryAfter: time.Minute})
+	require.Equal(t, FailureRateLimited, failure.Kind)
+	require.False(t, failure.Retryable)
+	require.Zero(t, failure.RetryAfter)
+	require.Equal(t, FailureActionEdit, failure.Action)
+	require.Contains(t, failure.Message, "daily upload quota")
+	require.Contains(t, failure.Message, "Reschedule")
+}

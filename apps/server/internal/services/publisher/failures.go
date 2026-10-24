@@ -144,7 +144,7 @@ func classifyProviderHTTPFailure(err error) (Failure, bool) {
 	if !errors.As(err, &providerErr) {
 		return Failure{}, false
 	}
-	if failure, ok := classifyMetaFailure(providerErr); ok {
+	if failure, ok := classifyProviderSpecificFailure(providerErr); ok {
 		return failure, true
 	}
 	code := strings.ToLower(providerErr.Code)
@@ -194,6 +194,17 @@ func classifyProviderHTTPFailure(err error) (Failure, bool) {
 	failure.Subcode = providerErr.Subcode
 	failure.TraceID = providerErr.TraceID
 	return failure, true
+}
+
+func classifyProviderSpecificFailure(providerErr *platform.HTTPError) (Failure, bool) {
+	if providerErr.Code == "youtube:daily_upload_quota_exceeded" {
+		failure := failureForKind(FailureRateLimited, providerErr.Code, providerErr.StatusCode, 0)
+		failure.Message = "YouTube's daily upload quota for this application is exhausted. Reschedule this post after the daily quota resets."
+		failure.Retryable = false
+		failure.Action = FailureActionEdit
+		return failure, true
+	}
+	return classifyMetaFailure(providerErr)
 }
 
 func providerFailureKindByStatus(status int, code string) string {
