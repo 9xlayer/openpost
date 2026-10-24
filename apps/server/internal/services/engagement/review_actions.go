@@ -107,14 +107,17 @@ func (s *Service) performReviewAction(ctx context.Context, item models.Engagemen
 		// the local Inbox update. Read its current truth; never resend it.
 		remote, err := reviews.GetReview(ctx, token, authority.Account.AccountID, item.RemoteID)
 		if err != nil {
-			return err
+			return acceptedReviewContinuation(err)
 		}
 		if remote.Subject.Review == nil {
-			return fmt.Errorf("review reply context is missing")
+			return acceptedReviewContinuation(fmt.Errorf("review reply context is missing"))
 		}
 		result.reply, result.known = remote.Subject.Review.OwnerReply, true
 	}
-	return s.commitReviewReply(ctx, item, input.ReviewJobID, result.reply)
+	if err := s.commitReviewReply(ctx, item, input.ReviewJobID, result.reply); err != nil {
+		return acceptedReviewContinuation(err)
+	}
+	return nil
 }
 
 func (s *Service) sendReviewAction(ctx context.Context, control *providerwrite.Control, reviews platform.ReviewAdapter, token string, item models.EngagementItem, input engagementActionJob, authority activityAuthority, result *reviewActionResult) (platform.PublishResult, error) {
@@ -291,16 +294,14 @@ func (s *Service) releaseRejectedReviewOperation(ctx context.Context, item model
 		if err := organizationguard.LockWorkspace(ctx, tx, item.WorkspaceID); err != nil {
 			return err
 		}
-		locked, err := tx.NewUpdate().Model((*models.Job)(nil)).Set("id=id").Where("id=? AND status='processing' AND attempts=? AND locked_at=?", jobID, execution.Attempt, execution.LockedAt).Exec(ctx)
-		if err != nil {
-			return err
-		}
-		rows, err := locked.RowsAffected()
-		if err != nil || rows != 1 {
+		if err := providerwrite.RequireCurrentJobExecution(ctx, tx, jobID); err != nil {
+			if errors.Is(err, providerwrite.ErrWriteInProgress) {
+				return nil
+			}
 			return err
 		}
 		var attempt models.ProviderWriteAttempt
-		err = tx.NewSelect().Model(&attempt).Where("operation_id=?", "engagement-review:"+jobID).Order("attempt_number DESC").Limit(1).Scan(ctx)
+		err := tx.NewSelect().Model(&attempt).Where("operation_id=?", "engagement-review:"+jobID).Order("attempt_number DESC").Limit(1).Scan(ctx)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
@@ -310,4 +311,8 @@ func (s *Service) releaseRejectedReviewOperation(ctx context.Context, item model
 		_, err = tx.NewUpdate().Model((*models.EngagementReviewOperation)(nil)).Set("state='rejected'").Set("updated_at=?", s.now()).Where("item_id=? AND job_id=? AND state='active'", item.ID, jobID).Exec(ctx)
 		return err
 	})
+}
+
+func acceptedReviewContinuation(cause error) error {
+	return &providerwrite.OutcomeError{Kind: string(platform.PublishSubmissionPending), ProviderState: "review_reply", RetryAfter: time.Minute, Err: cause}
 }

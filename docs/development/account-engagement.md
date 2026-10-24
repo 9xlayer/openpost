@@ -42,5 +42,8 @@ without replacing existing item IDs or opaque reply references.
 PostgreSQL drops the Rendition non-null constraint. SQLite rebuilds the installed
 table on one connection with foreign keys disabled outside the transaction,
 preserves columns/indexes/triggers and verifies foreign keys before commit.
+Migration 173 adds a stable job lease generation. Acquiring a job increments it;
+heartbeats update only the liveness timestamp. Provider fences and local review
+commits compare the acquisition generation, including when retry counters reset.
 Both fresh chains and upgrades are covered by migration tests; PostgreSQL tests
 use `OPENPOST_TEST_POSTGRES_URL` with an isolated schema.

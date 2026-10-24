@@ -279,14 +279,8 @@ func (s *Service) activityCheckpoint(ctx context.Context, db bun.IDB, input acco
 	if state.Generation != input.Generation || state.GrantID != authority.Account.OAuthGrantID || !state.GrantConsentedAt.Equal(authority.GrantConsentedAt) || !state.FeatureDecidedAt.Equal(authority.FeatureDecidedAt) {
 		return state, authority, adapter, errActivityChanged
 	}
-	if execution, ok := providerwrite.JobExecutionFromContext(ctx); ok {
-		current, err := db.NewSelect().Model((*models.Job)(nil)).Where("id=? AND status='processing' AND attempts=? AND locked_at=?", execution.ID, execution.Attempt, execution.LockedAt).Exists(ctx)
-		if err != nil {
-			return state, authority, adapter, err
-		}
-		if !current {
-			return state, authority, adapter, errActivityChanged
-		}
+	if err := providerwrite.RequireCurrentJobExecution(ctx, db, ""); err != nil {
+		return state, authority, adapter, errActivityChanged
 	}
 	return state, authority, adapter, nil
 }

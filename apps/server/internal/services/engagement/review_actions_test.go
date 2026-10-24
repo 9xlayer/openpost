@@ -23,6 +23,7 @@ type reviewProvider struct {
 	listingReply           *inboxactivity.ReviewReply
 	ambiguous              bool
 	afterWrite             func()
+	getErr                 error
 	writes, deletes, reads int
 }
 
@@ -37,6 +38,9 @@ func (p *reviewProvider) ListAccountActivity(context.Context, string, string, pl
 }
 func (p *reviewProvider) GetReview(context.Context, string, string, string) (platform.AccountActivityItem, error) {
 	p.reads++
+	if p.getErr != nil {
+		return platform.AccountActivityItem{}, p.getErr
+	}
 	return normalizedReview(p.reply), nil
 }
 func (p *reviewProvider) SetReviewReply(_ context.Context, _, _, _, message string) (inboxactivity.ReviewReply, error) {
@@ -267,6 +271,42 @@ func TestReviewReplyRejectsStaleWorkerBeforeSendAndCommit(t *testing.T) {
 			detail, err := s.GetEngagement(t.Context(), Actor{UserID: "u"}, "w", "review")
 			require.NoError(t, err)
 			require.Nil(t, detail.Item.Subject.Review.OwnerReply, "a stale worker cannot commit Inbox state")
+		})
+	}
+}
+
+func TestAcceptedReviewRecoversFromReadAndLocalCommitFailuresWithoutResending(t *testing.T) {
+	for _, phase := range []string{"recovery read", "local commit"} {
+		t.Run(phase, func(t *testing.T) {
+			s, provider := reviewTestService(t)
+			id, err := s.QueueEngagementActionReceipt(t.Context(), Actor{UserID: "u"}, "review", "reply", "Thanks", "recover")
+			require.NoError(t, err)
+			if phase == "recovery read" {
+				provider.afterWrite = func() {
+					_, err := s.db.NewUpdate().Model((*models.Job)(nil)).Set("status='failed'").Where("id=?", id).Exec(t.Context())
+					require.NoError(t, err)
+				}
+				require.Error(t, runReviewAction(t, s, id))
+				provider.afterWrite = nil
+				provider.getErr = &platform.HTTPError{StatusCode: 429}
+			} else {
+				_, err = s.db.ExecContext(t.Context(), `CREATE TRIGGER reject_review_save BEFORE UPDATE ON engagement_items BEGIN SELECT RAISE(FAIL,'storage unavailable'); END`)
+				require.NoError(t, err)
+			}
+			err = runReviewAction(t, s, id)
+			_, pending := providerwrite.IsPending(err)
+			require.True(t, pending, "accepted writes must retain a durable continuation after %s: %v", phase, err)
+			provider.getErr = nil
+			if phase == "local commit" {
+				_, err = s.db.ExecContext(t.Context(), `DROP TRIGGER reject_review_save`)
+				require.NoError(t, err)
+			}
+			require.NoError(t, runReviewAction(t, s, id))
+			require.Equal(t, 1, provider.writes)
+			detail, err := s.GetEngagement(t.Context(), Actor{UserID: "u"}, "w", "review")
+			require.NoError(t, err)
+			require.Equal(t, "Thanks", detail.Item.Subject.Review.OwnerReply.Text)
+			require.Equal(t, "complete", detail.Item.ReplyOperationState)
 		})
 	}
 }

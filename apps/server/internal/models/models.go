@@ -2612,18 +2612,19 @@ type TelegramPublishReceipt struct {
 type Job struct {
 	bun.BaseModel `bun:"table:jobs"`
 
-	ID          string    `bun:",pk" json:"id"`
-	Type        string    `bun:",notnull" json:"type"` // 'publish_post', 'refresh_token', 'media_cleanup', 'storage_delete'
-	ScopeID     string    `bun:"scope_id,notnull,default:''" json:"scope_id,omitempty"`
-	DedupeKey   string    `bun:"dedupe_key,notnull,default:''" json:"dedupe_key,omitempty"`
-	Payload     string    `bun:",notnull" json:"payload"`
-	Status      string    `bun:",default:'pending'" json:"status"` // 'pending', 'processing', 'completed', 'failed'
-	RunAt       time.Time `bun:",notnull" json:"run_at"`
-	Attempts    int       `bun:",default:0" json:"attempts"`
-	MaxAttempts int       `bun:",default:3" json:"max_attempts"`
-	LastError   string    `json:"last_error"`
-	LockedAt    time.Time `bun:"locked_at,nullzero" json:"locked_at"`
-	LockedBy    string    `json:"locked_by"`
+	ID              string    `bun:",pk" json:"id"`
+	Type            string    `bun:",notnull" json:"type"` // 'publish_post', 'refresh_token', 'media_cleanup', 'storage_delete'
+	ScopeID         string    `bun:"scope_id,notnull,default:''" json:"scope_id,omitempty"`
+	DedupeKey       string    `bun:"dedupe_key,notnull,default:''" json:"dedupe_key,omitempty"`
+	Payload         string    `bun:",notnull" json:"payload"`
+	Status          string    `bun:",default:'pending'" json:"status"` // 'pending', 'processing', 'completed', 'failed'
+	RunAt           time.Time `bun:",notnull" json:"run_at"`
+	Attempts        int       `bun:",default:0" json:"attempts"`
+	MaxAttempts     int       `bun:",default:3" json:"max_attempts"`
+	LastError       string    `json:"last_error"`
+	LockedAt        time.Time `bun:"locked_at,nullzero" json:"locked_at"`
+	LockedBy        string    `json:"locked_by"`
+	LeaseGeneration int64     `bun:"lease_generation,notnull,default:0" json:"-"`
 }
 
 type PostVariant struct {

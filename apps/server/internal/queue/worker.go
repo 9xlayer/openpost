@@ -622,6 +622,7 @@ func (w *BackgroundWorker) failAmbiguousStaleJobs(ctx context.Context, cutoff ti
 				Set("locked_at = NULL").
 				Set("locked_by = ''").
 				Where("id = ? AND status = ? AND locked_by = ?", job.ID, jobStatusProcessing, job.LockedBy).
+				Where("lease_generation=?", job.LeaseGeneration).
 				Where("locked_at IS NOT NULL AND locked_at <= ?", cutoff).
 				Exec(ctx)
 			if err != nil {
@@ -654,7 +655,7 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 				LIMIT 1
 			)
 			UPDATE jobs
-			SET status = ?, locked_at = CURRENT_TIMESTAMP, locked_by = ?
+			SET status = ?, locked_at = CURRENT_TIMESTAMP, locked_by = ?, lease_generation = lease_generation + 1
 			FROM next_job
 			WHERE jobs.id = next_job.id AND jobs.status = ?
 			RETURNING jobs.*
@@ -662,7 +663,7 @@ func (w *BackgroundWorker) processNextJobIfAvailable(ctx context.Context) bool {
 	} else {
 		err = w.db.NewRaw(`
 		UPDATE jobs
-		SET status = ?, locked_at = CURRENT_TIMESTAMP, locked_by = ?
+		SET status = ?, locked_at = CURRENT_TIMESTAMP, locked_by = ?, lease_generation = lease_generation + 1
 		WHERE status = ? AND id = (
 			SELECT id FROM jobs
 			WHERE status = ? AND run_at <= CURRENT_TIMESTAMP AND (? OR type IN (?)) AND (? OR type NOT IN (?))
@@ -691,7 +692,7 @@ func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job)
 	heartbeatDone := make(chan struct{})
 	go func() {
 		defer close(heartbeatDone)
-		w.heartbeatJobLock(heartbeatCtx, job.ID)
+		w.heartbeatJobLock(heartbeatCtx, job)
 	}()
 	processErr := w.executeJobGuarded(ctx, job)
 	cancelHeartbeat()
@@ -713,6 +714,7 @@ func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job)
 			Set("locked_at = NULL").
 			Set("locked_by = ''").
 			Where("id = ? AND status = ? AND locked_by = ?", job.ID, jobStatusProcessing, w.workerID).
+			Where("lease_generation=?", job.LeaseGeneration).
 			Exec(finalizeCtx); dbErr != nil {
 			log.Printf("[Worker %s] failed to reschedule recurring job %s: %v\n", w.workerID, job.ID, dbErr)
 		}
@@ -725,6 +727,7 @@ func (w *BackgroundWorker) handleLockedJob(ctx context.Context, job *models.Job)
 		Set("locked_at = NULL").
 		Set("locked_by = ''").
 		Where("id = ? AND status = ? AND locked_by = ?", job.ID, jobStatusProcessing, w.workerID).
+		Where("lease_generation=?", job.LeaseGeneration).
 		Exec(finalizeCtx)
 	if dbErr != nil {
 		log.Printf("[Worker %s] failed to mark job %s as completed: %v\n", w.workerID, job.ID, dbErr)
@@ -791,6 +794,7 @@ func (w *BackgroundWorker) finishFailedJob(ctx context.Context, job *models.Job,
 			Set("locked_at = NULL").
 			Set("locked_by = ''").
 			Where("id = ? AND status = ? AND locked_by = ?", job.ID, jobStatusProcessing, w.workerID).
+			Where("lease_generation=?", job.LeaseGeneration).
 			Exec(ctx)
 		if err != nil {
 			return 0, err
@@ -1072,7 +1076,7 @@ func (w *BackgroundWorker) hasPendingSuccessor(ctx context.Context, jobType, exc
 	return exists
 }
 
-func (w *BackgroundWorker) heartbeatJobLock(ctx context.Context, jobID string) {
+func (w *BackgroundWorker) heartbeatJobLock(ctx context.Context, job *models.Job) {
 	ticker := time.NewTicker(processingHeartbeat)
 	defer ticker.Stop()
 	for {
@@ -1083,16 +1087,17 @@ func (w *BackgroundWorker) heartbeatJobLock(ctx context.Context, jobID string) {
 			if _, err := w.db.NewUpdate().
 				Model((*models.Job)(nil)).
 				Set("locked_at = ?", time.Now().UTC()).
-				Where("id = ? AND status = ? AND locked_by = ?", jobID, jobStatusProcessing, w.workerID).
+				Where("id = ? AND status = ? AND locked_by = ?", job.ID, jobStatusProcessing, w.workerID).
+				Where("lease_generation=?", job.LeaseGeneration).
 				Exec(ctx); err != nil && ctx.Err() == nil {
-				log.Printf("[Worker %s] failed to heartbeat job %s: %v\n", w.workerID, jobID, err)
+				log.Printf("[Worker %s] failed to heartbeat job %s: %v\n", w.workerID, job.ID, err)
 			}
 		}
 	}
 }
 
 func (w *BackgroundWorker) executeJob(ctx context.Context, job *models.Job) error {
-	ctx = publisher.WithJobExecution(ctx, job.ID, job.Attempts, job.LockedAt)
+	ctx = publisher.WithJobExecution(ctx, job.ID, job.Attempts, job.LockedAt, job.LeaseGeneration)
 	definition, ok := jobregistry.Lookup(job.Type)
 	if !ok {
 		return fmt.Errorf("unsupported job type %q", job.Type)

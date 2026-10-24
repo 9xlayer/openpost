@@ -386,7 +386,13 @@ func (s *publisherLifecycleTestServer) authorizedPublicationJobWithIntent(
 		"readiness_intent":           string(intent),
 	})
 	require.NoError(t, err)
-	return WithJobExecution(ctx, s.jobID, 1, time.Now().UTC()), string(payload)
+	job := models.Job{ID: s.jobID, Type: "publish_publication", Payload: string(payload), RunAt: s.runAt, Status: "pending"}
+	_, err = s.db.NewInsert().Model(&job).On("CONFLICT (id) DO NOTHING").Exec(ctx)
+	require.NoError(t, err)
+	_, err = s.db.NewUpdate().Model(&job).Set("status='processing'").Set("locked_at=?", time.Now().UTC()).Set("lease_generation=lease_generation+1").WherePK().Exec(ctx)
+	require.NoError(t, err)
+	require.NoError(t, s.db.NewSelect().Model(&job).WherePK().Scan(ctx))
+	return WithJobExecution(ctx, s.jobID, job.Attempts, job.LockedAt, job.LeaseGeneration), string(payload)
 }
 
 func TestCertificationIntentJobPayloadCannotEscalateProductionReceipt(t *testing.T) {
