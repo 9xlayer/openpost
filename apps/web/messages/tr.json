@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "Eşleşen tümünü okundu işaretle",
 	"engagement_mark_all_read_success": "Eşleşen {count} öğe okundu olarak işaretlendi.",
 	"engagement_shared_read_help": "Okunma durumu bu çalışma alanındaki herkesle paylaşılır.",
+	"editor_mentions": "Bahsetmeler",
+	"editor_searching": "Aranıyor…",
+	"editor_no_matches": "Eşleşen hesap yok",
+	"editor_lookup_failed": "Bahsetmeler aranamadı. Yeniden deneyin.",
+	"editor_retry": "Yeniden dene",
 	"app_branding_title": "Uygulama markası",
 	"app_branding_description": "Uygulamada gösterilen adı ve logoları seçin. Giriş sayfaları, e-postalar ve yüklü uygulama simgeleri OpenPost markasını korur.",
 	"app_branding_home": "{name} ana sayfası",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "{name} kaldır",
 	"app_branding_light": "Açık",
 	"app_branding_dark": "Koyu",
-	"app_branding_appearance_description": "Temaları ve uygulama markasını özelleştirin."
+	"editor_permission_required": "Sağlayıcı bahsetme aramasına izin vermedi. Hesap ve uygulama izinlerini kontrol edin.",
+	"editor_rate_limited": "Bahsetme araması istek sınırına ulaştı. Daha sonra yeniden deneyin.",
+	"app_branding_appearance_description": "Temaları ve uygulama markasını özelleştirin.",
+	"editor_mention_limit": "Bir gönderi en fazla 50 seçili bahsetme içerebilir.",
+	"editor_mention_account_required": "Bu hesap için bahsetmeleri seçin veya düz metin yapıştırın."
 }

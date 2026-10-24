@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "Segna tutti i risultati come letti",
 	"engagement_mark_all_read_success": "{count} elementi corrispondenti segnati come letti.",
 	"engagement_shared_read_help": "Lo stato di lettura è condiviso con tutti in questo spazio di lavoro.",
+	"editor_mentions": "Menzioni",
+	"editor_searching": "Ricerca…",
+	"editor_no_matches": "Nessun account trovato",
+	"editor_lookup_failed": "Impossibile cercare menzioni. Riprova.",
+	"editor_retry": "Riprova",
 	"app_branding_title": "Identità dell’app",
 	"app_branding_description": "Scegli il nome e i loghi mostrati nell’app. Le pagine di accesso, le email e le icone dell’app installata mantengono il marchio OpenPost.",
 	"app_branding_home": "Home di {name}",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "Rimuovi {name}",
 	"app_branding_light": "Chiaro",
 	"app_branding_dark": "Scuro",
-	"app_branding_appearance_description": "Personalizza i temi e l’identità dell’app."
+	"editor_permission_required": "Il provider non ha autorizzato la ricerca di menzioni. Controlla i permessi dell’account e dell’app.",
+	"editor_rate_limited": "La ricerca di menzioni ha raggiunto il limite di richieste. Riprova più tardi.",
+	"app_branding_appearance_description": "Personalizza i temi e l’identità dell’app.",
+	"editor_mention_limit": "Un post può includere fino a 50 menzioni selezionate.",
+	"editor_mention_account_required": "Scegli le menzioni per questo account o incolla testo semplice."
 }

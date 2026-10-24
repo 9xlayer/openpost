@@ -36,6 +36,14 @@ Create an unpublished launch draft for the Company workspace and its connected L
 
 Inspect the saved Post in OpenPost. Check each destination Variant before asking the assistant to schedule it. To adapt one message for several channels, use the `adapt_post_variants` prompt with the saved `post_id` and the `variants[]` arguments.
 
+## Select mentions
+
+Use `lookup_mentions` with `workspace_id`, `account_id` and `query` before drafting a selected mention. It requires read access and searches through that account's grant. For LinkedIn, supply the exact company page vanity name.
+
+Pass the returned target and label in publication segment `settings.mentions`, with version 1 and UTF-8 byte ranges. `create_post` and `update_post` accept ordered `segments` and structured rendition segments, including joined source overrides. Keep selected identities paired with their text when changing a thread. See the [HTTP mention contract](/docs/automate/api/publications#select-people-and-company-mentions).
+
+Choose identities separately for each network. Ask the user to choose when search returns several plausible accounts, and report provider permission or rate-limit errors. Do not substitute an account with a similar name.
+
 ## Schedule approved work
 
 Use `mcp:full` and provide an exact time or ask for an available posting slot:

@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "Marcar correspondências como lidas",
 	"engagement_mark_all_read_success": "{count} itens correspondentes marcados como lidos.",
 	"engagement_shared_read_help": "O status de leitura é compartilhado com todos neste espaço de trabalho.",
+	"editor_mentions": "Menções",
+	"editor_searching": "Pesquisando…",
+	"editor_no_matches": "Nenhuma conta encontrada",
+	"editor_lookup_failed": "Não foi possível pesquisar menções. Tente novamente.",
+	"editor_retry": "Tentar novamente",
 	"app_branding_title": "Marca da aplicação",
 	"app_branding_description": "Escolha o nome e os logotipos apresentados na aplicação. As páginas de início de sessão, os emails e os ícones da aplicação instalada mantêm a marca OpenPost.",
 	"app_branding_home": "Página inicial de {name}",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "Remover {name}",
 	"app_branding_light": "Claro",
 	"app_branding_dark": "Escuro",
-	"app_branding_appearance_description": "Personalize os temas e a marca do aplicativo."
+	"editor_permission_required": "O provedor não concedeu acesso à busca de menções. Verifique as permissões da conta e do aplicativo.",
+	"editor_rate_limited": "A busca de menções atingiu o limite de solicitações. Tente mais tarde.",
+	"app_branding_appearance_description": "Personalize os temas e a marca do aplicativo.",
+	"editor_mention_limit": "Uma publicação pode incluir até 50 menções selecionadas.",
+	"editor_mention_account_required": "Escolha menções para esta conta ou cole texto simples."
 }

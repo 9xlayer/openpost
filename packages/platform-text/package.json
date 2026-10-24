@@ -6,6 +6,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./mentions": {
+      "types": "./src/mentions.ts",
+      "default": "./src/mentions.ts"
     }
   },
   "scripts": {

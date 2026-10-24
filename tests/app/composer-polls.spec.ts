@@ -205,7 +205,7 @@ for (const width of [1280, 390, 320]) {
         await expect(poll.getByText(/This account cannot publish polls/)).toBeVisible();
         await poll.getByRole("button", { name: "Text version", exact: true }).click();
         await expect(poll.getByText(/Text only, without voting buttons/)).toBeVisible();
-        await expect(poll.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+        await expect(poll.getByRole("textbox", { name: "Post text", exact: true })).toHaveText(
           "Help us plan.",
         );
         await expect(
@@ -365,8 +365,9 @@ for (const width of [1280, 390, 320]) {
           name: "Post text",
           exact: true,
         });
-        await expect(editor).toHaveValue(
+        await expect(editor).toHaveText(
           "Help us plan.\n\nWould you use this?\n1. Yes, sometimes\n2. No",
+          { useInnerText: true },
         );
         await expect(poll.getByRole("button", { name: "Poll version", exact: true })).toContainText(
           "Post without poll",

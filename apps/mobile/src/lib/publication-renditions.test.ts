@@ -339,3 +339,36 @@ for (const settings of [null, undefined, {}]) {
     expect(attachmentRequirement(settings)).toBeUndefined();
   });
 }
+
+test("legacy destination text edits remap selected identities without stale annotations", () => {
+  const target = {
+    provider: "bluesky" as const,
+    kind: "person" as const,
+    id: "did:plc:ewvi7nxzyoun6zhxrhs64oiz",
+  };
+  const chosen = {
+    ...rendition,
+    platform: "bluesky",
+    segments: [
+      {
+        ...rendition.segments![0]!,
+        source_overrides: undefined,
+        body: "Hi @alice",
+        body_override: "Hi @alice",
+        settings: {
+          mentions: { version: 1 as const, spans: [{ start: 3, end: 9, text: "@alice", target }] },
+        },
+      },
+    ],
+  };
+  const input = mobileRenditionInput(
+    { segments: [], renditions: [chosen] },
+    "founder",
+    { "segment:0": "🚀 Hi @alice" },
+    [],
+  );
+  expect(input.segments?.[0]?.settings?.mentions).toEqual({
+    version: 1,
+    spans: [{ start: 8, end: 14, text: "@alice", target }],
+  });
+});

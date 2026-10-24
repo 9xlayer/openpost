@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "将所有匹配项标为已读",
 	"engagement_mark_all_read_success": "已将 {count} 个匹配项标为已读。",
 	"engagement_shared_read_help": "已读状态与此工作区中的所有人共享。",
+	"editor_mentions": "提及",
+	"editor_searching": "搜索中…",
+	"editor_no_matches": "没有匹配的账号",
+	"editor_lookup_failed": "无法搜索提及，请重试。",
+	"editor_retry": "重试",
 	"app_branding_title": "应用品牌",
 	"app_branding_description": "选择应用内显示的名称和标志。登录页面、邮件和已安装应用的图标仍使用 OpenPost 品牌。",
 	"app_branding_home": "{name} 首页",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "移除{name}",
 	"app_branding_light": "浅色",
 	"app_branding_dark": "深色",
-	"app_branding_appearance_description": "自定义主题和应用品牌。"
+	"editor_permission_required": "平台未授予提及搜索权限，请检查账号和应用权限。",
+	"editor_rate_limited": "提及搜索请求已达上限，请稍后重试。",
+	"app_branding_appearance_description": "自定义主题和应用品牌。",
+	"editor_mention_limit": "每篇帖子最多可包含 50 个已选择的提及。",
+	"editor_mention_account_required": "请选择此账号的提及，或粘贴纯文本。"
 }

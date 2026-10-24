@@ -103,3 +103,34 @@ test("an alt-only edit still emits segments so the description is saved", () => 
     },
   ]);
 });
+
+test("canonical thread edits keep byte ranges and explicit mention removal", () => {
+  const target = {
+    provider: "bluesky" as const,
+    kind: "person" as const,
+    id: "did:plc:ewvi7nxzyoun6zhxrhs64oiz",
+  };
+  const mentions = { version: 1 as const, spans: [{ start: 8, end: 14, text: "@alice", target }] };
+  const source = { ...first, body: "🚀 Hi @alice", settings: { mentions } };
+  const pub = {
+    source_text: source.body,
+    segments: [
+      source,
+      {
+        ...reply,
+        body: "@alice",
+        settings: {
+          mentions: { version: 1 as const, spans: [{ start: 0, end: 6, text: "@alice", target }] },
+        },
+      },
+    ],
+  };
+  const update = publicationContentUpdate(pub, "A 🚀 Hi @alice", ["photo"], undefined, {
+    reply: { body: "@alice", mentions: [] },
+  });
+  expect(update.segments?.[0]?.settings?.mentions).toEqual({
+    version: 1,
+    spans: [{ start: 10, end: 16, text: "@alice", target }],
+  });
+  expect(update.segments?.[1]?.settings?.mentions).toEqual({ version: 1, spans: [] });
+});

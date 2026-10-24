@@ -1,3 +1,8 @@
+import {
+  readMentionMetadata,
+  remapMentionMetadata,
+  type PostTextValue,
+} from "@openpost/platform-text/mentions";
 import type { components } from "@openpost/api-contract";
 
 type Publication = components["schemas"]["PublicationResponse"];
@@ -104,10 +109,22 @@ export function mobileRenditionInput(
   accountId: string,
   textEdits: RenditionTextEdits | undefined,
   attachments: readonly Attachment[],
+  annotatedEdits?: Readonly<Record<string, PostTextValue>>,
 ): components["schemas"]["RenditionInput"] {
   const rendition = publication.renditions?.find((item) => item.social_account_id === accountId);
   if (!rendition)
     return {
+      ...(annotatedEdits?.body?.mentions !== undefined
+        ? {
+            segments: [
+              {
+                publication_segment_id: publication.segments?.[0]?.id,
+                body_override: annotatedEdits.body.body,
+                settings: { mentions: { version: 1, spans: annotatedEdits.body.mentions } },
+              },
+            ],
+          }
+        : {}),
       social_account_id: accountId,
       ...(textEdits?.body === undefined ? {} : { body: textEdits.body }),
     };
@@ -120,12 +137,15 @@ export function mobileRenditionInput(
         )
       : [];
     const media = withAttachments((segment.media ?? []).map(mediaInput), supplied);
-    let body = textEdits?.[`segment:${segment.position}`] ?? segment.body_override;
+    const textEdit = annotatedEdits?.[`segment:${segment.position}`];
+    let body =
+      textEdit?.body ?? textEdits?.[`segment:${segment.position}`] ?? segment.body_override;
     let sources = segment.source_overrides;
     if (sources?.length) {
       sources = sources.map((source) => ({ ...source }));
       for (const canonical of publication.segments ?? []) {
-        const caption = textEdits?.[`source:${canonical.id}`];
+        const annotated = annotatedEdits?.[`source:${canonical.id}`];
+        const caption = annotated?.body ?? textEdits?.[`source:${canonical.id}`];
         const addsMedia = supplied.length > 0 && canonical.id === publication.segments?.[0]?.id;
         if (caption === undefined && !addsMedia) continue;
         let source = sources.find((item) => item.publication_segment_id === canonical.id);
@@ -133,7 +153,16 @@ export function mobileRenditionInput(
           source = { publication_segment_id: canonical.id, media_inherited: true };
           sources.push(source);
         }
-        if (caption !== undefined) source.body_override = caption;
+        if (caption !== undefined) {
+          source.body_override = caption;
+          if (annotated?.mentions !== undefined)
+            source.mentions = { version: 1, spans: annotated.mentions };
+          else {
+            const previous = joinedSourceMentionValue(publication, segment, canonical.id);
+            const metadata = remapMentionMetadata(previous.body, caption, previous.metadata);
+            if (metadata) source.mentions = metadata;
+          }
+        }
         if (addsMedia) {
           const sourceMedia = source.media_inherited
             ? (canonical.media ?? []).map(mediaInput)
@@ -160,7 +189,14 @@ export function mobileRenditionInput(
       title_override: segment.title_override,
       description_override: segment.description_override,
       url_override: segment.url_override,
-      settings: segment.settings,
+      settings: renditionMentionSettings(
+        publication,
+        rendition,
+        segment,
+        body,
+        textEdit,
+        (sources?.length ?? 0) > 0,
+      ),
       media_inherited: supplied.length ? false : segment.media_inherited,
       ...(supplied.length || !segment.media_inherited ? { media } : {}),
       ...(sources?.length ? { source_overrides: sources } : {}),
@@ -198,4 +234,67 @@ export function renditionImages(rendition: Rendition): Media[] {
       media.filter((item) => item.mime_type.startsWith("image/")).map((item) => [item.id, item]),
     ).values(),
   ];
+}
+
+function joinedSourceMentionValue(
+  publication: PublicationContent,
+  segment: RenditionSegment,
+  id: string,
+) {
+  const canonical = publication.segments?.find((source) => source.id === id);
+  const own = segment.source_overrides?.find((source) => source.publication_segment_id === id);
+  const body = own?.body_override ?? canonical?.body ?? "";
+  return {
+    body,
+    metadata: readMentionMetadata(
+      body,
+      own?.body_override !== undefined ? own.mentions : canonical?.settings?.mentions,
+    ),
+  };
+}
+export function mobileRenditionTextValue(
+  publication: PublicationContent,
+  accountId: string,
+  key: string,
+  body: string,
+): PostTextValue {
+  const rendition = publication.renditions?.find((item) => item.social_account_id === accountId);
+  let metadata;
+  if (key.startsWith("source:")) {
+    const segment = rendition?.segments?.find((segment) => segment.source_overrides?.length);
+    if (segment) metadata = joinedSourceMentionValue(publication, segment, key.slice(7)).metadata;
+  } else {
+    const segment = rendition?.segments?.find((segment) => key === `segment:${segment.position}`);
+    const source = publication.segments?.find(
+      (source) => source.id === segment?.publication_segment_id,
+    );
+    metadata = readMentionMetadata(
+      body,
+      segment?.body_override !== undefined
+        ? segment.settings?.mentions
+        : source?.settings?.mentions,
+    );
+  }
+  return { body, mentions: metadata?.spans };
+}
+
+function renditionMentionSettings(
+  publication: PublicationContent,
+  rendition: Rendition,
+  segment: RenditionSegment,
+  body: string | undefined,
+  edited: PostTextValue | undefined,
+  joined: boolean,
+) {
+  if (joined) return segment.settings;
+  if (edited?.mentions !== undefined)
+    return { ...segment.settings, mentions: { version: 1 as const, spans: edited.mentions } };
+  if (body === undefined) return segment.settings;
+  const previous = authoredSegmentBody(publication, rendition, segment);
+  const metadata = remapMentionMetadata(
+    previous,
+    body,
+    readMentionMetadata(previous, segment.settings?.mentions),
+  );
+  return metadata ? { ...segment.settings, mentions: metadata } : segment.settings;
 }

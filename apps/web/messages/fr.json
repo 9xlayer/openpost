@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "Marquer les résultats comme lus",
 	"engagement_mark_all_read_success": "{count} éléments correspondants marqués comme lus.",
 	"engagement_shared_read_help": "Le statut de lecture est partagé avec tous les membres de cet espace de travail.",
+	"editor_mentions": "Mentions",
+	"editor_searching": "Recherche…",
+	"editor_no_matches": "Aucun compte trouvé",
+	"editor_lookup_failed": "Impossible de rechercher des mentions. Réessayez.",
+	"editor_retry": "Réessayer",
 	"app_branding_title": "Identité de l’application",
 	"app_branding_description": "Choisissez le nom et les logos affichés dans l’application. Les pages de connexion, les emails et les icônes de l’application installée conservent l’identité OpenPost.",
 	"app_branding_home": "Accueil de {name}",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "Supprimer {name}",
 	"app_branding_light": "Clair",
 	"app_branding_dark": "Sombre",
-	"app_branding_appearance_description": "Personnalisez les thèmes et l’identité de l’application."
+	"editor_permission_required": "Le fournisseur ne permet pas la recherche de mentions. Vérifiez les autorisations du compte et de l’application.",
+	"editor_rate_limited": "La recherche de mentions a atteint sa limite de requêtes. Réessayez plus tard.",
+	"app_branding_appearance_description": "Personnalisez les thèmes et l’identité de l’application.",
+	"editor_mention_limit": "Une publication peut inclure jusqu’à 50 mentions sélectionnées.",
+	"editor_mention_account_required": "Choisissez des mentions pour ce compte ou collez du texte brut."
 }

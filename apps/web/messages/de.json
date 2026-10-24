@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "Alle Treffer als gelesen markieren",
 	"engagement_mark_all_read_success": "{count} passende Einträge als gelesen markiert.",
 	"engagement_shared_read_help": "Der Lesestatus wird mit allen in diesem Arbeitsbereich geteilt.",
+	"editor_mentions": "Erwähnungen",
+	"editor_searching": "Suche läuft…",
+	"editor_no_matches": "Keine passenden Konten",
+	"editor_lookup_failed": "Erwähnungen konnten nicht gesucht werden. Versuche es erneut.",
+	"editor_retry": "Erneut versuchen",
 	"app_branding_title": "App-Branding",
 	"app_branding_description": "Wähle den Namen und die Logos in der App. Anmeldeseiten, E-Mails und Symbole der installierten App behalten das OpenPost-Branding.",
 	"app_branding_home": "{name}-Startseite",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "{name} entfernen",
 	"app_branding_light": "Hell",
 	"app_branding_dark": "Dunkel",
-	"app_branding_appearance_description": "Passe Designs und App-Branding an."
+	"editor_permission_required": "Der Anbieter hat die Suche nach Erwähnungen nicht freigegeben. Prüfe die Konto- und App-Berechtigungen.",
+	"editor_rate_limited": "Die Suche nach Erwähnungen hat ihr Anfragelimit erreicht. Versuche es später erneut.",
+	"app_branding_appearance_description": "Passe Designs und App-Branding an.",
+	"editor_mention_limit": "Ein Beitrag kann bis zu 50 ausgewählte Erwähnungen enthalten.",
+	"editor_mention_account_required": "Wähle Erwähnungen für dieses Konto oder füge einfachen Text ein."
 }

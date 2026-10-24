@@ -1,6 +1,8 @@
+import { readMentionMetadata, type MentionMetadata } from '@openpost/platform-text/mentions';
 import { readLinkDraft, type LinkDraft } from './links';
 import { readSharedPoll, type SharedPoll } from './polls';
 export interface PostItem {
+	mentions?: MentionMetadata;
 	poll?: SharedPoll;
 	link?: LinkDraft;
 	id?: string;
@@ -10,6 +12,7 @@ export interface PostItem {
 }
 
 export interface VariantPost {
+	mentions?: MentionMetadata;
 	content: string;
 	mediaIds: string[];
 	contentInherited?: boolean;
@@ -59,6 +62,7 @@ export function encodeThreadDraft(posts: PostItem[], variants: ThreadVariantMap 
 		p: posts.map((p) => ({
 			k: p.key,
 			c: p.content,
+			mentions: p.mentions,
 			m: p.mediaIds,
 			poll: p.poll,
 			link: p.link
@@ -123,6 +127,7 @@ function parseThreadPost(value: ThreadDraftJSONValue): DecodedThreadDraft['posts
 	}
 	return {
 		key: typeof value.k === 'string' && value.k ? value.k : generatePostKey(),
+		mentions: readMentionMetadata(String(value.c ?? ''), value.mentions),
 		content: value.c === undefined || value.c === null ? '' : String(value.c),
 		mediaIds: Array.isArray(value.m) ? value.m.map(String) : [],
 		poll: readSharedPoll(value),
@@ -144,6 +149,7 @@ function parseVariantPost(value: ThreadDraftJSONValue): VariantPost {
 	if (isThreadDraftRecord(value)) {
 		const variant: VariantPost = {
 			content: String(value.content ?? value.c ?? ''),
+			mentions: readMentionMetadata(String(value.content ?? value.c ?? ''), value.mentions),
 			mediaIds: Array.isArray(value.mediaIds)
 				? value.mediaIds.map(String)
 				: Array.isArray(value.m)
@@ -168,6 +174,7 @@ export function getDraftSnapshot(posts: PostItem[]): string {
 	return JSON.stringify(
 		posts.map((p) => ({
 			content: p.content,
+			mentions: p.mentions,
 			mediaIds: p.mediaIds,
 			poll: p.poll,
 			link: p.link
@@ -189,6 +196,7 @@ export function makeVariantRecord(sourcePosts: PostItem[]): Record<string, Varia
 			post.key,
 			{
 				content: post.content,
+				mentions: post.mentions,
 				mediaIds: [...post.mediaIds],
 				contentInherited: true,
 				mediaInherited: true
@@ -207,6 +215,7 @@ export function normalizeVariantRecord(
 				post.key,
 				{
 					content: value?.content ?? post.content,
+					mentions: value?.contentInherited ? post.mentions : value?.mentions,
 					mediaIds: value?.mediaIds ? [...value.mediaIds] : [...post.mediaIds],
 					contentInherited: value?.contentInherited ?? false,
 					mediaInherited: value?.mediaInherited ?? false
@@ -222,6 +231,7 @@ export function variantPostEquals(
 ): boolean {
 	return (
 		(left?.content ?? fallback.content) === right.content &&
+		JSON.stringify(left?.mentions ?? fallback.mentions) === JSON.stringify(right.mentions) &&
 		arraysEqual(left?.mediaIds ?? fallback.mediaIds, right.mediaIds) &&
 		(left?.contentInherited ?? false) === (right.contentInherited ?? false) &&
 		(left?.mediaInherited ?? false) === (right.mediaInherited ?? false)

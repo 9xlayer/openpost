@@ -1,3 +1,9 @@
+import { PostEditor } from "@/components/post-editor";
+import {
+  readMentionMetadata,
+  remapMentionMetadata,
+  type PostTextValue,
+} from "@openpost/platform-text/mentions";
 import { NativeText as Text } from "@/components/native-text";
 import { recordNativeFirstComposition } from "@/lib/telemetry/composition";
 import { nativeTelemetry } from "@/lib/telemetry";
@@ -15,7 +21,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
 
@@ -65,6 +70,7 @@ import {
   attachmentRequirement,
   mobileRenditionInput,
   mobileRenditionTextFields,
+  mobileRenditionTextValue,
   renditionImages,
   type RenditionTextEdits,
 } from "@/lib/publication-renditions";
@@ -253,7 +259,10 @@ function Composer({
   const theme = useNativeTheme();
   const { colors, editor, typography, spacing } = theme.manifest;
   const queryClient = useQueryClient();
-  const bodyInputRef = useRef<TextInput | null>(null);
+  const [canonicalTextEdits, setCanonicalTextEdits] = useState<Record<string, PostTextValue>>({});
+  const [annotatedRenditionEdits, setAnnotatedRenditionEdits] = useState<
+    Record<string, Record<string, PostTextValue>>
+  >({});
   const [initialPendingAttachments] = useState(() => takePendingAttachments());
   const editorDirty = useRef(initialPendingAttachments.length > 0);
   const contentSnapshot = useRef(pub);
@@ -313,6 +322,8 @@ function Composer({
     setSelectionTouched((pub.renditions?.length ?? 0) > 0);
     setSelectedAccounts(selectedAccountsFromPublication(pub));
     setRenditionTextEdits({});
+    setCanonicalTextEdits({});
+    setAnnotatedRenditionEdits({});
     setRenditionFields(renditionFieldsFromPublication(pub));
     setAttachments((current) => [
       ...attachmentsFromPublication(pub),
@@ -621,6 +632,7 @@ function Composer({
           body,
           media.map((item) => item.mediaId),
           altOverrides,
+          canonicalTextEdits,
         ),
         ...(activeSocialSetId ? { social_set_id: activeSocialSetId } : {}),
         ...(scheduledChanged
@@ -649,6 +661,7 @@ function Composer({
               accountId,
               renditionTextEdits[accountId],
               renditionMedia,
+              annotatedRenditionEdits[accountId],
             ),
           ),
         },
@@ -899,12 +912,64 @@ function Composer({
       if (error || !data)
         throw new Error(await errorMessage(response, "Could not generate this draft", error));
       requireCurrentQueryActor(scope);
-      return data;
+      const key = contentSnapshot.current.segments?.[0]?.id ?? "first";
+      const previous = canonicalTextEdits[key] ?? {
+        body,
+        mentions: readMentionMetadata(
+          body,
+          contentSnapshot.current.segments?.[0]?.settings?.mentions,
+        )?.spans,
+      };
+      try {
+        const metadata = remapMentionMetadata(
+          previous.body,
+          data.source_text,
+          previous.mentions === undefined ? undefined : { version: 1, spans: previous.mentions },
+        );
+        const annotated: Record<string, Record<string, PostTextValue>> = {
+          ...annotatedRenditionEdits,
+        };
+        for (const rendition of data.renditions ?? []) {
+          const field = renditionFields[rendition.social_account_id]?.[0]?.key ?? "body";
+          const before =
+            annotatedRenditionEdits[rendition.social_account_id]?.[field] ??
+            mobileRenditionTextValue(
+              contentSnapshot.current,
+              rendition.social_account_id,
+              field,
+              renditionTextEdits[rendition.social_account_id]?.[field] ??
+                renditionFields[rendition.social_account_id]?.find((item) => item.key === field)
+                  ?.value ??
+                "",
+            );
+          const mentions = remapMentionMetadata(
+            before.body,
+            rendition.body,
+            before.mentions === undefined ? undefined : { version: 1, spans: before.mentions },
+          );
+          annotated[rendition.social_account_id] = {
+            ...annotated[rendition.social_account_id],
+            [field]: { body: rendition.body, mentions: mentions?.spans },
+          };
+        }
+        return {
+          generated: data,
+          key,
+          canonical: { body: data.source_text, mentions: metadata?.spans },
+          annotated,
+        };
+      } catch {
+        throw new Error(
+          "The generated text changes a selected mention. Edit its mention choices before generating again.",
+        );
+      }
     },
-    onSuccess: (generated, scope) => {
+    onSuccess: ({ generated, key, canonical, annotated }, scope) => {
       if (!workspaceScopeIsCurrent(scope)) return;
       markEditorDirty();
       setBody(generated.source_text);
+      setCanonicalTextEdits((current) => ({ ...current, [key]: canonical }));
+      setAnnotatedRenditionEdits(annotated);
       setRenditionTextEdits(
         Object.fromEntries(
           (generated.renditions ?? []).map((rendition) => [
@@ -1117,23 +1182,35 @@ function Composer({
           (field, index, fields) => (
             <View key={field.key} style={{ gap: spacing.extraSmall }}>
               {fields.length > 1 ? <BodyText>Text {index + 1}</BodyText> : null}
-              <TextField
-                value={renditionTextEdits[accountId]?.[field.key] ?? field.value}
-                accessibilityLabel={`Custom text ${index + 1} for ${platformLabel(platform)}`}
-                onChangeText={(text) => {
+              <PostEditor
+                value={
+                  annotatedRenditionEdits[accountId]?.[field.key] ??
+                  mobileRenditionTextValue(
+                    contentSnapshot.current,
+                    accountId,
+                    field.key,
+                    renditionTextEdits[accountId]?.[field.key] ?? field.value,
+                  )
+                }
+                accountId={accountId}
+                platform={platform}
+                instanceURL={
+                  accounts.data?.find((account) => account.id === accountId)?.instance_url
+                }
+                workspaceId={pub.workspace_id}
+                label={`Custom text ${index + 1} for ${platformLabel(platform)}`}
+                placeholder="Account version"
+                onChange={(value) => {
                   markEditorDirty();
+                  setAnnotatedRenditionEdits((current) => ({
+                    ...current,
+                    [accountId]: { ...current[accountId], [field.key]: value },
+                  }));
                   setRenditionTextEdits((current) => ({
                     ...current,
-                    [accountId]: {
-                      ...current[accountId],
-                      [field.key]: text,
-                    },
+                    [accountId]: { ...current[accountId], [field.key]: value.body },
                   }));
                 }}
-                placeholder="Account version"
-                multiline
-                textAlignVertical="top"
-                style={styles.overrideField}
               />
             </View>
           ),
@@ -1209,35 +1286,47 @@ function Composer({
         ) : null}
 
         <DitherPanel style={{ backgroundColor: "transparent", borderWidth: 0, padding: 0 }}>
-          <TextField
-            ref={bodyInputRef}
-            value={body}
-            onChangeText={(text) => {
+          <PostEditor
+            workspaceId={pub.workspace_id}
+            value={
+              canonicalTextEdits[pub.segments?.[0]?.id ?? "first"] ?? {
+                body,
+                mentions: readMentionMetadata(body, pub.segments?.[0]?.settings?.mentions)?.spans,
+              }
+            }
+            onChange={(value) => {
               markEditorDirty();
-              setBody(text);
-              if (text.trim()) void recordNativeFirstComposition("text");
+              setBody(value.body);
+              setCanonicalTextEdits((current) => ({
+                ...current,
+                [pub.segments?.[0]?.id ?? "first"]: value,
+              }));
+              if (value.body.trim()) void recordNativeFirstComposition("text");
             }}
-            accessibilityLabel="Post text"
+            label="Post text"
             placeholder="What do you want to say?"
-            multiline
-            textAlignVertical="top"
-            imageKeyboard={{
-              onImageReceived: (attachment, context) =>
-                appendAttachments([attachment], context.focus),
-              onError: (message, context) => {
-                setActionError(message);
-                void errorHaptic();
-                context.focus();
-              },
-            }}
-            style={[
-              styles.writingField,
-              {
-                backgroundColor: "transparent",
-                borderColor: "transparent",
-              },
-            ]}
+            onImages={(images, focus) => appendAttachments(images, focus)}
           />
+          {(pub.segments ?? []).slice(1).map((segment, index) => (
+            <View key={segment.id} style={{ gap: spacing.extraSmall }}>
+              <BodyText>Text {index + 2}</BodyText>
+              <PostEditor
+                workspaceId={pub.workspace_id}
+                label={`Post text ${index + 2}`}
+                placeholder="Add to the thread"
+                value={
+                  canonicalTextEdits[segment.id] ?? {
+                    body: segment.body,
+                    mentions: readMentionMetadata(segment.body, segment.settings?.mentions)?.spans,
+                  }
+                }
+                onChange={(value) => {
+                  markEditorDirty();
+                  setCanonicalTextEdits((current) => ({ ...current, [segment.id]: value }));
+                }}
+              />
+            </View>
+          ))}
 
           <View style={styles.attachRow}>
             <Button

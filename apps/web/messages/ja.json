@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "一致するすべての項目を既読にする",
 	"engagement_mark_all_read_success": "一致する{count}件を既読にしました。",
 	"engagement_shared_read_help": "既読状態はこのワークスペースの全員で共有されます。",
+	"editor_mentions": "メンション",
+	"editor_searching": "検索中…",
+	"editor_no_matches": "一致するアカウントがありません",
+	"editor_lookup_failed": "メンションを検索できませんでした。もう一度お試しください。",
+	"editor_retry": "再試行",
 	"app_branding_title": "アプリのブランド設定",
 	"app_branding_description": "アプリ内に表示する名前とロゴを選択します。ログイン画面、メール、インストール済みアプリのアイコンはOpenPostのままです。",
 	"app_branding_home": "{name}のホーム",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "{name}を削除",
 	"app_branding_light": "ライト",
 	"app_branding_dark": "ダーク",
-	"app_branding_appearance_description": "テーマとアプリのブランド設定をカスタマイズします。"
+	"editor_permission_required": "メンション検索へのアクセスが許可されていません。アカウントとアプリの権限を確認してください。",
+	"editor_rate_limited": "メンション検索のリクエスト上限に達しました。しばらくしてから再試行してください。",
+	"app_branding_appearance_description": "テーマとアプリのブランド設定をカスタマイズします。",
+	"editor_mention_limit": "投稿には選択したメンションを最大50件含められます。",
+	"editor_mention_account_required": "このアカウントのメンションを選択するか、プレーンテキストを貼り付けてください。"
 }

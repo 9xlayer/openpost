@@ -1,3 +1,4 @@
+import type { MentionMetadata } from '@openpost/platform-text/mentions';
 import type { components } from '@openpost/api-contract';
 import { linkDraftSchema, type LinkDraft } from './links';
 import { sharedPollSchema, type SharedPoll } from './polls';
@@ -78,6 +79,7 @@ export interface PublicationMediaInput {
 }
 
 export interface PublicationSegmentInput {
+	mentions?: MentionMetadata;
 	poll?: SharedPoll;
 	link?: LinkDraft;
 	id: string;
@@ -124,7 +126,7 @@ export interface ComposerPublicationPayload {
 	};
 	media: Array<{ media_id: string; role: string }>;
 	segments: Array<{
-		settings?: { poll?: SharedPoll; link?: LinkDraft };
+		settings?: { poll?: SharedPoll; link?: LinkDraft; mentions?: MentionMetadata };
 		id: string;
 		body: string;
 		title: string;
@@ -153,6 +155,7 @@ export interface ComposerPublicationPayload {
 			source_overrides?: Array<{
 				publication_segment_id: string;
 				body_override?: string;
+				mentions?: MentionMetadata;
 				media_inherited: boolean;
 				media?: PublicationMediaPayload[];
 			}>;
@@ -205,7 +208,12 @@ export function buildPublicationPayload(
 			description: segment.description ?? '',
 			media: mediaPayload(segment.media)
 		};
-		if (segment.poll) payloadSegment.settings = { poll: sharedPollSchema.parse(segment.poll) };
+		if (segment.mentions) payloadSegment.settings = { mentions: segment.mentions };
+		if (segment.poll)
+			payloadSegment.settings = {
+				...payloadSegment.settings,
+				poll: sharedPollSchema.parse(segment.poll)
+			};
 		if (segment.link)
 			payloadSegment.settings = {
 				...payloadSegment.settings,

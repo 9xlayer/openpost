@@ -20,6 +20,48 @@ const draft = await openpost.publications.create({
 
 Omit `social_account_ids` to keep the draft without destinations. Pass `social_set_id` to copy that Social Set's accounts and saved destination defaults into the new Publication.
 
+## Selected mentions
+
+Use the destination account's provider search, then retain its returned target:
+
+```ts
+const matches = await openpost.accounts.lookupMentions("acc_bluesky", "alice");
+const selectedDID = "did:plc:ewvi7nxzyoun6zhxrhs64oiz";
+const candidate = matches.candidates.find(({ target }) => target.id === selectedDID);
+if (!candidate) throw new Error("Choose a matching account first.");
+const prefix = "Hi ";
+const start = new TextEncoder().encode(prefix).length;
+const body = prefix + candidate.label;
+
+const draft = await openpost.publications.create({
+  workspace_id: openpost.workspaceId(),
+  title: "Hello",
+  content_profile: "short_text",
+  source_text: body,
+  social_account_ids: ["acc_bluesky"],
+  segments: [
+    {
+      body,
+      settings: {
+        mentions: {
+          version: 1,
+          spans: [
+            {
+              start,
+              end: new TextEncoder().encode(body).length,
+              text: candidate.label,
+              target: candidate.target,
+            },
+          ],
+        },
+      },
+    },
+  ],
+});
+```
+
+Ranges use UTF-8 bytes. Choose identities separately for each network and preserve metadata when editing threads or variants. See the [HTTP mention contract](/docs/automate/api/publications#select-people-and-company-mentions) for inheritance, explicit removal and body-only compatibility.
+
 ## Upload and attach media
 
 `media.upload()` handles the OpenPost upload-session flow. It reserves the media record, sends the bytes to the returned storage target, and completes the record.
@@ -57,6 +99,17 @@ const draft = await openpost.publications.create({
 ```
 
 Use `media.list(workspaceId)` to inspect the library and `media.remove(id)` to remove an unused item. OpenPost still applies workspace quotas, file validation, provider limits, and media processing after the bytes arrive.
+
+To fit an image to one account and format, request a separate derivative:
+
+```ts
+const fitted = await openpost.media.prepareImage(asset.id, {
+  account_id: "acc_linkedin",
+  output_profile: "linkedin.post",
+});
+```
+
+Inspect the returned status and media, then explicitly attach `fitted.media.id` to the chosen variant. Preparation keeps the original and does not change a saved post's attachments.
 
 ## Customize a destination
 

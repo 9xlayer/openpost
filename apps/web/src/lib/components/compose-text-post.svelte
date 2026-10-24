@@ -1,4 +1,15 @@
 <script lang="ts">
+	import { joinPostText } from '@openpost/platform-text/mentions';
+	import PostEditor from '@openpost/ui/components/post-editor';
+	import { lookupComposerMentions } from '$lib/composer/mentions';
+	import {
+		readMentionMetadata,
+		validTextMentions,
+		remapMentionMetadata,
+		type PostTextValue,
+		type MentionMetadata,
+		type MentionCandidate
+	} from '@openpost/platform-text/mentions';
 	import { firstComposerURL as accountTextURL } from './compose/composer-links';
 	import {
 		readLinkDraft,
@@ -648,7 +659,6 @@
 	const previewSessions = new SvelteMap<string, PreviewWindowSession>();
 	let pollCreationAccountID = $state<string | undefined>();
 	let previewPollEditingKeys = new SvelteSet<string>();
-	const textareaRefs = new SvelteMap<number, HTMLTextAreaElement>();
 	const randomDelayOptions = [0, 5, 10, 15, 30, 45, 60];
 	const desktopComposerControls = new MediaQuery('min-width: 768px');
 	const accountControlLoading = $derived(loadingWorkspaces || loadingAccounts);
@@ -1198,15 +1208,6 @@
 		return Array.from(options).sort((a, b) => a - b);
 	});
 
-	const editorResizeSignature = $derived.by(() =>
-		posts
-			.map((post, index) => {
-				const mediaIds = getEditorMediaIdsForPost(post);
-				return `${post.key}:${index}:${getEditorContentForPost(post).length}:${mediaIds.join(',')}`;
-			})
-			.join('|')
-	);
-
 	// --------------------------------------------------------------------------
 	// Helpers
 	// --------------------------------------------------------------------------
@@ -1412,19 +1413,6 @@
 				accountId !== null && (!nextSelectedIdSet.has(accountId) || !nextVariants.has(accountId))
 			);
 		});
-	}
-
-	function autoResize(el: HTMLTextAreaElement) {
-		el.style.height = 'auto';
-		el.style.height = el.scrollHeight + 'px';
-	}
-
-	function textareaAttachment(index: number) {
-		return (el: HTMLTextAreaElement) => {
-			textareaRefs.set(index, el);
-			autoResize(el);
-			return () => textareaRefs.delete(index);
-		};
 	}
 
 	function getScheduledAt(): string | undefined {
@@ -2230,6 +2218,7 @@
 			segments: posts.map((post, index) => ({
 				id: `legacy-segment:${targetPublicationID}:${index}`,
 				content: post.content,
+				mentions: post.mentions,
 				poll: post.poll,
 				link: post.link,
 				url: index === 0 ? linkUrl : '',
@@ -2280,7 +2269,7 @@
 				const mediaInherited = sourceVariants.every((variant) => variant.mediaInherited);
 				const body = sourcePosts
 					.map((post) => getVariantContent(rendition.social_account_id, post.key) ?? post.content)
-					.map((value) => value.trim())
+					.map((value) => (joinsSegments ? value.trim() : value))
 					.filter(Boolean)
 					.join(joinsSegments ? '\n\n' : '');
 				const mediaIds = sourcePosts.flatMap(
@@ -2325,11 +2314,22 @@
 									}
 							)
 						};
-						if (variant && !variant.contentInherited) override.body_override = variant.content;
+						if (variant && !variant.contentInherited) {
+							override.body_override = variant.content;
+							override.mentions = variant.mentions;
+						}
 						return override;
 					});
 				}
-				if (!contentInherited) renditionSegment.body_override = body;
+				if (!contentInherited) {
+					renditionSegment.body_override = body;
+					if (!joinsSegments && sourcePosts[0]) {
+						const metadata = source[sourcePosts[0].key]?.mentions;
+						renditionSegment.settings = { ...renditionSegment.settings };
+						delete renditionSegment.settings.mentions;
+						if (metadata) renditionSegment.settings.mentions = metadata;
+					}
+				}
 				return renditionSegment;
 			});
 			const first = rendition.segments[0];
@@ -2369,7 +2369,7 @@
 				strategies: aiAppliedStrategies
 			};
 		}
-		return payload;
+		return $state.snapshot(payload);
 	}
 
 	function hydrateCanonicalSettings(publication: Publication) {
@@ -2466,6 +2466,15 @@
 							: joinedSource
 								? (joinedSource.media ?? []).map((item) => item.media_id)
 								: (renditionSegment?.media ?? []).map((item) => item.id),
+					mentions: contentInherited
+						? post.mentions
+						: readMentionMetadata(
+								joinedSource?.body_override ??
+									renditionSegment?.body_override ??
+									renditionSegment?.body ??
+									'',
+								joinedSource?.mentions ?? renditionSegment?.settings?.mentions
+							),
 					contentInherited,
 					mediaInherited
 				};
@@ -3444,6 +3453,7 @@
 		posts = canonicalSegments.map((segment) => ({
 			key: segment.id,
 			content: segment.body,
+			mentions: readMentionMetadata(segment.body, segment.settings?.mentions),
 			poll: readSharedPoll(segment.settings),
 			link: readLinkDraft(segment.settings),
 			mediaIds: (segment.media ?? []).map((media) => media.id)
@@ -3787,15 +3797,6 @@
 		} else if (workspaceCtx.settingsReady && workspaceId === selectedWorkspaceId) {
 			workspaceSettingsError = '';
 		}
-	});
-
-	$effect(() => {
-		String(editorResizeSignature);
-		tick().then(() => {
-			textareaRefs.forEach((el) => {
-				if (el) autoResize(el);
-			});
-		});
 	});
 
 	$effect(() => {
@@ -6329,28 +6330,52 @@
 			return;
 		}
 		const source = posts[0];
-		const joinedSource: PostItem = {
-			...source,
-			content: posts
-				.map((post) => post.content.trim())
-				.filter(Boolean)
-				.join('\n\n'),
-			mediaIds: [...new Set(posts.flatMap((post) => post.mediaIds))]
-		};
+		let joinedSource: PostItem;
 		const nextVariants = new SvelteMap<string, Record<string, VariantPost>>();
-		for (const [accountID, record] of variants.entries()) {
-			const values = posts.map((post) => record[post.key]).filter(Boolean);
-			nextVariants.set(accountID, {
-				[joinedSource.key]: {
-					content: values
-						.map((value) => value.content.trim())
-						.filter(Boolean)
-						.join('\n\n'),
-					mediaIds: [...new Set(values.flatMap((value) => value.mediaIds))],
-					contentInherited: false,
-					mediaInherited: values.every((value) => value.mediaInherited)
-				}
-			});
+		try {
+			const joined = joinPostText(
+				posts.map((post) => ({ body: post.content, mentions: post.mentions?.spans }))
+			);
+			joinedSource = {
+				...source,
+				content: joined.body,
+				mentions:
+					joined.mentions === undefined ? undefined : { version: 1, spans: joined.mentions },
+				mediaIds: [...new Set(posts.flatMap((post) => post.mediaIds))]
+			};
+			for (const [accountID, record] of variants.entries()) {
+				const values = posts.map(
+					(post) =>
+						record[post.key] ?? {
+							content: post.content,
+							mentions: post.mentions,
+							mediaIds: post.mediaIds,
+							contentInherited: true,
+							mediaInherited: true
+						}
+				);
+				const projected = joinPostText(
+					values.map((value, index) => ({
+						body: value.contentInherited ? posts[index].content : value.content,
+						mentions: (value.contentInherited ? posts[index].mentions : value.mentions)?.spans
+					}))
+				);
+				nextVariants.set(accountID, {
+					[joinedSource.key]: {
+						content: projected.body,
+						mentions:
+							projected.mentions === undefined
+								? undefined
+								: { version: 1, spans: projected.mentions },
+						mediaIds: [...new Set(values.flatMap((value) => value.mediaIds))],
+						contentInherited: values.every((value) => value.contentInherited),
+						mediaInherited: values.every((value) => value.mediaInherited)
+					}
+				});
+			}
+		} catch {
+			error = m.editor_mention_limit();
+			return;
 		}
 		posts = [joinedSource];
 		variants = nextVariants;
@@ -6363,7 +6388,12 @@
 	// --------------------------------------------------------------------------
 	// Variants
 	// --------------------------------------------------------------------------
-	function handleVariantChange(accountId: string, index: number, value: string) {
+	function handleVariantChange(
+		accountId: string,
+		index: number,
+		value: string,
+		mentions?: MentionMetadata
+	) {
 		const newVariants = new SvelteMap(variants);
 		const postKey = posts[index]?.key;
 		if (!postKey) return;
@@ -6375,6 +6405,13 @@
 					mediaIds: [...posts[index].mediaIds]
 				}),
 				content: value,
+				mentions:
+					mentions ??
+					remapMentionMetadata(
+						getVariantContent(accountId, postKey) ?? posts[index].content,
+						value,
+						normalizeVariantRecord(newVariants.get(accountId), posts)[postKey]?.mentions
+					),
 				contentInherited: false
 			}
 		};
@@ -6861,12 +6898,13 @@
 		}
 	}
 
-	function setPostContent(index: number, value: string) {
+	function setPostContent(index: number, value: string, mentions?: MentionMetadata) {
 		posts = posts.map((p, pi) =>
 			pi === index
 				? {
 						...p,
 						content: value,
+						mentions: mentions ?? remapMentionMetadata(p.content, value, p.mentions),
 						link: p.link ?? (firstComposerURL(value) ? initialLinkDraft(p) : undefined)
 					}
 				: p
@@ -6876,15 +6914,48 @@
 		scheduleAutoSave();
 	}
 
-	function setEditorContent(index: number, value: string) {
+	function setEditorContent(index: number, value: string, mentions?: MentionMetadata) {
 		if (value.trim()) void startFirstComposition('text');
 		if (activeVariantAccountId && activeVariantIsUnsynced) {
-			handleVariantChange(activeVariantAccountId, index, value);
+			handleVariantChange(activeVariantAccountId, index, value, mentions);
 			return;
 		}
-		setPostContent(index, value);
+		setPostContent(index, value, mentions);
 	}
 
+	function editorValue(post: PostItem, native = false): PostTextValue {
+		const variant = activeVariantAccountId
+			? variants.get(activeVariantAccountId)?.[post.key]
+			: undefined;
+		const metadata = variant && !variant.contentInherited ? variant.mentions : post.mentions;
+		const body = native ? nativeEditableText(post) : getEditorContentForPost(post);
+		return { body, mentions: metadata ? validTextMentions(body, metadata.spans) : undefined };
+	}
+	function editorChanged(post: PostItem, index: number, value: PostTextValue, native = false) {
+		const metadata: MentionMetadata | undefined =
+			value.mentions === undefined ? undefined : { version: 1, spans: value.mentions };
+		if (native && activeVariantAccount) {
+			if (nativeDescriptionKey(activeVariantAccount)) {
+				handleNativeTextChange(post, index, value.body);
+				return;
+			}
+			if (!activeVariantIsUnsynced) unsyncAccount(activeVariantAccount.id);
+		}
+		setEditorContent(index, value.body, metadata);
+	}
+	function mentionLookup(
+		native = false
+	): ((query: string, signal: AbortSignal) => Promise<MentionCandidate[]>) | undefined {
+		const account = activeVariantAccount;
+		if (
+			!account ||
+			!['bluesky', 'mastodon', 'linkedin'].includes(account.platform) ||
+			(native && nativeDescriptionKey(account))
+		)
+			return undefined;
+		return (query, signal) =>
+			lookupComposerMentions(selectedWorkspaceId, account.id, query, signal);
+	}
 	function setActivePost(index: number) {
 		activePostIndex = index;
 	}
@@ -7037,26 +7108,27 @@
 			ondragleave={handleDragLeave}
 			ondrop={(event) => handleDrop(event, index)}
 		>
-			<Textarea
-				id="post-textarea-{index}"
-				unstyled
-				dir="auto"
-				aria-label={editorTextIsYouTubeDescription
-					? m.compose_description()
-					: m.compose_post_text()}
-				value={nativeEditableText(post)}
-				{@attach textareaAttachment(index)}
-				oninput={(event) => {
-					handleNativeTextChange(post, index, event.currentTarget.value);
-					autoResize(event.currentTarget);
-				}}
-				onpaste={(event) => handlePaste(event, index)}
-				onfocus={() => setActivePost(index)}
-				placeholder={m.compose_ai_idea_placeholder()}
-				disabled={isSubmitting || buildingPost}
-				class="native-post-input w-full resize-none rounded-sm border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				style="min-height:44px; font:inherit; color:inherit; line-height:inherit;"
-			/>
+			{#key `${post.key}:${activeVariantAccountId ?? 'shared'}`}
+				<PostEditor
+					id="post-textarea-{index}"
+					label={editorTextIsYouTubeDescription ? m.compose_description() : m.compose_post_text()}
+					value={editorValue(post, true)}
+					onchange={(value) => editorChanged(post, index, value, true)}
+					lookup={mentionLookup(true)}
+					mentionScope={activeVariantAccount
+						? {
+								provider: activeVariantAccount.platform,
+								authority: activeVariantAccount.instance_url
+							}
+						: undefined}
+					onpaste={(event) => handlePaste(event, index)}
+					onfocus={() => setActivePost(index)}
+					placeholder={m.compose_ai_idea_placeholder()}
+					disabled={isSubmitting || buildingPost}
+					class="native-post-input w-full rounded-sm border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					style="min-height:44px; font:inherit; color:inherit; line-height:inherit;"
+				/>
+			{/key}
 			{#if !previewPollEditingKeys.has(post.key)}
 				{@const body = nativeEditableText(post).trim()}
 				{@const output = (
@@ -7883,35 +7955,31 @@
 
 										<div class="min-w-0 flex-1">
 											<div class="relative">
-												<Textarea
-													id="post-textarea-{i}"
-													dir="auto"
-													aria-label={editorTextIsYouTubeDescription
-														? m.compose_description()
-														: m.compose_post_text()}
-													unstyled
-													{@attach textareaAttachment(i)}
-													value={editorContent}
-													oninput={(e) => {
-														const target = e.target as HTMLTextAreaElement;
-														setEditorContent(i, target.value);
-														autoResize(target);
-													}}
-													onpaste={(e) => handlePaste(e, i)}
-													onfocus={() => setActivePost(i)}
-													placeholder={i === 0
-														? editorTextIsYouTubeDescription
-															? m.compose_describe_video()
-															: m.compose_ai_idea_placeholder()
-														: m.compose_add_to_thread()}
-													class="relative z-10 w-full resize-none overflow-y-hidden border-0 bg-transparent py-2 {isThread
-														? 'pr-12'
-														: 'pr-3 md:pr-4'} text-base leading-7 text-foreground placeholder:text-muted-foreground/70 focus:ring-0 focus:outline-none md:py-3 md:text-lg md:leading-8"
-													style="min-height: {i === 0 ? '120px' : '56px'};"
-													disabled={isSubmitting ||
-														buildingPost ||
-														(!!activeVariantAccountId && !activeVariantIsUnsynced)}
-												/>
+												{#key `${post.key}:${activeVariantAccountId ?? 'shared'}`}
+													<PostEditor
+														id="post-textarea-{i}"
+														label={editorTextIsYouTubeDescription
+															? m.compose_description()
+															: m.compose_post_text()}
+														value={editorValue(post)}
+														onchange={(value) => editorChanged(post, i, value)}
+														lookup={mentionLookup()}
+														onpaste={(event) => handlePaste(event, i)}
+														onfocus={() => setActivePost(i)}
+														placeholder={i === 0
+															? editorTextIsYouTubeDescription
+																? m.compose_describe_video()
+																: m.compose_ai_idea_placeholder()
+															: m.compose_add_to_thread()}
+														class="relative z-10 w-full border-0 bg-transparent py-2 {isThread
+															? 'pr-12'
+															: 'pr-3 md:pr-4'} text-base leading-7 text-foreground focus-visible:ring-2 focus-visible:ring-ring md:py-3 md:text-lg md:leading-8"
+														style="min-height: {i === 0 ? '120px' : '56px'};"
+														disabled={isSubmitting ||
+															buildingPost ||
+															(!!activeVariantAccountId && !activeVariantIsUnsynced)}
+													/>
+												{/key}
 											</div>
 
 											{#if pasteFeedback.length > 0}

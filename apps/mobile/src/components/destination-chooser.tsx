@@ -169,56 +169,59 @@ export function DestinationChooser({
             const selected = selectedIds.includes(account.id);
             return (
               <View key={account.id}>
-                <Pressable
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: selected }}
-                  onPress={() => onToggle(account.id)}
-                  style={({ pressed }) => [
+                <View
+                  style={[
                     styles.accountRow,
                     {
                       backgroundColor: colors.background,
                       borderColor: selected ? colors.primary : colors.outlineVariant,
                     },
-                    pressed && { opacity: 0.65 },
                   ]}
                 >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      {
-                        borderColor: selected ? colors.primary : colors.outlineVariant,
-                        backgroundColor: selected ? colors.primary : "transparent",
-                      },
-                    ]}
+                  <Pressable
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => onToggle(account.id)}
+                    style={({ pressed }) => [styles.accountSelection, pressed && { opacity: 0.65 }]}
                   >
-                    {selected ? (
-                      <ThemeIcon role="check" size={15} tintColor={colors.onPrimary} />
-                    ) : null}
-                  </View>
-                  <AccountAvatar
-                    name={
-                      account.alias || account.account_username || platformLabel(account.platform)
-                    }
-                    platform={account.platform}
-                    avatarUrl={account.account_avatar_url}
-                  />
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text
-                      numberOfLines={2}
-                      style={[typography.labelLarge, { color: colors.onSurface }]}
+                    <View
+                      style={[
+                        styles.checkbox,
+                        {
+                          borderColor: selected ? colors.primary : colors.outlineVariant,
+                          backgroundColor: selected ? colors.primary : "transparent",
+                        },
+                      ]}
                     >
-                      {accountHandle(
-                        account.account_username,
-                        platformLabel(account.platform),
-                        account.platform,
-                        account.alias ?? "",
-                      )}
-                    </Text>
-                    <BodyText>{platformLabel(account.platform)}</BodyText>
-                    {rowNote?.(account.id)}
-                  </View>
+                      {selected ? (
+                        <ThemeIcon role="check" size={15} tintColor={colors.onPrimary} />
+                      ) : null}
+                    </View>
+                    <AccountAvatar
+                      name={
+                        account.alias || account.account_username || platformLabel(account.platform)
+                      }
+                      platform={account.platform}
+                      avatarUrl={account.account_avatar_url}
+                    />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text
+                        numberOfLines={2}
+                        style={[typography.labelLarge, { color: colors.onSurface }]}
+                      >
+                        {accountHandle(
+                          account.account_username,
+                          platformLabel(account.platform),
+                          account.platform,
+                          account.alias ?? "",
+                        )}
+                      </Text>
+                      <BodyText>{platformLabel(account.platform)}</BodyText>
+                      {rowNote?.(account.id)}
+                    </View>
+                  </Pressable>
                   {rowAction?.(account.id, selected)}
-                </Pressable>
+                </View>
                 {selected ? expandedContent?.(account.id) : null}
               </View>
             );
@@ -305,6 +308,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     minHeight: 52,
   },
+  accountSelection: { flex: 1, minHeight: 52, flexDirection: "row", alignItems: "center", gap: 12 },
   checkbox: {
     width: 22,
     height: 22,

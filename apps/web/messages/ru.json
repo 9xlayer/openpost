@@ -10063,6 +10063,11 @@
 	"engagement_mark_all_read": "Отметить все результаты прочитанными",
 	"engagement_mark_all_read_success": "Отмечено прочитанными: {count}.",
 	"engagement_shared_read_help": "Статус прочтения общий для всех участников рабочего пространства.",
+	"editor_mentions": "Упоминания",
+	"editor_searching": "Поиск…",
+	"editor_no_matches": "Подходящих аккаунтов нет",
+	"editor_lookup_failed": "Не удалось найти упоминания. Повторите попытку.",
+	"editor_retry": "Повторить",
 	"app_branding_title": "Брендинг приложения",
 	"app_branding_description": "Выберите название и логотипы приложения. Страницы входа, письма и значки установленного приложения сохраняют брендинг OpenPost.",
 	"app_branding_home": "Главная {name}",
@@ -10095,5 +10100,9 @@
 	"app_branding_remove_image": "Удалить {name}",
 	"app_branding_light": "Светлая",
 	"app_branding_dark": "Тёмная",
-	"app_branding_appearance_description": "Настройте темы и брендинг приложения."
+	"editor_permission_required": "Сервис не разрешил поиск упоминаний. Проверьте разрешения аккаунта и приложения.",
+	"editor_rate_limited": "Достигнут лимит запросов поиска упоминаний. Повторите попытку позже.",
+	"app_branding_appearance_description": "Настройте темы и брендинг приложения.",
+	"editor_mention_limit": "Публикация может содержать до 50 выбранных упоминаний.",
+	"editor_mention_account_required": "Выберите упоминания для этого аккаунта или вставьте обычный текст."
 }

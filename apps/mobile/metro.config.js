@@ -13,6 +13,7 @@ const workspaceSources = [
   path.join(workspaceRoot, "packages", "api-contract"),
   path.join(workspaceRoot, "packages", "dither"),
   path.join(workspaceRoot, "packages", "query-catalog"),
+  path.join(workspaceRoot, "packages", "platform-text"),
 ];
 const installedWorkspaceSources = path.join(projectRoot, "node_modules", "@openpost");
 

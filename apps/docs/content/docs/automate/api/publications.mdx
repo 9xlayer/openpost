@@ -27,6 +27,48 @@ Creating a Publication does not publish it. Omit `social_account_ids` for a draf
 
 The server records raw HTTP creation as `creation_source: "api"`. The TypeScript SDK sends its own client identity and records `creation_source: "sdk"` instead.
 
+## Select people and company mentions
+
+Search through the account that will publish the post:
+
+```sh
+curl 'https://app.openpo.st/api/v1/accounts/acc_bluesky/mentions?query=alice' \
+  -H "Authorization: Bearer $OPENPOST_TOKEN"
+```
+
+Use the returned stable `target` with its visible label in a segment's `settings.mentions`:
+
+```json
+{
+  "body": "Hi @alice",
+  "settings": {
+    "mentions": {
+      "version": 1,
+      "spans": [
+        {
+          "start": 3,
+          "end": 9,
+          "text": "@alice",
+          "target": {
+            "provider": "bluesky",
+            "kind": "person",
+            "id": "did:plc:ewvi7nxzyoun6zhxrhs64oiz"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+`start` and `end` are UTF-8 byte offsets, with the end excluded. In JavaScript, use `new TextEncoder().encode(prefix).length`, not string length. The selected text must match exactly. Each field accepts up to 50 selections.
+
+Choose targets separately for each network. Bluesky supports people, Mastodon searches accounts on the connected instance, and LinkedIn looks up a company page by its exact vanity name where the provider grants access. Search permission and rate-limit failures are returned as errors, not empty results.
+
+For an independent account version, put the text in `renditions[].segments[].body_override` and its annotations in that segment's `settings.mentions`. For a joined thread, pair each source's `body_override` with `source_overrides[].mentions`. Omitted metadata preserves unchanged selections; explicit `spans: []` removes selected tagging. Safe surrounding text edits retain identities. Ambiguous edits require updated annotations and fail without changing the draft.
+
+A literal qualified Mastodon address can trigger a mention even without a selected token. Drafts with unsupported mention choices can be inspected and edited, but validation blocks publishing until those choices are resolved.
+
 ## Text cards for Instagram and Pixelfed
 
 New Instagram and Pixelfed variants default to `text_card: "text_only"`. The same creation path serves the web app, CLI, MCP and Workflows. Social Set defaults are copied on creation; explicit variant settings win. Existing variants without a setting remain unchanged.
