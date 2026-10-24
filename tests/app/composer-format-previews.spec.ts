@@ -121,7 +121,6 @@ for (const width of [1280, 390, 320])
         .toBeCloseTo(0.8, 1);
       await page.screenshot({ path: info.outputPath("feed.png") });
       await page.getByRole("button", { name: "Add media", exact: true }).click();
-      await page.getByRole("button").filter({ hasText: "Add media" }).click();
       const picker = page.getByRole("dialog");
       await picker.getByRole("tab", { name: "Library", exact: true }).click();
       await picker
@@ -157,7 +156,7 @@ for (const width of [1280, 390, 320])
         "cover",
       );
       await popup.close();
-      await page.getByRole("button", { name: "Remove media", exact: true }).nth(1).click();
+      await frame.getByRole("button", { name: "Remove media", exact: true }).click();
       await selectFormat("Story");
       const player = frame.getByLabel("Instagram story player", { exact: true });
       await expect(player).toBeVisible();
