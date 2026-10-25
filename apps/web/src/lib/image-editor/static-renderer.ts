@@ -64,6 +64,14 @@ export async function renderImageEditorPage(
 	signal?.throwIfAborted();
 	await waitForDocumentFonts(signal);
 	signal?.throwIfAborted();
+	if (imageEditorDocument.export_defaults.format === 'gif') {
+		const { renderImageEditorGif } = await import('./gif-export');
+		return {
+			page,
+			filename: imageEditorPageFilename(imageEditorDocument.title, page.name, pageIndex, 'gif'),
+			blob: await renderImageEditorGif(imageEditorDocument, page, signal)
+		};
+	}
 	const canvas = globalThis.document.createElement('canvas');
 	const adapter = new OpenPostFabricAdapter({
 		signal,

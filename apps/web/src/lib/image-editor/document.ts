@@ -1,5 +1,7 @@
 import { validEditorColorTools } from '$lib/editor-color-grade/model';
 import { validTextRuns } from './text-runs';
+import { validImageEditorLensEffect } from './lens-effects';
+import { validImageEditorAnimation } from './animation';
 import {
 	IMAGE_EDITOR_LIMITS,
 	IMAGE_EDITOR_SCHEMA_VERSION,
@@ -253,7 +255,7 @@ export function validateImageEditorDocument(document: ImageEditorDocument): stri
 		errors.push('The design title must be between 1 and 160 characters.');
 	}
 	if (
-		!['png', 'jpeg', 'webp'].includes(document.export_defaults.format) ||
+		!['png', 'jpeg', 'webp', 'gif'].includes(document.export_defaults.format) ||
 		!Number.isFinite(document.export_defaults.quality) ||
 		document.export_defaults.quality < 0.1 ||
 		document.export_defaults.quality > 1 ||
@@ -414,6 +416,10 @@ export function validateImageEditorDocument(document: ImageEditorDocument): stri
 				}
 			}
 			if (layer.type === 'shape' && !layer.shape) errors.push(`${layer.name} has no shape data.`);
+			if (layer.image?.lens_effect && !validImageEditorLensEffect(layer.image.lens_effect))
+				errors.push(`${layer.name} has an invalid lens effect.`);
+			if (layer.image?.animation && !validImageEditorAnimation(layer.image.animation))
+				errors.push(`${layer.name} has invalid animation frames or timing.`);
 			if (layer.type === 'paint' && !layer.paint) errors.push(`${layer.name} has no paint data.`);
 			if (
 				layer.paint &&

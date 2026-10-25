@@ -24,4 +24,6 @@ OpenPost Video Editor uses:
 
 Video Editor models download from their configured upstream repositories only when the related tool starts, then remain in browser Cache Storage or OPFS until removed. The MOSS browser runtime and retained notices ship under `apps/web/static/moss-tts/`; model weights are not bundled.
 
+OpenPost Image Editor uses gifuct-js 2.1.2 for GIF decoding and gifenc 1.0.3 for GIF encoding in browser workers. Both are MIT licensed. The retained notices are in `licenses/GIFUCT-JS.txt` and `licenses/GIFENC.txt`. The distributed browser notice, including js-binary-schema-parser, is `apps/web/static/licenses/image-editor-gif/THIRD_PARTY.txt`. Frame editing and lens effects use OpenPost's document and rendering owners; no native Compositor source is included.
+
 OpenPost does not include or import code, styles, utilities, or components from the commercial shadcn Designer package.

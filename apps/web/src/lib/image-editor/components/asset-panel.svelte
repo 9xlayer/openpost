@@ -1,9 +1,17 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { inspectImageEditorMediaAnimation } from '../media-ingestion';
+	import { imageEditorErrorMessage } from '$lib/image-editor/animation-error-message';
 	import { ContextMenu } from 'bits-ui';
 	import { useImageEditor } from '../editor.svelte';
 	import { queryImageEditorBrandKit, queryImageEditorMedia } from '$lib/query/image-editor';
 	import { mediaQueryKeys } from '@openpost/query-catalog';
 	import { queryClient } from '$lib/query/client';
+	import { queryMediaMetadata } from '$lib/query/media';
+	import {
+		captureQueryMutationSession,
+		queryMutationSessionIsCurrent
+	} from '$lib/query/authorization-boundary';
 	import { loadImageEditorBrandFonts } from '../fonts';
 	import { listGuestImageEditorMedia, storeGuestImageEditorMedia } from '../local-persistence';
 	import type { ImageEditorMediaItem } from '../types';
@@ -39,6 +47,8 @@
 		| { mode: 'overlay'; onclose: () => void }
 	) = $props();
 	const editor = useImageEditor();
+	const ingestionAbort = new AbortController();
+	onDestroy(() => ingestionAbort.abort());
 	let media = $state<ImageEditorMediaItem[]>([]);
 	let loading = $state(false);
 	let error = $state('');
@@ -46,6 +56,7 @@
 	let pickerOpen = $state(false);
 	let pickerInitialMode = $state<'library' | 'upload' | 'camera' | 'stock'>('upload');
 	let guestSource = $state<'library' | 'stock' | 'camera'>('library');
+	let stockMediaTarget: ReturnType<typeof captureMediaTarget> | undefined;
 	let replaceMode = $state(false);
 	let addedMessage = $state('');
 	let loadedWorkspaceID = '';
@@ -106,7 +117,7 @@
 			editor.setBrandKit(nextBrand);
 			await loadImageEditorBrandFonts(nextBrand);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_load_assets_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_load_assets_failed();
 		} finally {
 			loading = false;
 		}
@@ -120,7 +131,7 @@
 				? await listGuestImageEditorMedia(editor.id, search)
 				: await queryImageEditorMedia(editor.workspaceID, search, 'image', mediaListOptions());
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_search_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_search_failed();
 		} finally {
 			loading = false;
 		}
@@ -145,20 +156,71 @@
 		return undefined;
 	}
 
-	function addMedia(item: ImageEditorMediaItem, replace = replaceMode): void {
-		if (editor.backgroundImagePickerActive) {
-			editor.setPageBackgroundImage(item.id);
-			editor.backgroundImagePickerActive = false;
-			addedMessage = m.image_editor_media_added({ name: item.original_filename });
+	function captureMediaTarget(replace = replaceMode) {
+		return {
+			session: captureQueryMutationSession(),
+			workspaceID: editor.workspaceID,
+			designID: editor.id,
+			pageID: editor.activePageID,
+			selectedID: editor.selectedLayers[0]?.id,
+			selectedMediaID: editor.selectedLayers[0]?.image?.media_id,
+			background: editor.backgroundImagePickerActive,
+			backgroundRevision: editor.backgroundImagePickerRevision,
+			replace
+		};
+	}
+
+	function mediaTargetIsCurrent(target: ReturnType<typeof captureMediaTarget>): boolean {
+		return (
+			!ingestionAbort.signal.aborted &&
+			editor.workspaceID === target.workspaceID &&
+			editor.id === target.designID &&
+			editor.activePageID === target.pageID &&
+			(guestMode || queryMutationSessionIsCurrent(target.session))
+		);
+	}
+
+	function setBackgroundMedia(id: string, name: string): void {
+		editor.setPageBackgroundImage(id);
+		editor.backgroundImagePickerActive = false;
+		addedMessage = m.image_editor_media_added({ name });
+	}
+
+	async function addMedia(
+		item: Pick<ImageEditorMediaItem, 'id' | 'mime_type' | 'original_filename' | 'width' | 'height'>,
+		replace = replaceMode,
+		target = captureMediaTarget(replace)
+	): Promise<void> {
+		if (!mediaTargetIsCurrent(target)) return;
+		if (target.background) {
+			if (
+				editor.backgroundImagePickerActive &&
+				editor.backgroundImagePickerRevision === target.backgroundRevision
+			)
+				setBackgroundMedia(item.id, item.original_filename);
 			return;
 		}
-		const selected = editor.selectedLayers[0];
-		if (replace && selected?.image) {
+		let animation: import('../types').ImageEditorAnimation | undefined;
+		try {
+			animation = await inspectImageEditorMediaAnimation(
+				{ id: item.id, mime_type: item.mime_type, name: item.original_filename },
+				ingestionAbort.signal
+			);
+		} catch (cause) {
+			if (!ingestionAbort.signal.aborted && mediaTargetIsCurrent(target))
+				error = imageEditorErrorMessage(cause) ?? m.image_editor_animation_failed();
+			return;
+		}
+		if (!mediaTargetIsCurrent(target)) return;
+		const selected = editor.activePage?.layers.find((layer) => layer.id === target.selectedID);
+		if (target.replace && selected?.image?.media_id !== target.selectedMediaID) return;
+		if (target.replace && selected?.image) {
 			editor.updateLayer(selected.id, {
 				name: item.original_filename || selected.name,
 				image: {
 					...selected.image,
 					media_id: item.id,
+					animation,
 					source_width: item.width || selected.image.source_width,
 					source_height: item.height || selected.image.source_height
 				}
@@ -169,6 +231,7 @@
 		}
 		editor.addImage({
 			id: item.id,
+			animation,
 			width: item.width,
 			height: item.height,
 			name: item.original_filename
@@ -214,16 +277,20 @@
 		if (!(input instanceof HTMLInputElement)) return;
 		const files = Array.from(input.files ?? []);
 		if (files.length === 0) return;
+		const target = captureMediaTarget();
 		loading = true;
 		error = '';
 		try {
 			for (const file of files) {
-				const item = await storeGuestImageEditorMedia(editor.id, file);
+				const item = await storeGuestImageEditorMedia(target.designID, file, {
+					signal: ingestionAbort.signal
+				});
+				if (!mediaTargetIsCurrent(target)) return;
 				media = [item, ...media];
 			}
-			if (files.length === 1) addMedia(media[0]);
+			if (files.length === 1) await addMedia(media[0], target.replace, target);
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_search_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_search_failed();
 		} finally {
 			loading = false;
 			input.value = '';
@@ -231,15 +298,19 @@
 	}
 
 	async function captureGuestPhoto(file: File): Promise<void> {
+		const target = captureMediaTarget();
 		loading = true;
 		error = '';
 		try {
-			const item = await storeGuestImageEditorMedia(editor.id, file);
+			const item = await storeGuestImageEditorMedia(target.designID, file, {
+				signal: ingestionAbort.signal
+			});
+			if (!mediaTargetIsCurrent(target)) return;
 			media = [item, ...media];
-			addMedia(item);
+			await addMedia(item, target.replace, target);
 			guestSource = 'library';
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_search_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_search_failed();
 		} finally {
 			loading = false;
 		}
@@ -259,17 +330,24 @@
 	}
 
 	async function addStockMedia(file: File, asset: StockAsset): Promise<void> {
+		const target = stockMediaTarget;
+		stockMediaTarget = undefined;
+		if (!target || !mediaTargetIsCurrent(target)) return;
 		loading = true;
 		error = '';
 		try {
 			const provenance = stockProvenance(asset);
 			if (guestMode) {
-				const item = await storeGuestImageEditorMedia(editor.id, file, { provenance });
+				const item = await storeGuestImageEditorMedia(target.designID, file, {
+					provenance,
+					signal: ingestionAbort.signal
+				});
+				if (!mediaTargetIsCurrent(target)) return;
 				media = [item, ...media];
-				addMedia(item);
+				await addMedia(item, target.replace, target);
 			} else {
 				const uploaded = await uploadMediaFile({
-					workspaceId: editor.workspaceID,
+					workspaceId: target.workspaceID,
 					file,
 					source: 'stock_import',
 					retentionClass: 'library',
@@ -277,18 +355,30 @@
 					tagId: uploadTagID(),
 					prepareVideo: false
 				});
+				if (!mediaTargetIsCurrent(target)) return;
 				await queryClient.invalidateQueries({
-					queryKey: mediaQueryKeys.lists(editor.workspaceID)
+					queryKey: mediaQueryKeys.lists(target.workspaceID)
 				});
 				editor.refreshMediaLibrary();
 				await loadAll();
 				const item = media.find((entry) => entry.id === uploaded.id);
-				if (item) addMedia(item);
-				else editor.addImage({ id: uploaded.id, name: uploaded.original_filename });
+				if (item) await addMedia(item, target.replace, target);
+				else
+					await addMedia(
+						{
+							id: uploaded.id,
+							original_filename: uploaded.original_filename,
+							mime_type: file.type,
+							width: 0,
+							height: 0
+						},
+						target.replace,
+						target
+					);
 			}
 			guestSource = 'library';
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.stock_media_download_failed();
+			error = imageEditorErrorMessage(cause) ?? m.stock_media_download_failed();
 		} finally {
 			loading = false;
 		}
@@ -446,7 +536,7 @@
 		<Input
 			bind:ref={guestFileInput}
 			type="file"
-			accept="image/png,image/jpeg,image/webp"
+			accept="image/png,image/jpeg,image/webp,image/gif"
 			multiple
 			class="sr-only !size-px !p-0"
 			onchange={uploadGuestMedia}
@@ -519,7 +609,14 @@
 		{/if}
 		{#if guestMode && guestSource === 'stock'}
 			<div class="mb-4 rounded-lg border bg-card p-2">
-				<StockMediaBrowser accept="photo" compact onSelect={addStockMedia} />
+				<StockMediaBrowser
+					accept="photo"
+					compact
+					onSelectStart={() => {
+						stockMediaTarget = captureMediaTarget();
+					}}
+					onSelect={addStockMedia}
+				/>
 			</div>
 		{:else if guestMode && guestSource === 'camera'}
 			<div class="mb-4">
@@ -575,6 +672,7 @@
 													{
 														id: item.id,
 														name: item.original_filename,
+														mime_type: item.mime_type,
 														width: item.width,
 														height: item.height
 													},
@@ -657,29 +755,37 @@
 		onConfirm={async (ids) => {
 			const id = ids[0];
 			if (!id) return;
-			if (editor.backgroundImagePickerActive) {
-				editor.setPageBackgroundImage(id);
-				editor.backgroundImagePickerActive = false;
-				addedMessage = m.image_editor_media_added({ name: m.image_editor_image() });
-				editor.refreshMediaLibrary();
-				await loadAll();
-				return;
+			const target = captureMediaTarget();
+			if (target.background) {
+				setBackgroundMedia(id, m.image_editor_image());
+			} else {
+				try {
+					const listed = media.find((entry) => entry.id === id);
+					const item =
+						listed ??
+						(await queryMediaMetadata(target.workspaceID, [id])).media.find(
+							(entry) => entry.id === id
+						);
+					if (!item) throw new Error(m.image_editor_export_missing_media());
+					await addMedia(
+						{
+							id: item.id,
+							mime_type: item.mime_type ?? '',
+							original_filename: item.original_filename ?? m.image_editor_image(),
+							width: item.width ?? 0,
+							height: item.height ?? 0
+						},
+						target.replace,
+						target
+					);
+				} catch (cause) {
+					if (mediaTargetIsCurrent(target))
+						error = imageEditorErrorMessage(cause) ?? m.image_editor_animation_failed();
+				}
 			}
+			if (!mediaTargetIsCurrent(target)) return;
 			editor.refreshMediaLibrary();
 			await loadAll();
-			const item = media.find((entry) => entry.id === id);
-			if (item) addMedia(item);
-			else if (replaceMode && editor.selectedLayers[0]?.image) {
-				const selected = editor.selectedLayers[0];
-				editor.updateLayer(selected.id, {
-					image: {
-						...selected.image!,
-						media_id: id
-					}
-				});
-				replaceMode = false;
-			} else editor.addImage({ id });
-			if (!item) addedMessage = m.image_editor_media_added({ name: m.image_editor_image() });
 		}}
 	/>
 {/if}

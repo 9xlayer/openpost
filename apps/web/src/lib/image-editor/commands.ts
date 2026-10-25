@@ -639,8 +639,8 @@ export function imageEditorCommandForKeyboardEvent(
 	const physicalToolKey =
 		!primary &&
 		!event.altKey &&
-		!/^[a-z]$/.test(typedKey) &&
-		!['dead', 'process', 'unidentified'].includes(typedKey) &&
+		/^[\p{L}\p{M}]+$/u.test(typedKey) &&
+		!/\p{Script=Latin}/u.test(typedKey) &&
 		/^Key[A-Z]$/.test(event.code ?? '')
 			? event.code!.slice(3).toLowerCase()
 			: null;

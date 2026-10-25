@@ -9415,6 +9415,52 @@
 				"required": ["id", "provider_id", "organization_id", "domain", "created_at"],
 				"type": "object"
 			},
+			"ImageEditorAnimation": {
+				"additionalProperties": false,
+				"properties": {
+					"frames": {
+						"items": {
+							"$ref": "#/components/schemas/ImageEditorAnimationFrame"
+						},
+						"maxItems": 200,
+						"minItems": 1,
+						"type": ["array", "null"]
+					},
+					"repeat": {
+						"format": "int64",
+						"maximum": 65535,
+						"minimum": -1,
+						"type": "integer"
+					},
+					"source_frame_count": {
+						"format": "int64",
+						"maximum": 200,
+						"minimum": 1,
+						"type": "integer"
+					}
+				},
+				"required": ["source_frame_count", "repeat", "frames"],
+				"type": "object"
+			},
+			"ImageEditorAnimationFrame": {
+				"additionalProperties": false,
+				"properties": {
+					"duration_ms": {
+						"format": "int64",
+						"maximum": 10000,
+						"minimum": 20,
+						"type": "integer"
+					},
+					"source_index": {
+						"format": "int64",
+						"maximum": 199,
+						"minimum": 0,
+						"type": "integer"
+					}
+				},
+				"required": ["source_index", "duration_ms"],
+				"type": "object"
+			},
 			"ImageEditorBrandColor": {
 				"additionalProperties": false,
 				"properties": {
@@ -10049,7 +10095,7 @@
 				"additionalProperties": false,
 				"properties": {
 					"format": {
-						"enum": ["png", "jpeg", "webp"],
+						"enum": ["png", "jpeg", "webp", "gif"],
 						"type": "string"
 					},
 					"matte_color": {
@@ -10182,6 +10228,9 @@
 					"adjustments": {
 						"$ref": "#/components/schemas/ImageEditorImageAdjustments"
 					},
+					"animation": {
+						"$ref": "#/components/schemas/ImageEditorAnimation"
+					},
 					"color_grade_version": {
 						"enum": [1],
 						"format": "int64",
@@ -10196,6 +10245,9 @@
 					},
 					"intrinsic_pending": {
 						"type": "boolean"
+					},
+					"lens_effect": {
+						"$ref": "#/components/schemas/ImageEditorLensEffect"
 					},
 					"media_id": {
 						"type": "string"
@@ -10305,6 +10357,47 @@
 					}
 				},
 				"required": ["shape", "inset", "radius"],
+				"type": "object"
+			},
+			"ImageEditorLensEffect": {
+				"additionalProperties": false,
+				"properties": {
+					"amount": {
+						"format": "double",
+						"maximum": 1,
+						"minimum": 0,
+						"type": "number"
+					},
+					"angle": {
+						"format": "double",
+						"maximum": 180,
+						"minimum": -180,
+						"type": "number"
+					},
+					"blades": {
+						"format": "int64",
+						"maximum": 8,
+						"minimum": 3,
+						"type": "integer"
+					},
+					"kind": {
+						"enum": ["flare", "starburst", "mist", "prism", "bokeh"],
+						"type": "string"
+					},
+					"size": {
+						"format": "double",
+						"maximum": 1,
+						"minimum": 0,
+						"type": "number"
+					},
+					"threshold": {
+						"format": "double",
+						"maximum": 1,
+						"minimum": 0,
+						"type": "number"
+					}
+				},
+				"required": ["kind", "amount", "threshold", "size", "angle", "blades"],
 				"type": "object"
 			},
 			"ImageEditorPageBackground": {

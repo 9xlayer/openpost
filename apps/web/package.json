@@ -122,6 +122,8 @@
 		"d3-shape": "^3.2.0",
 		"fabric": "7.4.0",
 		"fflate": "0.8.3",
+		"gifenc": "1.0.3",
+		"gifuct-js": "2.1.2",
 		"html-to-image": "^1.11.13",
 		"immer": "^11.1.18",
 		"kokoro-js": "1.2.1",

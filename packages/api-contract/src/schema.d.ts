@@ -10810,6 +10810,19 @@ export interface components {
             /** Format: date-time */
             verified_at?: string;
         };
+        ImageEditorAnimation: {
+            frames: components["schemas"]["ImageEditorAnimationFrame"][] | null;
+            /** Format: int64 */
+            repeat: number;
+            /** Format: int64 */
+            source_frame_count: number;
+        };
+        ImageEditorAnimationFrame: {
+            /** Format: int64 */
+            duration_ms: number;
+            /** Format: int64 */
+            source_index: number;
+        };
         ImageEditorBrandColor: {
             id: string;
             name: string;
@@ -11002,7 +11015,7 @@ export interface components {
         };
         ImageEditorExportDefaults: {
             /** @enum {string} */
-            format: "png" | "jpeg" | "webp";
+            format: "png" | "jpeg" | "webp" | "gif";
             matte_color: string;
             /** Format: double */
             quality: number;
@@ -11048,6 +11061,7 @@ export interface components {
         };
         ImageEditorImageValue: {
             adjustments: components["schemas"]["ImageEditorImageAdjustments"];
+            animation?: components["schemas"]["ImageEditorAnimation"];
             /**
              * Format: int64
              * @enum {integer}
@@ -11057,6 +11071,7 @@ export interface components {
             /** @enum {string} */
             fit: "cover" | "contain" | "stretch";
             intrinsic_pending?: boolean;
+            lens_effect?: components["schemas"]["ImageEditorLensEffect"];
             media_id: string;
             /** Format: int64 */
             source_height: number;
@@ -11096,6 +11111,20 @@ export interface components {
             radius: number;
             /** @enum {string} */
             shape: "rectangle" | "rounded_rectangle" | "circle" | "ellipse" | "diamond";
+        };
+        ImageEditorLensEffect: {
+            /** Format: double */
+            amount: number;
+            /** Format: double */
+            angle: number;
+            /** Format: int64 */
+            blades: number;
+            /** @enum {string} */
+            kind: "flare" | "starburst" | "mist" | "prism" | "bokeh";
+            /** Format: double */
+            size: number;
+            /** Format: double */
+            threshold: number;
         };
         ImageEditorPageBackground: {
             color?: string;

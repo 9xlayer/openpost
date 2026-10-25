@@ -6,6 +6,8 @@ import { ImageEditorController } from '../editor.svelte';
 import { blankImageEditorDocument, defaultTransform } from '../document';
 import { rectanglePixelMask } from '../selection';
 import { ImageEditorMagicScan } from '../magic-scan';
+import { registerLocalImageEditorMedia, releaseLocalImageEditorMedia } from '../local-media-url';
+import { writeImageEditorMediaDrag } from '../media-drag';
 import Fixture from './image-editor-canvas.fixture.svelte';
 import '../../../routes/layout.css';
 
@@ -504,3 +506,41 @@ it.each([1, 2])(
 		await expect.poll(() => editor.activePage!.layers[0].paint!.spans).toEqual([]);
 	}
 );
+
+it('imports a library GIF drop with its animation and captured document position', async () => {
+	const blob = await (
+		await fetch(new URL('../../video-editor/media/fixtures/animated-rgb.gif', import.meta.url))
+	).blob();
+	const id = 'local_media_dropped_gif';
+	registerLocalImageEditorMedia(id, blob);
+	const editor = floatingSelection();
+	editor.cancelFloatingPixelSelection();
+	editor.clearPixelSelection();
+	editor.document!.pages[0].layers = [];
+	try {
+		const screen = await render(Fixture, { editor });
+		await expect.poll(() => screen.container.querySelector('.upper-canvas')).not.toBeNull();
+		editor.zoom = 1;
+		const surface = screen.getByTestId('image-editor-selection-surface').element();
+		await expect.poll(() => surface.getBoundingClientRect().width).toBeCloseTo(400, 1);
+		const bounds = surface.getBoundingClientRect();
+		const transfer = new DataTransfer();
+		writeImageEditorMediaDrag(transfer, { id, name: 'dropped.gif', width: 8, height: 8 });
+		surface.dispatchEvent(
+			new DragEvent('drop', {
+				bubbles: true,
+				cancelable: true,
+				dataTransfer: transfer,
+				clientX: bounds.left + 80,
+				clientY: bounds.top + 60
+			})
+		);
+		await expect.poll(() => editor.activePage?.layers.length).toBe(1);
+		expect(editor.activePage?.layers[0].image?.animation?.frames).toHaveLength(3);
+		const transform = editor.activePage!.layers[0].transform;
+		expect(transform.x + transform.width / 2).toBeCloseTo(80, 0);
+		expect(transform.y + transform.height / 2).toBeCloseTo(60, 0);
+	} finally {
+		releaseLocalImageEditorMedia(id);
+	}
+});

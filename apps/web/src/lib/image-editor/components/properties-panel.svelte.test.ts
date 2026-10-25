@@ -6,6 +6,7 @@ import { blankImageEditorDocument, defaultImageAdjustments, defaultTransform } f
 import type { ImageEditorLayer } from '../types';
 import Fixture from './properties-panel.fixture.svelte';
 import '../../../routes/layout.css';
+import { registerLocalImageEditorMedia, releaseLocalImageEditorMedia } from '../local-media-url';
 
 function setup(layers: ImageEditorLayer[]): ImageEditorController {
 	const editor = new ImageEditorController();
@@ -69,6 +70,67 @@ function imageLayer(): ImageEditorLayer {
 		}
 	};
 }
+
+it('edits GIF frames and timing through undoable controls, with playback kept out of authored history', async () => {
+	const blob = await (
+		await fetch(new URL('../../video-editor/media/fixtures/animated-rgb.gif', import.meta.url))
+	).blob();
+	const mediaID = 'local_media_frame-controls';
+	registerLocalImageEditorMedia(mediaID, blob);
+	const layer = imageLayer();
+	layer.name = 'animation.gif';
+	layer.image = {
+		...layer.image!,
+		media_id: mediaID,
+		source_width: 16,
+		source_height: 12,
+		animation: {
+			source_frame_count: 3,
+			repeat: 0,
+			frames: [0, 1, 2].map((source_index) => ({ source_index, duration_ms: 100 }))
+		}
+	};
+	const editor = setup([layer]);
+	editor.selectLayer(layer.id);
+	const screen = await render(Fixture, { editor });
+	try {
+		await expect
+			.element(screen.getByRole('status', { name: '' }).getByText('Loading GIF frames…'))
+			.not.toBeInTheDocument();
+		await screen.getByRole('button', { name: 'Frame 3, 100 ms', exact: true }).click();
+		await screen.getByRole('button', { name: 'Duplicate frame', exact: true }).click();
+		editor.undo();
+		await expect
+			.element(screen.getByRole('button', { name: 'Frame 3, 100 ms', exact: true }))
+			.toHaveAttribute('aria-pressed', 'true');
+		await expect
+			.element(screen.getByRole('button', { name: 'Frame 3, 100 ms', exact: true }))
+			.toHaveAttribute('tabindex', '0');
+		await screen.getByRole('button', { name: 'Frame 2, 100 ms', exact: true }).click();
+		await screen.getByRole('button', { name: 'Duplicate frame', exact: true }).click();
+		expect(
+			editor.selectedLayers[0].image?.animation?.frames.map((frame) => frame.source_index)
+		).toEqual([0, 1, 1, 2]);
+		await screen.getByRole('button', { name: 'Delete frame', exact: true }).click();
+		expect(
+			editor.selectedLayers[0].image?.animation?.frames.map((frame) => frame.source_index)
+		).toEqual([0, 1, 2]);
+		const duration = screen.getByLabelText('Frame duration (ms)', { exact: true });
+		await duration.fill('200');
+		await userEvent.tab();
+		expect(editor.selectedLayers[0].image?.animation?.frames[2].duration_ms).toBe(200);
+		editor.undo();
+		expect(editor.selectedLayers[0].image?.animation?.frames[2].duration_ms).toBe(100);
+		editor.redo();
+		const beforePlayback = editor.document;
+		await screen.getByRole('button', { name: 'Play animation', exact: true }).click();
+		await expect.poll(() => editor.animationTimeMs).toBeGreaterThan(0);
+		await screen.getByRole('button', { name: 'Pause animation', exact: true }).click();
+		expect(editor.document).toBe(beforePlayback);
+	} finally {
+		releaseLocalImageEditorMedia(mediaID);
+	}
+});
 
 it('opens Transform and exposes alignment for a multi-layer selection', async () => {
 	const editor = setup([shape('One', 0), shape('Two', 200)]);
@@ -232,4 +294,46 @@ it('disables locked shape radius and preserves accepted edits through Undo and r
 	cold.selectLayer(rounded.id);
 	expect(cold.selectedLayers[0]).toMatchObject({ locked: true, shape: { radius: 80 } });
 	await expect.element(radius).toBeDisabled();
+});
+
+it('plays every visible GIF through its ending when a shorter layer is selected', async () => {
+	const blob = await (
+		await fetch(new URL('../../video-editor/media/fixtures/animated-rgb.gif', import.meta.url))
+	).blob();
+	const mediaID = 'local_media_composed-playback';
+	registerLocalImageEditorMedia(mediaID, blob);
+	const short = imageLayer();
+	short.id = 'short';
+	short.name = 'short.gif';
+	short.image = {
+		...short.image!,
+		media_id: mediaID,
+		animation: {
+			source_frame_count: 3,
+			repeat: -1,
+			frames: [
+				{ source_index: 0, duration_ms: 100 },
+				{ source_index: 1, duration_ms: 100 }
+			]
+		}
+	};
+	const long = structuredClone(short);
+	long.id = 'long';
+	long.name = 'long.gif';
+	long.image!.animation!.frames = [0, 1, 2].map((source_index) => ({
+		source_index,
+		duration_ms: 200
+	}));
+	const editor = setup([short, long]);
+	editor.selectLayer('short');
+	const screen = await render(Fixture, { editor });
+	try {
+		const play = screen.getByRole('button', { name: 'Play animation', exact: true });
+		await expect.element(play).toBeEnabled();
+		await play.click();
+		await expect.poll(() => editor.animationTimeMs).toBeGreaterThanOrEqual(599);
+		await expect.element(play).toBeVisible();
+	} finally {
+		releaseLocalImageEditorMedia(mediaID);
+	}
 });

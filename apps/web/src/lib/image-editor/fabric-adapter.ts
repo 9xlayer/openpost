@@ -1,6 +1,11 @@
+import { ImageEditorAnimationError } from './animation-error';
 import { abortable } from '$lib/abortable';
 import { renderCurvedText } from './curved-text';
 import { imageEditorTextFontFamily, loadImageEditorTextFont } from './fonts';
+import { renderImageEditorLensEffect } from './lens-effects';
+import { readImageEditorGif } from './gif-client';
+import type { ImageEditorGifInfo } from './gif-source';
+import { imageEditorAnimationFrame, IMAGE_EDITOR_ANIMATION_LIMITS } from './animation';
 import { hasEditorColorGrade } from '$lib/editor-color-grade/model';
 import { getAuthenticatedMediaURL } from '$lib/media-url';
 import type {
@@ -48,6 +53,7 @@ type FabricObject = InstanceType<FabricModule['FabricObject']> & {
 	__imageEditorSourceWidth?: number;
 	__imageEditorSourceHeight?: number;
 	__imageEditorGradeApplied?: boolean;
+	__imageEditorAnimationSourceIndex?: number;
 	snapAngle?: number;
 	snapThreshold?: number;
 	__corner?: string;
@@ -398,6 +404,9 @@ export class OpenPostFabricAdapter {
 	private fabric: FabricModule | null = null;
 	private canvas: FabricStaticCanvas | null = null;
 	private readonly element: HTMLCanvasElement;
+	private animationTimeMs = 0;
+	private animationFrameOverrides: Readonly<Record<string, number>> = {};
+	private gifSources = new Map<string, ImageEditorGifInfo & { pixels: ArrayBuffer[] }>();
 	private objectURLs = new Set<string>();
 	private objectByLayerID = new Map<string, FabricObject>();
 	private decorationsByLayerID = new Map<string, FabricObject[]>();
@@ -583,12 +592,24 @@ export class OpenPostFabricAdapter {
 		this.syncing = false;
 	}
 
-	async sync(document: ImageEditorDocument, page: ImageEditorPage): Promise<void> {
+	async sync(
+		document: ImageEditorDocument,
+		page: ImageEditorPage,
+		animation?: { timeMs: number; frameOverrides?: Readonly<Record<string, number>> }
+	): Promise<void> {
+		if (animation) {
+			this.animationTimeMs = animation.timeMs;
+			this.animationFrameOverrides = animation.frameOverrides ?? {};
+		}
 		if (!this.canvas || !this.fabric) return;
 		const dimensionsChanged =
 			imageEditorPageDimensions(document, page).width !== this.pageDimensions.width ||
 			imageEditorPageDimensions(document, page).height !== this.pageDimensions.height;
 		const pageChanged = page.id !== this.page.id;
+		const retainedGIFs = new Set(
+			page.layers.flatMap((layer) => (layer.image?.animation ? [layer.image.media_id] : []))
+		);
+		for (const id of this.gifSources.keys()) if (!retainedGIFs.has(id)) this.gifSources.delete(id);
 		const backgroundChanged =
 			JSON.stringify(imageEditorPageBackground(page)) !== this.backgroundSnapshot;
 		if (dimensionsChanged || pageChanged) {
@@ -651,7 +672,16 @@ export class OpenPostFabricAdapter {
 			for (const layer of imageEditorLayerRenderOrder(page.layers)) {
 				const previous = this.layerSnapshots.get(layer.id);
 				let object = this.objectByLayerID.get(layer.id);
-				if (previous === layer && object && !this.curvedTextNeedsRefresh.has(object)) {
+				const animationChanged = Boolean(
+					layer.image?.animation &&
+					object?.__imageEditorAnimationSourceIndex !== this.animationSourceIndex(layer)
+				);
+				if (
+					previous === layer &&
+					object &&
+					!animationChanged &&
+					!this.curvedTextNeedsRefresh.has(object)
+				) {
 					// Ancestor edits change inherited flags without changing the child artwork.
 					if (hierarchyChanged) {
 						const interaction = this.layerInteractionOptions(layer);
@@ -662,10 +692,18 @@ export class OpenPostFabricAdapter {
 					}
 					continue;
 				}
-				if (previous && alphaHitFingerprint(previous) !== alphaHitFingerprint(layer)) {
+				if (
+					animationChanged ||
+					(previous && alphaHitFingerprint(previous) !== alphaHitFingerprint(layer))
+				) {
 					this.alphaHitMasks.delete(layer.id);
 				}
-				if (!previous || !object || this.requiresObjectRebuild(previous, layer)) {
+				if (
+					!previous ||
+					!object ||
+					animationChanged ||
+					this.requiresObjectRebuild(previous, layer)
+				) {
 					if (object) this.removeLayerObjects(layer.id, object);
 					const replacement = await this.createObject(layer);
 					if (sequence !== this.renderSequence) {
@@ -1230,6 +1268,7 @@ export class OpenPostFabricAdapter {
 
 	dispose(): void {
 		this.disposed = true;
+		this.gifSources.clear();
 		this.renderAbort.abort();
 		this.renderSequence++;
 		this.releaseTextInput();
@@ -1748,6 +1787,58 @@ export class OpenPostFabricAdapter {
 		}
 	}
 
+	private animationSourceIndex(layer: ImageEditorLayer): number {
+		const animation = layer.image!.animation!;
+		const override = this.animationFrameOverrides[layer.id];
+		const index =
+			override === undefined
+				? imageEditorAnimationFrame(animation, this.animationTimeMs)
+				: Math.min(animation.frames.length - 1, Math.max(0, override));
+		return animation.frames[index].source_index;
+	}
+
+	private async loadAnimatedMediaImage(layer: ImageEditorLayer): Promise<FabricImageObject | null> {
+		if (!this.fabric || !layer.image?.animation) return null;
+		const signal = this.renderSignal;
+		const mediaID = layer.image.media_id;
+		let source = this.gifSources.get(mediaID);
+		if (!source) {
+			const response = await fetch(getAuthenticatedMediaURL(`/media/${mediaID}`), {
+				credentials: 'include',
+				signal
+			});
+			if (!response.ok) throw new ImageEditorAnimationError('missing_media');
+			source = await readImageEditorGif(await response.blob(), true, signal);
+			signal.throwIfAborted();
+			const retainedPixels = [...this.gifSources.values()].reduce(
+				(sum, gif) => sum + gif.width * gif.height * gif.pixels.length,
+				0
+			);
+			if (
+				retainedPixels + source.width * source.height * source.pixels.length >
+				IMAGE_EDITOR_ANIMATION_LIMITS.maxDecodedPixels
+			)
+				throw new ImageEditorAnimationError('source_limit');
+			this.gifSources.set(mediaID, source);
+		}
+		const sourceIndex = this.animationSourceIndex(layer);
+		const pixels = source.pixels[sourceIndex];
+		if (!pixels) throw new ImageEditorAnimationError('frame_missing');
+		const canvas = document.createElement('canvas');
+		canvas.width = source.width;
+		canvas.height = source.height;
+		canvas
+			.getContext('2d')!
+			.putImageData(
+				new ImageData(new Uint8ClampedArray(pixels), source.width, source.height),
+				0,
+				0
+			);
+		const image: FabricImageObject = new this.fabric.FabricImage(canvas);
+		image.__imageEditorAnimationSourceIndex = sourceIndex;
+		return image;
+	}
+
 	private async createPageBackgroundObject(page: ImageEditorPage): Promise<FabricObject | null> {
 		if (!this.fabric || !this.canvas) return null;
 		const background = imageEditorPageBackground(page);
@@ -2000,7 +2091,9 @@ export class OpenPostFabricAdapter {
 		if (layer.type === 'image' && layer.image) {
 			const layerMediaID = layer.image.media_id;
 			const sequence = this.renderSequence;
-			const image = await this.loadMediaImage(layerMediaID, layer.id);
+			const image = layer.image.animation
+				? await this.loadAnimatedMediaImage(layer)
+				: await this.loadMediaImage(layerMediaID, layer.id);
 			if (!image) return null;
 			const sourceWidth = Math.max(1, image.width);
 			const sourceHeight = Math.max(1, image.height);
@@ -2022,11 +2115,15 @@ export class OpenPostFabricAdapter {
 					image.__imageEditorRenderWidth ?? sourceWidth,
 					image.__imageEditorRenderHeight ?? sourceHeight
 				);
-			image.set({
-				...options,
-				...geometry
-			});
 			this.applyImageFilters(image, layer);
+			if (layer.image.lens_effect) {
+				const source = image.getElement();
+				image.filters = [];
+				image.setElement(
+					renderImageEditorLensEffect(source, image.width, image.height, layer.image.lens_effect)
+				);
+			}
+			image.set({ ...options, ...geometry });
 			object = image;
 			object.__imageEditorSourceWidth = sourceWidth;
 			object.__imageEditorSourceHeight = sourceHeight;
@@ -2106,6 +2203,10 @@ export class OpenPostFabricAdapter {
 		if (next.type !== 'image') return false;
 		return (
 			previous.image?.media_id !== next.image?.media_id ||
+			JSON.stringify(previous.image?.lens_effect) !== JSON.stringify(next.image?.lens_effect) ||
+			JSON.stringify(previous.image?.animation) !== JSON.stringify(next.image?.animation) ||
+			(Boolean(next.image?.lens_effect) &&
+				JSON.stringify(previous.image?.adjustments) !== JSON.stringify(next.image?.adjustments)) ||
 			previous.image?.fit !== next.image?.fit ||
 			JSON.stringify(previous.image?.crop) !== JSON.stringify(next.image?.crop) ||
 			previous.image?.color_grade_version !== next.image?.color_grade_version
@@ -2145,6 +2246,7 @@ export class OpenPostFabricAdapter {
 			// SAFETY: image layers are rebuilt as FabricImage objects whenever their layer type changes.
 			const image = object as FabricImageObject;
 			if (
+				!layer.image.lens_effect &&
 				layer.image.color_grade_version === IMAGE_COLOR_GRADE_VERSION &&
 				image.__imageEditorGradeSource
 			) {
@@ -2159,7 +2261,7 @@ export class OpenPostFabricAdapter {
 				...common
 			});
 			this.applyImageGeometry(object, layer);
-			this.applyImageFilters(image, layer);
+			if (!layer.image.lens_effect) this.applyImageFilters(image, layer);
 		} else if (layer.type === 'text' && layer.text) {
 			if (!isEditableFabricText(object)) return;
 			const textObject = object;
@@ -2878,7 +2980,7 @@ export class OpenPostFabricAdapter {
 		sourceHeight: number
 	): ImageGradeRenderPlan {
 		// Interactive pixels feed selection/erase tools; exports retain full source detail.
-		if (!this.staticMode || this.renderScale >= 1)
+		if (!this.staticMode || this.renderScale >= 1 || layer.image?.lens_effect)
 			return { width: sourceWidth, height: sourceHeight };
 		const geometry = computeImageGeometry(layer, sourceWidth, sourceHeight);
 		const scale = Math.min(
@@ -3077,6 +3179,7 @@ export class OpenPostFabricAdapter {
 		}
 		this.decorationsByLayerID.delete(id);
 		this.releaseObjectURL(object);
+		object.dispose();
 	}
 
 	private releaseObjectURL(object: FabricObject): void {

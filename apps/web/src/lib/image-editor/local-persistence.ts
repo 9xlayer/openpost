@@ -15,6 +15,7 @@ import {
 } from './local-media-url';
 import { m } from '$lib/paraglide/messages';
 import { loadImageEditorTextFont } from './fonts';
+import { readImageEditorGif } from './gif-client';
 import type { StockMediaProvenance } from '$lib/stock-media';
 import { IMAGE_COLOR_GRADE_VERSION } from '$lib/editor-color-grade/model';
 import type {
@@ -178,7 +179,9 @@ export async function createGuestImageEditorDesignFromImage(
 	title: string
 ): Promise<ImageEditorDocumentResponse> {
 	assertSupportedGuestImage(file);
-	const dimensions = await imageDimensions(file);
+	const gif = file.type === 'image/gif' ? await readImageEditorGif(file, false) : undefined;
+	const dimensions = gif ?? (await imageDimensions(file));
+	const animation = gif?.animation;
 	const canvasSize = fitSourceSize(dimensions.width, dimensions.height);
 	const preset: ImageEditorPreset = {
 		key: 'custom',
@@ -202,6 +205,7 @@ export async function createGuestImageEditorDesignFromImage(
 			transform: defaultTransform(document.width_px, document.height_px),
 			image: {
 				media_id: media.id,
+				animation,
 				source_width: dimensions.width,
 				source_height: dimensions.height,
 				fit: 'stretch',
@@ -342,11 +346,13 @@ export async function storeGuestImageEditorProjectMedia(
 export async function storeGuestImageEditorMedia(
 	designID: string,
 	file: File,
-	options: { provenance?: StockMediaProvenance } = {}
+	options: { provenance?: StockMediaProvenance; signal?: AbortSignal } = {}
 ): Promise<ImageEditorMediaItem> {
 	const mediaGeneration = localImageEditorMediaGeneration(designID);
 	assertSupportedGuestImage(file);
-	const dimensions = await imageDimensions(file);
+	options.signal?.throwIfAborted();
+	const dimensions = await imageDimensions(file, options.signal);
+	options.signal?.throwIfAborted();
 	return await storeGuestAsset(designID, file, dimensions, options, mediaGeneration);
 }
 
@@ -672,12 +678,16 @@ function guestMediaItem(record: LocalImageEditorMedia): ImageEditorMediaItem {
 }
 
 function assertSupportedGuestImage(file: File): void {
-	if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+	if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
 		throw new Error(m.image_editor_public_image_type());
 	}
 }
 
-async function imageDimensions(blob: Blob): Promise<PixelSize> {
+async function imageDimensions(blob: Blob, signal?: AbortSignal): Promise<PixelSize> {
+	if (blob.type === 'image/gif') {
+		const { width, height } = await readImageEditorGif(blob, false, signal);
+		return { width, height };
+	}
 	try {
 		const bitmap = await createImageBitmap(blob);
 		const dimensions = { width: bitmap.width, height: bitmap.height };

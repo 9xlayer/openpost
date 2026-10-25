@@ -1,4 +1,10 @@
 <script lang="ts">
+	import { inspectImageEditorMediaAnimation } from '../media-ingestion';
+	import {
+		captureQueryMutationSession,
+		queryMutationSessionIsCurrent
+	} from '$lib/query/authorization-boundary';
+	import { imageEditorErrorMessage } from '$lib/image-editor/animation-error-message';
 	import { onDestroy, tick } from 'svelte';
 	import EditorColorMagnifier from '$lib/components/editor-color-magnifier.svelte';
 	import {
@@ -94,6 +100,8 @@
 	}
 
 	const editor = useImageEditor();
+	const ingestionAbort = new AbortController();
+	onDestroy(() => ingestionAbort.abort());
 	const magicScan = new ImageEditorMagicScan();
 	const GRID_BACKGROUND_IMAGE =
 		'linear-gradient(to right, rgb(249 115 22 / 0.22) 1px, transparent 1px), linear-gradient(to bottom, rgb(249 115 22 / 0.22) 1px, transparent 1px)';
@@ -372,13 +380,20 @@
 	$effect(() => {
 		const document = editor.document;
 		const page = editor.activePage;
+		const animation = {
+			timeMs: editor.animationTimeMs,
+			frameOverrides: editor.animationFrameOverrides
+		};
 		if (!adapter || !document || !page) return;
 		if (document === canvasOriginDocument) {
 			canvasOriginDocument = null;
 			adapter.accept(document, page);
 			return;
 		}
-		void adapter.sync(document, page);
+		void adapter.sync(document, page, animation).catch((cause) => {
+			if (!(cause instanceof DOMException && cause.name === 'AbortError'))
+				canvasError = imageEditorErrorMessage(cause) ?? m.image_editor_canvas_failed();
+		});
 	});
 
 	$effect(() => {
@@ -1728,7 +1743,7 @@
 		if (mediaDragDepth === 0) mediaDropActive = false;
 	}
 
-	function handleMediaDrop(event: DragEvent): void {
+	async function handleMediaDrop(event: DragEvent): Promise<void> {
 		const payload = readImageEditorMediaDrag(event.dataTransfer);
 		const files = payload ? [] : externalFiles(event.dataTransfer);
 		mediaDragDepth = 0;
@@ -1738,8 +1753,33 @@
 		if (!editor.canEdit) return;
 		const point = documentPoint(event);
 		if (!point) return;
-		if (payload) editor.addImage(payload, point);
-		else void onExternalFiles?.(files, point, editor.activePageID);
+		if (payload) {
+			const target = {
+				designID: editor.id,
+				pageID: editor.activePageID,
+				workspaceID: editor.workspaceID,
+				session: captureQueryMutationSession()
+			};
+			try {
+				const animation = await inspectImageEditorMediaAnimation(payload, ingestionAbort.signal);
+				if (
+					ingestionAbort.signal.aborted ||
+					editor.id !== target.designID ||
+					editor.activePageID !== target.pageID ||
+					editor.workspaceID !== target.workspaceID ||
+					!queryMutationSessionIsCurrent(target.session)
+				)
+					return;
+				editor.addImage({ ...payload, animation }, point, target.pageID);
+			} catch (cause) {
+				if (
+					!ingestionAbort.signal.aborted &&
+					editor.id === target.designID &&
+					editor.activePageID === target.pageID
+				)
+					canvasError = imageEditorErrorMessage(cause) ?? m.image_editor_animation_failed();
+			}
+		} else void onExternalFiles?.(files, point, editor.activePageID);
 	}
 
 	function startPan(event: PointerEvent): void {

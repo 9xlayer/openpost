@@ -64,6 +64,8 @@ describe('OpenPost Image Editor command registry', () => {
 			).toBeNull();
 		}
 		expect(imageEditorCommandForKeyboardEvent({ ...key('Dead'), code: 'KeyB' })).toBeNull();
+		expect(imageEditorCommandForKeyboardEvent({ ...key(','), code: 'KeyW' })).toBeNull();
+		expect(imageEditorCommandForKeyboardEvent({ ...key('é'), code: 'KeyB' })).toBeNull();
 		expect(
 			imageEditorCommandForKeyboardEvent({ ...key('д', { shiftKey: true }), code: 'KeyL' })
 		).toBe('tool_polygonal_lasso');

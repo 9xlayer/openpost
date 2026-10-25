@@ -1,6 +1,8 @@
 import { rasterizeSVGToPNG, isSVGFile } from '$lib/media/svg-rasterize';
 import { assertSafeSvg } from '$lib/media/safe-svg';
 import { IMAGE_EDITOR_LIMITS } from './types';
+import type { ImageEditorAnimation } from './types';
+import { readImageEditorGif } from './gif-client';
 
 export const IMAGE_EDITOR_IMPORT_LIMITS = {
 	maxFileBytes: 50 * 1024 * 1024,
@@ -33,6 +35,7 @@ export interface PreparedImageEditorImport {
 	width: number;
 	height: number;
 	decodedBytes: number;
+	animation?: ImageEditorAnimation;
 }
 
 const MIME_BY_EXTENSION = new Map([
@@ -72,9 +75,22 @@ export function assertImageEditorImportAdmission(
 
 export async function prepareImageEditorImport(
 	file: File,
-	options: { guestMode: boolean }
+	options: { guestMode: boolean; signal?: AbortSignal }
 ): Promise<PreparedImageEditorImport> {
 	const mime = assertImageEditorImportAdmission(file);
+	if (mime === 'image/gif') {
+		const gif = await readImageEditorGif(file, false, options.signal);
+		return {
+			file:
+				file.type === 'image/gif'
+					? file
+					: new File([file], file.name, { type: 'image/gif', lastModified: file.lastModified }),
+			width: gif.width,
+			height: gif.height,
+			decodedBytes: gif.width * gif.height * gif.animation.source_frame_count * 4,
+			animation: gif.animation.source_frame_count > 1 ? gif.animation : undefined
+		};
+	}
 	let prepared = file;
 	if (isSVGFile(file)) {
 		await assertSafeImageEditorSVG(file);

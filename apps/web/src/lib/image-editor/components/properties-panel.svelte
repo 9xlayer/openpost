@@ -11,6 +11,8 @@
 	import ColorPicker from '$lib/components/color-picker.svelte';
 	import ImageColorWorkspace from './image-color-workspace.svelte';
 	import LayerEffectsPanel from './layer-effects-panel.svelte';
+	import LensEffectProperties from './lens-effect-properties.svelte';
+	import AnimationProperties from './animation-properties.svelte';
 	import PageBackgroundEditor from './page-background-editor.svelte';
 	import TextContentProperties from './text-content-properties.svelte';
 	import { textRunStyleAt } from '../text-runs';
@@ -620,6 +622,10 @@
 
 				{#if layer.type !== 'group'}
 					{#key layer.id}<LayerEffectsPanel {layer} />{/key}
+				{/if}
+				{#if layer.image}
+					<LensEffectProperties {layer} />
+					{#key layer.id}<AnimationProperties {layer} />{/key}
 				{/if}
 
 				{#if layer.type === 'text' && layer.text}

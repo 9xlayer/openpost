@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { imageEditorErrorMessage } from '$lib/image-editor/animation-error-message';
 	import { onMount, tick, untrack } from 'svelte';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { replaceEqualDeep } from '@tanstack/svelte-query';
@@ -111,6 +112,7 @@
 		type ImageEditorRenderedPage
 	} from '../static-renderer';
 	import { imageEditorExportBudget } from '../export-budget';
+	import { imageEditorPageAnimations } from '../animation';
 	import { imageEditorPageDimensions } from '../page-dimensions';
 	import {
 		imageEditorPageExportFingerprint,
@@ -616,10 +618,7 @@
 				(cause instanceof DOMException && cause.name === 'AbortError')
 			)
 				return;
-			exportPreviewError =
-				cause instanceof Error && cause.message
-					? cause.message
-					: m.image_editor_export_preview_failed();
+			exportPreviewError = imageEditorErrorMessage(cause) || m.image_editor_export_preview_failed();
 		} finally {
 			if (generation === exportPreviewGeneration) {
 				exportPreviewBusy = false;
@@ -745,7 +744,7 @@
 		if (
 			coverHandoff &&
 			exportMode === 'attach' &&
-			editor.document?.export_defaults.format === 'webp'
+			['webp', 'gif'].includes(editor.document?.export_defaults.format ?? '')
 		) {
 			editor.mutate('Change cover export format', (document) => {
 				document.export_defaults.format = 'png';
@@ -1465,7 +1464,7 @@
 				statusAnnouncement = editor.saveMessage;
 			} else {
 				editor.saveState = 'error';
-				editor.saveMessage = cause instanceof Error ? cause.message : m.image_editor_save_failed();
+				editor.saveMessage = imageEditorErrorMessage(cause) ?? m.image_editor_save_failed();
 				statusAnnouncement = editor.saveMessage;
 			}
 			return retryable ? 'retry' : 'blocked';
@@ -1565,8 +1564,7 @@
 			statusAnnouncement = m.image_editor_conflict_reloaded_with_copy();
 		} catch (cause) {
 			if (!editorMutationViewIsCurrent(view)) return;
-			conflictError =
-				cause instanceof Error ? cause.message : m.image_editor_conflict_preserve_failed();
+			conflictError = imageEditorErrorMessage(cause) ?? m.image_editor_conflict_preserve_failed();
 			statusAnnouncement = conflictError;
 		} finally {
 			if (operationSequence === conflictOperationSequence) conflictBusy = false;
@@ -1592,8 +1590,7 @@
 			await goto(resolveAppPath(`/image-editor/${saved.id}`));
 		} catch (cause) {
 			if (!editorMutationViewIsCurrent(view)) return;
-			conflictError =
-				cause instanceof Error ? cause.message : m.image_editor_conflict_preserve_failed();
+			conflictError = imageEditorErrorMessage(cause) ?? m.image_editor_conflict_preserve_failed();
 			statusAnnouncement = conflictError;
 		} finally {
 			if (operationSequence === conflictOperationSequence) conflictBusy = false;
@@ -1648,8 +1645,7 @@
 			setTimeout(() => URL.revokeObjectURL(url), 0);
 			statusAnnouncement = m.image_editor_project_exported();
 		} catch (cause) {
-			projectError =
-				cause instanceof Error ? cause.message : m.image_editor_project_export_failed();
+			projectError = imageEditorErrorMessage(cause) ?? m.image_editor_project_export_failed();
 			statusAnnouncement = projectError;
 		} finally {
 			projectBusy = false;
@@ -1748,7 +1744,7 @@
 						})
 					: m.image_editor_project_import_partial_recoverable({
 							count: recovery.replacements.size,
-							error: cause instanceof Error ? cause.message : m.image_editor_project_import_failed()
+							error: imageEditorErrorMessage(cause) ?? m.image_editor_project_import_failed()
 						});
 			statusAnnouncement = projectError;
 		} finally {
@@ -1843,7 +1839,7 @@
 			revisions = page.revisions;
 			revisionNextCursor = page.nextCursor ?? '';
 		} catch (cause) {
-			historyError = cause instanceof Error ? cause.message : m.image_editor_history_load_failed();
+			historyError = imageEditorErrorMessage(cause) ?? m.image_editor_history_load_failed();
 		} finally {
 			historyBusy = false;
 		}
@@ -1861,7 +1857,7 @@
 			revisions = [...revisions, ...page.revisions.filter((revision) => !known.has(revision.id))];
 			revisionNextCursor = page.nextCursor ?? '';
 		} catch (cause) {
-			historyError = cause instanceof Error ? cause.message : m.image_editor_history_load_failed();
+			historyError = imageEditorErrorMessage(cause) ?? m.image_editor_history_load_failed();
 		} finally {
 			historyPageBusy = false;
 		}
@@ -1900,8 +1896,7 @@
 			if (request === revisionPreviewRequest) revisionPreview = preview;
 		} catch (cause) {
 			if (request === revisionPreviewRequest) {
-				historyError =
-					cause instanceof Error ? cause.message : m.image_editor_history_load_failed();
+				historyError = imageEditorErrorMessage(cause) ?? m.image_editor_history_load_failed();
 			}
 		} finally {
 			if (request === revisionPreviewRequest) {
@@ -1937,7 +1932,7 @@
 				setHistoryDialogOpen(false);
 				openConflictRecovery();
 			} else {
-				historyError = cause instanceof Error ? cause.message : m.image_editor_checkpoint_failed();
+				historyError = imageEditorErrorMessage(cause) ?? m.image_editor_checkpoint_failed();
 			}
 		} finally {
 			if (operationSequence === historyMutationSequence) historyBusy = false;
@@ -1989,7 +1984,7 @@
 				setHistoryDialogOpen(false);
 				openConflictRecovery();
 			} else {
-				historyError = cause instanceof Error ? cause.message : m.image_editor_restore_failed();
+				historyError = imageEditorErrorMessage(cause) ?? m.image_editor_restore_failed();
 			}
 		} finally {
 			if (operationSequence === historyMutationSequence) historyBusy = false;
@@ -2032,7 +2027,7 @@
 					: m.image_editor_template_replaced();
 		} catch (cause) {
 			if (!editorMutationViewIsCurrent(view)) return;
-			historyError = cause instanceof Error ? cause.message : m.image_editor_template_save_failed();
+			historyError = imageEditorErrorMessage(cause) ?? m.image_editor_template_save_failed();
 		} finally {
 			if (operationSequence === historyMutationSequence) historyBusy = false;
 		}
@@ -2049,8 +2044,7 @@
 				(template) => !template.built_in
 			);
 		} catch (cause) {
-			historyError =
-				cause instanceof Error ? cause.message : m.image_editor_templates_load_failed();
+			historyError = imageEditorErrorMessage(cause) ?? m.image_editor_templates_load_failed();
 		}
 	}
 
@@ -2147,6 +2141,7 @@
 		pageID: string
 	): Promise<void> {
 		if (!editor.canEdit || requests.length === 0 || externalDropBusy) return;
+		const view = captureEditorMutationView();
 		externalDropBusy = true;
 		externalDropError = '';
 		externalDropRetry = null;
@@ -2156,7 +2151,12 @@
 		const targetPage = editor.document?.pages.find((page) => page.id === pageID);
 		const availableSlots = availableImageEditorImportSlots(targetPage?.layers.length ?? 0);
 		const prepared: Array<
-			ExternalImportRequest & { preparedFile: File; width: number; height: number }
+			ExternalImportRequest & {
+				preparedFile: File;
+				width: number;
+				height: number;
+				animation?: import('../types').ImageEditorAnimation;
+			}
 		> = [];
 		let decodedBytes = 0;
 		let inserted = 0;
@@ -2170,13 +2170,14 @@
 				updateExternalImportItem(request.id, { status: 'preparing', error: undefined });
 				try {
 					if (prepared.length >= availableSlots) throw new ImageEditorImportError('layer_limit');
-					const result = await prepareImageEditorImport(request.file, { guestMode });
+					const result = await prepareImageEditorImport(request.file, { guestMode, signal });
 					decodedBytes = assertImageEditorBatchMemory(decodedBytes, result.decodedBytes);
 					prepared.push({
 						...request,
 						preparedFile: result.file,
 						width: result.width,
-						height: result.height
+						height: result.height,
+						animation: result.animation
 					});
 				} catch (cause) {
 					updateExternalImportItem(request.id, {
@@ -2203,21 +2204,24 @@
 						throw new ImageEditorImportError('layer_limit');
 					}
 					const media = guestMode
-						? await storeGuestImageEditorMedia(editor.id, request.preparedFile)
+						? await storeGuestImageEditorMedia(view.designID, request.preparedFile, { signal })
 						: await uploadMediaFile({
-								workspaceId: editor.workspaceID,
+								workspaceId: view.workspaceID,
 								file: request.preparedFile,
 								source: 'upload',
 								retentionClass: 'library',
 								signal
 							});
+					signal.throwIfAborted();
+					if (!editorMutationViewIsCurrent(view)) break;
 					const offset = request.offset * 24;
 					editor.addImage(
 						{
 							id: media.id,
 							name: media.original_filename,
 							width: request.width,
-							height: request.height
+							height: request.height,
+							animation: request.animation
 						},
 						{ x: point.x + offset, y: point.y + offset },
 						pageID
@@ -2291,7 +2295,7 @@
 
 	function imageEditorImportErrorMessage(cause: unknown): string {
 		if (!(cause instanceof ImageEditorImportError)) {
-			return cause instanceof Error ? cause.message : m.image_editor_external_drop_failed();
+			return imageEditorErrorMessage(cause) ?? m.image_editor_external_drop_failed();
 		}
 		switch (cause.code) {
 			case 'unsupported_type':
@@ -2809,7 +2813,7 @@
 			statusAnnouncement = m.image_editor_raster_done();
 		} catch (cause) {
 			if (!abort.signal.aborted)
-				rasterError = cause instanceof Error ? cause.message : m.image_editor_page_render_failed();
+				rasterError = imageEditorErrorMessage(cause) ?? m.image_editor_page_render_failed();
 		} finally {
 			rasterBusy = false;
 			rasterAbort = null;
@@ -2821,6 +2825,11 @@
 			(candidate) => candidate.image && !editor.isLayerLocked(candidate.id)
 		);
 		if (!layer?.image || backgroundBusy) return;
+		if (layer.image.animation) {
+			backgroundError = m.image_editor_animation_still_only();
+			statusAnnouncement = backgroundError;
+			return;
+		}
 		backgroundBusy = true;
 		const finishMetric = startImageEditorMetric('background_removal');
 		backgroundError = '';
@@ -2875,7 +2884,7 @@
 			finishMetric();
 		} catch (cause) {
 			finishMetric('error');
-			backgroundError = cause instanceof Error ? cause.message : m.image_editor_background_failed();
+			backgroundError = imageEditorErrorMessage(cause) ?? m.image_editor_background_failed();
 			statusAnnouncement = backgroundError;
 		} finally {
 			backgroundBusy = false;
@@ -3049,9 +3058,7 @@
 					? m.image_editor_export_cancelled_resume({
 							count: Object.keys(exportSuccessfulByPage).length
 						})
-					: cause instanceof Error
-						? cause.message
-						: m.image_editor_export_failed();
+					: (imageEditorErrorMessage(cause) ?? m.image_editor_export_failed());
 			statusAnnouncement = exportError;
 		} finally {
 			if (exportAbort === controller) {
@@ -5000,13 +5007,22 @@
 						disabled={!editor.canEdit}
 						onValueChange={(value) =>
 							editor.mutate('Change export format', (document) => {
-								document.export_defaults.format = value as 'png' | 'jpeg' | 'webp';
+								document.export_defaults.format = value as 'png' | 'jpeg' | 'webp' | 'gif';
 							})}
 						options={[
 							{ value: 'png', label: 'PNG' },
 							{ value: 'jpeg', label: 'JPEG' },
 							...(!(coverHandoff && exportMode === 'attach')
-								? [{ value: 'webp', label: 'WebP' }]
+								? [
+										{ value: 'webp', label: 'WebP' },
+										{
+											value: 'gif',
+											label: 'GIF',
+											disabled: !exportPages.every(
+												(page) => imageEditorPageAnimations(page).length > 0
+											)
+										}
+									]
 								: [])
 						]}
 						class="h-10 w-full"
@@ -5024,12 +5040,12 @@
 						max={1}
 						step={0.01}
 						value={editor.document?.export_defaults.quality ?? 0.92}
-						disabled={!editor.canEdit || editor.document?.export_defaults.format === 'png'}
+						disabled={!editor.canEdit || ['png', 'gif'].includes(exportFormat)}
 						ariaLabel={m.image_editor_quality({
 							quality: Math.round((editor.document?.export_defaults.quality ?? 0.92) * 100)
 						})}
 						onValueChange={(quality) => {
-							if (exportFormat === 'png' || !editor.document) return;
+							if (['png', 'gif'].includes(exportFormat) || !editor.document) return;
 							const nextQuality = Number(quality.toFixed(EXPORT_QUALITY_DECIMAL_PLACES));
 							const currentQuality = Number(
 								editor.document.export_defaults.quality.toFixed(EXPORT_QUALITY_DECIMAL_PLACES)
@@ -5047,6 +5063,9 @@
 				</label>
 			</div>
 
+			{#if exportFormat === 'gif'}
+				<p class="text-sm text-muted-foreground">{m.image_editor_animation_export_help()}</p>
+			{/if}
 			{#if exportHasTransparency && !exportSupportsTransparency}
 				<InlineNotice tone="warning">
 					<div class="grid gap-2">
