@@ -115,3 +115,31 @@ export function normalizeInstanceUsersFilters(filters: InstanceUsersFilters) {
     direction: filters.direction,
   } as const;
 }
+
+// Backup streams stay imperative; their small status read follows the same
+// actor-scoped cache and cancellation policy as the other admin panels.
+export interface InstanceBackupSummary {
+  created_at: string;
+  app_version: string;
+  database_bytes: number;
+  media_files: number;
+  media_bytes: number;
+  schema_version: number;
+  staged_at?: string;
+}
+export interface InstanceBackupStatus {
+  supported: boolean;
+  unsupported_reason?: "database" | "storage" | "process_role";
+  pending?: InstanceBackupSummary;
+  restore_points: Array<{ name: string; created_at: string; bytes: number }>;
+}
+export function instanceBackupQueryOptions(api: {
+  getInstanceBackup(signal: AbortSignal): Promise<InstanceBackupStatus>;
+}) {
+  const queryKey = [...adminRoot, "backup"] as const;
+  return {
+    ...openPostQueryPolicy(queryStaleTime),
+    queryKey,
+    queryFn: ({ signal }: QueryFunctionContext<typeof queryKey>) => api.getInstanceBackup(signal),
+  };
+}

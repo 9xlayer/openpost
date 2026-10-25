@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/openpost/backend/internal/config"
 	"github.com/openpost/backend/internal/connectors"
 	"github.com/openpost/backend/internal/database"
+	"github.com/openpost/backend/internal/database/migrations"
 	"github.com/openpost/backend/internal/diagnostics"
 	"github.com/openpost/backend/internal/imageprepare"
 	"github.com/openpost/backend/internal/memes"
@@ -60,6 +62,7 @@ import (
 	"github.com/openpost/backend/internal/services/identity"
 	"github.com/openpost/backend/internal/services/imagecaption"
 	"github.com/openpost/backend/internal/services/imagegeneration"
+	"github.com/openpost/backend/internal/services/instancebackup"
 	"github.com/openpost/backend/internal/services/instancesettings"
 	"github.com/openpost/backend/internal/services/mastodonapps"
 	"github.com/openpost/backend/internal/services/mcpoauth"
@@ -174,6 +177,29 @@ func main() {
 	if command.role == processRoleMigrate || command.role == processRoleMaintenance {
 		if err := cfg.ValidateRuntime(); err != nil {
 			fatalWithDiagnostics(diagnosticsReporter, err)
+		}
+	}
+
+	instanceBackupPaths := instancebackup.Paths{
+		DatabaseFile: database.SQLiteFilePath(cfg.DatabaseDSN()),
+		MediaDir:     cfg.MediaPath,
+	}
+	if cfg.DatabaseDriver == config.DatabaseDriverSQLite && cfg.StorageDriver == config.StorageDriverLocal && command.role == processRoleAll && instanceBackupPaths.DatabaseFile != "" {
+		latestSchema, err := migrations.LatestVersion()
+		if err != nil {
+			fatalfWithDiagnostics(diagnosticsReporter, "failed to read backup schema version: %v", err)
+		}
+		applied, err := instancebackup.ApplyPending(instanceBackupPaths, instancebackup.Current{
+			DatabaseDriver:           cfg.DatabaseDriver,
+			StorageDriver:            cfg.StorageDriver,
+			SchemaVersion:            latestSchema,
+			EncryptionKeyFingerprint: instancebackup.KeyFingerprint(cfg.EncryptionKey),
+		}, time.Now())
+		if err != nil {
+			fatalfWithDiagnostics(diagnosticsReporter, "failed to apply the staged backup restore: %v", err)
+		}
+		if applied {
+			log.Println("Applied the staged backup restore; the previous data was kept in a pre-restore folder")
 		}
 	}
 
@@ -632,10 +658,12 @@ func main() {
 		growthService.SetProvider(name, adapter)
 		accountPreflightService.SetProvider(name, adapter)
 	}
+	mediaSnapshotMu := &sync.RWMutex{}
 	storage, err := mediastore.New(context.Background(), mediastore.Config{
-		Driver:    cfg.StorageDriver,
-		LocalPath: cfg.MediaPath,
-		BaseURL:   cfg.MediaURL,
+		Driver:          cfg.StorageDriver,
+		LocalPath:       cfg.MediaPath,
+		LocalSnapshotMu: mediaSnapshotMu,
+		BaseURL:         cfg.MediaURL,
 		S3: mediastore.S3Config{
 			Endpoint:        cfg.S3Endpoint,
 			Region:          cfg.S3Region,
@@ -874,6 +902,20 @@ func main() {
 	}
 
 	mediaHandler.RegisterLegacyRoutes(e)
+	handlers.NewInstanceBackupHandler(db, authenticator, handlers.InstanceBackupConfig{
+		Paths:           instanceBackupPaths,
+		MediaSnapshotMu: mediaSnapshotMu,
+		AppVersion:      version,
+		DatabaseDriver:  cfg.DatabaseDriver,
+		StorageDriver:   cfg.StorageDriver,
+		EncryptionKey:   cfg.EncryptionKey,
+		ProcessRole:     string(command.role),
+		Restart: func() {
+			if process, err := os.FindProcess(os.Getpid()); err == nil {
+				_ = process.Signal(syscall.SIGTERM)
+			}
+		},
+	}).RegisterRoutes(e)
 	profileHandler.RegisterLegacyRoutes(e)
 	billingHandler := handlers.NewBillingHandler(billingService, db, authenticator)
 	billingHandler.SetUsage(usageService)
@@ -1321,6 +1363,9 @@ func capturePanics(recorder telemetry.Recorder, diagnosticsReporter *diagnostics
 		return func(c echo.Context) (err error) {
 			defer func() {
 				if recovered := recover(); recovered != nil {
+					if abort, ok := recovered.(error); ok && errors.Is(abort, http.ErrAbortHandler) {
+						panic(recovered)
+					}
 					c.Set(telemetryPanicCapturedKey, true)
 					c.Set(diagnosticsCapturedKey, true)
 					if diagnosticsReporter != nil {
