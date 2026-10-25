@@ -1,48 +1,44 @@
 package instancebackup
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
 
-func TestApplyPendingRollsBackAndKeepsStagedRestoreWhenMediaInstallFails(t *testing.T) {
+func TestApplyPendingRecoversInterruptedInstall(t *testing.T) {
 	root := t.TempDir()
 	paths := Paths{DatabaseFile: filepath.Join(root, "db", "openpost.db"), MediaDir: filepath.Join(root, "media")}
-	writeTestFile(t, paths.DatabaseFile, "current-db")
-	writeTestFile(t, filepath.Join(paths.MediaDir, "current.png"), "current-media")
+	point := "pre-restore-20261024T120000Z"
+	// Persisted state after the recovery snapshot completed, followed by a crash
+	// during replacement. Recovery must use the original point, not save this
+	// partially installed state as the previous instance.
+	writeTestFile(t, paths.DatabaseFile, "partially-installed-db")
+	writeTestFile(t, filepath.Join(paths.MediaDir, "new.png"), "partial-media")
+	writeTestFile(t, filepath.Join(paths.dataDir(), point, "database"), "original-db")
+	writeTestFile(t, filepath.Join(paths.dataDir(), point, "media", "old.png"), "original-media")
 	writeTestFile(t, filepath.Join(paths.PendingDir(), filepath.FromSlash(databaseEntry)), "staged-db")
-	writeTestFile(t, filepath.Join(paths.PendingDir(), "media", "staged.png"), "staged-media")
-	writeTestFile(t, filepath.Join(paths.PendingDir(), pendingMarkerName), `{"manifest":{"format_version":1}}`)
-
-	original := installMedia
-	installMedia = func(string, string) ([]movedEntry, error) { return nil, errors.New("disk full") }
-	t.Cleanup(func() { installMedia = original })
-
-	applied, err := ApplyPending(paths, time.Date(2026, 10, 24, 12, 0, 0, 0, time.UTC))
-	if err == nil || applied {
-		t.Fatalf("applied = %v, err = %v; want a failure", applied, err)
+	writeTestFile(t, filepath.Join(paths.PendingDir(), pendingMarkerName), `{"manifest":{"format_version":1},"confirmed":true}`)
+	writeTestFile(t, filepath.Join(paths.PendingDir(), "applying.json"), `"`+point+`"`)
+	applied, err := ApplyPending(paths, Current{}, time.Now())
+	if err != nil || applied {
+		t.Fatalf("applied = %v, err = %v", applied, err)
 	}
-	assertTestFile(t, paths.DatabaseFile, "current-db")
-	assertTestFile(t, filepath.Join(paths.MediaDir, "current.png"), "current-media")
+	assertTestFile(t, paths.DatabaseFile, "original-db")
+	assertTestFile(t, filepath.Join(paths.MediaDir, "old.png"), "original-media")
+	if _, err := os.Stat(filepath.Join(paths.MediaDir, "new.png")); !os.IsNotExist(err) {
+		t.Fatalf("partially installed media survived: %v", err)
+	}
+	pending, err := ReadPending(paths)
+	if err != nil || pending == nil || pending.Confirmed {
+		t.Fatalf("pending = %v, err = %v", pending, err)
+	}
 	assertTestFile(t, filepath.Join(paths.PendingDir(), filepath.FromSlash(databaseEntry)), "staged-db")
-	assertTestFile(t, filepath.Join(paths.PendingDir(), "media", "staged.png"), "staged-media")
-	if _, err := os.Stat(filepath.Join(paths.PendingDir(), pendingMarkerName)); err != nil {
-		t.Fatalf("pending marker was removed: %v", err)
+	// A second ordinary start cannot reapply the unconfirmed backup.
+	if applied, err := ApplyPending(paths, Current{}, time.Now()); err != nil || applied {
+		t.Fatalf("second start = %v, %v", applied, err)
 	}
-	if points, err := ListRestorePoints(paths); err != nil || len(points) != 0 {
-		t.Fatalf("restore points = %v, err = %v; want none after rollback", points, err)
-	}
-
-	installMedia = original
-	applied, err = ApplyPending(paths, time.Date(2026, 10, 24, 12, 1, 0, 0, time.UTC))
-	if err != nil || !applied {
-		t.Fatalf("retry applied = %v, err = %v", applied, err)
-	}
-	assertTestFile(t, paths.DatabaseFile, "staged-db")
-	assertTestFile(t, filepath.Join(paths.MediaDir, "staged.png"), "staged-media")
 }
 
 func writeTestFile(t *testing.T, path, content string) {
@@ -50,7 +46,7 @@ func writeTestFile(t *testing.T, path, content string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -68,7 +64,7 @@ func TestCopyTreeKeepsSymlinks(t *testing.T) {
 	source := filepath.Join(root, "source")
 	writeTestFile(t, filepath.Join(source, "photo.png"), "photo")
 	if err := os.Symlink("photo.png", filepath.Join(source, "alias.png")); err != nil {
-		t.Skipf("symlinks are not available: %v", err)
+		t.Skipf("symlinks unavailable: %v", err)
 	}
 	destination := filepath.Join(root, "destination")
 	if err := copyTree(source, destination); err != nil {

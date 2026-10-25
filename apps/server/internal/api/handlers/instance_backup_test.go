@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -138,6 +139,9 @@ func TestInstanceBackupExportAndStagedRestore(t *testing.T) {
 	require.NoError(t, json.Unmarshal(status.Body.Bytes(), &body))
 	require.True(t, body.Supported)
 	require.NotNil(t, body.Pending)
+	staged, err := instancebackup.ReadPending(server.paths)
+	require.NoError(t, err)
+	require.False(t, staged.Confirmed)
 
 	rejected := server.do(t, http.MethodPost, "/api/v1/admin/backup/restore/confirm", []byte(`{"confirm":"yes"}`), "application/json")
 	require.Equal(t, http.StatusBadRequest, rejected.Code, rejected.Body.String())
@@ -145,6 +149,10 @@ func TestInstanceBackupExportAndStagedRestore(t *testing.T) {
 
 	confirmed := server.do(t, http.MethodPost, "/api/v1/admin/backup/restore/confirm", []byte(`{"confirm":"restore"}`), "application/json")
 	require.Equal(t, http.StatusAccepted, confirmed.Code, confirmed.Body.String())
+	staged, err = instancebackup.ReadPending(server.paths)
+	require.NoError(t, err)
+	require.True(t, staged.Confirmed)
+	require.Equal(t, http.StatusConflict, server.do(t, http.MethodDelete, "/api/v1/admin/backup/restore/pending", nil, "").Code)
 	require.Eventually(t, func() bool { return server.restarts.Load() == 1 }, time.Second, 5*time.Millisecond)
 }
 
@@ -167,4 +175,23 @@ func TestInstanceBackupRejectsInvalidUploadAndCancelsStagedRestore(t *testing.T)
 	pending, err := instancebackup.ReadPending(server.paths)
 	require.NoError(t, err)
 	require.Nil(t, pending)
+}
+
+func TestInstanceBackupFailedExportAbortsDownload(t *testing.T) {
+	server := newInstanceBackupTestServer(t, true, browserSessionTestAuthenticator(), nil)
+	if err := os.Symlink("photo.png", filepath.Join(server.paths.MediaDir, "alias.png")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	httpServer := httptest.NewServer(server.echo)
+	defer httpServer.Close()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, httpServer.URL+"/api/v1/admin/backup/export", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer web-token")
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return
+	} // HTTP abort before headers is also a failed download.
+	defer response.Body.Close()
+	_, err = io.ReadAll(response.Body)
+	require.Error(t, err, "a truncated ZIP must never finish as a successful download")
 }

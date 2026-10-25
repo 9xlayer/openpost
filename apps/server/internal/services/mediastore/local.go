@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -37,8 +38,10 @@ type ReadinessStorage interface {
 type Config struct {
 	Driver string
 
-	LocalPath string
-	BaseURL   string
+	// LocalSnapshotMu coordinates local writes and deletions with instance backups.
+	LocalSnapshotMu *sync.RWMutex
+	LocalPath       string
+	BaseURL         string
 
 	S3 S3Config
 }
@@ -49,7 +52,9 @@ func New(ctx context.Context, cfg Config) (BlobStorage, error) {
 		if err := os.MkdirAll(filepath.Clean(cfg.LocalPath), 0755); err != nil {
 			return nil, err
 		}
-		return NewLocalStorage(cfg.LocalPath, cfg.BaseURL), nil
+		storage := NewLocalStorage(cfg.LocalPath, cfg.BaseURL)
+		storage.snapshotMu = cfg.LocalSnapshotMu
+		return storage, nil
 	case "s3":
 		return NewS3Storage(ctx, cfg.S3)
 	default:
@@ -58,8 +63,9 @@ func New(ctx context.Context, cfg Config) (BlobStorage, error) {
 }
 
 type LocalStorage struct {
-	baseDir string
-	baseURL string
+	snapshotMu *sync.RWMutex
+	baseDir    string
+	baseURL    string
 }
 
 func NewLocalStorage(baseDir string, baseURL string) *LocalStorage {
@@ -74,6 +80,10 @@ func (s *LocalStorage) Driver() string {
 }
 
 func (s *LocalStorage) Save(ctx context.Context, id string, reader io.Reader) (string, error) {
+	if s.snapshotMu != nil {
+		s.snapshotMu.RLock()
+		defer s.snapshotMu.RUnlock()
+	}
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -123,6 +133,10 @@ func DeleteForCleanup(ctx context.Context, storage BlobStorage, id string) error
 }
 
 func (s *LocalStorage) Delete(ctx context.Context, id string) error {
+	if s.snapshotMu != nil {
+		s.snapshotMu.RLock()
+		defer s.snapshotMu.RUnlock()
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}

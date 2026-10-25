@@ -1,6 +1,7 @@
 package instancebackup
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,46 +13,82 @@ import (
 	"time"
 )
 
-var installMedia = moveContents
-
 type RestorePoint struct {
 	Name      string
 	CreatedAt time.Time
 	Bytes     int64
 }
 
-func ApplyPending(paths Paths, now time.Time) (bool, error) {
+// ApplyPending runs before opening SQLite or starting workers. Staged inputs and
+// the recovery copy remain immutable until commit. A durable journal makes an
+// interrupted installation roll back on the next start, without guessing which
+// database or media files were already replaced.
+func ApplyPending(paths Paths, current Current, now time.Time) (bool, error) {
 	pending, err := ReadPending(paths)
 	if err != nil {
 		return false, fmt.Errorf("read staged restore: %w", err)
 	}
 	if pending == nil {
-		if err := os.RemoveAll(paths.PendingDir()); err != nil {
+		return false, nil
+	}
+	if err := paths.Validate(); err != nil {
+		return false, err
+	}
+	journal := filepath.Join(paths.PendingDir(), "applying.json")
+	raw, err := os.ReadFile(journal)
+	if err == nil {
+		var point string
+		if err := json.Unmarshal(raw, &point); err != nil || !restorePointNamePattern.MatchString(point) {
+			return false, errors.New("invalid restore recovery journal")
+		}
+		if err := recoverPrevious(paths, point, pending); err != nil {
 			return false, err
 		}
+		log.Printf("Recovered the previous data after an interrupted restore; staged backup requires confirmation again")
+		return false, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+	if !pending.Confirmed {
 		return false, nil
 	}
 
-	restorePoint := filepath.Join(paths.dataDir(), restorePointPrefix+now.UTC().Format("20060102T150405Z"))
-	if err := os.MkdirAll(restorePoint, 0o700); err != nil {
+	if err := checkCompatible(pending.Manifest, current); err != nil {
 		return false, err
 	}
+	return applyConfirmed(paths, pending, now)
+}
 
-	var undo undoStack
-	err = setAsideCurrentData(paths, restorePoint, &undo)
-	if err == nil {
-		err = installStagedData(paths, &undo)
+func applyConfirmed(paths Paths, pending *Pending, now time.Time) (bool, error) {
+	journal := filepath.Join(paths.PendingDir(), "applying.json")
+	name := restorePointPrefix + now.UTC().Format("20060102T150405Z")
+	point := filepath.Join(paths.dataDir(), name)
+	// Never merge into or overwrite an existing recovery copy.
+	if err := os.Mkdir(point, 0o700); err != nil {
+		return false, err
 	}
-	if err != nil {
-		if rollbackErr := undo.run(); rollbackErr != nil {
-			return false, fmt.Errorf("%w; rollback incomplete, the previous data may still be in %s: %w", err, restorePoint, rollbackErr)
+	if err := copyCurrent(paths, point); err != nil {
+		_ = os.RemoveAll(point)
+		return false, fmt.Errorf("save previous data: %w", err)
+	}
+	raw, _ := json.Marshal(name)
+	if err := writeAtomic(journal, raw); err != nil {
+		return false, err
+	}
+	if err := replaceData(paths, filepath.Join(paths.PendingDir(), filepath.FromSlash(databaseEntry)), filepath.Join(paths.PendingDir(), "media")); err != nil {
+		if recoveryErr := recoverPrevious(paths, name, pending); recoveryErr != nil {
+			return false, fmt.Errorf("restore failed: %w; recovery incomplete, previous data is in %s: %w", err, point, recoveryErr)
 		}
-		removeEmptyRestorePoint(restorePoint)
+		return false, fmt.Errorf("restore failed; previous data recovered: %w", err)
+	}
+	// Removing the staged marker commits the restore. A leftover journal is then
+	// harmless, even if cleanup is interrupted.
+	if err := os.Remove(filepath.Join(paths.PendingDir(), pendingMarkerName)); err != nil {
 		return false, err
 	}
-
-	if err := os.Remove(filepath.Join(paths.PendingDir(), pendingMarkerName)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return true, fmt.Errorf("restore applied but the staged marker could not be removed: %w", err)
+	if err := syncDirectory(paths.PendingDir()); err != nil {
+		return false, err
 	}
 	if err := os.RemoveAll(paths.PendingDir()); err != nil {
 		log.Printf("restore applied but staging cleanup failed: %v", err)
@@ -59,140 +96,109 @@ func ApplyPending(paths Paths, now time.Time) (bool, error) {
 	return true, nil
 }
 
-func removeEmptyRestorePoint(restorePoint string) {
-	_ = os.Remove(filepath.Join(restorePoint, "media"))
-	_ = os.Remove(restorePoint)
-}
-
-type undoStack []func() error
-
-func (u *undoStack) push(step func() error) {
-	*u = append(*u, step)
-}
-
-func (u undoStack) run() error {
-	var failures []error
-	for index := len(u) - 1; index >= 0; index-- {
-		if err := u[index](); err != nil {
-			failures = append(failures, err)
-		}
-	}
-	return errors.Join(failures...)
-}
-
-func setAsideCurrentData(paths Paths, restorePoint string, undo *undoStack) error {
+func copyCurrent(paths Paths, point string) error {
 	for _, suffix := range []string{"", "-wal", "-shm"} {
 		source := paths.DatabaseFile + suffix
-		destination := filepath.Join(restorePoint, filepath.Base(paths.DatabaseFile)+suffix)
-		moved, err := moveIfExists(source, destination)
-		if err != nil {
-			return fmt.Errorf("set aside current database: %w", err)
+		if _, err := os.Stat(source); errors.Is(err, fs.ErrNotExist) && suffix != "" {
+			continue
+		} else if err != nil {
+			return err
 		}
-		if moved {
-			undo.push(func() error { return moveEntry(destination, source) })
+		if err := copyTree(source, filepath.Join(point, "database"+suffix)); err != nil {
+			return err
 		}
 	}
-	if paths.MediaDir == "" {
-		return nil
-	}
-	moved, err := moveContents(paths.MediaDir, filepath.Join(restorePoint, "media"))
-	if err != nil {
-		return fmt.Errorf("set aside current media: %w", err)
-	}
-	if len(moved) > 0 {
-		undo.push(func() error { return moveBack(moved) })
-	}
-	return nil
-}
-
-func installStagedData(paths Paths, undo *undoStack) error {
-	stagedDatabase := filepath.Join(paths.PendingDir(), filepath.FromSlash(databaseEntry))
-	if err := moveEntry(stagedDatabase, paths.DatabaseFile); err != nil {
-		return fmt.Errorf("install restored database: %w", err)
-	}
-	undo.push(func() error { return moveEntry(paths.DatabaseFile, stagedDatabase) })
-	if paths.MediaDir == "" {
-		return nil
-	}
-	if err := os.MkdirAll(paths.MediaDir, 0o755); err != nil {
+	if err := copyOptionalTree(paths.MediaDir, filepath.Join(point, "media")); err != nil {
 		return err
 	}
-	if _, err := installMedia(filepath.Join(paths.PendingDir(), "media"), paths.MediaDir); err != nil {
-		return fmt.Errorf("install restored media: %w", err)
+	return syncTreeDirectories(point)
+}
+
+func recoverPrevious(paths Paths, name string, pending *Pending) error {
+	point := filepath.Join(paths.dataDir(), name)
+	if err := replaceData(paths, filepath.Join(point, "database"), filepath.Join(point, "media")); err != nil {
+		return err
 	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		source := filepath.Join(point, "database"+suffix)
+		if _, err := os.Stat(source); errors.Is(err, fs.ErrNotExist) {
+			continue
+		} else if err != nil {
+			return err
+		}
+		if err := copyTree(source, paths.DatabaseFile+suffix); err != nil {
+			return err
+		}
+	}
+	if err := writePending(paths, pendingMarker{Manifest: pending.Manifest, StagedAt: pending.StagedAt}); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(paths.PendingDir(), "applying.json")); err != nil {
+		return err
+	}
+	if err := syncDirectory(paths.PendingDir()); err != nil {
+		return err
+	}
+	// Keep the complete recovery copy for inspection and manual recovery.
 	return nil
 }
 
-type movedEntry struct {
-	from string
-	to   string
-}
-
-func moveBack(entries []movedEntry) error {
-	var firstErr error
-	for _, entry := range entries {
-		if err := moveEntry(entry.to, entry.from); err != nil && firstErr == nil {
-			firstErr = err
+func replaceData(paths Paths, databaseSource, mediaSource string) error {
+	// Check the source before touching current data.
+	if _, err := os.Stat(databaseSource); err != nil {
+		return err
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Remove(paths.DatabaseFile + suffix); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return err
 		}
 	}
-	return firstErr
-}
-
-func moveContents(sourceDir, destinationDir string) ([]movedEntry, error) {
-	entries, err := os.ReadDir(sourceDir)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+	if err := copyTree(databaseSource, paths.DatabaseFile); err != nil {
+		return err
 	}
-	if err != nil {
-		return nil, err
+	if paths.MediaDir == "" {
+		return nil
 	}
-	if len(entries) == 0 {
-		return nil, nil
+	// Preserve the configured root, which may be a mounted volume.
+	if err := os.MkdirAll(paths.MediaDir, 0o700); err != nil {
+		return err
 	}
-	if err := os.MkdirAll(destinationDir, 0o755); err != nil {
-		return nil, err
+	entries, err := os.ReadDir(paths.MediaDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
 	}
-	var moved []movedEntry
 	for _, entry := range entries {
-		from := filepath.Join(sourceDir, entry.Name())
-		to := filepath.Join(destinationDir, entry.Name())
-		if err := moveEntry(from, to); err != nil {
-			_ = moveBack(moved)
-			return nil, err
+		if err := os.RemoveAll(filepath.Join(paths.MediaDir, entry.Name())); err != nil {
+			return err
 		}
-		moved = append(moved, movedEntry{from: from, to: to})
 	}
-	return moved, nil
+	if err := copyOptionalTree(mediaSource, paths.MediaDir); err != nil {
+		return err
+	}
+	return syncTreeDirectories(paths.MediaDir)
 }
 
-func moveIfExists(source, destination string) (bool, error) {
-	if _, err := os.Lstat(source); errors.Is(err, fs.ErrNotExist) {
-		return false, nil
+func copyOptionalTree(source, destination string) error {
+	if source == "" {
+		return nil
+	}
+	if _, err := os.Stat(source); errors.Is(err, fs.ErrNotExist) {
+		return nil
 	} else if err != nil {
-		return false, err
-	}
-	if err := moveEntry(source, destination); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func moveEntry(source, destination string) error {
-	if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 		return err
 	}
-	if err := os.Rename(source, destination); err == nil {
-		return nil
-	}
-	if err := copyTree(source, destination); err != nil {
-		_ = os.RemoveAll(destination)
-		return err
-	}
-	return os.RemoveAll(source)
+	return copyTree(source, destination)
 }
 
 func copyTree(source, destination string) error {
-	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) error {
+	// Follow the configured root once; preserve symlink entries inside the tree.
+	// In particular a symlinked media mount must yield independent snapshot bytes.
+	resolved, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		return err
+	}
+	source = resolved
+	err = filepath.WalkDir(source, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
@@ -202,7 +208,10 @@ func copyTree(source, destination string) error {
 		}
 		target := filepath.Join(destination, relative)
 		if entry.IsDir() {
-			return os.MkdirAll(target, 0o755)
+			return os.MkdirAll(target, 0o700)
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			return err
 		}
 		if entry.Type()&fs.ModeSymlink != 0 {
 			link, err := os.Readlink(path)
@@ -212,23 +221,70 @@ func copyTree(source, destination string) error {
 			return os.Symlink(link, target)
 		}
 		if !entry.Type().IsRegular() {
-			return fmt.Errorf("cannot move %s: unsupported file type", path)
+			return fmt.Errorf("cannot copy %s: unsupported file type", path)
 		}
-		in, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer in.Close()
-		out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
-		if err != nil {
-			return err
-		}
-		if _, err := io.Copy(out, in); err != nil {
-			_ = out.Close()
-			return err
-		}
-		return out.Close()
+		return copyRegularFile(path, target)
 	})
+	if err != nil {
+		return err
+	}
+	return syncTreeDirectories(destination)
+}
+
+func copyRegularFile(source, target string) error {
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.CreateTemp(filepath.Dir(target), ".restore-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(out.Name())
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(out.Name(), target); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(target))
+}
+
+// Sync children before their parents, including the entry for the root itself,
+// before publishing a journal that promises the recovery copy is complete.
+func syncTreeDirectories(root string) error {
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return err
+	}
+	root = resolved
+	var directories []string
+	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			directories = append(directories, path)
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	for index := len(directories) - 1; index >= 0; index-- {
+		if err := syncDirectory(directories[index]); err != nil {
+			return err
+		}
+	}
+	return syncDirectory(filepath.Dir(root))
 }
 
 func ListRestorePoints(paths Paths) ([]RestorePoint, error) {

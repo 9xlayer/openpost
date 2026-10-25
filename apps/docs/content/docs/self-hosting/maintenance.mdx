@@ -13,7 +13,13 @@ Instance administrators can create and restore a backup without using a terminal
 - **Download a backup** creates one ZIP file with a consistent snapshot of the database and every uploaded media file. The server keeps running.
 - **Restore from a backup** checks the uploaded file first and changes nothing until you type `restore` to confirm. The server then restarts and replaces its data. The data it replaced stays in a `pre-restore-*` folder next to the database, listed on the same page, so you can go back. Delete these copies when you no longer need them.
 
-The backup does not contain `OPENPOST_ENCRYPTION_KEY`. A restore is refused when the key differs, because saved provider credentials would be unreadable. Keep `.env` with your backups.
+The ZIP contains private instance data, including API tokens and session records. Store it securely. It does not contain environment variables, the Compose file, external services, or `OPENPOST_ENCRYPTION_KEY`. A restore is refused when the key differs, because saved provider credentials would be unreadable. Keep `.env` with your backups.
+
+Export temporarily copies the database and local media next to the database before sending the ZIP. Restore needs space for the uploaded archive, its extracted contents, and a complete copy of the data being replaced. Allow free disk space for these copies. Uploads and media deletion wait while export captures its private copy; downloads do not hold that lock.
+
+Uploading alone never schedules a restore. You can leave the page or restart the server before confirmation without replacing current data. Once confirmed, leave the server running until its restart completes. If installation is interrupted, the next start recovers the previous database and media and requires confirmation again. Check the server logs if startup fails; recovery files are retained.
+
+To recover a saved restore point manually, stop the server first. Preserve the current database and media separately. In the chosen `pre-restore-*` folder, copy `database` to your configured SQLite filename, copy `database-wal` and `database-shm` to that filename with `-wal` and `-shm` suffixes if present, and replace the contents of your configured media directory with the folder's `media/` contents. Remove current SQLite sidecars before copying the saved ones. Remove any `restore-pending/` folder before starting again so a confirmed restore cannot override this recovery. Start the server and verify a saved post and its media. These folders are recovery copies, not downloadable ZIP backups.
 
 This feature needs the default SQLite database, local media storage, and a server that runs as a single process. It also needs a container restart policy such as the `unless-stopped` policy in the Compose file. Other setups keep using the manual steps below.
 

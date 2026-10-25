@@ -205,6 +205,6 @@
 			</div>
 		{/if}
 	</div>
-	<InstanceBackupSettings />
+	<InstanceBackupSettings {active} {userID} />
 	<ExternalApplicationAdminSettings />
 </div>

@@ -1,5 +1,12 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { queryClient } from '$lib/query/client';
+	import { instanceBackupQueryOptions } from '@openpost/query-catalog';
+	import {
+		registerSettingsInitialLoad,
+		SETTINGS_INITIAL_LOAD_PARTICIPANT
+	} from '$lib/settings-initial-load.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
@@ -27,8 +34,18 @@
 
 	type Phase = 'idle' | 'uploading' | 'confirming' | 'restarting' | 'restarted' | 'timeout';
 
-	let status = $state<BackupStatus | null>(null);
-	let loadError = $state('');
+	let { active, userID }: { active: boolean; userID: string } = $props();
+	const backupOptions = instanceBackupQueryOptions({ getInstanceBackup: fetchBackupStatus });
+	const backupQuery = createQuery(() => ({
+		...backupOptions,
+		enabled: active && Boolean(userID)
+	}));
+	const status = $derived(backupQuery.data ?? null);
+	const loadError = $derived(backupQuery.error ? m.settings_backup_load_failed() : '');
+	const reportInitialLoad = registerSettingsInitialLoad(
+		SETTINGS_INITIAL_LOAD_PARTICIPANT.instanceBackup
+	);
+	$effect(() => reportInitialLoad(active && backupQuery.isPending && !status));
 	let actionError = $state('');
 	let phase = $state<Phase>('idle');
 	let progress = $state(0);
@@ -43,16 +60,11 @@
 	const confirmMatches = $derived(confirmText.trim().toLowerCase() === RESTORE_CONFIRMATION_WORD);
 
 	async function refresh() {
-		try {
-			status = await fetchBackupStatus();
-			loadError = '';
-		} catch {
-			loadError = m.settings_backup_load_failed();
-		}
+		await backupQuery.refetch();
 	}
 
 	$effect(() => {
-		void refresh();
+		if (!confirmOpen) confirmText = '';
 	});
 
 	onDestroy(() => {
@@ -140,7 +152,7 @@
 	}
 
 	async function startRestore() {
-		if (!confirmMatches || phase === 'confirming') return;
+		if (!confirmOpen || !confirmMatches || busy) return;
 		actionError = '';
 		phase = 'confirming';
 		try {
@@ -161,7 +173,7 @@
 	async function restoreWasApplied(signal: AbortSignal) {
 		try {
 			const current = await fetchBackupStatus(signal);
-			status = current;
+			queryClient.setQueryData(backupOptions.queryKey, current);
 			return current.pending === undefined;
 		} catch (cause) {
 			return cause instanceof InstanceBackupError && cause.status === 401;
@@ -191,12 +203,17 @@
 	/>
 
 	{#if loadError}
-		<InlineNotice tone="error" message={loadError} />
-	{:else if !status}
+		<InlineNotice tone={status ? 'warning' : 'error'} message={loadError}>
+			{#snippet actions()}<Button variant="outline" size="sm" onclick={refresh}
+					>{m.common_retry()}</Button
+				>{/snippet}
+		</InlineNotice>
+	{/if}
+	{#if !status && !loadError}
 		<PageLoading layout="list" label={m.common_loading()} items={2} />
-	{:else if !status.supported}
+	{:else if status && !status.supported}
 		<InlineNotice tone="info" message={unsupportedMessage(status.unsupported_reason)} />
-	{:else}
+	{:else if status}
 		{#if actionError}
 			<InlineNotice tone="error" message={actionError} onDismiss={() => (actionError = '')} />
 		{/if}
@@ -283,7 +300,12 @@
 								{formatDateTime(point.created_at)}
 								<span class="text-muted-foreground">· {formatBytes(point.bytes)}</span>
 							</span>
-							<Button variant="outline" size="sm" onclick={() => removeRestorePoint(point.name)}>
+							<Button
+								variant="outline"
+								size="sm"
+								disabled={busy}
+								onclick={() => removeRestorePoint(point.name)}
+							>
 								{m.settings_backup_points_delete()}
 							</Button>
 						</li>

@@ -1,4 +1,9 @@
 import { z } from 'zod';
+import {
+	OpenPostQueryError,
+	type InstanceBackupStatus,
+	type InstanceBackupSummary
+} from '@openpost/query-catalog';
 import { applyAPIRequestHeaders } from '$lib/api/client';
 
 const BACKUP_API = '/api/v1/admin/backup';
@@ -6,7 +11,7 @@ const BACKUP_API = '/api/v1/admin/backup';
 export const BACKUP_EXPORT_URL = `${BACKUP_API}/export`;
 export const RESTORE_CONFIRMATION_WORD = 'restore';
 
-const backupSummarySchema = z.object({
+const backupSummarySchema: z.ZodType<InstanceBackupSummary> = z.object({
 	created_at: z.string(),
 	app_version: z.string(),
 	database_bytes: z.number(),
@@ -16,7 +21,7 @@ const backupSummarySchema = z.object({
 	staged_at: z.string().optional()
 });
 
-const backupStatusSchema = z.object({
+const backupStatusSchema: z.ZodType<InstanceBackupStatus> = z.object({
 	supported: z.boolean(),
 	unsupported_reason: z.enum(['database', 'storage', 'process_role']).optional(),
 	pending: backupSummarySchema.optional(),
@@ -51,15 +56,13 @@ export type BackupSummary = z.infer<typeof backupSummarySchema>;
 export type BackupStatus = z.infer<typeof backupStatusSchema>;
 export type BackupErrorCode = z.infer<typeof backupErrorCodeSchema>;
 
-export class InstanceBackupError extends Error {
+export class InstanceBackupError extends OpenPostQueryError {
 	readonly code: BackupErrorCode;
-	readonly status: number;
 
 	constructor(code: BackupErrorCode, status: number, message: string) {
-		super(message);
+		super(message, { status });
 		this.name = 'InstanceBackupError';
 		this.code = code;
-		this.status = status;
 	}
 }
 
@@ -98,6 +101,7 @@ export function uploadBackup(
 	onProgress: (fraction: number) => void,
 	signal: AbortSignal
 ): Promise<BackupSummary> {
+	if (signal.aborted) return Promise.reject(new DOMException('Upload cancelled', 'AbortError'));
 	return new Promise((resolve, reject) => {
 		const xhr = new XMLHttpRequest();
 		xhr.open('POST', `${BACKUP_API}/restore/upload`);
@@ -153,9 +157,9 @@ export async function deleteRestorePoint(name: string): Promise<void> {
 	await request(`/restore-points/${encodeURIComponent(name)}`, { method: 'DELETE' });
 }
 
-async function serverIsReady(): Promise<boolean> {
+async function serverIsReady(signal: AbortSignal): Promise<boolean> {
 	try {
-		const response = await fetch('/api/v1/ready', { cache: 'no-store' });
+		const response = await fetch('/api/v1/ready', { cache: 'no-store', signal });
 		return response.ok;
 	} catch {
 		return false;
@@ -169,12 +173,30 @@ export async function waitForRestart(
 	const startedAt = Date.now();
 	const deadline = startedAt + timeoutMs;
 	let wentDown = false;
-	await new Promise((resolve) => setTimeout(resolve, 3000));
+	await wait(signal, Math.min(3000, intervalMs, timeoutMs));
 	while (Date.now() < deadline && !signal.aborted) {
-		const ready = await serverIsReady();
+		const ready = await serverIsReady(
+			AbortSignal.any([
+				signal,
+				AbortSignal.timeout(Math.max(1, Math.min(5000, deadline - Date.now())))
+			])
+		);
 		if (!ready) wentDown = true;
 		if (ready && (wentDown || Date.now() - startedAt > 20_000)) return true;
-		await new Promise((resolve) => setTimeout(resolve, intervalMs));
+		await wait(signal, Math.max(0, Math.min(intervalMs, deadline - Date.now())));
 	}
 	return false;
+}
+
+function wait(signal: AbortSignal, ms: number): Promise<void> {
+	if (signal.aborted) return Promise.resolve();
+	return new Promise((resolve) => {
+		const done = () => {
+			clearTimeout(timer);
+			signal.removeEventListener('abort', done);
+			resolve();
+		};
+		const timer = setTimeout(done, ms);
+		signal.addEventListener('abort', done, { once: true });
+	});
 }

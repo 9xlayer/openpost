@@ -5,6 +5,8 @@ import {
 	confirmRestore,
 	deleteRestorePoint,
 	fetchBackupStatus,
+	uploadBackup,
+	waitForRestart,
 	type BackupStatus
 } from './instance-backup';
 
@@ -21,7 +23,10 @@ function respond(status: number, body: ResponsePayload) {
 }
 
 describe('instance backup client', () => {
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+	});
 
 	it('parses the backup status', async () => {
 		const fetchMock = vi.fn().mockResolvedValue(
@@ -113,5 +118,35 @@ describe('instance backup client', () => {
 			'/api/v1/admin/backup/restore-points/pre-restore-20261023T100000Z'
 		);
 		expect(fetchMock.mock.calls[0][1].method).toBe('DELETE');
+	});
+	it('does not start an upload with an already cancelled signal', async () => {
+		const xhr = vi.fn();
+		vi.stubGlobal('XMLHttpRequest', xhr);
+		await expect(
+			uploadBackup(new File(['zip'], 'backup.zip'), vi.fn(), AbortSignal.abort())
+		).rejects.toMatchObject({ name: 'AbortError' });
+		expect(xhr).not.toHaveBeenCalled();
+	});
+
+	it('bounds restart polling even when the readiness connection never answers', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(
+				(_url, init: RequestInit) =>
+					new Promise((_resolve, reject) => {
+						init.signal?.addEventListener(
+							'abort',
+							() => reject(new DOMException('timeout', 'AbortError')),
+							{ once: true }
+						);
+					})
+			)
+		);
+		const result = waitForRestart(new AbortController().signal, {
+			timeoutMs: 80,
+			intervalMs: 5
+		});
+		await expect(result).resolves.toBe(false);
+		expect(fetch).toHaveBeenCalled();
 	});
 });

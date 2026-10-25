@@ -84,67 +84,87 @@ func writeMedia(t *testing.T, dir, name, content string) {
 }
 
 func TestBackupRoundTripRestoresDatabaseAndMedia(t *testing.T) {
-	f := newFixture(t)
-	if _, err := f.db.Exec("INSERT INTO backup_probe (value) VALUES ('before')"); err != nil {
-		t.Fatal(err)
-	}
-	writeMedia(t, f.paths.MediaDir, "a.png", "original-a")
-	writeMedia(t, f.paths.MediaDir, "nested/b.png", "original-b")
-	archive := f.export(t)
+	for _, symlinked := range []bool{false, true} {
+		name := "directory"
+		if symlinked {
+			name = "symlinked media root"
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			if symlinked {
+				target := f.paths.MediaDir + "-target"
+				if err := os.MkdirAll(target, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(target, f.paths.MediaDir); err != nil {
+					t.Skipf("symlinks unavailable: %v", err)
+				}
+			}
+			if _, err := f.db.Exec("INSERT INTO backup_probe (value) VALUES ('before')"); err != nil {
+				t.Fatal(err)
+			}
+			writeMedia(t, f.paths.MediaDir, "a.png", "original-a")
+			writeMedia(t, f.paths.MediaDir, "nested/b.png", "original-b")
+			archive := f.export(t)
 
-	if _, err := f.db.Exec("UPDATE backup_probe SET value = 'after'"); err != nil {
-		t.Fatal(err)
-	}
-	writeMedia(t, f.paths.MediaDir, "a.png", "changed-a")
-	writeMedia(t, f.paths.MediaDir, "extra.png", "extra")
+			if _, err := f.db.Exec("UPDATE backup_probe SET value = 'after'"); err != nil {
+				t.Fatal(err)
+			}
+			writeMedia(t, f.paths.MediaDir, "a.png", "changed-a")
+			writeMedia(t, f.paths.MediaDir, "extra.png", "extra")
 
-	now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
-	manifest, err := instancebackup.Stage(context.Background(), f.paths, f.current, bytes.NewReader(archive), now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if manifest.MediaFiles != 2 {
-		t.Fatalf("media files = %d, want 2", manifest.MediaFiles)
-	}
-	pending, err := instancebackup.ReadPending(f.paths)
-	if err != nil || pending == nil {
-		t.Fatalf("pending = %v, err = %v", pending, err)
-	}
+			now := time.Date(2026, 10, 23, 12, 0, 0, 0, time.UTC)
+			manifest, err := instancebackup.Stage(context.Background(), f.paths, f.current, bytes.NewReader(archive), now)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if manifest.MediaFiles != 2 {
+				t.Fatalf("media files = %d, want 2", manifest.MediaFiles)
+			}
+			pending, err := instancebackup.ReadPending(f.paths)
+			if err != nil || pending == nil {
+				t.Fatalf("pending = %v, err = %v", pending, err)
+			}
 
-	if err := f.db.Close(); err != nil {
-		t.Fatal(err)
-	}
-	applied, err := instancebackup.ApplyPending(f.paths, now.Add(time.Minute))
-	if err != nil || !applied {
-		t.Fatalf("applied = %v, err = %v", applied, err)
-	}
+			if err := f.db.Close(); err != nil {
+				t.Fatal(err)
+			}
+			if err := instancebackup.ConfirmPending(f.paths); err != nil {
+				t.Fatal(err)
+			}
+			applied, err := instancebackup.ApplyPending(f.paths, f.current, now.Add(time.Minute))
+			if err != nil || !applied {
+				t.Fatalf("applied = %v, err = %v", applied, err)
+			}
 
-	restored, err := database.InitDB("file:" + filepath.ToSlash(f.paths.DatabaseFile) + "?mode=rwc")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer restored.Close()
-	var value string
-	if err := restored.QueryRow("SELECT value FROM backup_probe").Scan(&value); err != nil || value != "before" {
-		t.Fatalf("value = %q, err = %v", value, err)
-	}
-	assertFile(t, filepath.Join(f.paths.MediaDir, "a.png"), "original-a")
-	assertFile(t, filepath.Join(f.paths.MediaDir, "nested", "b.png"), "original-b")
-	if _, err := os.Stat(filepath.Join(f.paths.MediaDir, "extra.png")); !os.IsNotExist(err) {
-		t.Fatalf("extra media survived the restore: %v", err)
-	}
+			restored, err := database.InitDB("file:" + filepath.ToSlash(f.paths.DatabaseFile) + "?mode=rwc")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer restored.Close()
+			var value string
+			if err := restored.QueryRow("SELECT value FROM backup_probe").Scan(&value); err != nil || value != "before" {
+				t.Fatalf("value = %q, err = %v", value, err)
+			}
+			assertFile(t, filepath.Join(f.paths.MediaDir, "a.png"), "original-a")
+			assertFile(t, filepath.Join(f.paths.MediaDir, "nested", "b.png"), "original-b")
+			if _, err := os.Stat(filepath.Join(f.paths.MediaDir, "extra.png")); !os.IsNotExist(err) {
+				t.Fatalf("extra media survived the restore: %v", err)
+			}
 
-	points, err := instancebackup.ListRestorePoints(f.paths)
-	if err != nil || len(points) != 1 {
-		t.Fatalf("restore points = %v, err = %v", points, err)
-	}
-	assertFile(t, filepath.Join(filepath.Dir(f.paths.DatabaseFile), points[0].Name, "media", "extra.png"), "extra")
-	if _, err := os.Stat(f.paths.PendingDir()); !os.IsNotExist(err) {
-		t.Fatalf("staging directory was not cleaned up: %v", err)
-	}
+			points, err := instancebackup.ListRestorePoints(f.paths)
+			if err != nil || len(points) != 1 {
+				t.Fatalf("restore points = %v, err = %v", points, err)
+			}
+			assertFile(t, filepath.Join(filepath.Dir(f.paths.DatabaseFile), points[0].Name, "media", "extra.png"), "extra")
+			if _, err := os.Stat(f.paths.PendingDir()); !os.IsNotExist(err) {
+				t.Fatalf("staging directory was not cleaned up: %v", err)
+			}
 
-	if err := instancebackup.DeleteRestorePoint(f.paths, points[0].Name); err != nil {
-		t.Fatal(err)
+			if err := instancebackup.DeleteRestorePoint(f.paths, points[0].Name); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
 
@@ -202,9 +222,25 @@ func TestStageRejectsMalformedArchives(t *testing.T) {
 	}
 }
 
+func TestUploadedBackupRequiresConfirmationAcrossRestart(t *testing.T) {
+	f := newFixture(t)
+	archive := f.export(t)
+	if _, err := instancebackup.Stage(t.Context(), f.paths, f.current, bytes.NewReader(archive), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	applied, err := instancebackup.ApplyPending(f.paths, f.current, time.Now())
+	if err != nil || applied {
+		t.Fatalf("unconfirmed upload applied = %v, err = %v", applied, err)
+	}
+	pending, err := instancebackup.ReadPending(f.paths)
+	if err != nil || pending == nil {
+		t.Fatalf("unconfirmed upload lost: %v, %v", pending, err)
+	}
+}
+
 func TestApplyPendingWithoutStagedRestoreDoesNothing(t *testing.T) {
 	f := newFixture(t)
-	applied, err := instancebackup.ApplyPending(f.paths, time.Now())
+	applied, err := instancebackup.ApplyPending(f.paths, f.current, time.Now())
 	if err != nil || applied {
 		t.Fatalf("applied = %v, err = %v", applied, err)
 	}
@@ -231,5 +267,157 @@ func assertFile(t *testing.T, path, want string) {
 	got, err := os.ReadFile(path)
 	if err != nil || string(got) != want {
 		t.Fatalf("%s = %q, err = %v; want %q", path, got, err, want)
+	}
+}
+
+type deletingWriter struct {
+	bytes.Buffer
+	delete func()
+}
+
+func (w *deletingWriter) Write(p []byte) (int, error) {
+	if w.delete != nil {
+		w.delete()
+		w.delete = nil
+	}
+	return w.Buffer.Write(p)
+}
+
+func TestExportKeepsMediaDeletedWhileStreaming(t *testing.T) {
+	f := newFixture(t)
+	writeMedia(t, f.paths.MediaDir, "photo.png", "original-photo")
+	output := &deletingWriter{delete: func() {
+		if err := os.Remove(filepath.Join(f.paths.MediaDir, "photo.png")); err != nil {
+			t.Fatal(err)
+		}
+	}}
+	manifest, err := instancebackup.WriteArchive(t.Context(), f.db, instancebackup.ExportOptions{
+		AppVersion: "test", DatabaseDriver: "sqlite", StorageDriver: "local", Paths: f.paths,
+		EncryptionKeyFingerprint: f.current.EncryptionKeyFingerprint,
+	}, output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.MediaFiles != 1 {
+		t.Fatalf("export lost snapshotted media: %d files", manifest.MediaFiles)
+	}
+	if _, err := instancebackup.Stage(t.Context(), f.paths, f.current, bytes.NewReader(output.Bytes()), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	assertFile(t, filepath.Join(f.paths.PendingDir(), "media", "photo.png"), "original-photo")
+}
+
+func TestFailedInstallRecoversCurrentDatabaseAndMedia(t *testing.T) {
+	f := newFixture(t)
+	if _, err := f.db.Exec("INSERT INTO backup_probe (value) VALUES ('backup')"); err != nil {
+		t.Fatal(err)
+	}
+	writeMedia(t, f.paths.MediaDir, "photo.png", "backup-photo")
+	archive := f.export(t)
+	if _, err := f.db.Exec("UPDATE backup_probe SET value = 'current'"); err != nil {
+		t.Fatal(err)
+	}
+	writeMedia(t, f.paths.MediaDir, "photo.png", "current-photo")
+	if _, err := instancebackup.Stage(t.Context(), f.paths, f.current, bytes.NewReader(archive), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := instancebackup.ConfirmPending(f.paths); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// A damaged staging tree makes media installation fail after database install.
+	stagedMedia := filepath.Join(f.paths.PendingDir(), "media")
+	if err := os.RemoveAll(stagedMedia); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stagedMedia, []byte("damaged"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := instancebackup.ApplyPending(f.paths, f.current, time.Now()); err == nil || applied {
+		t.Fatalf("applied = %v, err = %v", applied, err)
+	}
+	db, err := database.InitDB("file:" + filepath.ToSlash(f.paths.DatabaseFile) + "?mode=rwc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var value string
+	if err := db.QueryRow("SELECT value FROM backup_probe").Scan(&value); err != nil || value != "current" {
+		t.Fatalf("recovered value = %q, err = %v", value, err)
+	}
+	assertFile(t, filepath.Join(f.paths.MediaDir, "photo.png"), "current-photo")
+	pending, err := instancebackup.ReadPending(f.paths)
+	if err != nil || pending == nil || pending.Confirmed {
+		t.Fatalf("pending = %v, err = %v", pending, err)
+	}
+}
+
+func TestStartupDoesNotRemoveUnownedRestoreDirectory(t *testing.T) {
+	f := newFixture(t)
+	f.paths.MediaDir = f.paths.PendingDir()
+	writeMedia(t, f.paths.MediaDir, "photo.png", "live-media")
+	if applied, err := instancebackup.ApplyPending(f.paths, f.current, time.Now()); err != nil || applied {
+		t.Fatalf("startup = %v, %v", applied, err)
+	}
+	assertFile(t, filepath.Join(f.paths.MediaDir, "photo.png"), "live-media")
+}
+
+func TestConfirmedRestoreRechecksStartupCompatibility(t *testing.T) {
+	f := newFixture(t)
+	archive := f.export(t)
+	if _, err := instancebackup.Stage(t.Context(), f.paths, f.current, bytes.NewReader(archive), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := instancebackup.ConfirmPending(f.paths); err != nil {
+		t.Fatal(err)
+	}
+	changed := f.current
+	changed.EncryptionKeyFingerprint = instancebackup.KeyFingerprint("changed-after-upload")
+	applied, err := instancebackup.ApplyPending(f.paths, changed, time.Now())
+	if applied || !errors.Is(err, instancebackup.ErrKeyMismatch) {
+		t.Fatalf("startup = %v, %v; want key mismatch", applied, err)
+	}
+	points, err := instancebackup.ListRestorePoints(f.paths)
+	if err != nil || len(points) != 0 {
+		t.Fatalf("incompatible restore touched current data: %v, %v", points, err)
+	}
+}
+
+func TestEmptyBackupClearsCurrentMedia(t *testing.T) {
+	f := newFixture(t)
+	archive := f.export(t)
+	writeMedia(t, f.paths.MediaDir, "extra.png", "current-media")
+	if _, err := instancebackup.Stage(t.Context(), f.paths, f.current, bytes.NewReader(archive), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if err := instancebackup.ConfirmPending(f.paths); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if applied, err := instancebackup.ApplyPending(f.paths, f.current, time.Now()); err != nil || !applied {
+		t.Fatalf("applied = %v, err = %v", applied, err)
+	}
+	entries, err := os.ReadDir(f.paths.MediaDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("media = %v, %v; want empty directory", entries, err)
+	}
+}
+
+func TestStageRejectsMediaInBackupWorkingDirectories(t *testing.T) {
+	for _, name := range []string{"restore-pending", "pre-restore-20261025T120000Z", "backup-export-existing"} {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			archive := f.export(t)
+			f.paths.MediaDir = filepath.Join(filepath.Dir(f.paths.DatabaseFile), name)
+			writeMedia(t, f.paths.MediaDir, "photo.png", "live-media")
+			if _, err := instancebackup.Stage(t.Context(), f.paths, f.current, bytes.NewReader(archive), time.Now()); err == nil {
+				t.Fatal("unsafe media layout accepted")
+			}
+			assertFile(t, filepath.Join(f.paths.MediaDir, "photo.png"), "live-media")
+		})
 	}
 }

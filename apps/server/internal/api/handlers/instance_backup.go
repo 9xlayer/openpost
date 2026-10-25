@@ -23,21 +23,23 @@ const (
 )
 
 type InstanceBackupConfig struct {
-	Paths          instancebackup.Paths
-	AppVersion     string
-	DatabaseDriver string
-	StorageDriver  string
-	EncryptionKey  string
-	ProcessRole    string
-	Restart        func()
+	MediaSnapshotMu *sync.RWMutex
+	Paths           instancebackup.Paths
+	AppVersion      string
+	DatabaseDriver  string
+	StorageDriver   string
+	EncryptionKey   string
+	ProcessRole     string
+	Restart         func()
 }
 
 type InstanceBackupHandler struct {
-	db     *bun.DB
-	authn  middleware.Authenticator
-	config InstanceBackupConfig
-	busy   sync.Mutex
-	now    func() time.Time
+	db         *bun.DB
+	authn      middleware.Authenticator
+	config     InstanceBackupConfig
+	busy       sync.Mutex
+	restarting bool
+	now        func() time.Time
 
 	restartDelay time.Duration
 }
@@ -84,6 +86,8 @@ func (h *InstanceBackupHandler) unsupportedReason() string {
 	case h.config.DatabaseDriver != "sqlite" || h.config.Paths.DatabaseFile == "":
 		return "database"
 	case h.config.StorageDriver != "local":
+		return "storage"
+	case h.config.Paths.Validate() != nil:
 		return "storage"
 	case h.config.ProcessRole != "all":
 		return "process_role"
@@ -159,6 +163,9 @@ func (h *InstanceBackupHandler) export(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{fieldError: "another backup operation is in progress", "code": "busy"})
 	}
 	defer h.busy.Unlock()
+	if h.restarting {
+		return c.JSON(http.StatusConflict, map[string]string{fieldError: "the server is restarting", "code": "busy"})
+	}
 
 	filename := "openpost-backup-" + h.now().UTC().Format("20060102-150405") + ".zip"
 	response := c.Response()
@@ -173,6 +180,7 @@ func (h *InstanceBackupHandler) export(c echo.Context) error {
 		StorageDriver:            h.config.StorageDriver,
 		EncryptionKeyFingerprint: instancebackup.KeyFingerprint(h.config.EncryptionKey),
 		Paths:                    h.config.Paths,
+		MediaSnapshotMu:          h.config.MediaSnapshotMu,
 		Now:                      h.now,
 	}, response)
 	if err != nil {
@@ -190,6 +198,9 @@ func (h *InstanceBackupHandler) upload(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{fieldError: "another backup operation is in progress", "code": "busy"})
 	}
 	defer h.busy.Unlock()
+	if h.restarting {
+		return c.JSON(http.StatusConflict, map[string]string{fieldError: "the server is restarting", "code": "busy"})
+	}
 
 	current, err := h.current()
 	if err != nil {
@@ -234,6 +245,9 @@ func (h *InstanceBackupHandler) confirm(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{fieldError: "another backup operation is in progress", "code": "busy"})
 	}
 	defer h.busy.Unlock()
+	if h.restarting {
+		return c.JSON(http.StatusConflict, map[string]string{fieldError: "the server is restarting", "code": "busy"})
+	}
 
 	pending, err := instancebackup.ReadPending(h.config.Paths)
 	if err != nil {
@@ -245,6 +259,10 @@ func (h *InstanceBackupHandler) confirm(c echo.Context) error {
 	if h.config.Restart == nil {
 		return c.JSON(http.StatusConflict, map[string]string{fieldError: "this server cannot restart itself", "code": "restart_unavailable"})
 	}
+	if err := instancebackup.ConfirmPending(h.config.Paths); err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to confirm the staged restore"})
+	}
+	h.restarting = true
 	restart := h.config.Restart
 	time.AfterFunc(h.restartDelay, restart)
 	return c.JSON(http.StatusAccepted, map[string]bool{"restarting": true})
@@ -258,6 +276,9 @@ func (h *InstanceBackupHandler) cancel(c echo.Context) error {
 		return c.JSON(http.StatusConflict, map[string]string{fieldError: "another backup operation is in progress", "code": "busy"})
 	}
 	defer h.busy.Unlock()
+	if h.restarting {
+		return c.JSON(http.StatusConflict, map[string]string{fieldError: "the server is restarting", "code": "busy"})
+	}
 	if err := instancebackup.CancelPending(h.config.Paths); err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{fieldError: "failed to discard the staged restore"})
 	}
@@ -267,6 +288,13 @@ func (h *InstanceBackupHandler) cancel(c echo.Context) error {
 func (h *InstanceBackupHandler) deleteRestorePoint(c echo.Context) error {
 	if err := h.authorize(c); err != nil || c.Response().Committed {
 		return err
+	}
+	if !h.busy.TryLock() {
+		return c.JSON(http.StatusConflict, map[string]string{fieldError: "another backup operation is in progress", "code": "busy"})
+	}
+	defer h.busy.Unlock()
+	if h.restarting {
+		return c.JSON(http.StatusConflict, map[string]string{fieldError: "the server is restarting", "code": "busy"})
 	}
 	err := instancebackup.DeleteRestorePoint(h.config.Paths, c.Param("name"))
 	switch {

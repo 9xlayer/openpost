@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -27,16 +28,21 @@ var (
 )
 
 type pendingMarker struct {
-	Manifest Manifest  `json:"manifest"`
-	StagedAt time.Time `json:"staged_at"`
+	Manifest  Manifest  `json:"manifest"`
+	StagedAt  time.Time `json:"staged_at"`
+	Confirmed bool      `json:"confirmed"`
 }
 
 type Pending struct {
-	Manifest Manifest
-	StagedAt time.Time
+	Manifest  Manifest
+	StagedAt  time.Time
+	Confirmed bool
 }
 
 func Stage(ctx context.Context, paths Paths, current Current, upload io.Reader, now time.Time) (Manifest, error) {
+	if err := paths.Validate(); err != nil {
+		return Manifest{}, err
+	}
 	pendingDir := paths.PendingDir()
 	if err := os.RemoveAll(pendingDir); err != nil {
 		return Manifest{}, fmt.Errorf("clear previous staged restore: %w", err)
@@ -93,11 +99,14 @@ func stageInto(ctx context.Context, pendingDir string, current Current, upload i
 		return Manifest{}, err
 	}
 
+	if err := syncTreeDirectories(pendingDir); err != nil {
+		return Manifest{}, err
+	}
 	marker, err := json.Marshal(pendingMarker{Manifest: manifest, StagedAt: now.UTC()})
 	if err != nil {
 		return Manifest{}, err
 	}
-	if err := os.WriteFile(filepath.Join(pendingDir, pendingMarkerName), marker, 0o600); err != nil {
+	if err := writeAtomic(filepath.Join(pendingDir, pendingMarkerName), marker); err != nil {
 		return Manifest{}, err
 	}
 	return manifest, nil
@@ -126,6 +135,9 @@ func readManifest(reader *zip.ReadCloser) (Manifest, error) {
 }
 
 func checkCompatible(manifest Manifest, current Current) error {
+	if manifest.DatabaseBytes <= 0 || manifest.MediaBytes < 0 || manifest.MediaFiles < 0 || manifest.DatabaseBytes > 64<<30 || manifest.MediaBytes > (64<<30)-manifest.DatabaseBytes {
+		return ErrInvalidArchive
+	}
 	if manifest.FormatVersion != FormatVersion {
 		return ErrUnsupportedBackup
 	}
@@ -213,9 +225,16 @@ func extractFile(file *zip.File, target string, maxBytes int64) (int64, string, 
 	}
 	hash := sha256.New()
 	written, copyErr := io.Copy(io.MultiWriter(destination, hash), io.LimitReader(source, maxBytes+1))
+	var syncErr error
+	if copyErr == nil {
+		syncErr = destination.Sync()
+	}
 	closeErr := destination.Close()
 	if copyErr != nil {
 		return 0, "", ErrInvalidArchive
+	}
+	if syncErr != nil {
+		return 0, "", syncErr
 	}
 	if closeErr != nil {
 		return 0, "", closeErr
@@ -259,9 +278,67 @@ func ReadPending(paths Paths) (*Pending, error) {
 	if err := json.Unmarshal(raw, &marker); err != nil {
 		return nil, err
 	}
-	return &Pending{Manifest: marker.Manifest, StagedAt: marker.StagedAt}, nil
+	return &Pending{Manifest: marker.Manifest, StagedAt: marker.StagedAt, Confirmed: marker.Confirmed}, nil
 }
 
 func CancelPending(paths Paths) error {
 	return os.RemoveAll(paths.PendingDir())
+}
+
+// ConfirmPending is the durable authorization boundary. Uploading alone never
+// authorizes a restore, including across an unrelated server restart.
+func ConfirmPending(paths Paths) error {
+	pending, err := ReadPending(paths)
+	if err != nil {
+		return err
+	}
+	if pending == nil {
+		return os.ErrNotExist
+	}
+	return writePending(paths, pendingMarker{Manifest: pending.Manifest, StagedAt: pending.StagedAt, Confirmed: true})
+}
+
+func writePending(paths Paths, marker pendingMarker) error {
+	data, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	return writeAtomic(filepath.Join(paths.PendingDir(), pendingMarkerName), data)
+}
+
+func writeAtomic(target string, data []byte) error {
+	file, err := os.CreateTemp(filepath.Dir(target), ".restore-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	if _, err := file.Write(data); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(file.Name(), target); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(target))
+}
+
+func syncDirectory(path string) error {
+	// Windows does not support flushing directory handles. Regular file writes
+	// remain synced; directory metadata follows the filesystem journal there.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	dir, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return dir.Sync()
 }

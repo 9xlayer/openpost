@@ -13,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/uptrace/bun"
@@ -23,17 +24,33 @@ type ExportOptions struct {
 	DatabaseDriver           string
 	StorageDriver            string
 	EncryptionKeyFingerprint string
+	MediaSnapshotMu          *sync.RWMutex
 	Paths                    Paths
 	Now                      func() time.Time
 }
 
 func WriteArchive(ctx context.Context, db *bun.DB, options ExportOptions, output io.Writer) (Manifest, error) {
+	if err := options.Paths.Validate(); err != nil {
+		return Manifest{}, err
+	}
 	snapshotDir, err := os.MkdirTemp(options.Paths.dataDir(), "backup-export-")
 	if err != nil {
 		return Manifest{}, fmt.Errorf("create backup workspace: %w", err)
 	}
 	defer os.RemoveAll(snapshotDir)
 
+	// Local storage publishes immutable files by rename. Holding this gate
+	// until private copies exist prevents deletion or replacement of blobs
+	// referenced by the database snapshot, without blocking a slow download.
+	if options.MediaSnapshotMu != nil {
+		options.MediaSnapshotMu.Lock()
+	}
+	locked := options.MediaSnapshotMu != nil
+	defer func() {
+		if locked {
+			options.MediaSnapshotMu.Unlock()
+		}
+	}()
 	snapshotPath := filepath.Join(snapshotDir, "openpost.db")
 	if _, err := db.ExecContext(ctx, "VACUUM INTO ?", snapshotPath); err != nil {
 		return Manifest{}, fmt.Errorf("snapshot database: %w", err)
@@ -44,6 +61,14 @@ func WriteArchive(ctx context.Context, db *bun.DB, options ExportOptions, output
 		return Manifest{}, fmt.Errorf("read schema version: %w", err)
 	}
 
+	mediaSnapshot := filepath.Join(snapshotDir, "media")
+	if err := copyOptionalTree(options.Paths.MediaDir, mediaSnapshot); err != nil {
+		return Manifest{}, fmt.Errorf("snapshot media: %w", err)
+	}
+	if locked {
+		options.MediaSnapshotMu.Unlock()
+		locked = false
+	}
 	now := time.Now
 	if options.Now != nil {
 		now = options.Now
@@ -62,7 +87,7 @@ func WriteArchive(ctx context.Context, db *bun.DB, options ExportOptions, output
 	if err := writeDatabaseEntry(archive, snapshotPath, &manifest); err != nil {
 		return Manifest{}, err
 	}
-	if err := writeMediaEntries(ctx, archive, options.Paths.MediaDir, &manifest); err != nil {
+	if err := writeMediaEntries(ctx, archive, mediaSnapshot, &manifest); err != nil {
 		return Manifest{}, err
 	}
 	manifestWriter, err := archive.CreateHeader(&zip.FileHeader{Name: manifestEntry, Method: zip.Deflate, Modified: manifest.CreatedAt})
@@ -113,17 +138,18 @@ func writeMediaEntries(ctx context.Context, archive *zip.Writer, mediaDir string
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if !entry.Type().IsRegular() {
+		if entry.IsDir() {
 			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("unsupported media file type: %s", path)
 		}
 		relative, err := filepath.Rel(mediaDir, path)
 		if err != nil {
 			return err
 		}
 		size, err := copyFileIntoArchive(archive, path, mediaPrefix+filepath.ToSlash(relative))
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
+
 		if err != nil {
 			return err
 		}

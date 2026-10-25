@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/openpost/backend/internal/config"
 	"github.com/openpost/backend/internal/connectors"
 	"github.com/openpost/backend/internal/database"
+	"github.com/openpost/backend/internal/database/migrations"
 	"github.com/openpost/backend/internal/diagnostics"
 	"github.com/openpost/backend/internal/imageprepare"
 	"github.com/openpost/backend/internal/memes"
@@ -183,7 +185,16 @@ func main() {
 		MediaDir:     cfg.MediaPath,
 	}
 	if cfg.DatabaseDriver == config.DatabaseDriverSQLite && cfg.StorageDriver == config.StorageDriverLocal && command.role == processRoleAll && instanceBackupPaths.DatabaseFile != "" {
-		applied, err := instancebackup.ApplyPending(instanceBackupPaths, time.Now())
+		latestSchema, err := migrations.LatestVersion()
+		if err != nil {
+			fatalfWithDiagnostics(diagnosticsReporter, "failed to read backup schema version: %v", err)
+		}
+		applied, err := instancebackup.ApplyPending(instanceBackupPaths, instancebackup.Current{
+			DatabaseDriver:           cfg.DatabaseDriver,
+			StorageDriver:            cfg.StorageDriver,
+			SchemaVersion:            latestSchema,
+			EncryptionKeyFingerprint: instancebackup.KeyFingerprint(cfg.EncryptionKey),
+		}, time.Now())
 		if err != nil {
 			fatalfWithDiagnostics(diagnosticsReporter, "failed to apply the staged backup restore: %v", err)
 		}
@@ -647,10 +658,12 @@ func main() {
 		growthService.SetProvider(name, adapter)
 		accountPreflightService.SetProvider(name, adapter)
 	}
+	mediaSnapshotMu := &sync.RWMutex{}
 	storage, err := mediastore.New(context.Background(), mediastore.Config{
-		Driver:    cfg.StorageDriver,
-		LocalPath: cfg.MediaPath,
-		BaseURL:   cfg.MediaURL,
+		Driver:          cfg.StorageDriver,
+		LocalPath:       cfg.MediaPath,
+		LocalSnapshotMu: mediaSnapshotMu,
+		BaseURL:         cfg.MediaURL,
 		S3: mediastore.S3Config{
 			Endpoint:        cfg.S3Endpoint,
 			Region:          cfg.S3Region,
@@ -890,12 +903,13 @@ func main() {
 
 	mediaHandler.RegisterLegacyRoutes(e)
 	handlers.NewInstanceBackupHandler(db, authenticator, handlers.InstanceBackupConfig{
-		Paths:          instanceBackupPaths,
-		AppVersion:     version,
-		DatabaseDriver: cfg.DatabaseDriver,
-		StorageDriver:  cfg.StorageDriver,
-		EncryptionKey:  cfg.EncryptionKey,
-		ProcessRole:    string(command.role),
+		Paths:           instanceBackupPaths,
+		MediaSnapshotMu: mediaSnapshotMu,
+		AppVersion:      version,
+		DatabaseDriver:  cfg.DatabaseDriver,
+		StorageDriver:   cfg.StorageDriver,
+		EncryptionKey:   cfg.EncryptionKey,
+		ProcessRole:     string(command.role),
 		Restart: func() {
 			if process, err := os.FindProcess(os.Getpid()); err == nil {
 				_ = process.Signal(syscall.SIGTERM)
