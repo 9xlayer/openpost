@@ -13,6 +13,7 @@
     "browser:install": "playwright install chromium",
     "build": "bun scripts/tasks.mjs build",
     "capture:product-demos": "OPENPOST_CAPTURE_DEMOS=1 OPENPOST_APP_E2E_PORT=${OPENPOST_APP_E2E_PORT:-19281} playwright test --config tests/app/playwright.config.ts tests/app/product-demos.spec.ts --output tmp/product-demos/results --workers=1 && bun scripts/encode-product-demos.mjs",
+    "render:launch-film": "bun apps/marketing/launch-film/render.mjs",
     "capture:product-screenshots": "OPENPOST_UPDATE_PRODUCT_SCREENSHOTS=1 OPENPOST_APP_E2E_PORT=${OPENPOST_APP_E2E_PORT:-19181} playwright test --config tests/app/playwright.config.ts tests/app/product-screenshots.spec.ts --workers=1 && bun scripts/optimize-readme-images.mjs && bun scripts/sync-assets.mjs",
     "check": "bun scripts/tasks.mjs check",
     "check:changed": "bash scripts/changed-files-check.sh",

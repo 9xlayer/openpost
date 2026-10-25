@@ -10165,5 +10165,12 @@
 	"engagement_review_approved": "Onaylandı",
 	"engagement_review_rejected": "Reddedildi",
 	"engagement_review_unknown": "Belirtilmedi",
-	"engagement_review_reply_busy": "Bir yanıt işlemi hâlâ kontrol ediliyor. Değiştirmeden önce işlem kaydını inceleyin."
+	"engagement_review_reply_busy": "Bir yanıt işlemi hâlâ kontrol ediliyor. Değiştirmeden önce işlem kaydını inceleyin.",
+	"analytics_range_year": "Son bir yıl",
+	"analytics_range_all": "Tüm zamanlar",
+	"analytics_range_custom": "Özel tarih aralığı",
+	"analytics_range_custom_help": "UTC tarihlerini seçin. Başlangıç ve bitiş günleri dahildir. Ölçümler kendi raporlama dönemlerini korur.",
+	"analytics_range_invalid": "Başlangıç tarihini ve bu tarih ile bugün arasında bir bitiş tarihi seçin.",
+	"analytics_range_export_description": "{range} için kaydedilmiş ölçümleri dışa aktarın.",
+	"analytics_range_dates": "{from} – {to}"
 }

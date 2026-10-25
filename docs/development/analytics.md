@@ -22,6 +22,8 @@ Snapshots include workspace and provider identity for scoped queries and deletio
 
 The worker handles `analytics_sweep`, `analytics_account_sync`, and `analytics_rendition_sync`. A partial unique job index prevents duplicate active work for the same subject. The sweep runs every 15 minutes, queues only due subjects, and always schedules its successor.
 
+Explicit Workspace refreshes can collect published renditions of any age through the existing permission, readiness, deduplication, and rate-limit gates. Background collection retains its seven-day eligibility window.
+
 Account checks start on a daily cadence. Rendition checks use 1, 3, 12, and 24 hour bands until day 7. Repeated unchanged results can increase the current interval to 8× its base cadence. Stored backoff and `Retry-After` apply to scheduled and manual refresh alike.
 
 Permission and unsupported states do not consume provider quota. OpenPost re-evaluates them during sweeps so reconnects and newly added adapter support recover without manual database changes. Rate limits preserve the last successful values and use the provider's retry hint when available.
@@ -35,3 +37,9 @@ The sweep uniqueness rule applies to pending sweeps. A running sweep can queue i
 `POST /api/v1/analytics/refresh` requires editor access and reconsiders collection without bypassing provider gates. `POST /api/v1/analytics/repurpose` accepts a Workspace ID, discriminated content reference, and range in the request body. It recomputes bounded evidence and returns a fresh local composer handoff without writing a Publication, changing the source, or calling an AI provider.
 
 The API preserves engagement and exposure types. The frontend and mobile declarations are regenerated from Huma through OpenAPI. Analytics is intentionally not a first-class CLI or MCP workflow; their parity documentation continues to mark it unavailable rather than publishing a divergent contract.
+
+## Reporting windows
+
+Overview, exports, and repurpose evidence share the same range contract. `days` accepts 7, 30, 90, 365, or 0 for all time. Existing requests still default to 30 days. A custom range supplies both `from` and `to` as inclusive UTC calendar dates and takes precedence over `days`. The server resolves an inclusive start and exclusive end, caps the interval at the current time, and rejects incomplete, inverted, or invalid dates. Pagination binds the requested dates as well as the preset and account.
+
+All time begins at the earliest stored published post or analytics snapshot in the Workspace. It does not initiate provider history reads. Published-content inventory follows its original publication time; trends include only measurements captured within the selected interval. Lifetime counters and account-wide current measurements retain their existing scope labels, so choosing a historical interval never relabels a lifetime total as activity during that interval. Exports use the resolved interval, and the web URL preserves the selected preset or custom dates.

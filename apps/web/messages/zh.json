@@ -10165,5 +10165,12 @@
 	"engagement_review_approved": "已批准",
 	"engagement_review_rejected": "已拒绝",
 	"engagement_review_unknown": "未指定",
-	"engagement_review_reply_busy": "回复操作仍在确认中。替换回复前请查看回执。"
+	"engagement_review_reply_busy": "回复操作仍在确认中。替换回复前请查看回执。",
+	"analytics_range_year": "过去一年",
+	"analytics_range_all": "全部时间",
+	"analytics_range_custom": "自定义范围",
+	"analytics_range_custom_help": "选择 UTC 日期，包含起止日期。各平台指标保留其自身的报告周期。",
+	"analytics_range_invalid": "请选择开始日期，以及介于开始日期和今天之间的结束日期。",
+	"analytics_range_export_description": "导出 {range} 的已保存测量数据。",
+	"analytics_range_dates": "{from} – {to}"
 }

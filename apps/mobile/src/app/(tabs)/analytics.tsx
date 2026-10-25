@@ -6,9 +6,21 @@ import {
   type AnalyticsRangeDays,
 } from "@openpost/query-catalog";
 import { gradientSvg } from "@openpost/dither/paint";
+import {
+  analyticsCalendarDate as calendarDate,
+  analyticsPickerDate,
+} from "@/lib/analytics-date-range";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { router } from "expo-router";
 import { useState } from "react";
-import { RefreshControl, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import {
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SvgXml } from "react-native-svg";
 
 import { BottomDrawer } from "@/components/bottom-drawer";
@@ -31,7 +43,9 @@ import { accountHandle, platformLabel } from "@/lib/format";
 import { useAnalytics, useWorkspaceId } from "@/lib/queries";
 import { useNativeTheme } from "@/theme";
 
-const RANGES: readonly AnalyticsRangeDays[] = [7, 30, 90];
+const RANGES: readonly AnalyticsRangeDays[] = [7, 30, 90, 365, 0];
+const rangeLabel = (days: AnalyticsRangeDays) =>
+  days === 0 ? "All time" : days === 365 ? "Last year" : `${days} days`;
 const number = new Intl.NumberFormat("en", {
   notation: "compact",
   maximumFractionDigits: 1,
@@ -45,10 +59,21 @@ export default function AnalyticsScreen() {
 function AnalyticsDashboard() {
   const { colors, spacing, typography, shape } = useNativeTheme().manifest;
   const [days, setDays] = useState<AnalyticsRangeDays>(30);
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [custom, setCustom] = useState(false);
+  const [draftFrom, setDraftFrom] = useState(() =>
+    calendarDate(new Date(Date.now() - 30 * 86400000)),
+  );
+  const [draftTo, setDraftTo] = useState(() => calendarDate(new Date()));
+  const [picking, setPicking] = useState<"from" | "to" | null>(null);
+  const validRange = draftFrom <= draftTo && draftTo <= calendarDate(new Date());
   const [trend, setTrend] = useState<"views" | "engagement" | "followers">("views");
   const [accountId, setAccountId] = useState("");
   const [accountPickerOpen, setAccountPickerOpen] = useState(false);
-  const query = useAnalytics({ days, accountId });
+  const selectedRangeLabel = from && to ? `${from} – ${to}` : rangeLabel(days);
+  const query = useAnalytics({ days, from, to, accountId });
   const overview = query.data?.pages[0];
   // The filter offers exactly the accounts the overview describes, using the
   // same identity as the audience and post rows below.
@@ -82,18 +107,18 @@ function AnalyticsDashboard() {
           paddingBottom: spacing.small,
         }}
       >
-        <View style={styles.actions}>
-          {RANGES.map((range) => (
-            <Button
-              key={range}
-              title={`${range} days`}
-              intent={days === range ? "primary" : "ordinary"}
-              accessibilityState={{ selected: days === range }}
-              onPress={() => setDays(range)}
-              style={styles.filter}
-            />
-          ))}
-        </View>
+        <Button
+          title={selectedRangeLabel}
+          intent="ordinary"
+          accessibilityHint="Choose the analytics date range"
+          onPress={() => {
+            setCustom(Boolean(from));
+            setDraftFrom(from || calendarDate(new Date(Date.now() - 30 * 86400000)));
+            setDraftTo(to || calendarDate(new Date()));
+            setPicking(null);
+            setRangeOpen(true);
+          }}
+        />
         <Button
           title={
             selectedAccount
@@ -105,6 +130,76 @@ function AnalyticsDashboard() {
           accessibilityHint="Filter analytics by account"
         />
       </View>
+      <BottomDrawer open={rangeOpen} onDismiss={() => setRangeOpen(false)} title="Date range">
+        <View style={{ gap: spacing.medium, padding: spacing.large }}>
+          {!custom &&
+            RANGES.map((range) => (
+              <Button
+                key={range}
+                title={rangeLabel(range)}
+                intent={!from && days === range ? "primary" : "ordinary"}
+                accessibilityState={{ selected: !from && days === range }}
+                onPress={() => {
+                  setDays(range);
+                  setFrom("");
+                  setTo("");
+                  setRangeOpen(false);
+                }}
+              />
+            ))}
+          <Button
+            title={custom ? "Back to presets" : "Custom range"}
+            intent="ordinary"
+            onPress={() => {
+              setCustom(!custom);
+              setPicking(null);
+            }}
+          />
+          {custom ? (
+            <>
+              <BodyText>Choose inclusive dates in UTC.</BodyText>
+              <Button
+                title={`From: ${draftFrom}`}
+                intent="ordinary"
+                onPress={() => setPicking("from")}
+              />
+              <Button title={`To: ${draftTo}`} intent="ordinary" onPress={() => setPicking("to")} />
+              {picking ? (
+                <DateTimePicker
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  value={analyticsPickerDate(picking === "from" ? draftFrom : draftTo)}
+                  timeZoneName="UTC"
+                  maximumDate={new Date(`${calendarDate(new Date())}T23:59:59.999Z`)}
+                  onChange={(event, date) => {
+                    if (Platform.OS !== "ios") setPicking(null);
+                    if (event.type === "set" && date) {
+                      if (picking === "from") setDraftFrom(calendarDate(date));
+                      else setDraftTo(calendarDate(date));
+                    }
+                  }}
+                />
+              ) : null}
+              {!validRange ? (
+                <BodyText>Choose an end date on or after the start date.</BodyText>
+              ) : null}
+              {picking && Platform.OS === "ios" ? (
+                <Button title="Done" intent="ordinary" onPress={() => setPicking(null)} />
+              ) : null}
+              <Button
+                title="Apply"
+                disabled={!validRange}
+                onPress={() => {
+                  setDays(30);
+                  setFrom(draftFrom);
+                  setTo(draftTo);
+                  setRangeOpen(false);
+                }}
+              />
+            </>
+          ) : null}
+        </View>
+      </BottomDrawer>
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: spacing.large,
@@ -186,7 +281,7 @@ function AnalyticsDashboard() {
               <Metric
                 label="Published"
                 value={number.format(overview.summary.published)}
-                detail={`${days} days`}
+                detail={selectedRangeLabel}
               />
             </View>
             <View style={{ gap: spacing.small }}>
@@ -232,7 +327,9 @@ function AnalyticsDashboard() {
                             params: { id: publicationId },
                           })
                         }
-                        style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+                        style={({ pressed }) => ({
+                          opacity: pressed ? 0.6 : 1,
+                        })}
                       >
                         <ContentSection
                           style={{

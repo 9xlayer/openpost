@@ -10165,5 +10165,12 @@
 	"engagement_review_approved": "Freigegeben",
 	"engagement_review_rejected": "Abgelehnt",
 	"engagement_review_unknown": "Nicht angegeben",
-	"engagement_review_reply_busy": "Ein Antwortvorgang wird noch geprüft. Prüfe den Beleg, bevor du die Antwort ersetzt."
+	"engagement_review_reply_busy": "Ein Antwortvorgang wird noch geprüft. Prüfe den Beleg, bevor du die Antwort ersetzt.",
+	"analytics_range_year": "Letztes Jahr",
+	"analytics_range_all": "Gesamter Zeitraum",
+	"analytics_range_custom": "Benutzerdefinierter Zeitraum",
+	"analytics_range_custom_help": "Inklusive Datumsangaben in UTC. Plattformmetriken behalten ihre eigenen Berichtszeiträume.",
+	"analytics_range_invalid": "Wähle ein Startdatum und ein Enddatum zwischen dem Startdatum und heute.",
+	"analytics_range_export_description": "Gespeicherte Messwerte für {range} exportieren.",
+	"analytics_range_dates": "{from} – {to}"
 }

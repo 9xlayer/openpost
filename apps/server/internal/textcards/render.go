@@ -14,6 +14,7 @@ import (
 
 	"github.com/disintegration/imaging"
 	textrender "github.com/go-text/render"
+	"github.com/openpost/backend/internal/imagethumbnail"
 )
 
 type Identity struct {
@@ -197,7 +198,7 @@ func paintAvatar(canvas *image.NRGBA, avatar image.Image, name string, faces fon
 	disc, initialInk := avatarPlaceholderColors(style)
 	paintRounded(canvas, avatarRect, 39, disc)
 	if avatar != nil {
-		photo := imaging.Fill(avatar, 78, 78, imaging.Center, imaging.Lanczos)
+		photo := imagethumbnail.Square(avatar, 78)
 		mask := image.NewAlpha(image.Rect(0, 0, 78, 78))
 		for y := 0; y < 78; y++ {
 			for x := 0; x < 78; x++ {

@@ -24,6 +24,9 @@
 		open?: boolean;
 		workspaceId: string;
 		days: number;
+		from?: string;
+		to?: string;
+		rangeLabel?: string;
 		accountId?: string;
 		/** Connected account identities, including multiple accounts per platform. */
 		accounts: { id: string; username: string; platform: string; avatar_url?: string | null }[];
@@ -42,6 +45,9 @@
 		open = $bindable(false),
 		workspaceId,
 		days,
+		from = '',
+		to = '',
+		rangeLabel,
 		accountId = '',
 		accounts,
 		metrics,
@@ -139,6 +145,8 @@
 			const result = await requestExport({
 				workspace_id: workspaceId,
 				days,
+				from: from || undefined,
+				to: to || undefined,
 				account_ids: selectedAccounts.join(',') || undefined,
 				format,
 				timezone,
@@ -175,7 +183,11 @@
 	<Dialog.Content class="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-xl">
 		<Dialog.Header>
 			<Dialog.Title>{m.analytics_export_title()}</Dialog.Title>
-			<Dialog.Description>{m.analytics_export_description({ days })}</Dialog.Description>
+			<Dialog.Description
+				>{rangeLabel
+					? m.analytics_range_export_description({ range: rangeLabel })
+					: m.analytics_export_description({ days })}</Dialog.Description
+			>
 		</Dialog.Header>
 		<div class="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1" data-testid="analytics-export-form">
 			<div class="space-y-2">

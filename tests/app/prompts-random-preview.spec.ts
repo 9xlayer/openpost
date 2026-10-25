@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, createWorkspace, registerUser, expectPostText } from "./helpers";
 
 test("Random reveals an idea and only an explicit New post authors its example", async ({
   page,
@@ -86,7 +86,8 @@ test("Random reveals an idea and only an explicit New post authors its example",
       .getByRole("button", { name: "New post", exact: true });
     await author.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByRole("textbox", { name: "Post text", exact: true })).toHaveValue(
+    await expectPostText(
+      page.getByRole("textbox", { name: "Post text", exact: true }),
       selected!.example,
     );
     await expect

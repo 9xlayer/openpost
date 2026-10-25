@@ -15077,6 +15077,14 @@
 						"format": "int64",
 						"type": "integer"
 					},
+					"range_end": {
+						"format": "date-time",
+						"type": "string"
+					},
+					"range_start": {
+						"format": "date-time",
+						"type": "string"
+					},
 					"summary": {
 						"$ref": "#/components/schemas/Summary"
 					},
@@ -19157,10 +19165,16 @@
 				"additionalProperties": false,
 				"properties": {
 					"days": {
-						"description": "Reporting window in days",
-						"enum": [7, 30, 90],
+						"description": "Reporting window in days; 0 means all time",
+						"enum": [0, 7, 30, 90, 365],
 						"format": "int64",
 						"type": "integer"
+					},
+					"from": {
+						"type": "string"
+					},
+					"to": {
+						"type": "string"
 					}
 				},
 				"required": ["days"],
@@ -31913,15 +31927,35 @@
 						}
 					},
 					{
-						"description": "Reporting window in days (7, 30, or 90)",
+						"description": "Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days.",
 						"explode": false,
 						"in": "query",
 						"name": "days",
 						"schema": {
 							"default": 30,
-							"description": "Reporting window in days (7, 30, or 90)",
+							"description": "Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days.",
 							"format": "int64",
 							"type": "integer"
+						}
+					},
+					{
+						"description": "Inclusive start date (YYYY-MM-DD, UTC), supplied together with to",
+						"explode": false,
+						"in": "query",
+						"name": "from",
+						"schema": {
+							"description": "Inclusive start date (YYYY-MM-DD, UTC), supplied together with to",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Inclusive end date (YYYY-MM-DD, UTC), supplied together with from",
+						"explode": false,
+						"in": "query",
+						"name": "to",
+						"schema": {
+							"description": "Inclusive end date (YYYY-MM-DD, UTC), supplied together with from",
+							"type": "string"
 						}
 					},
 					{
@@ -32059,15 +32093,35 @@
 						}
 					},
 					{
-						"description": "Reporting window in days (7, 30, or 90)",
+						"description": "Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days.",
 						"explode": false,
 						"in": "query",
 						"name": "days",
 						"schema": {
 							"default": 30,
-							"description": "Reporting window in days (7, 30, or 90)",
+							"description": "Reporting window: 7, 30, 90, 365 days, or 0 for all time. Custom dates override days.",
 							"format": "int64",
 							"type": "integer"
+						}
+					},
+					{
+						"description": "Inclusive start date (YYYY-MM-DD, UTC), supplied together with to",
+						"explode": false,
+						"in": "query",
+						"name": "from",
+						"schema": {
+							"description": "Inclusive start date (YYYY-MM-DD, UTC), supplied together with to",
+							"type": "string"
+						}
+					},
+					{
+						"description": "Inclusive end date (YYYY-MM-DD, UTC), supplied together with from",
+						"explode": false,
+						"in": "query",
+						"name": "to",
+						"schema": {
+							"description": "Inclusive end date (YYYY-MM-DD, UTC), supplied together with from",
+							"type": "string"
 						}
 					},
 					{

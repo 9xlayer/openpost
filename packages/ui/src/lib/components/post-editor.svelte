@@ -347,6 +347,7 @@
 	});
 	$effect(() => {
 		if (editor) {
+			editor.view.dom.id = id;
 			editor.view.dom.className = `tiptap ProseMirror ${className} ${editor.isFocused ? 'ProseMirror-focused' : ''}`;
 			editor.view.dom.style.cssText = style;
 			editor.view.dom.setAttribute('aria-label', label);

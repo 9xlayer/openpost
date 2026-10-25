@@ -7,6 +7,9 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 -->
 <script lang="ts">
 	import { appBranding } from '$lib/app-branding.svelte';
+	import AnalyticsDateRange from '$lib/components/analytics-date-range.svelte';
+	import type { AnalyticsRangeDays } from '@openpost/query-catalog';
+	import { page } from '$app/state';
 	import AnalyticsNumber from '$lib/components/analytics-number.svelte';
 	import AnalyticsExportDialog from '$lib/components/analytics-export-dialog.svelte';
 	import AsyncActionButton from '$lib/components/async-action-button.svelte';
@@ -17,7 +20,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 		analyticsQueryKeys
 	} from '@openpost/query-catalog';
 	import { createInfiniteQuery, createQuery } from '@tanstack/svelte-query';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { client } from '$lib/api/client';
 	import type { components } from '$lib/api/types';
@@ -63,10 +66,24 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	type AnalyticsInsight = components['schemas']['Insight'];
 	type AnalyticsMetricMetadata = components['schemas']['AnalyticsMetricMetadata'];
 	type MetricSummary = components['schemas']['MetricSummary'];
-	type RangeDays = 7 | 30 | 90;
+	type RangeDays = AnalyticsRangeDays;
 	type ChartMetric = 'followers' | 'engagement' | 'views';
 
-	let rangeDays = $state<RangeDays>(30);
+	const rangePresets: RangeDays[] = [0, 7, 30, 90, 365];
+	let rangeDays = $state<RangeDays>(
+		rangePresets.find((days) => String(days) === page.url.searchParams.get('days')) ?? 30
+	);
+	let rangeFrom = $state(page.url.searchParams.get('from') ?? '');
+	let rangeTo = $state(page.url.searchParams.get('to') ?? '');
+	const rangeLabel = $derived(
+		rangeFrom && rangeTo
+			? m.analytics_range_dates({ from: rangeFrom, to: rangeTo })
+			: rangeDays === 0
+				? m.analytics_range_all()
+				: rangeDays === 365
+					? m.analytics_range_year()
+					: m.analytics_range_days({ days: rangeDays })
+	);
 	let selectedAccountID = $state('all');
 	let selectedAccountWorkspaceID = $state('');
 	let chartMetric = $state<ChartMetric>('views');
@@ -87,6 +104,8 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	const analyticsQuery = createInfiniteQuery(() =>
 		analyticsOverviewQueryOptions(analyticsQueryAPI, currentWorkspaceID, {
 			days: rangeDays,
+			from: rangeFrom,
+			to: rangeTo,
 			accountId: queryAccountID === 'all' ? undefined : queryAccountID,
 			sort: sortMode,
 			limit: 50
@@ -299,6 +318,22 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 		);
 	}
 
+	function setDateRange(days: RangeDays, from: string, to: string) {
+		rangeDays = days;
+		rangeFrom = from;
+		rangeTo = to;
+		const url = new URL(page.url);
+		url.searchParams.set('days', String(days));
+		if (from && to) {
+			url.searchParams.set('from', from);
+			url.searchParams.set('to', to);
+		} else {
+			url.searchParams.delete('from');
+			url.searchParams.delete('to');
+		}
+		replaceState(url, page.state);
+	}
+
 	function combineAnalyticsPages(pages: AnalyticsOverview[]): AnalyticsOverview | null {
 		return pages.reduce<AnalyticsOverview | null>(
 			(combined, page) => (combined ? appendAnalyticsContentPage(combined, page) : page),
@@ -325,7 +360,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 				body: {
 					workspace_id: requestedWorkspaceID,
 					reference: item.reference,
-					range: { days: rangeDays }
+					range: { days: rangeDays, from: rangeFrom || undefined, to: rangeTo || undefined }
 				}
 			});
 			if (response.error || !response.data) {
@@ -630,6 +665,9 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 	bind:open={exportOpen}
 	workspaceId={currentWorkspaceID}
 	days={rangeDays}
+	from={rangeFrom}
+	to={rangeTo}
+	{rangeLabel}
 	accountId={queryAccountID === 'all' ? '' : queryAccountID}
 	{accounts}
 	metrics={exportMetrics}
@@ -637,27 +675,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 
 {#snippet actions()}
 	<div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-		<div
-			class="flex min-h-11 items-center rounded-md border border-border p-1 md:min-h-9"
-			role="group"
-			aria-label={m.analytics_range_label()}
-		>
-			{#each [7, 30, 90] as days (days)}
-				<button
-					type="button"
-					class={[
-						'min-h-9 rounded-sm px-2.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none md:min-h-7 [@media(pointer:coarse)]:min-h-11',
-						rangeDays === days
-							? 'bg-secondary text-secondary-foreground'
-							: 'text-muted-foreground hover:text-foreground'
-					]}
-					aria-pressed={rangeDays === days}
-					onclick={() => (rangeDays = days as RangeDays)}
-				>
-					{m.analytics_range_days({ days })}
-				</button>
-			{/each}
-		</div>
+		<AnalyticsDateRange days={rangeDays} from={rangeFrom} to={rangeTo} onchange={setDateRange} />
 		<Button
 			variant="outline"
 			size="sm"
@@ -900,7 +918,7 @@ FORM: Server-owned insights and content rows preserve source, period, sample, an
 							<AnalyticsNumber value={displayedSummary?.published ?? 0} />
 						</p>
 						<p class="mt-1 text-xs text-muted-foreground">
-							{m.analytics_range_days({ days: rangeDays })}
+							{rangeLabel}
 						</p>
 					</div>
 				</div>

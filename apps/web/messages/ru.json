@@ -10165,5 +10165,12 @@
 	"engagement_review_approved": "Одобрен",
 	"engagement_review_rejected": "Отклонён",
 	"engagement_review_unknown": "Не указано",
-	"engagement_review_reply_busy": "Операция ответа ещё проверяется. Проверьте квитанцию перед заменой ответа."
+	"engagement_review_reply_busy": "Операция ответа ещё проверяется. Проверьте квитанцию перед заменой ответа.",
+	"analytics_range_year": "Последний год",
+	"analytics_range_all": "За всё время",
+	"analytics_range_custom": "Свой период",
+	"analytics_range_custom_help": "Выберите даты включительно в UTC. Метрики сохраняют отчётные периоды платформ.",
+	"analytics_range_invalid": "Выберите начальную дату и конечную дату между начальной датой и сегодняшним днём.",
+	"analytics_range_export_description": "Экспортировать сохранённые показатели за {range}.",
+	"analytics_range_dates": "{from} – {to}"
 }

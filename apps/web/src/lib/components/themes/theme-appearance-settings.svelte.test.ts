@@ -4,7 +4,9 @@ import { render } from 'vitest-browser-svelte';
 import { QueryClientProvider } from '@tanstack/svelte-query';
 import { themeQueryKeys } from '@openpost/query-catalog';
 import { client } from '$lib/api/client';
+import { userProfileDefaults } from '$lib/test-fixtures/user-profile';
 import { queryClient } from '$lib/query/client';
+import { auth } from '$lib/stores/auth';
 import { workspaceCtx } from '$lib/stores/workspace.svelte';
 import { getBuiltInTheme } from '$lib/themes';
 import { builtInManifestReference } from './theme-library-model';
@@ -55,6 +57,19 @@ const workspace = {
 
 beforeEach(() => {
 	queryClient.clear();
+	auth.setUser({
+		...userProfileDefaults,
+		id: 'theme-owner',
+		email: 'theme-owner@example.com',
+		username: 'theme-owner',
+		public_profile_enabled: false,
+		is_admin: false,
+		is_managed: false,
+		has_password: true,
+		legal_acceptance_required: false,
+		email_verified: true,
+		created_at: '2026-10-24T12:00:00Z'
+	});
 	getPaths = [];
 	testPage.url = new URL('http://localhost/settings');
 	postMock.mockReset();

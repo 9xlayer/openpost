@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { authenticatePage, createWorkspace, registerUser } from "./helpers";
+import { authenticatePage, createWorkspace, registerUser, expectPostText } from "./helpers";
 
 // The create-flow half of this selection race was fixed by decoupling workspace
 // selection from dialog mount state in create-workspace-dialog.svelte (the
@@ -249,7 +249,7 @@ test("dirty composer workspace switches can stay, save to the origin, or discard
   await switchDialog.getByRole("button", { name: "Stay here" }).click();
   await expect(switchDialog).toBeHidden();
   await expect(workspaceButton).toContainText(first.name);
-  await expect(textarea).toHaveValue("Keep this exact draft");
+  await expectPostText(textarea, "Keep this exact draft");
   await textarea.fill("Keep this exact draft after staying");
 
   await workspaceButton.click();
@@ -259,11 +259,11 @@ test("dirty composer workspace switches can stay, save to the origin, or discard
   await expect(switchDialog).toBeVisible();
   await expect(switchDialog.getByRole("alert")).toContainText("Temporary save failure");
   await expect(workspaceButton).toContainText(first.name);
-  await expect(textarea).toHaveValue("Keep this exact draft after staying");
+  await expectPostText(textarea, "Keep this exact draft after staying");
   await switchDialog.getByRole("button", { name: "Save draft" }).click();
   await expect(switchDialog).toBeHidden();
   await expect(workspaceButton).toContainText(second.name);
-  await expect(textarea).toHaveValue("");
+  await expectPostText(textarea, "");
   expect(draftWrites).toHaveLength(2);
   for (const draftWrite of draftWrites) {
     expect(draftWrite).toEqual(
@@ -282,7 +282,7 @@ test("dirty composer workspace switches can stay, save to the origin, or discard
   await switchDialog.getByRole("button", { name: "Discard and switch" }).click();
   await expect(switchDialog).toBeHidden();
   await expect(workspaceButton).toContainText(first.name);
-  await expect(textarea).toHaveValue("");
+  await expectPostText(textarea, "");
   expect(draftWrites).toHaveLength(2);
 });
 

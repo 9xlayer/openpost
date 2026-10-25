@@ -276,18 +276,19 @@ func (s *Service) enqueueAccountJob(ctx context.Context, account models.SocialAc
 }
 
 func (s *Service) listAnalyticsRenditions(ctx context.Context, workspaceID string, force bool, now time.Time) ([]models.Rendition, error) {
-	cutoff := now.Add(-7 * 24 * time.Hour)
-	if force {
-		cutoff = now.Add(-90 * 24 * time.Hour)
-	}
 	var renditions []models.Rendition
-	if err := s.db.NewSelect().
-		Model(&renditions).
+	query := s.db.NewSelect().Model(&renditions).
 		Join("JOIN publications AS publication ON publication.id = rendition.publication_id").
 		Where("publication.workspace_id = ?", workspaceID).
-		Where("COALESCE(publication.actual_run_at, publication.updated_at) >= ?", cutoff).
-		Where("rendition.status = ?", models.RenditionStatusPublished).
-		Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		Where("publication.status = ?", models.PublicationStatusPublished).
+		Where("rendition.status = ?", models.RenditionStatusPublished)
+	// Background collection keeps its existing bounded cadence. An explicit
+	// Workspace refresh can collect older published content through the same
+	// permission, provider-readiness, deduplication, and rate-limit gates.
+	if !force {
+		query = query.Where("COALESCE(publication.actual_run_at, publication.updated_at) >= ?", now.Add(-7*24*time.Hour))
+	}
+	if err := query.Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("list analytics renditions: %w", err)
 	}
 	return renditions, nil

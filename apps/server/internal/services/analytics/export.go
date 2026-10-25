@@ -39,8 +39,10 @@ var (
 )
 
 // ExportOptions selects what an export contains. The zero value exports every
-// account and metric for 30 days, one row per post, in UTC.
+// account and metric for all time, one row per post, in UTC.
 type ExportOptions struct {
+	From      string
+	To        string
 	Days      int
 	AccountID string
 	// AccountIDs selects individual accounts. Empty means every account.
@@ -116,7 +118,7 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 	// One unpaged pass keeps the export complete without rebuilding the
 	// overview for every page of a large workspace.
 	overview, err := s.OverviewWithOptions(ctx, workspaceID, options.Days, OverviewOptions{
-		AccountID: scope.accountID, Sort: "newest", Unpaged: true,
+		From: options.From, To: options.To, AccountID: scope.accountID, Sort: "newest", Unpaged: true,
 	})
 	if err != nil {
 		return ExportDataset{}, err
@@ -133,8 +135,8 @@ func (s *Service) BuildExport(ctx context.Context, workspaceID string, options E
 		GeneratedAt: overview.GeneratedAt.In(location),
 		Timezone:    location.String(),
 		RangeDays:   overview.RangeDays,
-		From:        overview.GeneratedAt.AddDate(0, 0, -overview.RangeDays).UTC().Format("2006-01-02"),
-		To:          overview.GeneratedAt.UTC().Format("2006-01-02"),
+		From:        overview.RangeStart.UTC().Format("2006-01-02"),
+		To:          overview.RangeEnd.Add(-time.Nanosecond).UTC().Format("2006-01-02"),
 		GroupBy:     groupBy,
 		Metrics:     metrics,
 		Posts:       exportPostsTable(content, metrics, location),

@@ -26,7 +26,9 @@ var (
 )
 
 type RepurposeRange struct {
-	Days int `json:"days" enum:"7,30,90" doc:"Reporting window in days"`
+	Days int    `json:"days" enum:"0,7,30,90,365" doc:"Reporting window in days; 0 means all time"`
+	From string `json:"from,omitempty"`
+	To   string `json:"to,omitempty"`
 }
 
 type RepurposeProvenance struct {
@@ -75,12 +77,16 @@ func (s *Service) ResolveRepurposeSource(
 	rangeInput RepurposeRange,
 ) (RepurposeSource, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	if workspaceID == "" || (rangeInput.Days != 7 && rangeInput.Days != 30 && rangeInput.Days != 90) {
+	if workspaceID == "" || ValidateRange(rangeInput.Days, rangeInput.From, rangeInput.To) != nil {
 		return RepurposeSource{}, ErrInvalidRepurposeReference
 	}
 
+	rangeStart, rangeEnd, err := s.overviewRange(ctx, workspaceID, rangeInput.Days, rangeInput.From, rangeInput.To, s.now().UTC())
+	if err != nil {
+		return RepurposeSource{}, ErrInvalidRepurposeReference
+	}
 	title, sourceText, profile, platformName, publishedAt, candidateAccountIDs, snapshot, err :=
-		s.resolveRepurposeReference(ctx, workspaceID, reference, rangeInput.Days)
+		s.resolveRepurposeReference(ctx, workspaceID, reference, rangeStart, rangeEnd)
 	if err != nil {
 		return RepurposeSource{}, err
 	}
@@ -94,8 +100,7 @@ func (s *Service) ResolveRepurposeSource(
 	if err != nil {
 		return RepurposeSource{}, err
 	}
-	rangeEnd := s.now().UTC()
-	rangeStart := rangeEnd.AddDate(0, 0, -rangeInput.Days)
+
 	return RepurposeSource{
 		HandoffID: uuid.NewString(), WorkspaceID: workspaceID, Title: title,
 		SourceText: sourceText, ContentProfile: profile, DestinationAccountIDs: destinationIDs,
@@ -111,20 +116,20 @@ func (s *Service) resolveRepurposeReference(
 	ctx context.Context,
 	workspaceID string,
 	reference ContentReference,
-	days int,
+	rangeStart, rangeEnd time.Time,
 ) (string, string, string, string, time.Time, []string, repurposeSnapshot, error) {
 	if strings.TrimSpace(reference.Type) != string(platform.AccountContentOriginOpenPost) ||
 		strings.TrimSpace(reference.PublicationID) == "" || strings.TrimSpace(reference.RenditionID) == "" {
 		return "", "", "", "", time.Time{}, nil, repurposeSnapshot{}, ErrInvalidRepurposeReference
 	}
-	return s.resolveManagedRepurposeSource(ctx, workspaceID, reference, days)
+	return s.resolveManagedRepurposeSource(ctx, workspaceID, reference, rangeStart, rangeEnd)
 }
 
 func (s *Service) resolveManagedRepurposeSource(
 	ctx context.Context,
 	workspaceID string,
 	reference ContentReference,
-	days int,
+	rangeStart, rangeEnd time.Time,
 ) (string, string, string, string, time.Time, []string, repurposeSnapshot, error) {
 	var publication models.Publication
 	if err := s.db.NewSelect().Model(&publication).
@@ -150,7 +155,7 @@ func (s *Service) resolveManagedRepurposeSource(
 	var stored []models.AnalyticsRenditionSnapshot
 	if err := s.db.NewSelect().Model(&stored).
 		Where("workspace_id = ? AND publication_id = ? AND rendition_id = ?", workspaceID, publication.ID, sourceRendition.ID).
-		Order("captured_at DESC").Limit(50).Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		Where("captured_at < ?", rangeEnd).Order("captured_at DESC").Limit(50).Scan(ctx); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", "", "", "", time.Time{}, nil, repurposeSnapshot{}, fmt.Errorf("load managed repurpose evidence: %w", err)
 	}
 	publishedAt := publication.ActualRunAt
@@ -161,7 +166,7 @@ func (s *Service) resolveManagedRepurposeSource(
 	for _, item := range stored {
 		snapshots = append(snapshots, repurposeSnapshot{MetricsJSON: item.MetricsJSON, MetricMetadataJSON: item.MetricMetadataJSON, CapturedAt: item.CapturedAt, Platform: sourceRendition.Platform})
 	}
-	selected := selectRepurposeSnapshot(snapshots, s.now().AddDate(0, 0, -days), s.now())
+	selected := selectRepurposeSnapshot(snapshots, rangeStart, rangeEnd)
 	return publication.Title, firstNonEmptyAnalyticsText(publication.SourceText, publication.SourceContent),
 		publication.ContentProfile, sourceRendition.Platform, publishedAt, accountIDs, selected, nil
 }
