@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [7.30.4] - 2026-10-25
+
+### Added
+
+- Analytics now offers last-year, all-time, and custom date ranges, with matching exports and mobile date controls. Older published posts retain their original dates and can be inspected without changing their publication history.
+
+### Fixed
+
+- Appearance settings only show a loading indicator for the selected tab.
+
 ## [7.29.4] - 2026-10-24
 
 ### Fixed
