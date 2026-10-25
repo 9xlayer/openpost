@@ -100,6 +100,7 @@ const checks = {
       "scripts/ci-artifacts.test.mjs",
       "scripts/ci-plan.test.mjs",
       "scripts/go-test-shards.test.mjs",
+      "scripts/release-proof.test.mjs",
       "scripts/release-asset-upload.test.mjs",
       "scripts/release-ci-contract.test.mjs",
       "scripts/release-surfaces.test.mjs",

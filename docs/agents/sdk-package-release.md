@@ -4,7 +4,7 @@ The npm package is `@getopenpost/sdk`. Its SemVer is independent from the OpenPo
 
 ## Routine releases
 
-Every publishable change under `packages/sdk/` must increase its stable package version. Pull-request and main CI compare the package with the previous commit; tag CI compares a new tag with the previous published release. All of them fail when package sources changed without a version increase.
+Every publishable change under `packages/sdk/` must increase its stable package version. Pull-request CI compares the package with its base commit; main and tag CI compare it with the previous published release, so a main push that changed the package without a version increase cannot prove a release. All of them fail when package sources changed without a version increase.
 
 The app's `v*` release workflow publishes the SDK independently, beside the Hosted deployment:
 

@@ -182,6 +182,60 @@ jobs:
           done
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
+  candidate-frontend:
+    name: Resolve the candidate frontend
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      ci_run_id: ${{ steps.frontend.outputs.run_id }}
+      frontend_artifact: ${{ steps.frontend.outputs.artifact }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Wait for the tag CI frontend artifact
+        id: frontend
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          # Binaries build while tag CI is still proving the candidate. The
+          # draft, every upload, and promotion still wait for CI success.
+          for attempt in $(seq 1 160); do
+            run_id="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow CI \
+              --branch "$GITHUB_REF_NAME" \
+              --event push \
+              --limit 20 \
+              --json databaseId,headSha \
+              --jq '[.[] | select(.headSha == "'"$GITHUB_SHA"'")][0].databaseId // empty' || true)"
+            if [[ "$run_id" =~ ^[0-9]+$ ]]; then
+              if artifact="$(bun scripts/ci-artifacts.mjs resolve --repository "$GITHUB_REPOSITORY" --run-id "$run_id" --prefix "frontend-public-${GITHUB_SHA}-" 2>/dev/null)"; then
+                {
+                  echo "run_id=$run_id"
+                  echo "artifact=$artifact"
+                } >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              state="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion --jq '.status + " " + (.conclusion // "")')"
+              if [[ "$state" == completed* ]]; then
+                echo "Tag CI run $run_id finished ($state) without a frontend artifact." >&2
+                exit 1
+              fi
+            fi
+            echo "Waiting for the tag CI frontend artifact (attempt ${attempt}/160)."
+            sleep 15
+          done
+          echo "Tag CI did not publish a frontend artifact in time." >&2
+          exit 1
+
   prepare-draft:
     name: Prepare reusable draft release
     runs-on: ubuntu-latest
@@ -228,10 +282,10 @@ jobs:
   build-binaries:
     name: Build server (${{ matrix.os }}-${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    needs: [verify-candidate, prepare-draft]
+    needs: candidate-frontend
     permissions:
       actions: read
-      contents: write
+      contents: read
     strategy:
       matrix:
         include:
@@ -247,8 +301,8 @@ jobs:
       - name: Download frontend built by candidate CI
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CI_RUN_ID: ${{ needs.verify-candidate.outputs.ci_run_id }}
-          FRONTEND_ARTIFACT: ${{ needs.verify-candidate.outputs.frontend_artifact }}
+          CI_RUN_ID: ${{ needs.candidate-frontend.outputs.ci_run_id }}
+          FRONTEND_ARTIFACT: ${{ needs.candidate-frontend.outputs.frontend_artifact }}
         run: gh run download "$CI_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$FRONTEND_ARTIFACT" --dir apps/server/cmd/openpost/public
       - name: Build binary
         shell: bash
@@ -259,21 +313,20 @@ jobs:
           else
             CGO_ENABLED=1 go build -buildvcs=false -ldflags="-s -w -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA}" -o ../../openpost-server-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} ./cmd/openpost
           fi
-      - name: Upload server binary to the draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          bash scripts/release-asset-upload.sh \
-            "openpost-server-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}"
+      - name: Retain the server binary for the draft release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-asset-server-${{ matrix.os }}-${{ matrix.arch }}
+          path: openpost-server-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+          if-no-files-found: error
+          retention-days: 7
 
   build-cli:
     name: Build CLI (${{ matrix.os }}-${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
-    needs: [verify-candidate, prepare-draft]
+    needs: candidate-frontend
     permissions:
-      actions: read
-      contents: write
+      contents: read
     strategy:
       matrix:
         include:
@@ -307,16 +360,57 @@ jobs:
               shasum -a 256 -c "${asset}.sha256"
             fi
           done
-      - name: Upload CLI and MCP binaries to the draft release
+      - name: Retain CLI and MCP binaries for the draft release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-asset-cli-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            openpost-cli-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+            openpost-cli-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}.sha256
+            openpost-mcp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+            openpost-mcp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  upload-assets:
+    name: Upload server, CLI, and MCP binaries
+    runs-on: ubuntu-latest
+    needs: [verify-candidate, prepare-draft, candidate-frontend, build-binaries, build-cli]
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts
+      - name: Require binaries built from the verified frontend
+        env:
+          VERIFIED_RUN: ${{ needs.verify-candidate.outputs.ci_run_id }}
+          VERIFIED_FRONTEND: ${{ needs.verify-candidate.outputs.frontend_artifact }}
+          BUILT_RUN: ${{ needs.candidate-frontend.outputs.ci_run_id }}
+          BUILT_FRONTEND: ${{ needs.candidate-frontend.outputs.frontend_artifact }}
+        shell: bash
+        run: |
+          # A full CI rerun replaces the frontend artifact; rerun this workflow
+          # so the binaries embed the same bytes as the tested image.
+          [[ "$VERIFIED_RUN" == "$BUILT_RUN" && "$VERIFIED_FRONTEND" == "$BUILT_FRONTEND" ]] || {
+            echo "Binaries used $BUILT_FRONTEND from run $BUILT_RUN; CI verified $VERIFIED_FRONTEND from run $VERIFIED_RUN." >&2
+            exit 1
+          }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-asset-*
+          path: release-assets
+          merge-multiple: true
+      - name: Upload the binaries to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          bash scripts/release-asset-upload.sh \
-            "openpost-cli-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}" \
-            "openpost-cli-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}.sha256" \
-            "openpost-mcp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}" \
-            "openpost-mcp-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}.sha256"
+          # Promotion verifies the exact core asset set after this upload.
+          shopt -s nullglob
+          assets=(release-assets/openpost-*)
+          bash scripts/release-asset-upload.sh "${assets[@]}"
 
   build-android:
     name: Sign Android candidate
@@ -385,7 +479,7 @@ jobs:
   promote-image:
     name: Promote tested image
     runs-on: ubuntu-latest
-    needs: [verify-candidate, prepare-draft, build-binaries, build-cli]
+    needs: [verify-candidate, prepare-draft, upload-assets]
     permissions:
       contents: write
       packages: write
@@ -654,8 +748,7 @@ jobs:
     # build-android is intentionally not a need: a skipped need would skip
     # publication. Server-only releases publish core assets; mobile releases
     # wait below for the parallel signing job to attach its APK.
-    needs:
-      [verify-candidate, prepare-draft, build-binaries, build-cli, promote-image, deploy-production]
+    needs: [verify-candidate, prepare-draft, upload-assets, promote-image, deploy-production]
     permissions:
       contents: write
     steps:

@@ -59,10 +59,62 @@ test("release candidate requires every independent CI job", () => {
   );
 });
 
+test("only green main release-plan runs record a release proof", () => {
+  const jobs = load(ci).jobs;
+  const steps = jobs["release-candidate"].steps;
+  const gate = steps.findIndex((step) => step.name === "Require every planned check");
+  const proofSteps = steps.filter(
+    (step) =>
+      step.name === "Record the release proof for this exact revision" ||
+      step.with?.name === "release-proof-${{ github.sha }}-${{ github.run_attempt }}",
+  );
+  assert.equal(proofSteps.length, 2);
+  for (const step of proofSteps) {
+    assert.ok(steps.indexOf(step) > gate, "the proof must follow the required-check gate");
+    assert.equal(
+      step.if,
+      "github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.plan.outputs.mode == 'release'",
+    );
+  }
+  const planStep = workflowStepScript(
+    ci,
+    "plan",
+    "Plan from the fail-closed release surface registry",
+  );
+  assert.match(
+    planStep,
+    /release-proof\.mjs find --repository "\$GITHUB_REPOSITORY" --sha "\$GITHUB_SHA"/u,
+  );
+  assert.match(planStep, /ci-plan\.mjs --reuse "\$proof_run"/u);
+});
+
+test("proven tags build the versioned image from relayed proven artifacts", () => {
+  const jobs = load(ci).jobs;
+  assert.equal(jobs.policy.if, "needs.plan.outputs.mode != 'reuse'");
+  assert.equal(jobs["candidate-relay"].if, "needs.plan.outputs.mode == 'reuse'");
+  assert.equal(
+    jobs.android.if,
+    "needs.plan.outputs.android == 'true' && needs.plan.outputs.mode != 'reuse'",
+  );
+  assert.deepEqual(jobs.image.needs, ["plan", "frontend-build", "candidate-relay"]);
+  assert.match(
+    jobs.image.if,
+    /needs\.frontend-build\.result == 'success' \|\| needs\.candidate-relay\.result == 'success'/u,
+  );
+  const uploads = jobs["candidate-relay"].steps
+    .filter((step) => step.uses?.startsWith("actions/upload-artifact@"))
+    .map((step) => step.with.name);
+  assert.deepEqual(uploads, [
+    "frontend-public-${{ github.sha }}-${{ github.run_attempt }}",
+    "android-unsigned-${{ github.sha }}-${{ github.run_attempt }}",
+  ]);
+});
+
 test("package recovery dispatch keeps app deployment out of the job graph", () => {
   const workflow = load(release);
   assert.deepEqual(workflow.on.workflow_dispatch.inputs.package.options, ["n8n", "sdk"]);
   assert.equal(workflow.jobs["verify-candidate"].if, "github.event_name == 'push'");
+  assert.equal(workflow.jobs["candidate-frontend"].if, "github.event_name == 'push'");
   assert.equal(
     workflow.jobs["publish-n8n"].if,
     "!cancelled() && (needs.promote-image.result == 'success' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.package == 'n8n'))",
@@ -72,7 +124,8 @@ test("package recovery dispatch keeps app deployment out of the job graph", () =
     "!cancelled() && (needs.promote-image.result == 'success' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.package == 'sdk'))",
   );
   for (const [name, job] of Object.entries(workflow.jobs)) {
-    if (name === "verify-candidate" || name === "publish-n8n" || name === "publish-sdk") continue;
+    if (["verify-candidate", "candidate-frontend", "publish-n8n", "publish-sdk"].includes(name))
+      continue;
     assert.ok(job.needs, `${name} must remain downstream of the release gate`);
     assert.ok(!job.if?.includes("always()"), `${name} must not run after skipped needs`);
   }
@@ -461,6 +514,33 @@ test("Android keeps its own cadence across core releases", () => {
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("binaries build during tag CI but upload only after it verifies their frontend", () => {
+  const jobs = load(release).jobs;
+  assert.equal(jobs["build-binaries"].needs, "candidate-frontend");
+  assert.equal(jobs["build-cli"].needs, "candidate-frontend");
+  for (const job of ["build-binaries", "build-cli"]) {
+    assert.equal(jobs[job].permissions.contents, "read", `${job} must not write the release`);
+  }
+  assert.deepEqual(jobs["upload-assets"].needs, [
+    "verify-candidate",
+    "prepare-draft",
+    "candidate-frontend",
+    "build-binaries",
+    "build-cli",
+  ]);
+  const guard = workflowStepScript(
+    release,
+    "upload-assets",
+    "Require binaries built from the verified frontend",
+  );
+  assert.match(guard, /\$VERIFIED_RUN" == "\$BUILT_RUN"/u);
+  assert.deepEqual(jobs["promote-image"].needs, [
+    "verify-candidate",
+    "prepare-draft",
+    "upload-assets",
+  ]);
 });
 
 test("server-only releases do not require an Android CI artifact", () => {
