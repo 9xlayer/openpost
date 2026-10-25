@@ -3,6 +3,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { shardRunPattern } from "./go-test-shards.mjs";
 import {
   formatPruneResult,
   pruneTurboCache,
@@ -98,6 +99,7 @@ const checks = {
       "scripts/release-lifecycle.test.mjs",
       "scripts/ci-artifacts.test.mjs",
       "scripts/ci-plan.test.mjs",
+      "scripts/go-test-shards.test.mjs",
       "scripts/release-asset-upload.test.mjs",
       "scripts/release-ci-contract.test.mjs",
       "scripts/release-surfaces.test.mjs",
@@ -472,6 +474,12 @@ function testPlan(requestedScope, requestedOptions) {
   }
   if (process.env.OPENPOST_GO_COVERAGE_FILE) {
     backendArguments.push(`-coverprofile=${process.env.OPENPOST_GO_COVERAGE_FILE}`);
+  }
+  if (process.env.OPENPOST_GO_TEST_SHARD) {
+    backendArguments.push(
+      "-run",
+      shardRunPattern("apps/server", process.env.OPENPOST_GO_TEST_SHARD, root),
+    );
   }
   backendArguments.push("./...");
   const backend = stage("backend tests", [go(...backendArguments, { cwd: "apps/server" })]);
