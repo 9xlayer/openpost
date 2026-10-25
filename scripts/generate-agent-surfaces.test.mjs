@@ -59,19 +59,19 @@ async function fixtureDirectory() {
 
 function headerRuleHas(contents, pathname, header) {
   const lines = contents.split("\n");
-  const ruleIndex = lines.findIndex((line) => {
-    const [prefix, suffix, ...rest] = line.split("*");
-    if (rest.length > 0) return false;
-    if (suffix === undefined) return line === pathname;
-    return (
-      pathname.startsWith(prefix) &&
-      pathname.endsWith(suffix) &&
-      pathname.length >= prefix.length + suffix.length
-    );
-  });
-  if (ruleIndex === -1) return false;
-  for (let index = ruleIndex + 1; index < lines.length && /^\s/u.test(lines[index]); index += 1) {
-    if (lines[index].trim() === header) return true;
+  for (let ruleIndex = 0; ruleIndex < lines.length; ruleIndex += 1) {
+    const [prefix, suffix, ...rest] = lines[ruleIndex].split("*");
+    if (rest.length > 0) continue;
+    const matches =
+      suffix === undefined
+        ? lines[ruleIndex] === pathname
+        : pathname.startsWith(prefix) &&
+          pathname.endsWith(suffix) &&
+          pathname.length >= prefix.length + suffix.length;
+    if (!matches) continue;
+    for (let index = ruleIndex + 1; index < lines.length && /^\s/u.test(lines[index]); index += 1) {
+      if (lines[index].trim() === header) return true;
+    }
   }
   return false;
 }
