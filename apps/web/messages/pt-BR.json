@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "Os GIFs de origem podem ter até 20 MB, 200 quadros, 2048 px por lado e 16 milhões de pixels decodificados.",
 	"image_editor_animation_loop_conflict": "Para combinar camadas GIF, use repetição em todas ou reprodução finita em todas. Exporte-as separadamente para manter configurações de repetição diferentes.",
 	"image_editor_animation_add_layer": "Adicione uma camada GIF animada visível antes de exportar GIF.",
-	"image_editor_animation_timing_conflict": "Os tempos sobrepostos criariam quadros inferiores a 20 ms. Alinhe as durações ou exporte as camadas GIF separadamente."
+	"image_editor_animation_timing_conflict": "Os tempos sobrepostos criariam quadros inferiores a 20 ms. Alinhe as durações ou exporte as camadas GIF separadamente.",
+	"editor_add_mention": "Adicionar menção",
+	"editor_search_characters": "Digite pelo menos dois caracteres para pesquisar.",
+	"saved_mentions_title": "Menções salvas",
+	"saved_mentions_description": "Salve um nome e use @ em Todos. Cada rede usa o texto ou a identidade que você definir.",
+	"saved_mentions_name": "Nome da menção",
+	"saved_mentions_text": "Texto ou identificador",
+	"saved_mentions_native_hint": "Escolha um resultado para marcar uma conta. Caso contrário, o texto será apenas substituído.",
+	"saved_mentions_load_failed": "Não foi possível carregar as menções salvas.",
+	"saved_mentions_save_failed": "Não foi possível salvar a menção. Tente novamente.",
+	"saved_mentions_delete_hint": "A exclusão só afeta inserções futuras.",
+	"saved_mentions_save_insert": "Salvar e inserir",
+	"saved_mentions_new": "Nova menção",
+	"saved_mentions_native": "Conta selecionada"
 }

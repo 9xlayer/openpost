@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "Les GIF sources sont limités à 20 Mo, 200 images, 2048 px par côté et 16 millions de pixels décodés.",
 	"image_editor_animation_loop_conflict": "Pour combiner des calques GIF, utilisez la lecture en boucle sur tous les calques ou une lecture finie sur tous. Exportez-les séparément pour conserver des réglages de boucle différents.",
 	"image_editor_animation_add_layer": "Ajoutez un calque GIF animé visible avant d’exporter un GIF.",
-	"image_editor_animation_timing_conflict": "Les durées superposées créeraient des images de moins de 20 ms. Alignez les durées ou exportez les calques GIF séparément."
+	"image_editor_animation_timing_conflict": "Les durées superposées créeraient des images de moins de 20 ms. Alignez les durées ou exportez les calques GIF séparément.",
+	"editor_add_mention": "Ajouter une mention",
+	"editor_search_characters": "Saisissez au moins deux caractères pour rechercher.",
+	"saved_mentions_title": "Mentions enregistrées",
+	"saved_mentions_description": "Enregistrez un nom, puis utilisez @ dans Tous. Chaque réseau utilise le texte ou l’identité configurés.",
+	"saved_mentions_name": "Nom de la mention",
+	"saved_mentions_text": "Texte ou identifiant",
+	"saved_mentions_native_hint": "Choisissez un résultat pour identifier un compte. Sinon, seul le texte est remplacé.",
+	"saved_mentions_load_failed": "Impossible de charger les mentions enregistrées.",
+	"saved_mentions_save_failed": "Impossible d’enregistrer la mention. Réessayez.",
+	"saved_mentions_delete_hint": "La suppression ne concerne que les insertions futures.",
+	"saved_mentions_save_insert": "Enregistrer et insérer",
+	"saved_mentions_new": "Nouvelle mention",
+	"saved_mentions_native": "Compte sélectionné"
 }

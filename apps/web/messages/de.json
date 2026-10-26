@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "GIF-Quelldateien dürfen höchstens 20 MB, 200 Einzelbilder, 2048 px pro Seite und 16 Millionen dekodierte Pixel enthalten.",
 	"image_editor_animation_loop_conflict": "Verwende zum Kombinieren von GIF-Ebenen entweder auf allen Ebenen Endlosschleifen oder auf allen eine endliche Wiedergabe. Exportiere sie getrennt, um gemischte Wiederholungseinstellungen zu behalten.",
 	"image_editor_animation_add_layer": "Füge vor dem GIF-Export eine sichtbare animierte GIF-Ebene hinzu.",
-	"image_editor_animation_timing_conflict": "Überlagerte Bildzeiten würden Einzelbilder unter 20 ms erzeugen. Gleiche die Dauer an oder exportiere die GIF-Ebenen getrennt."
+	"image_editor_animation_timing_conflict": "Überlagerte Bildzeiten würden Einzelbilder unter 20 ms erzeugen. Gleiche die Dauer an oder exportiere die GIF-Ebenen getrennt.",
+	"editor_add_mention": "Erwähnung hinzufügen",
+	"editor_search_characters": "Gib mindestens zwei Zeichen für die Suche ein.",
+	"saved_mentions_title": "Gespeicherte Erwähnungen",
+	"saved_mentions_description": "Speichere einen Namen und verwende @ unter Alle. Jedes Netzwerk nutzt den festgelegten Text oder die Identität.",
+	"saved_mentions_name": "Name der Erwähnung",
+	"saved_mentions_text": "Text oder Nutzername",
+	"saved_mentions_native_hint": "Wähle ein Suchergebnis, um ein Konto zu markieren. Andernfalls wird nur der Text ersetzt.",
+	"saved_mentions_load_failed": "Gespeicherte Erwähnungen konnten nicht geladen werden.",
+	"saved_mentions_save_failed": "Die Erwähnung konnte nicht gespeichert werden. Versuche es erneut.",
+	"saved_mentions_delete_hint": "Das Löschen betrifft nur zukünftige Einfügungen.",
+	"saved_mentions_save_insert": "Speichern und einfügen",
+	"saved_mentions_new": "Neue Erwähnung",
+	"saved_mentions_native": "Ausgewähltes Konto"
 }

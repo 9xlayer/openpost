@@ -3212,6 +3212,7 @@ func (h *PublicationHandler) validatePublicationByIDWithDB(ctx context.Context, 
 		for segmentIndex, segment := range segments {
 			issues = append(issues, validatePublicationPoll(rendition, segment, canonicalSegments, len(segments))...)
 			issues = append(issues, validatePublicationMentions(rendition, accountsByID[rendition.SocialAccountID], segment, canonicalSegments, len(segments))...)
+			segment = projectSegmentMentionText(segment, rendition, accountsByID[rendition.SocialAccountID], canonicalSegments, len(segments))
 			segmentSettings := mergePublicationSettings(destinationSettings, segment.Settings)
 			issues = append(issues, validateTextCardOutput(rendition, segment, segmentSettings)...)
 			segmentMedia := deliveredSegmentMedia(segment)

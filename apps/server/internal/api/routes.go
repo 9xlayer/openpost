@@ -425,6 +425,7 @@ func RegisterHumaRoutes(api huma.API, deps RouteDeps) {
 	postingScheduleHandler.GetNextAvailableSlot(api)
 
 	promptHandler := handlers.NewPromptHandler(deps.DB, deps.Authenticator)
+	handlers.RegisterSavedMentionRoutes(api, deps.DB, deps.Authenticator)
 	promptHandler.ListPrompts(api)
 	promptHandler.CreatePrompt(api)
 	promptHandler.UpdatePrompt(api)

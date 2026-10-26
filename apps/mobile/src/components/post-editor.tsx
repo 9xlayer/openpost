@@ -7,10 +7,14 @@ import { Pressable, ScrollView, View } from "react-native";
 import { useDrawerInputSpace } from "@/components/bottom-drawer";
 import { EnrichedTextInput, type EnrichedTextInputInstance } from "react-native-enriched-html";
 import { nativePostHTML, nativePostValue, nativePostTextChange } from "@/lib/post-editor-value";
-import type { PostTextValue } from "@openpost/platform-text/mentions";
+import type { PostTextValue, MentionCandidate } from "@openpost/platform-text/mentions";
 import { useQuery } from "@tanstack/react-query";
-import { mentionLookupQueryOptions, OpenPostQueryError } from "@openpost/query-catalog";
-import { nativeMentionLookupAPI } from "@/lib/mention-lookup";
+import {
+  mentionLookupQueryOptions,
+  savedMentionsQueryOptions,
+  OpenPostQueryError,
+} from "@openpost/query-catalog";
+import { nativeMentionLookupAPI, nativeSavedMentionAPI } from "@/lib/mention-lookup";
 import { BodyText, Button } from "@/components/ui";
 import { useNativeTheme } from "@/theme";
 import type { PendingAttachment } from "@/lib/media";
@@ -53,7 +57,9 @@ export function PostEditor({
   const [query, setQuery] = useState<string | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [debounced, setDebounced] = useState("");
-  const supported = !!accountId && ["bluesky", "mastodon", "linkedin"].includes(platform ?? "");
+  const libraryMode = !accountId && !!workspaceId;
+  const supported =
+    libraryMode || (!!accountId && ["bluesky", "mastodon", "linkedin"].includes(platform ?? ""));
   useEffect(() => {
     rememberMentionClipboardTargets(workspaceId, value.mentions ?? []);
   }, [value, workspaceId]);
@@ -78,18 +84,48 @@ export function PostEditor({
     const timer = setTimeout(() => setDebounced(query ?? ""), 180);
     return () => clearTimeout(timer);
   }, [query]);
-  const showingSuggestions = supported && query !== null && query.length >= 2;
+  const showingSuggestions = supported && query !== null && (libraryMode || query.length >= 2);
   useEffect(() => {
     if (!showingSuggestions) reserveInputSpace(0);
     return () => reserveInputSpace(0);
   }, [showingSuggestions, reserveInputSpace]);
   const search = useQuery({
     ...mentionLookupQueryOptions(nativeMentionLookupAPI, workspaceId, accountId ?? "", debounced),
-    enabled: supported && query !== null && query === debounced && query.trim().length >= 2,
+    enabled:
+      !libraryMode &&
+      supported &&
+      query !== null &&
+      query === debounced &&
+      query.trim().length >= 2,
+  });
+  const library = useQuery({
+    ...savedMentionsQueryOptions(nativeSavedMentionAPI, workspaceId),
+    enabled: libraryMode && query !== null,
   });
   const active = query === debounced;
-  const candidates = active ? (search.data?.candidates ?? []) : [];
-  const loading = query !== null && query.trim().length >= 2 && (!active || search.isFetching);
+  const candidates: MentionCandidate[] = libraryMode
+    ? (library.data ?? [])
+        .filter((entry) =>
+          [entry.name, ...entry.profiles.map((profile) => profile.text)].some((text) =>
+            text.toLocaleLowerCase().includes((query ?? "").toLocaleLowerCase()),
+          ),
+        )
+        .map((entry) => ({
+          label: entry.name,
+          detail: entry.profiles.map((profile) => profile.text).join(" · "),
+          target: {
+            provider: "workspace",
+            kind: "profile",
+            id: entry.id,
+            profiles: entry.profiles,
+          },
+        }))
+    : active
+      ? (search.data?.candidates ?? [])
+      : [];
+  const loading = libraryMode
+    ? library.isFetching
+    : query !== null && query.trim().length >= 2 && (!active || search.isFetching);
   const lookupError =
     active && search.error
       ? search.error instanceof OpenPostQueryError && search.error.status === 403
@@ -98,7 +134,9 @@ export function PostEditor({
           ? "Mention search is rate limited. Try again later."
           : "Could not search mentions. Try again."
       : null;
-  const error = editorError ?? lookupError;
+  const error =
+    editorError ??
+    (libraryMode && library.error ? "Could not load saved mentions. Try again." : lookupError);
   return (
     <View style={{ gap: spacing.extraSmall }}>
       <EnrichedTextInput
@@ -150,18 +188,10 @@ export function PostEditor({
         }}
         onChangeHtml={({ nativeEvent }) => {
           try {
-            const parsed = nativePostValue(nativeEvent.value, plain.current);
-            const nativeScope = instanceURL?.replace(/\/$/, "").toLowerCase();
-            if (
-              platform &&
-              parsed.mentions.some(
-                (span) =>
-                  span.target.provider !== platform ||
-                  (platform === "mastodon" &&
-                    span.target.authority?.replace(/\/$/, "").toLowerCase() !== nativeScope),
-              )
-            )
-              throw new Error("wrong_network");
+            const parsed = nativePostValue(nativeEvent.value, plain.current, {
+              platform,
+              authority: instanceURL,
+            });
             if (
               parsed.mentions.some(
                 (span) =>
@@ -234,7 +264,8 @@ export function PostEditor({
                 intent="quiet"
                 onPress={() => {
                   setEditorError(null);
-                  void search.refetch();
+                  if (libraryMode) void library.refetch();
+                  else void search.refetch();
                 }}
               />
             </>

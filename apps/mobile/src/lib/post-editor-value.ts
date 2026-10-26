@@ -34,7 +34,11 @@ export function nativePostHTML(value: PostTextValue): string {
 
 type NativeNode = ReturnType<typeof parseDocument>["children"][number];
 const blockTags = new Set(["p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li"]);
-export function nativePostValue(html: string, plainText?: string): StructuredPostTextValue {
+export function nativePostValue(
+  html: string,
+  plainText?: string,
+  scope?: { platform?: string; authority?: string },
+): StructuredPostTextValue {
   if (html.length > 1024 * 1024) throw new Error("editor_content_too_large");
   let body = "";
   let bytes = 0;
@@ -82,6 +86,17 @@ export function nativePostValue(html: string, plainText?: string): StructuredPos
       mentions.sort((a, b) => a.start - b.start),
     ),
   };
+  if (
+    scope?.platform &&
+    parsed.mentions.some(
+      (span) =>
+        (span.target.provider !== "workspace" && span.target.provider !== scope.platform) ||
+        (span.target.provider === "mastodon" &&
+          span.target.authority?.replace(/\/$/, "").toLowerCase() !==
+            scope.authority?.replace(/\/$/, "").toLowerCase()),
+    )
+  )
+    throw new Error("wrong_network");
   if (plainText === undefined || plainText === body) return parsed;
   // Native HTML can omit a final paragraph break. Plain text owns exact content.
   if (plainText.startsWith(body) && /^\n*$/.test(plainText.slice(body.length)))

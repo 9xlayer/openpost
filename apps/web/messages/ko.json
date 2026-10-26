@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "원본 GIF는 최대 20MB, 200프레임, 각 변 2048픽셀, 디코딩된 총 1,600만 픽셀까지 지원합니다.",
 	"image_editor_animation_loop_conflict": "GIF 레이어를 합치려면 모두 무한 반복하거나 모두 유한 재생으로 설정하세요. 서로 다른 반복 설정을 유지하려면 각각 내보내세요.",
 	"image_editor_animation_add_layer": "GIF로 내보내기 전에 표시되는 애니메이션 GIF 레이어를 추가하세요.",
-	"image_editor_animation_timing_conflict": "겹치는 프레임 타이밍으로 20ms 미만인 프레임이 생깁니다. 길이를 맞추거나 GIF 레이어를 각각 내보내세요."
+	"image_editor_animation_timing_conflict": "겹치는 프레임 타이밍으로 20ms 미만인 프레임이 생깁니다. 길이를 맞추거나 GIF 레이어를 각각 내보내세요.",
+	"editor_add_mention": "멘션 추가",
+	"editor_search_characters": "검색하려면 두 글자 이상 입력하세요.",
+	"saved_mentions_title": "저장된 멘션",
+	"saved_mentions_description": "이름을 저장한 뒤 전체에서 @를 입력하세요. 각 네트워크에 설정된 텍스트나 계정이 사용됩니다.",
+	"saved_mentions_name": "멘션 이름",
+	"saved_mentions_text": "텍스트 또는 사용자 이름",
+	"saved_mentions_native_hint": "계정을 태그하려면 검색 결과를 선택하세요. 그 외에는 텍스트만 대체됩니다.",
+	"saved_mentions_load_failed": "저장된 멘션을 불러오지 못했습니다.",
+	"saved_mentions_save_failed": "멘션을 저장하지 못했습니다. 다시 시도하세요.",
+	"saved_mentions_delete_hint": "삭제는 이후 삽입에만 적용됩니다.",
+	"saved_mentions_save_insert": "저장하고 삽입",
+	"saved_mentions_new": "새 멘션",
+	"saved_mentions_native": "선택한 계정"
 }

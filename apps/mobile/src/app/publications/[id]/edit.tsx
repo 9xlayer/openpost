@@ -54,7 +54,6 @@ import {
   readinessDebounceMs,
   readinessRequestSignature,
   resolveDestinationCapabilities,
-  type ReadinessSegment,
   type ReadinessRequestInput,
   type ResolvedDestinationCapability,
 } from "@/lib/destination-readiness";
@@ -68,7 +67,7 @@ import {
 } from "@/lib/media";
 import { pickMedia } from "@/lib/media-picker";
 import { takePendingAttachments } from "@/lib/share";
-import { publicationContentUpdate } from "@/lib/publication-content";
+import { publicationContentUpdate, publicationReadinessSegments } from "@/lib/publication-content";
 import {
   attachmentRequirement,
   mobileRenditionInput,
@@ -346,20 +345,6 @@ function Composer({
     .filter((attachment) => attachment.mediaId)
     .map((attachment) => attachment.mediaId as string);
 
-  function buildReadinessSegments(firstSegmentMediaIds: string[]): ReadinessSegment[] {
-    const snapshot = contentSnapshot.current;
-    const canonical = snapshot.segments?.length
-      ? snapshot.segments
-      : [{ body: snapshot.source_text ?? "", media: snapshot.media ?? [] }];
-    return canonical.map((segment, index) => ({
-      content: index === 0 ? body : (segment.body ?? ""),
-      mediaIds:
-        index === 0
-          ? firstSegmentMediaIds
-          : ((segment.media ?? []).map((media) => media.id).filter(Boolean) as string[]),
-    }));
-  }
-
   function selectedImageIDs(accountId: string, resolvedProfile?: string) {
     const profile =
       contentSnapshot.current.renditions?.find((r) => r.social_account_id === accountId)
@@ -380,7 +365,12 @@ function Composer({
     firstSegmentMediaIds: string[],
     accountIds = [...selectableAccountIds].sort(),
   ) {
-    const segments = buildReadinessSegments(firstSegmentMediaIds);
+    const segments = publicationReadinessSegments(
+      contentSnapshot.current,
+      body,
+      firstSegmentMediaIds,
+      canonicalTextEdits,
+    );
     const snapshot = contentSnapshot.current;
     const accountSegments = Object.fromEntries(
       accountIds.map((accountId) => {
@@ -398,7 +388,16 @@ function Composer({
           strategy,
           selectedImageIDs(accountId),
         );
-        return [accountId, renditionReadinessSegments(snapshot, input, segments, strategy)];
+        return [
+          accountId,
+          renditionReadinessSegments(
+            snapshot,
+            input,
+            segments,
+            strategy,
+            accounts.data?.find((account) => account.id === accountId),
+          ),
+        ];
       }),
     );
     const input = { accountIds, segments, accountSegments };
@@ -480,6 +479,7 @@ function Composer({
     imageChoices,
     renditionTextEdits,
     annotatedRenditionEdits,
+    canonicalTextEdits,
   ]);
 
   // Readiness describes the destinations selected now. Clearing the last one

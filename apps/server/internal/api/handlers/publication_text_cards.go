@@ -320,6 +320,9 @@ func (h *PublicationHandler) refreshTextCardRendition(ctx context.Context, db bu
 	for _, segment := range segments {
 		var overrides map[string]any
 		_ = json.Unmarshal([]byte(segment.SettingsJSON), &overrides)
+		if body, _, err := publicationsource.DeliveryText(canonical, segment.PublicationSegmentID, segment.SourceOverridesJSON, segment.BodyOverride, overrides, len(segments) == 1 && len(canonical) > 1, segment.Body, rendition.Platform, account.InstanceURL); err == nil {
+			segment.Body = body
+		}
 		if err := h.textCards.RefreshSegment(ctx, db, account, rendition, segment, mergePublicationSettings(settings, overrides)); err != nil {
 			if errors.Is(err, publicationcards.ErrRenderBusy) {
 				return huma.Error429TooManyRequests("Text card rendering is busy; try again shortly")

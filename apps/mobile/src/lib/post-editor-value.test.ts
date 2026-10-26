@@ -40,3 +40,51 @@ test("editing a selected token removes its identity while edits before it shift 
   });
   expect(nativePostTextChange(value, "Hi @alex")).toEqual({ body: "Hi @alex", mentions: [] });
 });
+
+test("native account edits retain saved profiles while direct Mastodon identities remain instance-scoped", () => {
+  const value: StructuredPostTextValue = {
+    body: "Hi @guest",
+    mentions: [
+      {
+        start: 3,
+        end: 9,
+        text: "@guest",
+        target: {
+          provider: "workspace",
+          kind: "profile",
+          id: "saved",
+          profiles: [{ provider: "x", text: "@guest_x" }],
+        },
+      },
+    ],
+  };
+  expect(
+    nativePostValue(nativePostHTML(value), value.body, {
+      platform: "mastodon",
+      authority: "https://social.example",
+    }),
+  ).toEqual(value);
+  const direct: StructuredPostTextValue = {
+    body: "@guest@social.example",
+    mentions: [
+      {
+        start: 0,
+        end: 21,
+        text: "@guest@social.example",
+        target: {
+          provider: "mastodon",
+          kind: "person",
+          id: "42",
+          authority: "https://social.example",
+          handle: "guest@social.example",
+        },
+      },
+    ],
+  };
+  expect(() =>
+    nativePostValue(nativePostHTML(direct), direct.body, {
+      platform: "mastodon",
+      authority: "https://other.example",
+    }),
+  ).toThrow("wrong_network");
+});

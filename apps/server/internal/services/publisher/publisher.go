@@ -778,10 +778,21 @@ func (s *Service) publishRenditionSegments(
 		segment := &segments[i]
 		var settings map[string]any
 		_ = json.Unmarshal([]byte(segment.SettingsJSON), &settings)
-		projection, err := publicationsource.DeliveryMentions(canonical, segment.PublicationSegmentID, segment.SourceOverridesJSON, segment.BodyOverride, settings, len(segments) == 1 && len(canonical) > 1, segment.Body, rendition.Platform, account.InstanceURL)
+		body, projection, err := publicationsource.DeliveryText(canonical, segment.PublicationSegmentID, segment.SourceOverridesJSON, segment.BodyOverride, settings, len(segments) == 1 && len(canonical) > 1, segment.Body, rendition.Platform, account.InstanceURL)
 		if err != nil {
 			return fmt.Errorf("mention validation: %w", err)
 		}
+		segment.Description = posttext.ProjectEquivalentText(segment.Description, segment.Body, body)
+		rendition.Description = posttext.ProjectEquivalentText(rendition.Description, segment.Body, body)
+		for _, key := range []string{"description", "video_description"} {
+			if value, ok := settings[key].(string); ok {
+				settings[key] = posttext.ProjectEquivalentText(value, segment.Body, body)
+			}
+			if value, ok := destinationSettings[key].(string); ok {
+				destinationSettings[key] = posttext.ProjectEquivalentText(value, segment.Body, body)
+			}
+		}
+		segment.Body = body
 		if settings == nil {
 			settings = map[string]any{}
 		}
@@ -850,6 +861,8 @@ func (s *Service) publishRenditionSegments(
 		mediaItems := make([]platform.MediaItem, 0, len(mediaAttachments))
 		_, publishesMediaDirectly := provider.(platform.DirectMediaPublisher)
 		uploadRendition := *rendition
+		uploadRendition.Body = segment.Body
+		uploadRendition.Description = firstNonEmptyPublisherString(segment.Description, rendition.Description)
 		uploadRendition.SettingsJSON = mustPublisherJSON(settings)
 		for _, media := range mediaAttachments {
 			s.recordPublicationLifecycleEvent(ctx, publication.WorkspaceID, publication.ID, rendition.ID, lifecycle.EventUploadStarted, lifecycle.StatusStarted, "segment media upload started", map[string]any{

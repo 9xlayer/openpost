@@ -1,7 +1,134 @@
 import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { authenticatePage, createWorkspace, registerUser, composerDestinations } from "./helpers";
+
+for (const joined of [false, true])
+  test(`video description edits preserve explicit mention decisions (${joined ? "joined" : "single"})`, async ({
+    page,
+    request,
+  }) => {
+    const auth = await registerUser(request, `description-mention-${randomUUID()}@example.com`);
+    const workspace = await createWorkspace(request, auth.token, "Description mention edits");
+    const accountID = randomUUID();
+    execFileSync("sqlite3", [
+      "-cmd",
+      ".timeout 5000",
+      `/tmp/openpost-app-e2e-${process.env.OPENPOST_APP_E2E_PORT ?? 18180}.db`,
+      `INSERT INTO social_accounts (id,workspace_id,slug,platform,account_id,account_username,access_token_encrypted,is_active) VALUES ('${accountID}','${workspace.id}','video-mention','youtube','channel','channel',X'00',1);`,
+    ]);
+    const headers = { Authorization: `Bearer ${auth.token}` };
+    const uploaded = await request.post("/api/v1/media/upload", {
+      headers,
+      multipart: {
+        workspace_id: workspace.id,
+        file: {
+          name: "mention-description.mp4",
+          mimeType: "video/mp4",
+          buffer: readFileSync(
+            new URL("./fixtures/product-screenshots/study-sos-demo.mp4", import.meta.url),
+          ),
+        },
+      },
+    });
+    expect(uploaded.ok(), await uploaded.text()).toBe(true);
+    const media = await uploaded.json();
+    const response = await request.post("/api/v1/publications", {
+      headers,
+      data: {
+        workspace_id: workspace.id,
+        title: "Description mention edits",
+        content_profile: "video",
+        source_text: "Hello @alice",
+        segments: [
+          {
+            body: "Hello @alice",
+            media: [{ media_id: media.id }],
+            settings: {
+              mentions: {
+                version: 1,
+                spans: [
+                  {
+                    start: 6,
+                    end: 12,
+                    text: "@alice",
+                    target: {
+                      provider: "workspace",
+                      kind: "profile",
+                      id: "saved",
+                      profiles: [{ provider: "youtube", text: "@alice_youtube" }],
+                    },
+                  },
+                ],
+              },
+            },
+          },
+          ...(joined ? [{ body: "Later" }] : []),
+        ],
+        renditions: [{ social_account_id: accountID, output_profile: "youtube.video" }],
+      },
+    });
+    expect(response.ok(), await response.text()).toBe(true);
+    const publication = await response.json();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await authenticatePage(page, auth.token);
+    await page.goto(`/publications/${publication.id}?workspace_id=${workspace.id}`);
+    let copied: Record<string, string> = {};
+    if (joined) {
+      const source = page.getByRole("textbox", { name: "Description", exact: true }).first();
+      await source.click();
+      await source.press("ControlOrMeta+a");
+      copied = await source.evaluate((element) => {
+        const data = new DataTransfer();
+        element.dispatchEvent(
+          new ClipboardEvent("copy", { bubbles: true, cancelable: true, clipboardData: data }),
+        );
+        return Object.fromEntries(data.types.map((type) => [type, data.getData(type)]));
+      });
+    }
+    await page.locator(`#composer-destination-${accountID}`).click();
+    await page
+      .getByRole("textbox", { name: "Description", exact: true })
+      .fill("Fresh video description");
+    await expect
+      .poll(async () => {
+        const saved = await (
+          await request.get(`/api/v1/publications/${publication.id}`, { headers })
+        ).json();
+        return joined
+          ? saved.renditions[0].description
+          : saved.renditions[0].segments[0].body_override;
+      })
+      .toBe("Fresh video description");
+    if (joined) {
+      const description = page.getByRole("textbox", { name: "Description", exact: true });
+      await description.fill("");
+      await description.evaluate((element, copied) => {
+        const data = new DataTransfer();
+        for (const [type, value] of Object.entries(copied)) data.setData(type, value);
+        element.dispatchEvent(
+          new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData: data }),
+        );
+      }, copied);
+      await expect(description.locator("[data-mention]")).toHaveText("@alice");
+      await expect
+        .poll(
+          async () =>
+            (
+              await (
+                await request.get(`/api/v1/publications/${publication.id}`, { headers })
+              ).json()
+            ).renditions[0].description,
+        )
+        .toBe("Hello @alice_youtube");
+      await page.reload();
+      await page.locator(`#composer-destination-${accountID}`).click();
+      await expect(description.locator("[data-mention]")).toHaveText("@alice");
+    }
+    expect(errors).toEqual([]);
+  });
 
 test("copying a variant replaces its selected company identity", async ({ page, request }) => {
   const auth = await registerUser(request, `mention-copy-${randomUUID()}@example.com`);

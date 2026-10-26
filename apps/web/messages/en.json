@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "GIF sources must be 20 MB or smaller, with at most 200 frames, 2048 px per side and 16 million decoded pixels.",
 	"image_editor_animation_loop_conflict": "To combine GIF layers, use looping on every layer or finite playback on every layer. Export them separately to keep mixed loop settings.",
 	"image_editor_animation_add_layer": "Add a visible animated GIF layer before exporting GIF.",
-	"image_editor_animation_timing_conflict": "Overlapping frame timings would create frames shorter than 20 ms. Align their durations or export the GIF layers separately."
+	"image_editor_animation_timing_conflict": "Overlapping frame timings would create frames shorter than 20 ms. Align their durations or export the GIF layers separately.",
+	"editor_add_mention": "Add mention",
+	"editor_search_characters": "Type at least two characters to search.",
+	"saved_mentions_title": "Saved mentions",
+	"saved_mentions_description": "Save a name once, then use @ in All. Each network uses its configured text or identity.",
+	"saved_mentions_name": "Mention name",
+	"saved_mentions_text": "Text or handle",
+	"saved_mentions_native_hint": "Choose a search result to tag an account. Otherwise, this is a text replacement.",
+	"saved_mentions_load_failed": "Could not load saved mentions.",
+	"saved_mentions_save_failed": "Could not save the mention. Try again.",
+	"saved_mentions_delete_hint": "Deleting changes future insertions only.",
+	"saved_mentions_save_insert": "Save and insert",
+	"saved_mentions_new": "New mention",
+	"saved_mentions_native": "Selected account"
 }

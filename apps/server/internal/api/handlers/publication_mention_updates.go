@@ -36,7 +36,7 @@ func preserveRenditionMentionInputs(ctx context.Context, db bun.IDB, publication
 			if err := db.NewSelect().Model(&segments).Where("rendition_id = ?", previous.ID).Order("position ASC").Scan(ctx); err != nil {
 				return err
 			}
-			if err := preserveRenditionSegmentMentions(input, segments, canonical); err != nil {
+			if err := preserveRenditionSegmentMentions(input, segments, canonical, accounts[input.SocialAccountID]); err != nil {
 				return huma.Error400BadRequest(err.Error())
 			}
 		}
@@ -44,9 +44,12 @@ func preserveRenditionMentionInputs(ctx context.Context, db bun.IDB, publication
 	return nil
 }
 
-func preserveRenditionSegmentMentions(input *RenditionInput, previous []models.RenditionSegment, canonical []models.PublicationSegment) error {
+func preserveRenditionSegmentMentions(input *RenditionInput, previous []models.RenditionSegment, canonical []models.PublicationSegment, account models.SocialAccount) error {
 	for index, old := range previous {
 		if len(input.Segments) == 0 {
+			if index == 0 {
+				input.Body = normalizeMentionProjectionEcho(RenditionSegmentInput{Body: input.Body}, old, canonical, account.Platform, account.InstanceURL, len(previous) == 1 && len(canonical) > 1).Body
+			}
 			if err := requireRetainedMentionSegments(old); err != nil {
 				return err
 			}
@@ -57,6 +60,7 @@ func preserveRenditionSegmentMentions(input *RenditionInput, previous []models.R
 			if !sameMentionSource(*next, old, index, i) {
 				continue
 			}
+			*next = normalizeMentionProjectionEcho(*next, old, canonical, account.Platform, account.InstanceURL, len(previous) == 1 && len(canonical) > 1)
 			if len(next.SourceOverrides) == 0 {
 				if err := preserveRenditionTextMentions(next, old, canonical, len(previous) == 1 && len(canonical) > 1); err != nil {
 					return err

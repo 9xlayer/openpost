@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "I GIF sorgente possono avere al massimo 20 MB, 200 fotogrammi, 2048 px per lato e 16 milioni di pixel decodificati.",
 	"image_editor_animation_loop_conflict": "Per combinare livelli GIF, usa la ripetizione continua su tutti oppure la riproduzione finita su tutti. Esportali separatamente per mantenere impostazioni di ripetizione diverse.",
 	"image_editor_animation_add_layer": "Aggiungi un livello GIF animato visibile prima di esportare un GIF.",
-	"image_editor_animation_timing_conflict": "Le durate sovrapposte creerebbero fotogrammi inferiori a 20 ms. Allinea le durate o esporta i livelli GIF separatamente."
+	"image_editor_animation_timing_conflict": "Le durate sovrapposte creerebbero fotogrammi inferiori a 20 ms. Allinea le durate o esporta i livelli GIF separatamente.",
+	"editor_add_mention": "Aggiungi menzione",
+	"editor_search_characters": "Digita almeno due caratteri per cercare.",
+	"saved_mentions_title": "Menzioni salvate",
+	"saved_mentions_description": "Salva un nome e usa @ in Tutti. Ogni rete usa il testo o l’identità configurati.",
+	"saved_mentions_name": "Nome della menzione",
+	"saved_mentions_text": "Testo o nome utente",
+	"saved_mentions_native_hint": "Scegli un risultato per taggare un account. Altrimenti viene sostituito solo il testo.",
+	"saved_mentions_load_failed": "Impossibile caricare le menzioni salvate.",
+	"saved_mentions_save_failed": "Impossibile salvare la menzione. Riprova.",
+	"saved_mentions_delete_hint": "L’eliminazione riguarda solo gli inserimenti futuri.",
+	"saved_mentions_save_insert": "Salva e inserisci",
+	"saved_mentions_new": "Nuova menzione",
+	"saved_mentions_native": "Account selezionato"
 }

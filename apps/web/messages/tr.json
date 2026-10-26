@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "Kaynak GIF en fazla 20 MB, 200 kare, kenar başına 2048 piksel ve 16 milyon çözülmüş piksel içerebilir.",
 	"image_editor_animation_loop_conflict": "GIF katmanlarını birleştirmek için tümünde sonsuz döngü veya tümünde sonlu oynatma kullanın. Farklı döngü ayarlarını korumak için ayrı ayrı dışa aktarın.",
 	"image_editor_animation_add_layer": "GIF dışa aktarmadan önce görünür bir animasyonlu GIF katmanı ekleyin.",
-	"image_editor_animation_timing_conflict": "Üst üste gelen kare süreleri 20 ms’den kısa kareler oluşturur. Süreleri hizalayın veya GIF katmanlarını ayrı ayrı dışa aktarın."
+	"image_editor_animation_timing_conflict": "Üst üste gelen kare süreleri 20 ms’den kısa kareler oluşturur. Süreleri hizalayın veya GIF katmanlarını ayrı ayrı dışa aktarın.",
+	"editor_add_mention": "Bahsetme ekle",
+	"editor_search_characters": "Aramak için en az iki karakter yazın.",
+	"saved_mentions_title": "Kayıtlı bahsetmeler",
+	"saved_mentions_description": "Bir adı kaydedin, sonra Tümü sekmesinde @ yazın. Her ağ, yapılandırılmış metni veya hesabı kullanır.",
+	"saved_mentions_name": "Bahsetme adı",
+	"saved_mentions_text": "Metin veya kullanıcı adı",
+	"saved_mentions_native_hint": "Bir hesabı etiketlemek için arama sonucu seçin. Aksi halde yalnızca metin değiştirilir.",
+	"saved_mentions_load_failed": "Kayıtlı bahsetmeler yüklenemedi.",
+	"saved_mentions_save_failed": "Bahsetme kaydedilemedi. Tekrar deneyin.",
+	"saved_mentions_delete_hint": "Silme işlemi yalnızca sonraki eklemeleri etkiler.",
+	"saved_mentions_save_insert": "Kaydet ve ekle",
+	"saved_mentions_new": "Yeni bahsetme",
+	"saved_mentions_native": "Seçilen hesap"
 }

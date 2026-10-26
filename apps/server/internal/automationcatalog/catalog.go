@@ -139,6 +139,9 @@ var cursorPage = &Pagination{
 var operations = []Operation{
 	read("list-workspaces", ExposureAlpha),
 	readDisabled("get-workspace-settings"),
+	readDisabled("list-saved-mentions"),
+	writeDisabled("save-saved-mention", EffectLocalMutation),
+	writeDisabled("delete-saved-mention", EffectDestructive),
 	withSelectors(read("list-accounts", ExposureAlpha), workspaceSelector()),
 	readDisabled("list-account-providers"),
 	withSelectors(read("get-account-destination-options", ExposureAlpha), workspaceSelector(), accountSelector()),

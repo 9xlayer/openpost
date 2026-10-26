@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { joinPostText } from '@openpost/platform-text/mentions';
+	import { joinPostText, postTextForDestination } from '@openpost/platform-text/mentions';
+	import SavedMentionDialog from './compose/saved-mention-dialog.svelte';
+	import { searchSavedMentions, savedMentionCandidate } from '$lib/query/saved-mentions';
+	import type { SavedMention } from '@openpost/query-catalog';
 	import PostEditor from '@openpost/ui/components/post-editor';
 	import { lookupComposerMentions } from '$lib/query/mentions';
 	import {
@@ -455,6 +458,17 @@
 	let leaveEditorForWorkspaceID = '';
 	let accountLoadError = $state('');
 	let accountsWorkspaceId = $state('');
+	let mentionDialogSequence = 0;
+	let mentionDialog = $state.raw<{
+		id: number;
+		workspaceId: string;
+		name: string;
+		complete: (candidate: MentionCandidate) => void;
+		session: QueryMutationSession;
+	} | null>(null);
+	$effect(() => {
+		if (mentionDialog && mentionDialog.workspaceId !== selectedWorkspaceId) mentionDialog = null;
+	});
 	let accountRetryIds: string[] | undefined = undefined;
 	let workspaceRequestSequence = 0;
 	let accountRequestSequence = 0;
@@ -1046,6 +1060,7 @@
 			posts: posts.map((post) => ({
 				key: post.key,
 				content: post.content,
+				mentions: post.mentions,
 				mediaIds: post.mediaIds,
 				poll: post.poll,
 				link: post.link
@@ -1578,7 +1593,7 @@
 			post.poll,
 			account.id,
 			visibleSettings(account),
-			getVariantContent(account.id, post.key) ?? post.content,
+			destinationText(post, account),
 			segmentSettingsByPost[post.key]?.[account.id] ?? {}
 		);
 	}
@@ -1664,7 +1679,7 @@
 			const mediaIds = getVariantMediaIds(account.id, post.key) ?? post.mediaIds;
 			const projection = joined
 				? {
-						body: getVariantContent(account.id, post.key) ?? post.content,
+						body: destinationText(post, account),
 						settings: segmentSettingsByPost[post.key]?.[account.id] ?? {}
 					}
 				: pollProjection(post, account);
@@ -1734,13 +1749,14 @@
 				)
 			});
 		}
+		const destinationSettings = destinationSettingsForAccount(account);
 		return buildComposerPreview({
 			account,
 			mode: textComposerMode,
 			outputProfile:
 				requestedOutputProfiles[account.id] ?? resolvedCapabilities[account.id]?.output_profile,
 			segments,
-			destinationSettings: settingsForAccount(account),
+			destinationSettings,
 			title: nativePreviewTitle(account),
 			linkUrl: segments[0]?.url ?? ''
 		});
@@ -2541,6 +2557,12 @@
 	}
 
 	function accountNeedsOwnSegmentCopy(accountID: string): boolean {
+		if (
+			posts.some((post) =>
+				post.mentions?.spans.some((span) => span.target.provider === 'workspace')
+			)
+		)
+			return true;
 		return accountNeedsSegmentCopy(
 			accountID,
 			variants,
@@ -2599,7 +2621,7 @@
 					locale: getLocaleTag(),
 					region,
 					account_settings: Object.fromEntries(
-						selectedAccounts.map((account) => [account.id, settingsForAccount(account)])
+						selectedAccounts.map((account) => [account.id, destinationSettingsForAccount(account)])
 					),
 					account_segments: Object.fromEntries(
 						selectedAccounts
@@ -6568,7 +6590,8 @@
 					const metadata = variant?.contentInherited ? post.mentions : variant?.mentions;
 					return metadata?.spans.some(
 						(span) =>
-							span.target.provider !== account?.platform ||
+							(span.target.provider !== 'workspace' &&
+								span.target.provider !== account?.platform) ||
 							(span.target.provider === 'mastodon' &&
 								span.target.authority?.replace(/\/$/, '').toLowerCase() !==
 									account?.instance_url?.replace(/\/$/, '').toLowerCase())
@@ -6792,7 +6815,11 @@
 		if (field === 'content') {
 			const key = nativeDescriptionKey(account);
 			const hasCaptionOverride = Boolean(key && settingsByAccount[account.id]?.[key]);
-			const resetCaptionOnly = Boolean(joinedDescriptionKey(account) && hasCaptionOverride);
+			const resetCaptionOnly = Boolean(
+				joinedDescriptionKey(account) &&
+				hasCaptionOverride &&
+				!variantHasContentOverride(account.id)
+			);
 			if (key && hasCaptionOverride) updateAccountSetting(account, key, '');
 			if (resetCaptionOnly) return;
 		}
@@ -6856,7 +6883,12 @@
 		const post = posts.find((item) => item.key === segment.id);
 		return post ? [post] : [];
 	}
-	function handleNativeTextChange(post: PostItem, index: number, value: string) {
+	function handleNativeTextChange(
+		post: PostItem,
+		index: number,
+		value: string,
+		mentions?: MentionMetadata
+	) {
 		if (!activeVariantAccountId) return;
 		const id = activeVariantAccountId;
 		if (!post.link && accountTextURL(value))
@@ -6865,6 +6897,16 @@
 			);
 		const account = activeVariantAccount;
 		if (account && joinedDescriptionKey(account)) {
+			// The caption replaces joined text. Keep media decisions on their sources.
+			unsyncAccount(id);
+			posts.forEach((_source, sourceIndex) =>
+				handleVariantChange(
+					id,
+					sourceIndex,
+					sourceIndex === 0 ? value : '',
+					sourceIndex === 0 ? mentions : { version: 1, spans: [] }
+				)
+			);
 			updateAccountSetting(account, joinedDescriptionKey(account)!, value);
 			return;
 		}
@@ -6873,7 +6915,7 @@
 			if (key) updateAccountSetting(account, key, value);
 		}
 		unsyncAccount(id);
-		handleVariantChange(id, index, value);
+		handleVariantChange(id, index, value, mentions);
 	}
 	function pollDestinationFor(post: PostItem, account: SocialAccount) {
 		return {
@@ -6949,20 +6991,69 @@
 		setPostContent(index, value, mentions);
 	}
 
-	function editorValue(post: PostItem, native = false): PostTextValue {
-		const variant = activeVariantAccountId
-			? variants.get(activeVariantAccountId)?.[post.key]
+	function destinationSettingsForAccount(account: SocialAccount): ComposerSettings {
+		const destinationSettings = { ...settingsForAccount(account) };
+		const provider = getPlatformKey(account.platform);
+		const descriptionKey =
+			provider === 'youtube' || provider === 'peertube'
+				? 'description'
+				: provider === 'facebook'
+					? 'video_description'
+					: undefined;
+		const description = descriptionKey
+			? parseComposerSettingOptionalString(destinationSettings[descriptionKey])
 			: undefined;
+		if (descriptionKey && description !== undefined && posts[0]) {
+			destinationSettings[descriptionKey] = postTextForDestination(
+				accountEditorValue(posts[0], account, description, true),
+				account.platform,
+				account.instance_url
+			).body;
+		}
+		return destinationSettings;
+	}
+	function accountEditorValue(
+		post: PostItem,
+		account: SocialAccount | undefined | null,
+		body: string,
+		native: boolean
+	): PostTextValue {
+		const variant = account ? variants.get(account.id)?.[post.key] : undefined;
 		const metadata = variant && !variant.contentInherited ? variant.mentions : post.mentions;
-		const body = native ? nativeEditableText(post) : getEditorContentForPost(post);
+		if (
+			native &&
+			account &&
+			posts.length > 1 &&
+			resolvedCapabilities[account.id]?.segment_strategy === 'join'
+		) {
+			try {
+				const joined = joinPostText(
+					posts.map((source) => {
+						const version = variants.get(account.id)?.[source.key];
+						return {
+							body: version && !version.contentInherited ? version.content : source.content,
+							mentions: (version && !version.contentInherited ? version.mentions : source.mentions)
+								?.spans
+						};
+					})
+				);
+				if (body === joined.body) return joined;
+			} catch {
+				/* The destination readiness owner reports invalid joined metadata. */
+			}
+		}
 		return { body, mentions: metadata ? validTextMentions(body, metadata.spans) : undefined };
+	}
+	function editorValue(post: PostItem, native = false): PostTextValue {
+		const body = native ? nativeEditableText(post) : getEditorContentForPost(post);
+		return accountEditorValue(post, activeVariantAccount, body, native);
 	}
 	function editorChanged(post: PostItem, index: number, value: PostTextValue, native = false) {
 		const metadata: MentionMetadata | undefined =
 			value.mentions === undefined ? undefined : { version: 1, spans: value.mentions };
 		if (native && activeVariantAccount) {
 			if (nativeDescriptionKey(activeVariantAccount)) {
-				handleNativeTextChange(post, index, value.body);
+				handleNativeTextChange(post, index, value.body, metadata);
 				return;
 			}
 			if (!activeVariantIsUnsynced) unsyncAccount(activeVariantAccount.id);
@@ -6973,14 +7064,45 @@
 		native = false
 	): ((query: string, signal: AbortSignal) => Promise<MentionCandidate[]>) | undefined {
 		const account = activeVariantAccount;
+		const workspaceId = selectedWorkspaceId;
+		if (!account) return (query, signal) => searchSavedMentions(workspaceId, query, signal);
 		if (
 			!account ||
 			!['bluesky', 'mastodon', 'linkedin'].includes(account.platform) ||
 			(native && nativeDescriptionKey(account))
 		)
 			return undefined;
-		return (query, signal) =>
-			lookupComposerMentions(selectedWorkspaceId, account.id, query, signal);
+		return (query, signal) => lookupComposerMentions(workspaceId, account.id, query, signal);
+	}
+	function createSavedMention(query: string, complete: (candidate: MentionCandidate) => void) {
+		mentionDialog = {
+			id: ++mentionDialogSequence,
+			workspaceId: selectedWorkspaceId,
+			name: query,
+			complete,
+			session: captureQueryMutationSession()
+		};
+	}
+	function insertSavedMention(entry: SavedMention, origin: number) {
+		const target = mentionDialog;
+		if (target?.id !== origin) return;
+		mentionDialog = null;
+		if (
+			target &&
+			target.workspaceId === selectedWorkspaceId &&
+			queryMutationSessionIsCurrent(target.session)
+		)
+			target.complete(savedMentionCandidate(entry));
+	}
+	function destinationText(post: PostItem, account: SocialAccount) {
+		const variant = variants.get(account.id)?.[post.key];
+		const body = getVariantContent(account.id, post.key) ?? post.content;
+		const metadata = variant && !variant.contentInherited ? variant.mentions : post.mentions;
+		return postTextForDestination(
+			{ body, mentions: metadata?.spans },
+			account.platform,
+			account.instance_url
+		).body;
 	}
 	function setActivePost(index: number) {
 		activePostIndex = index;
@@ -7041,6 +7163,21 @@
 		randomDelayOverride = 'default';
 	}
 </script>
+
+{#if mentionDialog}
+	{#key mentionDialog.workspaceId}
+		<SavedMentionDialog
+			dialogId={mentionDialog.id}
+			workspaceId={mentionDialog.workspaceId}
+			{accounts}
+			initialName={mentionDialog.name}
+			onclose={() => {
+				mentionDialog = null;
+			}}
+			oninsert={insertSavedMention}
+		/>
+	{/key}
+{/if}
 
 {#snippet sharedPollControl(post: PostItem, i: number, presentation: 'summary' | 'dialog')}
 	<SharedPollEditor
@@ -7141,6 +7278,8 @@
 					value={editorValue(post, true)}
 					onchange={(value) => editorChanged(post, index, value, true)}
 					lookup={mentionLookup(true)}
+					minimumQueryLength={activeVariantAccountId ? 2 : 0}
+					oncreate={activeVariantAccountId ? undefined : createSavedMention}
 					mentionScope={activeVariantAccount
 						? {
 								provider: activeVariantAccount.platform,
@@ -7151,7 +7290,7 @@
 					onfocus={() => setActivePost(index)}
 					placeholder={m.compose_ai_idea_placeholder()}
 					disabled={isSubmitting || buildingPost}
-					class="native-post-input w-full rounded-sm border-0 bg-transparent p-0 shadow-none outline-none focus-visible:ring-2 focus-visible:ring-ring"
+					class="native-post-input w-full rounded-sm border-0 bg-transparent p-0 shadow-none outline-none"
 					style="min-height:44px; font:inherit; color:inherit; line-height:inherit;"
 				/>
 			{/key}
@@ -7990,6 +8129,8 @@
 														value={editorValue(post)}
 														onchange={(value) => editorChanged(post, i, value)}
 														lookup={mentionLookup()}
+														minimumQueryLength={activeVariantAccountId ? 2 : 0}
+														oncreate={activeVariantAccountId ? undefined : createSavedMention}
 														onpaste={(event) => handlePaste(event, i)}
 														onfocus={() => setActivePost(i)}
 														placeholder={i === 0
@@ -7999,7 +8140,7 @@
 															: m.compose_add_to_thread()}
 														class="relative z-10 w-full border-0 bg-transparent py-2 {isThread
 															? 'pr-12'
-															: 'pr-3 md:pr-4'} text-base leading-7 text-foreground focus-visible:ring-2 focus-visible:ring-ring md:py-3 md:text-lg md:leading-8"
+															: 'pr-3 md:pr-4'} text-base leading-7 text-foreground md:py-3 md:text-lg md:leading-8"
 														style="min-height: {i === 0 ? '120px' : '56px'};"
 														disabled={isSubmitting ||
 															buildingPost ||

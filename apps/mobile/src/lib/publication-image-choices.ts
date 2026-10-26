@@ -1,4 +1,6 @@
 import type { components } from "@openpost/api-contract";
+import { postTextForDestination, readMentionMetadata } from "@openpost/platform-text/mentions";
+import type { ReadinessSegment } from "./destination-readiness";
 
 type Media = Pick<
   components["schemas"]["MediaSummary"],
@@ -97,13 +99,29 @@ export function applyRenditionImageChoices(
 export function renditionReadinessSegments(
   publication: Publication,
   rendition: RenditionInput,
-  canonical: { content: string; mediaIds: string[] }[],
+  canonical: ReadinessSegment[],
   strategy: "preserve" | "join",
+  destination?: { platform: string; instance_url?: string },
 ): { content: string; mediaIds: string[] }[] {
   const sources = publication.segments ?? [];
   const stored = publication.renditions?.find(
     (item) => item.social_account_id === rendition.social_account_id,
   );
+  const platform = destination?.platform ?? stored?.platform ?? "";
+  const project = (body: string, mentions: unknown) =>
+    postTextForDestination(
+      { body, mentions: readMentionMetadata(body, mentions)?.spans },
+      platform,
+      destination?.instance_url,
+    ).body;
+  canonical = canonical.map((segment) => ({
+    ...segment,
+    content: postTextForDestination(
+      { body: segment.content, mentions: segment.mentions },
+      platform,
+      destination?.instance_url,
+    ).body,
+  }));
   const sourceValue = (id: string | undefined, index: number) =>
     canonical[sources.findIndex((source) => source.id === id)] ??
     canonical[index] ?? { content: "", mediaIds: [] };
@@ -136,7 +154,10 @@ export function renditionReadinessSegments(
             (item) => item.publication_segment_id === source.id,
           );
           return {
-            content: override?.body_override ?? inherited.content,
+            content:
+              override?.body_override == null
+                ? inherited.content
+                : project(override.body_override, override.mentions),
             mediaIds:
               override?.media_inherited === false
                 ? (override.media ?? []).map((item) => item.media_id)
@@ -149,7 +170,10 @@ export function renditionReadinessSegments(
         ? join(canonical)
         : sourceValue(segment.publication_segment_id, index);
     return {
-      content: segment.body_override ?? segment.body ?? inherited.content,
+      content:
+        segment.body_override != null || segment.body != null
+          ? project(segment.body_override ?? segment.body ?? "", segment.settings?.mentions)
+          : inherited.content,
       mediaIds:
         segment.media_inherited === false
           ? (segment.media ?? []).map((item) => item.media_id)

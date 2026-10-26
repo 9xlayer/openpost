@@ -118,6 +118,7 @@ func (h *PublicationHandler) loadPublicationResponsesWithDB(
 				segmentsByRendition[rendition.ID],
 				mediaByRenditionSegment,
 			)
+			output = projectRenditionMentionText(output, rendition, accountsByID[rendition.SocialAccountID], segmentsByPublication[publication.ID])
 			response.Renditions = append(response.Renditions, output)
 		}
 		body = append(body, response)
@@ -162,7 +163,7 @@ func (h *PublicationHandler) loadRenditionAccounts(
 	var accounts []models.SocialAccount
 	if err := db.NewSelect().
 		Model(&accounts).
-		Column("id", "workspace_id", "platform", "slug", "account_username", "account_avatar_url").
+		Column("id", "workspace_id", "platform", "slug", "account_username", "account_avatar_url", "instance_url").
 		Where("workspace_id IN (?)", bun.List(workspaceIDs)).
 		Where("id IN (?)", bun.List(accountIDs)).
 		Scan(ctx); err != nil {

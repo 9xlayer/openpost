@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "源 GIF 不得超过 20 MB、200 帧、每边 2048 像素以及解码后总计 1600 万像素。",
 	"image_editor_animation_loop_conflict": "合成 GIF 图层时，请将所有图层设为无限循环或全部设为有限播放。要保留混合循环设置，请分别导出。",
 	"image_editor_animation_add_layer": "导出 GIF 前，请添加可见的动画 GIF 图层。",
-	"image_editor_animation_timing_conflict": "重叠的帧时间会产生短于 20 毫秒的帧。请对齐时长，或分别导出 GIF 图层。"
+	"image_editor_animation_timing_conflict": "重叠的帧时间会产生短于 20 毫秒的帧。请对齐时长，或分别导出 GIF 图层。",
+	"editor_add_mention": "添加提及",
+	"editor_search_characters": "请输入至少两个字符进行搜索。",
+	"saved_mentions_title": "已保存的提及",
+	"saved_mentions_description": "保存名称后，在“全部”中输入 @。每个网络会使用已配置的文本或账号身份。",
+	"saved_mentions_name": "提及名称",
+	"saved_mentions_text": "文本或用户名",
+	"saved_mentions_native_hint": "选择搜索结果以标记账号，否则仅替换文本。",
+	"saved_mentions_load_failed": "无法加载已保存的提及。",
+	"saved_mentions_save_failed": "无法保存提及，请重试。",
+	"saved_mentions_delete_hint": "删除仅影响今后的插入。",
+	"saved_mentions_save_insert": "保存并插入",
+	"saved_mentions_new": "新建提及",
+	"saved_mentions_native": "已选账号"
 }

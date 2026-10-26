@@ -1,6 +1,8 @@
 import { getContext, setContext } from "svelte";
 
 export type UiMessages = {
+  editor_add_mention: () => string;
+  editor_search_characters: () => string;
   editor_mention_limit: () => string;
   editor_mention_account_required: () => string;
   editor_permission_required: () => string;
@@ -30,6 +32,8 @@ export type UiMessages = {
 };
 const messagesKey = Symbol("openpost-ui-messages");
 const english: UiMessages = {
+  editor_add_mention: () => "Add mention",
+  editor_search_characters: () => "Type at least two characters to search.",
   editor_mention_limit: () => "A post can include at most 50 selected mentions.",
   editor_mention_account_required: () => "Choose mentions for this account, or paste plain text.",
 

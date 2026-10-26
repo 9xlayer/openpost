@@ -10205,5 +10205,18 @@
 	"image_editor_animation_source_limit": "元のGIFは20 MB以下、最大200フレーム、各辺2048ピクセル、デコード後の合計1600万ピクセルまでです。",
 	"image_editor_animation_loop_conflict": "GIFレイヤーを合成するには、すべてを無限ループにするか、すべての再生回数を有限にしてください。異なるループ設定を保つには、個別に書き出してください。",
 	"image_editor_animation_add_layer": "GIFを書き出す前に、表示中のアニメーションGIFレイヤーを追加してください。",
-	"image_editor_animation_timing_conflict": "重なるフレームのタイミングにより、20ミリ秒未満のフレームが発生します。長さを揃えるか、GIFレイヤーを個別に書き出してください。"
+	"image_editor_animation_timing_conflict": "重なるフレームのタイミングにより、20ミリ秒未満のフレームが発生します。長さを揃えるか、GIFレイヤーを個別に書き出してください。",
+	"editor_add_mention": "メンションを追加",
+	"editor_search_characters": "検索するには2文字以上入力してください。",
+	"saved_mentions_title": "保存したメンション",
+	"saved_mentions_description": "名前を保存して「すべて」で @ を入力すると、各ネットワークに設定したテキストやアカウントが使われます。",
+	"saved_mentions_name": "メンション名",
+	"saved_mentions_text": "テキストまたはユーザー名",
+	"saved_mentions_native_hint": "アカウントをタグ付けするには検索結果を選択してください。それ以外はテキストの置換になります。",
+	"saved_mentions_load_failed": "保存したメンションを読み込めませんでした。",
+	"saved_mentions_save_failed": "メンションを保存できませんでした。もう一度お試しください。",
+	"saved_mentions_delete_hint": "削除は今後の挿入にのみ適用されます。",
+	"saved_mentions_save_insert": "保存して挿入",
+	"saved_mentions_new": "新しいメンション",
+	"saved_mentions_native": "選択したアカウント"
 }
