@@ -3,6 +3,7 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+import { shardRunPattern } from "./go-test-shards.mjs";
 import {
   formatPruneResult,
   pruneTurboCache,
@@ -57,6 +58,7 @@ const checks = {
       "scripts/ui-build-lock.test.mjs",
       "scripts/build-telemetry-env.test.mjs",
       "scripts/frontend-vite-build.test.mjs",
+      "scripts/component-browser-tests.test.mjs",
       "scripts/paraglide-offline.test.mjs",
       "scripts/paraglide-declarations.test.mjs",
       "scripts/package-frontend.test.mjs",
@@ -98,9 +100,14 @@ const checks = {
       "scripts/release-lifecycle.test.mjs",
       "scripts/ci-artifacts.test.mjs",
       "scripts/ci-plan.test.mjs",
+      "scripts/go-test-shards.test.mjs",
+      "scripts/release-proof.test.mjs",
+      "scripts/release-failures.test.mjs",
       "scripts/release-asset-upload.test.mjs",
       "scripts/release-ci-contract.test.mjs",
       "scripts/release-surfaces.test.mjs",
+      "scripts/release-ship.test.mjs",
+      "scripts/ci-setup-tools.test.mjs",
     ),
     bun("scripts/release-surfaces.mjs"),
   ]),
@@ -112,7 +119,7 @@ const checks = {
     bunTest("scripts/cloudflare-edge-plan.test.mjs"),
     bunTest("scripts/check-marketing-route-manifest.test.mjs"),
     bunTest("scripts/marketing-agent-readiness.test.mjs"),
-    bunTest("scripts/generate-agent-surfaces.test.mjs"),
+    commandStep("bunx", "turbo", "run", "_test:public-build"),
     bunTest("scripts/public-deployment-proof.test.mjs"),
     bun("scripts/check-marketing-route-manifest.mjs"),
   ]),
@@ -247,6 +254,11 @@ if (import.meta.main) {
 
 export function resolvePlan(requestedCommand, requestedScope, requestedOptions = new Set()) {
   if (!requestedCommand) throw new Error(help());
+  if (requestedOptions.has("--non-browser")) {
+    throw new Error(
+      "--non-browser was removed; use test for the standard suite or select an explicit test scope",
+    );
+  }
   switch (requestedCommand) {
     case "dev":
       return devPlan(requestedScope);
@@ -261,16 +273,29 @@ export function resolvePlan(requestedCommand, requestedScope, requestedOptions =
     case "check":
       return checkPlan(requestedScope, requestedOptions);
     case "test":
-      return testPlan(requestedScope, requestedOptions);
+      return testPlan(requestedScope);
     case "build":
       return buildPlan(requestedScope);
+    case "preflight":
     case "verify":
-      if (requestedScope) throw unsupported("verify", requestedScope, []);
-      return plan("verify", undefined, [
+      if (requestedScope) throw unsupported(requestedCommand, requestedScope, []);
+      return plan(requestedCommand, undefined, [
         [taskStage("static checks", "check")],
-        [taskStage("format check", "format:check"), taskStage("lint", "lint")],
+        [
+          taskStage("format check", "format:check"),
+          taskStage("lint", "lint"),
+          ...(requestedCommand === "preflight"
+            ? [
+                checks["npm-packages"],
+                checks["n8n-package"],
+                stage("mobile source checks", [
+                  commandStep("bun", "run", "check:source", { cwd: "apps/mobile" }),
+                ]),
+              ]
+            : []),
+        ],
         [taskStage("tests", "test")],
-        [taskStage("production builds", "build")],
+        ...(requestedCommand === "verify" ? [[taskStage("production builds", "build")]] : []),
       ]);
     default:
       throw new Error(`unknown task ${JSON.stringify(requestedCommand)}\n${help()}`);
@@ -461,7 +486,7 @@ function checkPlan(requestedScope, requestedOptions) {
   ]);
 }
 
-function testPlan(requestedScope, requestedOptions) {
+function testPlan(requestedScope) {
   const supported = [...surfaceScopes, ...browserScopes];
   if (requestedScope && !supported.includes(requestedScope)) {
     throw unsupported("test", requestedScope, supported);
@@ -472,6 +497,12 @@ function testPlan(requestedScope, requestedOptions) {
   }
   if (process.env.OPENPOST_GO_COVERAGE_FILE) {
     backendArguments.push(`-coverprofile=${process.env.OPENPOST_GO_COVERAGE_FILE}`);
+  }
+  if (process.env.OPENPOST_GO_TEST_SHARD) {
+    backendArguments.push(
+      "-run",
+      shardRunPattern("apps/server", process.env.OPENPOST_GO_TEST_SHARD, root),
+    );
   }
   backendArguments.push("./...");
   const backend = stage("backend tests", [go(...backendArguments, { cwd: "apps/server" })]);
@@ -496,9 +527,6 @@ function testPlan(requestedScope, requestedOptions) {
     commandStep("bunx", "turbo", "run", "test", "--concurrency", "1"),
   ]);
   const repository = stage("repository tests", [bunTest("./scripts")]);
-  const nonBrowserFrontend = stage("frontend server tests", [
-    commandStep("bunx", "turbo", "run", "test:server", "--filter", "@openpost/web"),
-  ]);
   const marketing = stage("marketing tests", [
     commandStep("bun", "run", "test", { cwd: "apps/marketing" }),
     bunTest(
@@ -529,19 +557,6 @@ function testPlan(requestedScope, requestedOptions) {
   if (requestedScope) {
     const byScope = { frontend, backend, cli, marketing, docs };
     return plan("test", requestedScope, [[byScope[requestedScope]]]);
-  }
-  if (requestedOptions.has("--non-browser")) {
-    const nonBrowserWorkspace = stage("workspace tests", [
-      commandStep(
-        "bunx",
-        "turbo",
-        "run",
-        "test",
-        "--filter=!@openpost/web",
-        "--filter=!@openpost/social-preview",
-      ),
-    ]);
-    return plan("test", undefined, [[backend, cli, nonBrowserFrontend, nonBrowserWorkspace]]);
   }
   return plan("test", undefined, [[backend, cli, repository], [workspace]]);
 }
@@ -806,7 +821,7 @@ function unsupported(requestedCommand, requestedScope, supported) {
 function help() {
   return [
     "Usage: bun scripts/tasks.mjs <command> [scope] [--plan]",
-    "Commands: dev, format, format:check, lint, fallow, check, test, build, verify",
+    "Commands: dev, format, format:check, lint, fallow, check, test, build, preflight, verify",
     `Surface scopes: ${surfaceScopes.join(", ")}`,
     `Browser test scopes: ${browserScopes.join(", ")}`,
     `Policy selectors: ${Object.keys(checks).join(", ")}`,

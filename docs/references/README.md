@@ -26,3 +26,5 @@ The [October 2026 publishing competitor audit](competitor-audit-2026-10-10.md) r
 All checkout directories are ignored by Git. Keep them shallow and local. Never commit or vendor them. Audit the exact source revision and license before porting any code.
 
 Refresh a checkout when needed with `git -C docs/references/<name> pull --ff-only`.
+
+The [release workflow comparison](release-workflows.md) records pinned CI/CD sources, measured timing boundaries, and adopted or rejected patterns from T3 Code, Postiz, Immich, Jellyfin, n8n, Cal.diy and Grafana.

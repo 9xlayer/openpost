@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, mkdirSync, copyFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -235,5 +235,160 @@ test("structural gate rejects unused exports while complexity stays advisory", (
     assert.match(complexity.stdout, /choose/u);
   } finally {
     rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("local preflight shares verification stages without a production build phase", () => {
+  const result = spawnSync("bun", ["scripts/tasks.mjs", "preflight", "--plan"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const stages = Object.fromEntries(
+    JSON.parse(result.stdout).stages.map((stage) => [stage.label, stage]),
+  );
+  assert.equal(stages["format check"].phase, stages.lint.phase);
+  assert.ok(stages.tests.phase > stages.lint.phase);
+  assert.ok(stages.tests.phase > stages["static checks"].phase);
+  assert.equal(stages["production builds"], undefined);
+  for (const label of ["npm packages", "n8n package", "mobile source checks"]) {
+    assert.equal(stages[label].phase, stages.lint.phase, label);
+    assert.ok(stages[label].phase > stages["static checks"].phase, label);
+    assert.ok(stages.tests.phase > stages[label].phase, label);
+  }
+  assert.ok(stages["npm packages"].commands.includes("bun run check"));
+  assert.ok(stages["n8n package"].commands.includes("bun run check"));
+  assert.deepEqual(stages["mobile source checks"].commands, ["bun run check:source"]);
+});
+
+test("preflight children share the root lock and run independent format and lint processes together", () => {
+  const fixture = mkdtempSync(path.join(os.tmpdir(), "openpost-preflight-"));
+  try {
+    mkdirSync(path.join(fixture, "scripts"));
+    mkdirSync(path.join(fixture, "bin"));
+    for (const directory of [
+      "apps/server",
+      "apps/cli",
+      "apps/mobile",
+      "packages/sdk",
+      "packages/cli",
+      "packages/n8n-nodes-openpost",
+    ])
+      mkdirSync(path.join(fixture, directory), { recursive: true });
+    for (const script of ["tasks.mjs", "turbo-cache.mjs", "go-test-shards.mjs"]) {
+      copyFileSync(new URL(`./${script}`, import.meta.url), path.join(fixture, "scripts", script));
+    }
+    // Only task orchestration is real in this fixture. Leaf tools record their
+    // execution instead of requiring the complete application/toolchain.
+    const shim = `#!${process.execPath}
+import { appendFileSync, readFileSync } from "node:fs";
+import { basename } from "node:path";
+const tool = basename(process.argv[1]);
+const args = process.argv.slice(2);
+if (tool === "bun" && args[0] === "scripts/tasks.mjs") {
+  const child = Bun.spawn([${JSON.stringify(process.execPath)}, ...args], { env: process.env, stdout: "inherit", stderr: "inherit" });
+  process.exit(await child.exited);
+}
+const record = (event) => appendFileSync(process.env.EVENTS, JSON.stringify({ tool, args, event, locked: process.env.OPENPOST_ROOT_TASK_LOCKED }) + "\\n");
+record("start");
+if (args.includes("oxfmt") || args.includes("lint:oxlint")) {
+  const partner = args.includes("oxfmt") ? "lint:oxlint" : "oxfmt";
+  const deadline = Date.now() + 5_000;
+  while (!readFileSync(process.env.EVENTS, "utf8").split("\\n").filter(Boolean).map(JSON.parse).some((entry) => entry.event === "start" && entry.args.includes(partner))) {
+    if (Date.now() > deadline) throw new Error("independent format and lint never overlapped");
+    await Bun.sleep(10);
+  }
+}
+record("end");
+`;
+    for (const tool of ["bun", "bunx", "go", "git", "golangci-lint"]) {
+      writeFileSync(path.join(fixture, "bin", tool), shim, { mode: 0o755 });
+    }
+    const eventsPath = path.join(fixture, "events.jsonl");
+    const result = spawnSync(process.execPath, ["scripts/tasks.mjs", "preflight"], {
+      cwd: fixture,
+      encoding: "utf8",
+      timeout: 10_000,
+      env: {
+        ...process.env,
+        PATH: `${fixture}/bin:${process.env.PATH}`,
+        EVENTS: eventsPath,
+        OPENPOST_ROOT_TASK_LOCKED: "",
+        OPENPOST_TURBO_CACHE_DIR: path.join(fixture, "cache"),
+      },
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const events = readFileSync(eventsPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert.ok(events.length > 0);
+    assert.ok(events.every(({ locked }) => locked === "1"));
+    const format = events.findIndex(
+      ({ args, event }) => args.includes("oxfmt") && event === "start",
+    );
+    const formatEnd = events.findIndex(
+      ({ args, event }) => args.includes("oxfmt") && event === "end",
+    );
+    const lint = events.findIndex(
+      ({ args, event }) => args.includes("lint:oxlint") && event === "start",
+    );
+    const lintEnd = events.findIndex(
+      ({ args, event }) => args.includes("lint:oxlint") && event === "end",
+    );
+    assert.ok(
+      format >= 0 && lint >= 0 && format < lintEnd && lint < formatEnd,
+      "format and lint must overlap",
+    );
+    const tests = events.findIndex(
+      ({ tool, args, event }) =>
+        tool === "bun" && args.join(" ") === "test ./scripts" && event === "start",
+    );
+    assert.ok(tests > Math.max(formatEnd, lintEnd));
+    for (const artifactCheck of [
+      "scripts/check-npm-package-build.mjs",
+      "scripts/check-n8n-package-build.mjs",
+    ]) {
+      const finished = events.findIndex(
+        ({ args, event }) => args.includes(artifactCheck) && event === "end",
+      );
+      assert.ok(finished >= 0 && tests > finished, artifactCheck);
+    }
+    assert.ok(events.some(({ args }) => args.join(" ") === "test ./scripts"));
+    assert.ok(
+      events.some(({ args }) => args.slice(0, 5).join(" ") === "turbo run test --concurrency 1"),
+    );
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
+
+test("the public-build gate hashes its corpus and canonical build dependencies", () => {
+  const result = spawnSync("bunx", ["turbo", "run", "_test:public-build", "--dry=json"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const tasks = new Map(JSON.parse(result.stdout).tasks.map((task) => [task.taskId, task]));
+  const gate = tasks.get("//#_test:public-build");
+  assert.equal(gate.resolvedTaskDefinition.cache, true);
+  for (const input of [
+    "tests/build/generate-agent-surfaces.test.mjs",
+    "scripts/generate-agent-surfaces.mjs",
+    "docs/reference/nix-module.md",
+    "scripts/tasks.mjs",
+    "scripts/cli-option.mjs",
+    "scripts/immutable-frontend-assets.mjs",
+  ]) {
+    assert.ok(gate.inputs[input], `${input} must invalidate the public-build proof`);
+  }
+  for (const dependency of ["@openpost/docs#build", "@openpost/site#build"]) {
+    assert.ok(gate.dependencies.includes(dependency));
+    // The gate's independent rebuilds must receive the same environment as
+    // their canonical dependency builds, as well as inherit their hashes.
+    for (const name of tasks.get(dependency).resolvedTaskDefinition.env) {
+      assert.ok(gate.resolvedTaskDefinition.env.includes(name), name);
+    }
   }
 });

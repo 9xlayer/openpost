@@ -13,7 +13,7 @@ Real versions only ever come from the release workflow's `publish-npm` job.
 
 ## Routine releases
 
-Every publishable change under `packages/sdk/` or `packages/cli/` must increase that package's stable version. PR CI enforces this through `bun scripts/npm-package-release.mjs check-version --package <dir>` in the `npm-packages` job, which also runs each package's check, test, build, and an `npm pack --dry-run` payload inspection.
+Every publishable change under `packages/sdk/` or `packages/cli/` must increase that package's stable version. PR, main, and tag CI enforce this through `bun scripts/npm-package-release.mjs check-version --package <dir>` in the `npm-packages` job (main and tag CI compare with the previous published release), which also runs each package's check, test, build, and an `npm pack --dry-run` payload inspection.
 
 The app's `v*` release workflow publishes the SDK beside the Hosted deployment, never behind it. The CLI wrapper instead publishes after the GitHub release goes public, because it installs its binaries from that release:
 

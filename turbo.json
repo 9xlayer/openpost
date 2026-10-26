@@ -48,6 +48,37 @@
     "@openpost/ui#check": {
       "dependsOn": ["build", "^check"],
       "outputs": []
+    },
+    "//#_test:public-build": {
+      "dependsOn": ["@openpost/docs#build", "@openpost/site#build"],
+      "inputs": [
+        "tests/build/generate-agent-surfaces.test.mjs",
+        "scripts/**",
+        "docs/**",
+        "apps/server/**",
+        "apps/cli/**",
+        ".oxfmtrc.json",
+        "apps/web/.oxfmtrc.json"
+      ],
+      "outputs": [],
+      "env": [
+        "CF_PAGES",
+        "CF_PAGES_BRANCH",
+        "CF_PAGES_COMMIT_SHA",
+        "GITHUB_RUN_ID",
+        "GITHUB_SHA",
+        "OPENPOST_RELEASE_VERSION",
+        "POSTHOG_PROJECT_ID",
+        "POSTHOG_SOURCEMAPS_ENABLED",
+        "POSTHOG_UI_HOST",
+        "VITE_OPENPOST_ENVIRONMENT",
+        "VITE_OPENPOST_REVISION",
+        "VITE_OPENPOST_VERSION",
+        "VITE_POSTHOG_API_HOST",
+        "VITE_POSTHOG_PROJECT_TOKEN",
+        "VITE_POSTHOG_UI_HOST"
+      ],
+      "passThroughEnv": ["POSTHOG_PERSONAL_API_KEY"]
     }
   }
 }

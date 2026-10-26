@@ -1,12 +1,13 @@
 #!/usr/bin/env bun
 
 import { createHash } from "node:crypto";
-import { mkdir, rm, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { checkMCPRegistryOwnership } from "./check-mcp-registry.mjs";
 import { releaseCommandEnvironment } from "./release-command-environment.mjs";
-import { requireConventionalCommitMessage, selectWorkflowRun } from "./release-lifecycle.mjs";
+import { formatFailureDigest } from "./release-failures.mjs";
+import { findReleaseProofRun } from "./release-proof.mjs";
 import { publishedStableReleaseTag } from "./published-release-tag.mjs";
 import {
   changedReleasePaths,
@@ -46,16 +47,28 @@ try {
       await status();
       break;
     case "prepare":
-      await prepare(args.join(" ").trim());
+      await prepare();
       break;
     case "promote":
       await promote(args[0]);
       break;
-    case "prod": {
-      const tag = await prepare(args.join(" ").trim());
-      await promote(tag);
+    case "ship":
+    case "prod":
+      if (args.length > 0) {
+        throw new Error(
+          "ship releases committed HEAD; commit your work, then run it without arguments",
+        );
+      }
+      await ship();
       break;
-    }
+    case "watch":
+      if (args.length === 0) throw new Error("pass one or more workflow run ids");
+      await watchRuns(args.map((id) => ({ id, label: `run ${id}` })));
+      break;
+    case "failures":
+      if (!args[0]) throw new Error("pass a workflow run id");
+      printFailures(args[0]);
+      break;
     default:
       throw new Error(`unknown release command ${JSON.stringify(command)}`);
   }
@@ -180,21 +193,31 @@ async function checkReleaseMobileIdentity(previousReleaseTag) {
 }
 
 async function check() {
+  const started = Date.now();
   run(["bun", "run", "doctor"]);
   run(["bun", "install", "--frozen-lockfile"]);
-  run(["bun", "run", "check"]);
-  await runParallel([
-    ["bun", "run", "format:check"],
-    ["bun", "run", "lint"],
-    ["bun", "scripts/tasks.mjs", "test", "--non-browser"],
-  ]);
-  console.log("release check: local checks passed");
+  run(["bun", "install", "--cwd", "apps/mobile", "--frozen-lockfile"]);
+  run(["bun", "scripts/tasks.mjs", "preflight"]);
+  console.log(`release check: local preflight passed in ${formatDuration(Date.now() - started)}`);
+  console.log(
+    "Remote gates still include end-to-end browsers, race/integration tests, security scans, and release artifacts. Use check-full for a broader local rehearsal.",
+  );
+}
+
+async function verifyLocalCandidate(revision) {
+  await check();
+  if (git(["rev-parse", "HEAD"]) !== revision || isDirty()) {
+    throw new Error(
+      "candidate changed during local checks; commit the intended revision and run ship again",
+    );
+  }
 }
 
 async function checkFull() {
   await requireLocalReleaseHost();
   run(["bun", "run", "doctor"]);
   run(["bun", "install", "--frozen-lockfile"]);
+  run(["bun", "install", "--cwd", "apps/mobile", "--frozen-lockfile"]);
   run(["bun", "run", "check", "--", "provider-certification"]);
   const fingerprint = await worktreeFingerprint();
   const stampDir = path.join(root, ".devenv", "state", "release-check");
@@ -258,12 +281,15 @@ async function checkFull() {
   console.log(`release check-full: complete (${fingerprint.slice(0, 12)})`);
 }
 
-async function prepare(commitMessage) {
+async function prepare() {
   requireCommand("git");
   requireCommand("gh");
   const branch = git(["branch", "--show-current"]);
   if (branch !== "main") throw new Error(`refusing to release from ${JSON.stringify(branch)}`);
-  if (isDirty()) requireConventionalCommitMessage(commitMessage);
+  if (isDirty())
+    throw new Error(
+      "preparation requires a clean worktree; commit the candidate before verification",
+    );
 
   verifyGitHubReleaseAccess();
   await warnUnlessProductionReady("prepare");
@@ -285,20 +311,10 @@ async function prepare(commitMessage) {
     return headTag;
   }
 
-  let tag;
-  if (isDirty()) {
-    if (!commitMessage) throw new Error("uncommitted work requires a Conventional Commit message");
-    tag = runCapture(["bun", "scripts/next-release-version.mjs", latestTag], {
-      PENDING_COMMIT_MESSAGE: commitMessage,
-    }).trim();
-  } else {
-    tag = runCapture(["bun", "scripts/next-release-version.mjs", latestTag]).trim();
-  }
+  const tag = runCapture(["bun", "scripts/next-release-version.mjs", latestTag]).trim();
+  const revision = git(["rev-parse", "HEAD"]);
 
-  // Cheap validation first: input syntax and contracts fail here, before any
-  // file is touched. Expensive verification belongs to tag CI, which proves
-  // the selected candidate. Local focused checks belong to implementation
-  // work, not to release preparation.
+  // Validate release inputs before running the shared local gates.
   run(["bun", "scripts/check-changelog.mjs"]);
   checkReleaseContracts();
   await checkReleaseMobileIdentity(publishedStableReleaseTag());
@@ -314,10 +330,9 @@ async function prepare(commitMessage) {
   // local main commits so the tag (created by promote) points at an
   // origin/main revision. Later main commits cannot enter the tag; a
   // rejected push means origin advanced and preparation stops here.
+  await verifyLocalCandidate(revision);
   const ahead = Number(git(["rev-list", "--count", "origin/main..HEAD"]));
-  if (ahead > 0) run(["git", "push", "origin", "main"]);
-
-  const revision = git(["rev-parse", "HEAD"]);
+  if (ahead > 0) run(["git", "push", "origin", `${revision}:refs/heads/main`]);
   console.log(`release prepare: ${tag} candidate selected at ${revision}; run promote to tag it`);
   return tag;
 }
@@ -341,28 +356,28 @@ async function promote(requestedTag) {
   // Tag CI proves the candidate with the final version embedded; main CI is
   // development feedback, not a serial predecessor. Do not wait for it here.
 
-  const remoteTag = runOptional([
-    "git",
-    "ls-remote",
-    "--exit-code",
-    "--tags",
-    "origin",
-    `refs/tags/${tag}`,
-  ]);
-  if (!remoteTag.ok) {
-    const localTarget = runOptional(["git", "rev-parse", `refs/tags/${tag}`]);
-    if (!localTarget.ok) run(["git", "tag", tag]);
+  const remoteTag = git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`]);
+  if (!remoteTag) {
+    runQuiet(["git", "fetch", "--quiet", "origin", "main"]);
+    if (!runOptional(["git", "merge-base", "--is-ancestor", revision, "origin/main"]).ok) {
+      throw new Error(
+        "promotion requires a candidate already pushed to origin/main; run prepare first",
+      );
+    }
+    await verifyLocalCandidate(revision);
+    const localTarget = runOptional(["git", "rev-parse", "--verify", `refs/tags/${tag}`]);
+    if (!localTarget.ok) run(["git", "tag", tag, revision]);
     if (git(["rev-list", "-n", "1", tag]) !== revision)
       throw new Error(`${tag} does not point at HEAD`);
     run(["git", "push", "origin", tag], { OPENPOST_SKIP_PUSH_CHECK: "1" });
-  } else {
-    const remoteTarget = remoteTag.stdout.trim().split(/\s+/)[0];
-    if (remoteTarget !== revision)
-      throw new Error(`remote ${tag} points at ${remoteTarget}, not ${revision}`);
+  } else if (remoteTag.split(/\s+/u)[0] !== revision) {
+    throw new Error(`remote ${tag} points at another revision`);
   }
 
-  const releaseRun = await waitForWorkflow("Build and Release", tag, revision);
-  run(["gh", "run", "watch", releaseRun.id, "--exit-status"]);
+  await watchRuns([
+    { id: await waitForTagRun("CI", tag, revision), label: `${tag} CI` },
+    { id: await waitForTagRun("Build and Release", tag, revision), label: `${tag} release` },
+  ]);
   const releaseURL = runCapture([
     "gh",
     "release",
@@ -376,6 +391,258 @@ async function promote(requestedTag) {
   await verifyProduction(tag, revision);
   console.log(`release promote: shipped ${tag}`);
   console.log(releaseURL);
+}
+
+// Local verification precedes every new candidate push. An existing immutable
+// tag resumes independently of newer main commits or canceled main CI runs.
+async function ship() {
+  const started = Date.now();
+  const phase = (message) => console.log(`\n[${formatDuration(Date.now() - started)}] ${message}`);
+  requireCommand("gh");
+  const branch = git(["branch", "--show-current"]);
+  if (branch !== "main") throw new Error(`refusing to release from ${JSON.stringify(branch)}`);
+  if (isDirty())
+    throw new Error(
+      "ship requires a clean worktree; commit the candidate before running local release checks",
+    );
+
+  runQuiet(["git", "fetch", "--quiet", "origin", "main", "--tags"]);
+  const revision = git(["rev-parse", "HEAD"]);
+  let tag = git(["tag", "--points-at", "HEAD", "--list", "v*", "--sort=-v:refname"])
+    .split("\n")
+    .find(Boolean);
+  const remoteTag = tag ? git(["ls-remote", "--tags", "origin", `refs/tags/${tag}`]) : "";
+  if (remoteTag && remoteTag.split(/\s+/u)[0] !== revision) {
+    throw new Error(`remote ${tag} points at another revision; ship a new commit instead`);
+  }
+
+  if (!remoteTag) {
+    const [ahead, behind] = git(["rev-list", "--left-right", "--count", "HEAD...origin/main"])
+      .split(/\s+/u)
+      .map(Number);
+    if (behind > 0) {
+      throw new Error(
+        `main is ${behind} commit(s) behind origin/main; integrate origin/main before selecting a new candidate`,
+      );
+    }
+    phase("Checking release inputs");
+    const latestTag = git(["tag", "--list", "v*", "--sort=-v:refname"]).split("\n").find(Boolean);
+    if (!latestTag) throw new Error("no v* release tags found");
+    run(["bun", "scripts/check-changelog.mjs"]);
+    checkReleaseContracts();
+    await checkReleaseMobileIdentity(publishedStableReleaseTag());
+    tag ??= runCapture(["bun", "scripts/next-release-version.mjs", latestTag]).trim();
+    runCapture(["bun", "scripts/release-notes.mjs", tag]);
+
+    phase(`Verifying ${revision.slice(0, 12)} locally before push`);
+    await verifyLocalCandidate(revision);
+    if (ahead > 0) {
+      phase(`Pushing ${ahead} verified commit(s) to main`);
+      run(["git", "push", "origin", `${revision}:refs/heads/main`]);
+    }
+    // Tag CI reuses a completed exact-SHA proof if one already exists. Otherwise
+    // it runs every required gate. A moving main run is never a prerequisite.
+    phase(`Tagging ${tag} at ${revision.slice(0, 12)}`);
+    if (!runOptional(["git", "rev-parse", "--verify", `refs/tags/${tag}`]).ok) {
+      run(["git", "tag", tag, revision]);
+    }
+    if (git(["rev-list", "-n", "1", tag]) !== revision)
+      throw new Error(`${tag} does not point at the verified revision`);
+    run(["git", "push", "origin", tag], { OPENPOST_SKIP_PUSH_CHECK: "1" });
+  } else {
+    phase(`Resuming immutable ${tag} at ${revision.slice(0, 12)}`);
+  }
+
+  const remoteStarted = Date.now();
+  const preparation = formatDuration(remoteStarted - started);
+  phase(`Preparation complete (${preparation}); remote CI, publication, and deployment start`);
+  await watchRuns([
+    { id: await waitForTagRun("CI", tag, revision), label: `${tag} CI` },
+    { id: await waitForTagRun("Build and Release", tag, revision), label: `${tag} release` },
+  ]);
+  phase("Verifying production");
+  await verifyProduction(tag, revision);
+  const releaseURL = runCapture([
+    "gh",
+    "release",
+    "view",
+    tag,
+    "--json",
+    "url",
+    "--jq",
+    ".url",
+  ]).trim();
+  console.log(
+    `\nrelease ship: ${tag} is live at ${revision}\nPreparation: ${preparation}. Remote CI, publication, and deployment observed: ${formatDuration(Date.now() - remoteStarted)}.\n${releaseURL}`,
+  );
+}
+
+async function waitForTagRun(workflow, tag, revision) {
+  for (let attempt = 0; attempt < 36; attempt += 1) {
+    const result = runOptional([
+      "gh",
+      "run",
+      "list",
+      "--workflow",
+      workflow,
+      "--branch",
+      tag,
+      "--limit",
+      "5",
+      "--json",
+      "databaseId,headSha",
+      "--jq",
+      `[.[] | select(.headSha == "${revision}") | .databaseId] | max // empty`,
+    ]);
+    const id = result.ok ? result.stdout.trim() : "";
+    if (/^[1-9][0-9]*$/u.test(id)) return id;
+    await Bun.sleep(5_000);
+  }
+  throw new Error(`${workflow} did not start for ${tag}`);
+}
+
+// Reports each finished job once and stops at the first failure with the
+// failing tests and their local reproduction commands. Remaining jobs keep
+// running in GitHub, so a rerun of ship resumes without losing their work.
+async function watchRuns(runs, { pollMs = 20_000 } = {}) {
+  const reported = new Set();
+  let heartbeat = Date.now();
+  for (;;) {
+    const states = runs.map((entry) => ({ ...entry, ...runState(entry.id) }));
+    for (const state of states) {
+      for (const job of state.jobs) {
+        if (job.status !== "completed" || reported.has(job.databaseId)) continue;
+        reported.add(job.databaseId);
+        if (job.conclusion === "skipped") continue;
+        const took =
+          job.startedAt && job.completedAt
+            ? Date.parse(job.completedAt) - Date.parse(job.startedAt)
+            : 0;
+        const mark = job.conclusion === "success" ? "✓" : "✗";
+        console.log(`${mark} ${state.label}: ${job.name} (${formatDuration(took)})`);
+        if (job.conclusion === "success" || job.name === "Release Candidate") {
+          continue;
+        }
+        printJobFailure(state.id, job);
+        throw new Error(
+          `${job.name} ${job.conclusion} in ${state.label}. Inspect the reported step and log. ` +
+            `For setup failure, timeout, or cancellation, recover the same candidate with gh run rerun ${state.id} --failed, then resume ship. ` +
+            "For a code failure, reproduce locally, fix and commit, then ship a new tag.",
+        );
+      }
+    }
+    if (states.every((state) => state.status === "completed")) {
+      const unfinished = states.find((state) => state.conclusion !== "success");
+      if (unfinished?.conclusion === "cancelled") {
+        throw new Error(
+          `${unfinished.label} was canceled: ${unfinished.url}. The run result alone does not identify the cause. Inspect its annotations, then rerun failed jobs for the same candidate.`,
+        );
+      }
+      if (unfinished) {
+        throw new Error(`${unfinished.label} finished ${unfinished.conclusion}: ${unfinished.url}`);
+      }
+      return;
+    }
+    if (Date.now() - heartbeat >= 5 * 60_000) {
+      heartbeat = Date.now();
+      const running = states.flatMap((state) =>
+        state.jobs.filter((job) => job.status !== "completed").map((job) => job.name),
+      );
+      console.log(`… ${running.length} job(s) running: ${running.slice(0, 6).join(", ")}`);
+    }
+    await Bun.sleep(pollMs);
+  }
+}
+
+function runState(id) {
+  const result = runOptional([
+    "gh",
+    "run",
+    "view",
+    String(id),
+    "--json",
+    "status,conclusion,url,jobs",
+  ]);
+  if (!result.ok)
+    throw new Error(
+      `could not read workflow run ${id}: ${result.stderr.trim()}. Resume watch or ship when GitHub is reachable; the remote run has not been canceled.`,
+    );
+  return JSON.parse(result.stdout);
+}
+
+function printJobFailure(runId, job) {
+  const interrupted = ["cancelled", "timed_out"].includes(job.conclusion);
+  const step = job.steps?.find((item) =>
+    ["failure", "cancelled", "timed_out"].includes(item.conclusion),
+  );
+  if (step) console.log(`Step: ${step.name} (${step.conclusion})`);
+  if (interrupted) {
+    const metadata = runOptional([
+      "gh",
+      "api",
+      `repos/${repositoryName()}/actions/jobs/${job.databaseId}`,
+      "--jq",
+      ".check_run_url",
+    ]);
+    if (metadata.ok && metadata.stdout.trim()) {
+      const annotations = runOptional([
+        "gh",
+        "api",
+        `${metadata.stdout.trim()}/annotations`,
+        "--jq",
+        '.[] | select(.annotation_level == "failure") | .message',
+      ]);
+      if (annotations.ok && annotations.stdout.trim())
+        console.log(`GitHub annotations:\n${annotations.stdout.trim()}`);
+    }
+    for (const item of job.steps ?? []) {
+      const elapsed = Date.parse(item.completedAt) - Date.parse(item.startedAt);
+      if (elapsed >= 60_000)
+        console.log(`  ${item.name}: ${formatDuration(elapsed)} (${item.conclusion})`);
+    }
+  }
+  const log = runOptional([
+    "gh",
+    "run",
+    "view",
+    String(runId),
+    "--job",
+    String(job.databaseId),
+    interrupted ? "--log" : "--log-failed",
+  ]);
+  if (!log.ok) console.log(`Job log unavailable: ${log.stderr.trim()}`);
+  console.log(`\n${formatFailureDigest(job.name, log.stdout, { url: job.url })}\n`);
+}
+
+function printFailures(runId) {
+  const state = runState(runId);
+  const failed = state.jobs.filter(
+    (job) =>
+      ["failure", "cancelled", "timed_out"].includes(job.conclusion) &&
+      job.name !== "Release Candidate",
+  );
+  if (failed.length === 0) {
+    console.log(`run ${runId} has no failed jobs (${state.status} ${state.conclusion ?? ""})`);
+    return;
+  }
+  for (const job of failed) printJobFailure(runId, job);
+}
+
+function repositoryName() {
+  return runCapture([
+    "gh",
+    "repo",
+    "view",
+    "--json",
+    "nameWithOwner",
+    "--jq",
+    ".nameWithOwner",
+  ]).trim();
+}
+
+function formatDuration(milliseconds) {
+  const seconds = Math.max(0, Math.round(milliseconds / 1_000));
+  return `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, "0")}s`;
 }
 
 async function status() {
@@ -404,6 +671,12 @@ async function status() {
   ]);
   console.log(`Candidate:  ${ci.ok && ci.stdout.trim() !== "{}" ? ci.stdout.trim() : "not found"}`);
   try {
+    const proof = findReleaseProofRun({ repository: repositoryName(), sha: revision });
+    console.log(`Proof:      ${proof ? `CI run ${proof}; ship skips the test gates` : "none yet"}`);
+  } catch (error) {
+    console.log(`Proof:      unavailable (${error.message})`);
+  }
+  try {
     const response = await fetch("https://app.openpo.st/api/v1/version", {
       signal: AbortSignal.timeout(10_000),
     });
@@ -423,33 +696,6 @@ async function status() {
       console.log(`Production: unavailable (${error.message})`);
     }
   }
-}
-
-async function waitForWorkflow(workflow, branch, revision) {
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    const result = runOptional([
-      "gh",
-      "run",
-      "list",
-      "--workflow",
-      workflow,
-      "--commit",
-      revision,
-      "--limit",
-      "20",
-      "--json",
-      "databaseId,attempt,headBranch,status,conclusion",
-    ]);
-    if (result.ok) {
-      const runs = JSON.parse(result.stdout || "[]");
-      const match = selectWorkflowRun(runs, { workflow, branch, revision });
-      if (match) {
-        return match;
-      }
-    }
-    await Bun.sleep(5_000);
-  }
-  throw new Error(`${workflow} did not appear for ${revision}`);
 }
 
 async function verifyProduction(version, revision) {
@@ -650,37 +896,6 @@ function run(argv, extraEnv = {}) {
   if (result.exitCode !== 0) throw new Error(`${argv[0]} exited with ${result.exitCode}`);
 }
 
-async function runParallel(commands) {
-  for (const argv of commands) console.log(`\n==> ${argv.join(" ")}`);
-  const processes = commands.map((argv) =>
-    Bun.spawn(argv, {
-      cwd: root,
-      env: releaseCommandEnvironment(),
-      stdin: "inherit",
-      stdout: "inherit",
-      stderr: "inherit",
-    }),
-  );
-  let reportFailure;
-  const firstFailure = new Promise((resolve) => {
-    reportFailure = resolve;
-  });
-  const statuses = processes.map((process, index) =>
-    process.exited.then((status) => {
-      if (status !== 0) reportFailure({ index, status });
-      return status;
-    }),
-  );
-  const outcome = await Promise.race([Promise.all(statuses).then(() => undefined), firstFailure]);
-  if (outcome) {
-    for (const [index, process] of processes.entries()) {
-      if (index !== outcome.index) process.kill();
-    }
-    await Promise.all(statuses);
-    throw new Error(`${commands[outcome.index][0]} exited with ${outcome.status}`);
-  }
-}
-
 function runCapture(argv, extraEnv = {}) {
   const result = Bun.spawnSync(argv, {
     cwd: root,
@@ -690,6 +905,11 @@ function runCapture(argv, extraEnv = {}) {
   });
   if (result.exitCode !== 0) throw new Error(`${argv[0]} exited with ${result.exitCode}`);
   return result.stdout.toString();
+}
+
+function runQuiet(argv) {
+  const result = runOptional(argv);
+  if (!result.ok) throw new Error(`${argv.join(" ")} failed: ${result.stderr.trim()}`);
 }
 
 function runOptional(argv) {

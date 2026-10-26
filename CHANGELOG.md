@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Self-hosted instance administrators can record certification evidence for Telegram bot publishing. Recording derived the expected contract from the managed-production flag, while readiness decisions and the certification context derived it from the provider's mandatory certification policy, so every Telegram, Pinterest and Google Business Profile evidence append on a self-hosted instance was rejected with "provider readiness evidence was rejected". Both paths now share one contract derivation.
+
+## [7.31.1] - 2026-10-26
+
+### Added
+
+- Instance administrators can download a full backup of a self-hosted instance and restore it from **Settings → Instance → Backup and restore**. The backup is one ZIP file with a consistent snapshot of the SQLite database and every uploaded media file. A restore is checked first, applied on the next start only after explicit confirmation, and keeps the replaced data as a restore point that can be deleted from the same page. Exports protect local media against concurrent deletion; interrupted restores recover from a durable journal without consuming their staged input. Backups need the default SQLite database, local media storage, and a single server process; the encryption key is not included and must match.
+
+### Fixed
+
+- Keep release image-index publication running after successful image builds when proven artifacts replace upstream build jobs.
+
 ## [7.30.4] - 2026-10-25
 
 ### Added
