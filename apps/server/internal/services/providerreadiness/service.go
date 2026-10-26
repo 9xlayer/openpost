@@ -160,22 +160,10 @@ func (s *Service) ResolveCertificationContext(
 	}
 	policyMode := account.Platform + "." + string(operation)
 	accountKind := AccountKind(account)
-	var contract CertificationContract
-	var err error
-	mandatoryCertification := requiresCertifiedOperation(account.Platform)
-	// Production publishing keeps the explicit evidence gate. Account-read
-	// operations only require recorded proof when their provider policy marks
-	// them mandatory, so normal Discord bot analytics is not certification-gated.
-	enforceCertification := (operation.IsPublish() && s.enforceCertification) || mandatoryCertification
 	if operation.IsPublish() {
 		policyMode = PublicationPolicyMode(account, capability, settings)
-		contract, err = PublicationContract(capability, operation, enforceCertification, accountKind, policyMode)
-	} else {
-		contract, err = OperationContract(account.Platform, operation, enforceCertification, accountKind)
 	}
-	if mandatoryCertification && !s.managedProduction {
-		allowNonProductionCertification(&contract)
-	}
+	contract, err := s.certificationContract(account.Platform, capability, operation, accountKind, policyMode)
 	if claimedPolicyMode = strings.TrimSpace(claimedPolicyMode); claimedPolicyMode != "" && claimedPolicyMode != policyMode {
 		return CertificationContext{}, errors.New("provider certification policy mode does not match the account settings")
 	}
@@ -277,11 +265,7 @@ func (s *Service) DecideAccountOperation(ctx context.Context, account models.Soc
 	configuration := s.resolveConfiguration(account.Platform, accountConfigurationRef(account))
 	accountKind := AccountKind(account)
 	policyMode := account.Platform + "." + string(operation)
-	mandatoryCertification := requiresCertifiedOperation(account.Platform)
-	contract, _ := OperationContract(account.Platform, operation, mandatoryCertification, accountKind)
-	if mandatoryCertification && (s == nil || !s.managedProduction) {
-		allowNonProductionCertification(&contract)
-	}
+	contract, _ := s.certificationContract(account.Platform, capabilities.Capability{}, operation, accountKind, policyMode)
 	accountReferenceHash, referenceErr := AccountReferenceHash(account)
 	request := DecisionRequest{
 		Implemented:                 s.isAccountOperationImplemented(account, operation),
@@ -333,17 +317,7 @@ func (s *Service) decidePublication(ctx context.Context, input PublicationDecisi
 		accountKind = "standard"
 	}
 	policyMode := normalizedPolicyToken(input.PolicyMode, input.Provider+".unspecified")
-	mandatoryCertification := requiresCertifiedOperation(input.Provider)
-	contract, _ := PublicationContract(
-		input.Capability,
-		input.Operation,
-		(s != nil && s.enforceCertification) || mandatoryCertification,
-		accountKind,
-		policyMode,
-	)
-	if mandatoryCertification && (s == nil || !s.managedProduction) {
-		allowNonProductionCertification(&contract)
-	}
+	contract, _ := s.certificationContract(input.Provider, input.Capability, input.Operation, accountKind, policyMode)
 	request := DecisionRequest{
 		Implemented:                 s.isPublicationImplemented(input.Provider, outputProfile),
 		Subject:                     s.subject(configuration, accountKind, outputProfile, input.Operation, policyMode),
@@ -424,6 +398,37 @@ func requiresCertifiedOperation(provider string) bool {
 	default:
 		return false
 	}
+}
+
+// certificationContract derives the contract that ResolveCertificationContext
+// hands to operators, append validation checks, and readiness decisions enforce.
+// Every path binds evidence to the same digest in every deployment mode.
+func (s *Service) certificationContract(
+	provider string,
+	capability capabilities.Capability,
+	operation Operation,
+	accountKind string,
+	policyMode string,
+) (CertificationContract, error) {
+	mandatoryCertification := requiresCertifiedOperation(provider)
+	// Production publishing keeps the explicit evidence gate. Account-read
+	// operations only require recorded proof when their provider policy marks
+	// them mandatory, so normal Discord bot analytics is not certification-gated.
+	enforceCertification := (operation.IsPublish() && s != nil && s.enforceCertification) || mandatoryCertification
+	var contract CertificationContract
+	var err error
+	if operation.IsPublish() {
+		contract, err = PublicationContract(capability, operation, enforceCertification, accountKind, policyMode)
+	} else {
+		contract, err = OperationContract(provider, operation, enforceCertification, accountKind)
+	}
+	if err != nil {
+		return CertificationContract{}, err
+	}
+	if mandatoryCertification && (s == nil || !s.managedProduction) {
+		allowNonProductionCertification(&contract)
+	}
+	return contract, nil
 }
 
 func allowNonProductionCertification(contract *CertificationContract) {
@@ -595,18 +600,10 @@ func (s *Service) validateCertificationContract(evidence CertificationEvidence) 
 	} else if evidence.Subject.OutputProfile != "" || !s.isImplemented(evidence.Subject.Provider) {
 		return errors.New("provider certification account read operation is not implemented")
 	}
-	var contract CertificationContract
-	var err error
-	if evidence.Subject.Operation.IsPublish() {
-		contract, err = PublicationContract(
-			capability, evidence.Subject.Operation, s.managedProduction,
-			evidence.Subject.AccountKind, evidence.Subject.PolicyMode,
-		)
-	} else {
-		contract, err = OperationContract(
-			evidence.Subject.Provider, evidence.Subject.Operation, s.managedProduction, evidence.Subject.AccountKind,
-		)
-	}
+	contract, err := s.certificationContract(
+		evidence.Subject.Provider, capability, evidence.Subject.Operation,
+		evidence.Subject.AccountKind, evidence.Subject.PolicyMode,
+	)
 	if err != nil {
 		return errors.New("provider certification contract is invalid")
 	}
