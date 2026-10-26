@@ -265,11 +265,7 @@ func (s *Service) DecideAccountOperation(ctx context.Context, account models.Soc
 	configuration := s.resolveConfiguration(account.Platform, accountConfigurationRef(account))
 	accountKind := AccountKind(account)
 	policyMode := account.Platform + "." + string(operation)
-	mandatoryCertification := requiresCertifiedOperation(account.Platform)
-	contract, _ := OperationContract(account.Platform, operation, mandatoryCertification, accountKind)
-	if mandatoryCertification && (s == nil || !s.managedProduction) {
-		allowNonProductionCertification(&contract)
-	}
+	contract, _ := s.certificationContract(account.Platform, capabilities.Capability{}, operation, accountKind, policyMode)
 	accountReferenceHash, referenceErr := AccountReferenceHash(account)
 	request := DecisionRequest{
 		Implemented:                 s.isAccountOperationImplemented(account, operation),
@@ -321,17 +317,7 @@ func (s *Service) decidePublication(ctx context.Context, input PublicationDecisi
 		accountKind = "standard"
 	}
 	policyMode := normalizedPolicyToken(input.PolicyMode, input.Provider+".unspecified")
-	mandatoryCertification := requiresCertifiedOperation(input.Provider)
-	contract, _ := PublicationContract(
-		input.Capability,
-		input.Operation,
-		(s != nil && s.enforceCertification) || mandatoryCertification,
-		accountKind,
-		policyMode,
-	)
-	if mandatoryCertification && (s == nil || !s.managedProduction) {
-		allowNonProductionCertification(&contract)
-	}
+	contract, _ := s.certificationContract(input.Provider, input.Capability, input.Operation, accountKind, policyMode)
 	request := DecisionRequest{
 		Implemented:                 s.isPublicationImplemented(input.Provider, outputProfile),
 		Subject:                     s.subject(configuration, accountKind, outputProfile, input.Operation, policyMode),
@@ -415,8 +401,8 @@ func requiresCertifiedOperation(provider string) bool {
 }
 
 // certificationContract derives the contract that ResolveCertificationContext
-// hands to operators and that validateCertificationContract checks on append,
-// so both sides bind evidence to the same digest in every deployment mode.
+// hands to operators, append validation checks, and readiness decisions enforce.
+// Every path binds evidence to the same digest in every deployment mode.
 func (s *Service) certificationContract(
 	provider string,
 	capability capabilities.Capability,
@@ -428,7 +414,7 @@ func (s *Service) certificationContract(
 	// Production publishing keeps the explicit evidence gate. Account-read
 	// operations only require recorded proof when their provider policy marks
 	// them mandatory, so normal Discord bot analytics is not certification-gated.
-	enforceCertification := (operation.IsPublish() && s.enforceCertification) || mandatoryCertification
+	enforceCertification := (operation.IsPublish() && s != nil && s.enforceCertification) || mandatoryCertification
 	var contract CertificationContract
 	var err error
 	if operation.IsPublish() {
@@ -439,7 +425,7 @@ func (s *Service) certificationContract(
 	if err != nil {
 		return CertificationContract{}, err
 	}
-	if mandatoryCertification && !s.managedProduction {
+	if mandatoryCertification && (s == nil || !s.managedProduction) {
 		allowNonProductionCertification(&contract)
 	}
 	return contract, nil
