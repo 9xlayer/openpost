@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humaecho"
 	"github.com/labstack/echo/v4"
+	"github.com/openpost/backend/internal/capabilities"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/posttext"
 	"github.com/openpost/backend/internal/services/publicationsource"
@@ -194,5 +195,94 @@ func TestPublicationMentionIdentitySurvivesLegacyEditsAndCountsInRevisions(t *te
 		response = send(http.MethodPost, "/api/v1/publications/"+publication.ID+"/validate", map[string]any{})
 		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 		require.NotContains(t, response.Body.String(), "mention_choice_invalid")
+	}
+}
+
+// TestPublicationMentionValidationSeparatesMetadataFromProviderSettings exercises
+// persisted thread overrides through the same HTTP validation used by scheduling.
+func TestPublicationMentionValidationSeparatesMetadataFromProviderSettings(t *testing.T) {
+	for _, provider := range []string{"bluesky", "mastodon", "linkedin", "x"} {
+		t.Run(provider, func(t *testing.T) {
+			db := createHandlerTestDB(t, (*models.WorkspaceMember)(nil), (*models.Job)(nil),
+				(*models.Publication)(nil), (*models.PublicationSegment)(nil), (*models.PublicationSegmentMedia)(nil),
+				(*models.Rendition)(nil), (*models.RenditionSegment)(nil), (*models.RenditionSegmentMedia)(nil), (*models.RenditionMedia)(nil))
+			_, err := db.NewInsert().Model(&models.WorkspaceMember{WorkspaceID: "workspace-1", UserID: "user-1", Role: models.WorkspaceRoleAdmin}).Exec(t.Context())
+			require.NoError(t, err)
+			seedHandlerAccount(t, db, "account", provider)
+			_, err = db.NewUpdate().Model((*models.SocialAccount)(nil)).Set("instance_url = ?", "https://mastodon.social").Where("id = ?", "account").Exec(t.Context())
+			require.NoError(t, err)
+			profile := models.ContentProfileThread
+			output := provider + ".thread"
+			if provider == "linkedin" {
+				profile, output = models.ContentProfileShortText, "linkedin.post"
+			}
+			e := echo.New()
+			api := humaecho.NewWithGroup(e, e.Group("/api/v1"), huma.DefaultConfig("Test", "1"))
+			NewPublicationHandler(db, testAuthenticator{}, nil).RegisterRoutes(api)
+			send := func(path string, body any) *httptest.ResponseRecorder {
+				data, err := json.Marshal(body)
+				require.NoError(t, err)
+				request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, path, bytes.NewReader(data))
+				request.Header.Set("Authorization", "Bearer web-token")
+				request.Header.Set("Content-Type", "application/json")
+				response := httptest.NewRecorder()
+				e.ServeHTTP(response, request)
+				return response
+			}
+			for _, mode := range []string{"cleared", "selected", "wrong network", "wrong authority"} {
+				if mode == "wrong authority" && provider != "mastodon" {
+					continue
+				}
+				mentions := &posttext.Mentions{Version: 1, Spans: []posttext.MentionSpan{}}
+				if mode != "cleared" {
+					target := posttext.MentionTarget{Provider: "bluesky", Kind: "person", ID: "did:plc:ewvi7nxzyoun6zhxrhs64oiz"}
+					if mode != "wrong network" {
+						switch provider {
+						case "mastodon":
+							target = posttext.MentionTarget{Provider: provider, Kind: "person", ID: "123", Handle: "alice", Authority: "https://mastodon.social"}
+							if mode == "wrong authority" {
+								target.Authority = "https://other.example"
+							}
+						case "linkedin":
+							target = posttext.MentionTarget{Provider: provider, Kind: "page", ID: "urn:li:organization:123"}
+						}
+					} else if provider == "bluesky" {
+						target = posttext.MentionTarget{Provider: "linkedin", Kind: "page", ID: "urn:li:organization:123"}
+					}
+					mentions.Spans = []posttext.MentionSpan{{Start: 3, End: 9, Text: "@alice", Target: target}}
+				}
+				body := "Hi @alice"
+				if mode == "cleared" {
+					body = "Thanks for the idea!"
+				}
+				destinationSegments := []RenditionSegmentInput{{
+					PublicationSegmentID: "first", BodyOverride: &body, Settings: map[string]any{"mentions": mentions},
+				}}
+				if profile == models.ContentProfileThread {
+					destinationSegments = append(destinationSegments, RenditionSegmentInput{PublicationSegmentID: "tail"})
+				}
+				response := send("/api/v1/publications", CreatePublicationBody{
+					WorkspaceID: "workspace-1", Title: "Mention validation", ContentProfile: models.ContentProfileThread,
+					Segments:   []PublicationSegmentInput{{ID: "first", Body: body}, {ID: "tail", Body: "Tail"}},
+					Renditions: []RenditionInput{{SocialAccountID: "account", Profile: profile, OutputProfile: output, Segments: destinationSegments}},
+				})
+				require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+				var publication PublicationResponse
+				require.NoError(t, json.Unmarshal(response.Body.Bytes(), &publication))
+				response = send("/api/v1/publications/"+publication.ID+"/validate", map[string]any{})
+				require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+				var result struct {
+					Issues []capabilities.ValidationIssue `json:"issues"`
+				}
+				require.NoError(t, json.Unmarshal(response.Body.Bytes(), &result))
+				invalidMention := false
+				for _, issue := range result.Issues {
+					require.False(t, issue.Code == "unsupported_setting" && issue.Field == "mentions", issue.Message)
+					invalidMention = invalidMention || issue.Code == "mention_choice_invalid"
+				}
+				wantInvalid := mode == "wrong network" || mode == "wrong authority" || mode == "selected" && provider == "x"
+				require.Equal(t, wantInvalid, invalidMention, "%s: %s", mode, response.Body.String())
+			}
+		})
 	}
 }
