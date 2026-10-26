@@ -33,7 +33,9 @@
     "test:backend:pkg": "go test -tags dev",
     "test:file": "bun test",
     "verify": "bun scripts/tasks.mjs verify",
-    "capture:mobile-screenshots": "bun scripts/capture-mobile-screenshots.mjs"
+    "capture:mobile-screenshots": "bun scripts/capture-mobile-screenshots.mjs",
+    "preflight": "bun scripts/tasks.mjs preflight",
+    "_test:public-build": "bun test ./tests/build/generate-agent-surfaces.test.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

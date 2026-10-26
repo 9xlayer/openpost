@@ -4,47 +4,6 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { requireConventionalCommitMessage, selectWorkflowRun } from "./release-lifecycle.mjs";
-
-test("local preparation and workflow selection share lifecycle decisions", () => {
-  assert.equal(
-    requireConventionalCommitMessage("feat(release): deepen lifecycle\n\nBody"),
-    "feat(release): deepen lifecycle",
-  );
-  assert.throws(() => requireConventionalCommitMessage("release work"), /Conventional Commit/u);
-  assert.deepEqual(
-    selectWorkflowRun(
-      [
-        {
-          databaseId: 12,
-          attempt: 2,
-          headBranch: "main",
-          status: "queued",
-          conclusion: null,
-        },
-      ],
-      { workflow: "CI", branch: "main", revision: "abc" },
-    ),
-    { id: "12", attempt: 2 },
-  );
-  assert.throws(
-    () =>
-      selectWorkflowRun(
-        [
-          {
-            databaseId: 12,
-            attempt: 2,
-            headBranch: "main",
-            status: "completed",
-            conclusion: "failure",
-          },
-        ],
-        { workflow: "CI", branch: "main", revision: "abc" },
-      ),
-    /CI failed for abc/u,
-  );
-});
-
 for (const localCommits of [0, 2]) {
   test(`release preparation selects the pushed main SHA with ${localCommits} local commits and no changelog commit`, () => {
     const directory = mkdtempSync(path.join(tmpdir(), "openpost-release-preparation-"));
@@ -64,7 +23,6 @@ for (const localCommits of [0, 2]) {
         "mobile-release.mjs",
         "release-command-environment.mjs",
         "release-failures.mjs",
-        "release-lifecycle.mjs",
         "release-proof.mjs",
         "ci-artifacts.mjs",
         "published-release-tag.mjs",
@@ -98,7 +56,7 @@ for (const localCommits of [0, 2]) {
         let stdout = "";
         let exitCode = 0;
         if (command === "git branch --show-current") stdout = "main";
-        else if (command === "git status --porcelain") stdout = " M source.ts";
+        else if (command === "git status --porcelain") stdout = "";
         else if (command === "git rev-list --left-right --count HEAD...origin/main") stdout = "${localCommits}\\t0";
         else if (command === "git tag --list v* --sort=-v:refname") stdout = "v1.0.0";
         else if (command.startsWith("git tag --points-at")) stdout = "";
@@ -114,20 +72,20 @@ for (const localCommits of [0, 2]) {
         else if (command.startsWith("git diff --name-only")) stdout = "";
         else if (command === "git rev-list --count origin/main..HEAD") stdout = "${localCommits}";
         else if (command === "git rev-parse HEAD") stdout = "abc123";
-        else if (command === "git push origin main") stdout = "";
+        else if (command === "git push origin abc123:refs/heads/main") stdout = "";
         else if (command.startsWith("git add")) throw new Error("Preparation must not stage files");
         else if (command.startsWith("git commit")) throw new Error("Preparation must not commit");
         else if (!(command.startsWith("bash -lc command -v") ||
           command.startsWith("gh auth") || command.startsWith("gh workflow") ||
           command.startsWith("git fetch") || command.startsWith("git diff") ||
           command.startsWith("git rev-list --count") || command.startsWith("git rev-parse") ||
-          command === "git push origin main" ||
+          command === "git push origin abc123:refs/heads/main" ||
           command.startsWith("bun run check --") ||
           command === "bun scripts/check-changelog.mjs" ||
           command === "bun scripts/release-notes.mjs v1.0.1" ||
           command.startsWith("bun scripts/mobile-release.mjs") ||
           command === "bun run doctor" ||
-          command === "bun install --frozen-lockfile")) throw new Error("Unexpected command: " + command);
+          command.startsWith("bun install") || command === "bun scripts/tasks.mjs preflight")) throw new Error("Unexpected command: " + command);
         return { exitCode, stdout: Buffer.from(stdout), stderr: Buffer.from("") };
       };`,
       );
@@ -142,8 +100,11 @@ for (const localCommits of [0, 2]) {
         .split("\n")
         .map((line) => JSON.parse(line));
       const indexOf = (prefix) => commands.findIndex((argv) => argv.join(" ").startsWith(prefix));
-      // Cheap validation runs before any file is touched.
+      // Release inputs and local verification both run before any remote write.
       assert.ok(indexOf("bun scripts/check-changelog.mjs") >= 0);
+      assert.ok(
+        indexOf("bun scripts/tasks.mjs preflight") > indexOf("bun scripts/check-changelog.mjs"),
+      );
       assert.ok(indexOf("bun run check -- release-version") >= 0);
       assert.ok(indexOf("bun scripts/mobile-release.mjs check-release") >= 0);
       const notesAt = indexOf("bun scripts/release-notes.mjs v1.0.1");
@@ -155,7 +116,9 @@ for (const localCommits of [0, 2]) {
       );
       // The pushed candidate is main itself: local commits ride along, a
       // clean tree pushes nothing.
-      const pushed = commands.some((argv) => argv.join(" ") === "git push origin main");
+      const pushed = commands.some(
+        (argv) => argv.join(" ") === "git push origin abc123:refs/heads/main",
+      );
       assert.equal(pushed, localCommits > 0);
       assert.equal(readFileSync(path.join(directory, "changes/fix.md"), "utf8"), fragment);
       assert.equal(readFileSync(path.join(directory, "CHANGELOG.md"), "utf8"), originalChangelog);

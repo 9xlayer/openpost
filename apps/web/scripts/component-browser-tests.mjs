@@ -18,12 +18,13 @@ if (index < 1 || index > count) throw new Error('Invalid Vitest shard');
 const require = createRequire(import.meta.url);
 const vitest = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs');
 
-function run(args) {
-	const result = spawnSync(process.execPath, [vitest, ...args], {
-		stdio: 'inherit'
+function run(executable, args) {
+	const result = spawnSync(executable, args, {
+		stdio: 'inherit',
+		env: { ...process.env, OPENPOST_PARAGLIDE_PRECOMPILED: '1' }
 	});
 	if (result.error) throw result.error;
-	if (result.status !== 0) throw new Error(`Vitest exited with status ${result.status}`);
+	if (result.status !== 0) throw new Error(`${executable} exited with status ${result.status}`);
 }
 
 function usesModuleMocks(file) {
@@ -44,8 +45,19 @@ function usesModuleMocks(file) {
 
 const directory = mkdtempSync(join(tmpdir(), 'openpost-component-tests-'));
 try {
+	// Each isolated Vite process otherwise compiles the same catalog again.
+	// Generate fresh output once, including for standalone CI shard invocations.
+	run('bun', ['run', 'generate:i18n']);
 	const inventoryPath = join(directory, 'files.json');
-	run(['list', '--project', 'client', '--filesOnly', '--json', inventoryPath]);
+	run(process.execPath, [
+		vitest,
+		'list',
+		'--project',
+		'client',
+		'--filesOnly',
+		'--json',
+		inventoryPath
+	]);
 	const inventory = z
 		.array(z.object({ file: z.string().min(1) }))
 		.min(1)
@@ -65,7 +77,7 @@ try {
 	);
 	for (const group of [...mocked.map((file) => [file]), ...(plain.length ? [plain] : [])]) {
 		console.log('Component browser process:', group);
-		run(['run', '--project', 'client', ...group]);
+		run(process.execPath, [vitest, 'run', '--project', 'client', ...group]);
 	}
 } finally {
 	rmSync(directory, { recursive: true, force: true });

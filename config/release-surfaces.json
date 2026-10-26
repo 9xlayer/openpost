@@ -57,7 +57,8 @@
         "deploy/",
         "patches/",
         "scripts/",
-        "tests/helpers/"
+        "tests/helpers/",
+        "tests/build/"
       ],
       "paths": [
         ".dockerignore",

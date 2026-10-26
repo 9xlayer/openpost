@@ -126,6 +126,16 @@ apps/marketing/static/og/
 
 # Local agent scratch evidence (audit screenshots, PDFs, dumps); never shipped.
 /tmp/
+# Component-test review captures, including older explicit screenshot names.
+/apps/web/src/**/__screenshots__/
+/apps/web/src/lib/video-editor/components/acf001-*.png
+/apps/web/src/lib/video-editor/components/eld001-*.png
+/apps/web/src/lib/video-editor/components/mn001-*.png
+/apps/web/src/lib/video-editor/components/mt002-*.png
+/apps/web/src/lib/video-editor/components/mu001-*.png
+/apps/web/src/lib/video-editor/components/tge001-*.png
+/apps/web/src/lib/video-editor/components/vkp001-*.png
+/apps/web/src/lib/video-editor/components/vlt001-*.png
 # Temporary asset sync state; recovered by scripts/sync-assets.mjs
 /.sync-assets.lock/
 /apps/web/static/.assets.staged-*/

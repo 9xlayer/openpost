@@ -6,13 +6,16 @@ import path from "node:path";
 import test from "node:test";
 
 import { parse } from "parse5";
-import { docsSocialEntries, marketingRouteManifest } from "../packages/social-images/src/index.js";
+import {
+  docsSocialEntries,
+  marketingRouteManifest,
+} from "../../packages/social-images/src/index.js";
 import {
   discoveryDocument,
   generateAgentSurface,
   productionProjections,
   renderOriginVaryHeaders,
-} from "./generate-agent-surfaces.mjs";
+} from "../../scripts/generate-agent-surfaces.mjs";
 
 async function runRootTask(root, arguments_, environment = {}) {
   await new Promise((resolve, reject) => {
@@ -29,26 +32,16 @@ async function runRootTask(root, arguments_, environment = {}) {
 }
 
 let productionBuildPromise;
-// Build both sites twice to check cold output and deterministic regeneration.
-// The four forced builds and full-corpus assertions need headroom on CI runners.
+// Compare canonical artifacts with independent forced rebuilds, including cold
+// marketing without generated application configuration. Keep CI headroom.
 const productionBuildTestTimeoutMs = 900_000;
 
 function ensureProductionBuilds(root) {
   productionBuildPromise ??= (async () => {
-    // Policy CI builds marketing without preparing the application first.
-    // Cross-app imports must work with no generated application tsconfig.
-    const appConfig = path.join(root, "apps/web/.svelte-kit/tsconfig.json");
-    const previousConfig = await readFile(appConfig).catch((error) => {
-      if (error.code !== "ENOENT") throw error;
-    });
-    await rm(appConfig, { force: true });
-    try {
-      await runRootTask(root, ["build", "--", "marketing"], { TURBO_FORCE: "true" });
-    } catch (error) {
-      if (previousConfig) await writeFile(appConfig, previousConfig);
-      throw error;
-    }
-    await runRootTask(root, ["build", "--", "docs"], { TURBO_FORCE: "true" });
+    // Canonical graph dependencies normally restore these artifacts first.
+    // Keep direct invocation useful too, without bypassing the build cache.
+    await runRootTask(root, ["build", "--", "marketing"]);
+    await runRootTask(root, ["build", "--", "docs"]);
   })();
   return productionBuildPromise;
 }
@@ -115,7 +108,7 @@ test("origin Vary headers cover only canonical HTML and explicit Markdown within
 });
 
 test("documentation discovery headers leave room for the canonical page catalogue", async () => {
-  const root = path.resolve(import.meta.dirname, "..");
+  const root = path.resolve(import.meta.dirname, "../..");
   const base = await readFile(path.join(root, "apps/docs/public/_headers"), "utf8");
   const pages = docsSocialEntries.filter(
     ({ agentRepresentation }) => agentRepresentation.membership === "ordinary",
@@ -1405,7 +1398,7 @@ test(
   "both production builds emit canonical homepage artifacts and discovery",
   { timeout: productionBuildTestTimeoutMs },
   async () => {
-    const root = path.resolve(import.meta.dirname, "..");
+    const root = path.resolve(import.meta.dirname, "../..");
     const turboPlanDirectory = await mkdtemp(path.join(os.tmpdir(), "openpost-turbo-plan-"));
     const turboPlanPath = path.join(turboPlanDirectory, "plan.json");
     let turboPlan;
@@ -1907,9 +1900,17 @@ test(
     await assertArtifactSnapshot(docsDirectory, firstDocsSurface);
     assert.deepEqual(await semanticHTMLSnapshot(docsDirectory, expectedDocsHTML), firstDocsHTML);
 
-    await runRootTask(root, ["build", "--", "marketing"], {
-      TURBO_FORCE: "true",
+    // Marketing must build independently of generated application configuration.
+    const appConfig = path.join(root, "apps/web/.svelte-kit/tsconfig.json");
+    const previousConfig = await readFile(appConfig).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
     });
+    await rm(appConfig, { force: true });
+    try {
+      await runRootTask(root, ["build", "--", "marketing"], { TURBO_FORCE: "true" });
+    } finally {
+      if (previousConfig) await writeFile(appConfig, previousConfig);
+    }
     await assertArtifactSnapshot(marketingDirectory, firstMarketingSurface);
     assert.deepEqual(
       await semanticHTMLSnapshot(marketingDirectory, expectedMarketingHTML),

@@ -230,7 +230,7 @@ jobs:
     name: Backend tests (${{ matrix.shard }}/4)
     needs: plan
     if: needs.plan.outputs.backend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
       fail-fast: false
@@ -252,8 +252,9 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: Install recording analysis tools
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - name: Verify or install recording analysis tools
+        timeout-minutes: 5
+        run: bash scripts/ci-setup-tools.sh media
       - env:
           OPENPOST_GO_COVERAGE_FILE: coverage.out
           OPENPOST_GO_TEST_RACE: "1"
@@ -381,7 +382,7 @@ jobs:
     name: Frontend tests (${{ matrix.shard }})
     needs: plan
     if: needs.plan.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -403,7 +404,11 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
+      - name: Install pinned Chromium and system dependencies
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "60000"
+        run: bunx --no-install playwright install --with-deps chromium
       - if: matrix.shard != 'packages'
         working-directory: apps/web
         env:
@@ -568,7 +573,7 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6]
     needs: [plan, frontend-build, marketing-build]
     if: needs.plan.outputs.application == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -606,8 +611,14 @@ jobs:
           go-version-file: apps/server/go.mod
           cache-dependency-path: apps/server/go.sum
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
-      - run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - name: Install pinned Chromium and system dependencies
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "60000"
+        run: bunx --no-install playwright install --with-deps chromium
+      - name: Verify or install media fixture tools
+        timeout-minutes: 5
+        run: bash scripts/ci-setup-tools.sh media
       - name: Test the canonical application artifact
         env:
           OPENPOST_E2E_PREBUILT: "1"
@@ -629,7 +640,7 @@ jobs:
     name: Marketing browser suite
     needs: [plan, marketing-build]
     if: needs.plan.outputs.marketing == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -652,9 +663,14 @@ jobs:
           name: ${{ steps.marketing-artifact.outputs.name }}
           path: apps/marketing/dist
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
-      - name: Install media conversion fixture tools
-        run: sudo apt-get update && sudo apt-get install --yes ffmpeg
+      - name: Install pinned Chromium and system dependencies
+        timeout-minutes: 5
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "60000"
+        run: bunx --no-install playwright install --with-deps chromium
+      - name: Verify or install media conversion fixture tools
+        timeout-minutes: 5
+        run: bash scripts/ci-setup-tools.sh media
       - env:
           OPENPOST_E2E_PREBUILT: "1"
         run: bun run test -- e2e
