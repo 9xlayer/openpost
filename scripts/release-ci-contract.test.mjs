@@ -281,6 +281,11 @@ test("container candidates run and publish on native amd64 and arm64 runners", (
 
   const index = jobs["image-index"];
   assert.deepEqual(index.needs, ["plan", "image"]);
+  // A skipped frontend build or relay must not suppress the index after
+  // successful image builds. An explicit status check overrides GitHub's
+  // implicit success() across the dependency graph.
+  assert.match(index.if, /(?:always|cancelled)\(\)/u);
+  assert.match(index.if, /needs\.image\.result == 'success'/u);
   const resolve = workflowStepScript(
     ci,
     "image-index",

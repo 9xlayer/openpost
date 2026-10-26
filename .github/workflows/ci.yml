@@ -1138,7 +1138,7 @@ jobs:
   image-index:
     name: Production image index
     needs: [plan, image]
-    if: needs.plan.outputs.image == 'true' && github.event_name == 'push'
+    if: ${{ !cancelled() && needs.plan.outputs.image == 'true' && needs.image.result == 'success' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     permissions:
       actions: read
