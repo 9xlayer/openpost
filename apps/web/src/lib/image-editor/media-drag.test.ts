@@ -36,6 +36,7 @@ describe('OpenPost Image Editor media drag payload', () => {
 		writeImageEditorMediaDrag(dataTransfer, {
 			id: 'media-1',
 			name: 'Launch image',
+			mime_type: 'image/gif',
 			width: 1600,
 			height: 900
 		});
@@ -46,6 +47,7 @@ describe('OpenPost Image Editor media drag payload', () => {
 		expect(readImageEditorMediaDrag(dataTransfer)).toEqual({
 			id: 'media-1',
 			name: 'Launch image',
+			mime_type: 'image/gif',
 			width: 1600,
 			height: 900
 		});

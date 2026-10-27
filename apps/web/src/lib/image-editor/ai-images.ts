@@ -49,6 +49,7 @@ export async function prepareImageAIRequest(
 	if (settings.operation === 'edit') {
 		const layer = editor.selectedLayers.length === 1 ? editor.selectedLayers[0] : undefined;
 		if (!layer?.image || editor.isLayerLocked(layer.id)) throw new Error(m.image_ai_select_layer());
+		if (layer.image.animation) throw new Error(m.image_editor_animation_still_only());
 		request.source_media_id = layer.image.media_id;
 		request.target_layer_id = layer.id;
 		request.target_fingerprint = await imageAITargetFingerprint(document, page, layer);
@@ -132,6 +133,7 @@ export async function applyImageAIResult(
 				image: {
 					...layer.image!,
 					media_id: media.id,
+					animation: undefined,
 					source_width: media.width,
 					source_height: media.height,
 					intrinsic_pending: false

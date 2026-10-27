@@ -74,7 +74,23 @@ describe('OpenPost Image Editor portable projects', () => {
 				source_height: 2,
 				fit: 'cover',
 				crop: { x: 0, y: 0, width: 1, height: 1 },
-				adjustments: defaultImageAdjustments()
+				adjustments: defaultImageAdjustments(),
+				lens_effect: {
+					kind: 'prism',
+					amount: 0.4,
+					threshold: 0.8,
+					size: 0.2,
+					angle: 15,
+					blades: 6
+				},
+				animation: {
+					source_frame_count: 3,
+					repeat: 0,
+					frames: [
+						{ source_index: 2, duration_ms: 200 },
+						{ source_index: 0, duration_ms: 100 }
+					]
+				}
 			}
 		});
 		expect(imageEditorPortableMediaIDs(document)).toEqual(['media-source']);
@@ -90,6 +106,19 @@ describe('OpenPost Image Editor portable projects', () => {
 		);
 
 		expect(parsed.document.title).toBe('Launch / card');
+		expect(parsed.document.pages[0].layers[0].image?.lens_effect).toMatchObject({
+			kind: 'prism',
+			amount: 0.4,
+			angle: 15
+		});
+		expect(parsed.document.pages[0].layers[0].image?.animation).toEqual({
+			source_frame_count: 3,
+			repeat: 0,
+			frames: [
+				{ source_index: 2, duration_ms: 200 },
+				{ source_index: 0, duration_ms: 100 }
+			]
+		});
 		expect(parsed.document.brand_kit_id).toBeUndefined();
 		expect(parsed.media).toHaveLength(1);
 		expect(parsed.media[0].id).toBe('media-source');

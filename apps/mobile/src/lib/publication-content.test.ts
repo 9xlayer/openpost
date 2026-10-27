@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { publicationContentUpdate } from "./publication-content";
+import { publicationContentUpdate, publicationReadinessSegments } from "./publication-content";
 
 const first = {
   id: "first",
@@ -21,6 +21,23 @@ const reply = {
   media: [{ id: "reply-photo", alt_text: "Reply photo" }],
 };
 const publication = { source_text: "Before", segments: [first, reply], media: first.media };
+
+test("readiness checks unsaved later thread edits and explicit empty text with retained media", () => {
+  for (const body of ["Short corrected reply", ""]) {
+    const draft = {
+      ...publication,
+      segments: [first, { ...reply, body: "x".repeat(400) }],
+    };
+    expect(
+      publicationReadinessSegments(draft, "Edited first post", ["new-photo"], {
+        reply: { body },
+      }),
+    ).toEqual([
+      { content: "Edited first post", mediaIds: ["new-photo"] },
+      { content: body, mediaIds: ["reply-photo"] },
+    ]);
+  }
+});
 
 test("saves added photos on the first canonical segment and preserves the rest of the thread", () => {
   const update = publicationContentUpdate(publication, "Edited", ["photo", "new-photo"]);

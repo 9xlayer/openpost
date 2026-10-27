@@ -190,3 +190,43 @@ test("capability checks use selected copies and saved independent destination me
     { content: "First caption\n\nContinuation", mediaIds: ["fitted", "tail-image"] },
   ]);
 });
+
+test("readiness projects saved mention snapshots for inherited and joined destination text", async () => {
+  const { publicationReadinessSegments } = await import("./publication-content");
+  const { renditionReadinessSegments } = await import("./publication-image-choices");
+  const target = {
+    provider: "workspace" as const,
+    kind: "profile" as const,
+    id: "saved",
+    profiles: [{ provider: "x", text: "@guest_x" }],
+  };
+  const publication = {
+    source_text: "Hi @guest",
+    segments: [
+      {
+        ...sources[0],
+        body: "Hi @guest",
+        settings: {
+          mentions: { version: 1 as const, spans: [{ start: 3, end: 9, text: "@guest", target }] },
+        },
+      },
+      sources[1],
+    ],
+    renditions: [],
+  };
+  const canonical = publicationReadinessSegments(publication, "Hi @guest", []);
+  expect(
+    renditionReadinessSegments(
+      publication,
+      { social_account_id: "account" },
+      canonical,
+      "preserve",
+      { platform: "x" },
+    ).map((segment) => segment.content),
+  ).toEqual(["Hi @guest_x", "Continuation"]);
+  expect(
+    renditionReadinessSegments(publication, { social_account_id: "account" }, canonical, "join", {
+      platform: "x",
+    }).map((segment) => segment.content),
+  ).toEqual(["Hi @guest_x\n\nContinuation"]);
+});

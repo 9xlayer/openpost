@@ -791,6 +791,41 @@ func TestValidateFlagsUnsupportedProviderSettings(t *testing.T) {
 	requireIssueCode(t, issues, "unsupported_setting")
 }
 
+// TestValidateOutputAcceptsAuthoredMentionsOutsideProviderCatalog guards the
+// shared authored-metadata boundary for every provider and output format.
+func TestValidateOutputAcceptsAuthoredMentionsOutsideProviderCatalog(t *testing.T) {
+	t.Parallel()
+
+	for _, capability := range All() {
+		t.Run(capability.Provider+"/"+capability.Profile+"/cleared", func(t *testing.T) {
+			issues := ValidateOutput(capability.Provider, capability.OutputProfile, capability.Profile,
+				"Thanks for the idea!", "A title", "", nil,
+				map[string]any{"mentions": map[string]any{"version": 1, "spans": []any{}}})
+			for _, issue := range issues {
+				require.False(t, issue.Code == "unsupported_setting" && issue.Field == "mentions", issue.Message)
+			}
+		})
+	}
+	for _, test := range []struct {
+		provider string
+		target   map[string]any
+	}{
+		{ProviderBluesky, map[string]any{"provider": "bluesky", "kind": "person", "id": "did:plc:ewvi7nxzyoun6zhxrhs64oiz"}},
+		{ProviderMastodon, map[string]any{"provider": "mastodon", "kind": "person", "id": "123", "handle": "alice", "authority": "https://mastodon.social"}},
+		{ProviderLinkedIn, map[string]any{"provider": "linkedin", "kind": "page", "id": "urn:li:organization:123"}},
+	} {
+		t.Run(test.provider+"/selected", func(t *testing.T) {
+			settings := map[string]any{"mentions": map[string]any{
+				"version": 1,
+				"spans":   []any{map[string]any{"start": 8, "end": 14, "text": "@alice", "target": test.target}},
+			}}
+			issues := ValidateOutput(test.provider, test.provider+".post", models.ContentProfileShortText,
+				"🚀 Hi @alice", "", "", nil, settings)
+			requireNoIssueCode(t, issues, "unsupported_setting")
+		})
+	}
+}
+
 func TestValidateRequiresExplicitConsentWithoutGenericQuotaWarnings(t *testing.T) {
 	tiktokIssues := Validate(ProviderTikTok, models.ContentProfileShortVideo, "caption", "", "", []MediaItem{{
 		ID:              "video-1",
@@ -897,6 +932,7 @@ func requireIssueForField(t *testing.T, issues []ValidationIssue, code, field st
 	require.Failf(t, "missing validation issue", "code %q for field %q not found in %#v", code, field, issues)
 }
 
+// requireNoIssueCode fails the test when any validation issue uses the given code.
 func requireNoIssueCode(t *testing.T, issues []ValidationIssue, code string) {
 	t.Helper()
 	for _, issue := range issues {

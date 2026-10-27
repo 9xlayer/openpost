@@ -60,6 +60,30 @@ describe('OpenPost Image Editor command registry', () => {
 		expect(imageEditorShortcutLabel(save, '⌘')).toBe('⌘ S');
 	});
 
+	it.each(['и', 'β', 'لا'])('selects the brush using its physical key under %s input', (value) => {
+		expect(imageEditorCommandForKeyboardEvent({ ...key(value), code: 'KeyB' })).toBe('tool_pencil');
+	});
+
+	it('keeps Latin layouts, browser modifiers, dead keys, and composition character-based', () => {
+		expect(imageEditorCommandForKeyboardEvent({ ...key('v'), code: 'KeyB' })).toBe('tool_select');
+		for (const modifiers of [
+			{ ctrlKey: true },
+			{ metaKey: true },
+			{ altKey: true },
+			{ isComposing: true }
+		]) {
+			expect(
+				imageEditorCommandForKeyboardEvent({ ...key('и', modifiers), code: 'KeyB' })
+			).toBeNull();
+		}
+		expect(imageEditorCommandForKeyboardEvent({ ...key('Dead'), code: 'KeyB' })).toBeNull();
+		expect(imageEditorCommandForKeyboardEvent({ ...key(','), code: 'KeyW' })).toBeNull();
+		expect(imageEditorCommandForKeyboardEvent({ ...key('é'), code: 'KeyB' })).toBeNull();
+		expect(
+			imageEditorCommandForKeyboardEvent({ ...key('д', { shiftKey: true }), code: 'KeyL' })
+		).toBe('tool_polygonal_lasso');
+	});
+
 	it('never dispatches commands while an IME composition is active', () => {
 		expect(imageEditorCommandForKeyboardEvent(key('t', { isComposing: true }))).toBeNull();
 		expect(

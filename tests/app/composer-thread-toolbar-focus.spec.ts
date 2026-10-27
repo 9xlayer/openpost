@@ -26,6 +26,30 @@ for (const width of [1280, 390, 320]) {
         if (scheme === "dark") await expect(page.locator("html")).toHaveClass(/dark/);
         else await expect(page.locator("html")).not.toHaveClass(/dark/);
         const editors = page.getByRole("textbox", { name: "Post text", exact: true });
+        const firstEditor = editors.first();
+        const firstAction = page.getByRole("button", { name: "Add media", exact: true }).first();
+        await firstAction.focus();
+        const decoration = () =>
+          firstEditor.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return [style.boxShadow, style.outlineStyle, style.outlineWidth];
+          });
+        const restingDecoration = await decoration();
+        if (width < 768) await firstEditor.tap();
+        else await firstEditor.click();
+        await expect(firstEditor).toBeFocused();
+        await page.screenshot({ path: testInfo.outputPath("editor-pointer-focus.png") });
+        expect(await decoration()).toEqual(restingDecoration);
+        await page.keyboard.type("Pointer editing");
+        expect(await decoration()).toEqual(restingDecoration);
+        await firstAction.focus();
+        for (let step = 0; step < 8; step++) {
+          await page.keyboard.press("Shift+Tab");
+          if (await firstEditor.evaluate((element) => document.activeElement === element)) break;
+        }
+        await expect(firstEditor).toBeFocused();
+        expect(await decoration()).not.toEqual(restingDecoration);
+        await page.screenshot({ path: testInfo.outputPath("editor-keyboard-focus.png") });
         await editors.first().fill("Audit first post.");
         await page.getByRole("button", { name: "Add post", exact: true }).click();
         await editors.nth(1).fill("Audit second post.");

@@ -96,9 +96,32 @@ func singleMentionProjection(value posttext.Value) (string, *posttext.Projection
 
 // DeliveryMentions is the shared validation and provider-write projection.
 func DeliveryMentions(canonical []models.PublicationSegment, sourceID, overridesJSON string, wholeOverride *string, settings map[string]any, joined bool, delivered, provider, authority string) (*posttext.Projection, error) {
+	_, projection, err := DeliveryText(canonical, sourceID, overridesJSON, wholeOverride, settings, joined, delivered, provider, authority)
+	return projection, err
+}
+
+// DeliveryText keeps stored authorship intact while projecting reusable mention
+// snapshots for reads, validation, text cards and the provider-write plan.
+func DeliveryText(canonical []models.PublicationSegment, sourceID, overridesJSON string, wholeOverride *string, settings map[string]any, joined bool, delivered, provider, authority string) (string, *posttext.Projection, error) {
 	body, projection, err := ResolveMentions(canonical, sourceID, overridesJSON, wholeOverride, settings, joined)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	return posttext.ForDelivery(body, delivered, provider, authority, projection)
+	projected, projection, err := posttext.ForDestination(body, provider, authority, projection)
+	if err != nil {
+		return "", nil, err
+	}
+	if projected != body {
+		switch {
+		case strings.HasPrefix(delivered, body):
+			delivered = projected + strings.TrimPrefix(delivered, body)
+		case strings.HasPrefix(delivered, strings.TrimSpace(body)):
+			delivered = strings.TrimSpace(projected) + strings.TrimPrefix(delivered, strings.TrimSpace(body))
+		case strings.HasPrefix(delivered, projected), strings.HasPrefix(delivered, strings.TrimSpace(projected)):
+		default:
+			return "", nil, posttext.ErrInvalid
+		}
+	}
+	projection, err = posttext.ForDelivery(projected, delivered, provider, authority, projection)
+	return delivered, projection, err
 }

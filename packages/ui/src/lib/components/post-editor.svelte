@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount, mount, unmount, untrack } from 'svelte';
 	import { Editor } from '@tiptap/core';
+	import { shift } from '@floating-ui/dom';
+	import { IsUsingKeyboard } from 'bits-ui';
 	import Document from '@tiptap/extension-document';
 	import Paragraph from '@tiptap/extension-paragraph';
 	import Text from '@tiptap/extension-text';
@@ -30,7 +32,9 @@
 		class: className = '',
 		style = '',
 		onpaste,
-		onfocus
+		onfocus,
+		minimumQueryLength = 2,
+		oncreate
 	}: {
 		id: string;
 		value: PostTextValue;
@@ -44,6 +48,8 @@
 		style?: string;
 		onpaste?: (event: ClipboardEvent) => void;
 		onfocus?: () => void;
+		minimumQueryLength?: number;
+		oncreate?: (query: string, complete: (candidate: MentionCandidate) => void) => void;
 	} = $props();
 	const messages = getUiMessages();
 	const componentID = $props.id();
@@ -51,6 +57,7 @@
 	const suggestionKey = new PluginKey(popupID);
 	let element: HTMLDivElement;
 	let editor = $state<Editor>();
+	const keyboard = new IsUsingKeyboard();
 	let pending: AbortController | undefined;
 	let editorError = $state('');
 	let currentQuery = '';
@@ -60,12 +67,33 @@
 		selected: 0,
 		error: '',
 		loading: false,
+		hint: '',
+		create: undefined as (() => void) | undefined,
 		choose,
 		retry: () => {
 			void retry();
 		}
 	});
 	function choose(index: number) {
+		if (index === list.items.length && oncreate && currentSuggestion && editor) {
+			const instance = editor;
+			const range = { ...currentSuggestion.range };
+			const document = instance.state.doc;
+			const query = currentSuggestion.query;
+			exitSuggestion(instance.view, suggestionKey);
+			oncreate(query, (candidate) => {
+				if (instance.isDestroyed || !instance.state.doc.eq(document)) return;
+				if (postTextValue(instance.getJSON()).mentions.length >= 50) {
+					editorError = messages.editor_mention_limit();
+					return;
+				}
+				instance.chain().focus().insertContentAt(range, [
+					{ type: 'mention', attrs: { id: candidate.target.id, label: candidate.label, identity: candidate.target } },
+					{ type: 'text', text: ' ' }
+				]).run();
+			});
+			return;
+		}
 		const item = list.items[index];
 		if (postTextValue(editor!.getJSON()).mentions.length >= 50) {
 			list.error = messages.editor_mention_limit();
@@ -81,7 +109,8 @@
 		currentQuery = query;
 		list.loading = true;
 		list.error = '';
-		if (!lookup || query.trim().length < 2) {
+		list.hint = query.trim().length < minimumQueryLength ? messages.editor_search_characters() : '';
+		if (!lookup || query.trim().length < minimumQueryLength) {
 			list.loading = false;
 			return [];
 		}
@@ -125,6 +154,7 @@
 	}
 	function updateSuggestion(props: SuggestionProps<MentionCandidate>) {
 		currentSuggestion = props;
+		list.create = oncreate ? () => choose(list.items.length) : undefined;
 		list.items = props.items;
 		list.selected = 0;
 		editor?.view.dom.setAttribute('aria-controls', popupID);
@@ -132,7 +162,7 @@
 	}
 	function updateActive() {
 		const dom = editor?.view.dom;
-		if (list.items[list.selected])
+		if (list.items[list.selected] || (list.selected === list.items.length && list.create))
 			dom?.setAttribute('aria-activedescendant', `${popupID}-${list.selected}`);
 		else dom?.removeAttribute('aria-activedescendant');
 	}
@@ -161,6 +191,7 @@
 			metadata.spans.some(
 				(span) =>
 					mentionScope &&
+					span.target.provider !== 'workspace' &&
 					(span.target.provider !== mentionScope.provider ||
 						(span.target.provider === 'mastodon' &&
 							span.target.authority?.replace(/\/$/, '').toLowerCase() !==
@@ -200,6 +231,7 @@
 			],
 			suggestion: {
 				pluginKey: suggestionKey,
+				floatingUi: { middleware: [shift({ padding: 8 })] },
 				allow: () => !!lookup && !disabled,
 				items: ({ query }) => search(query),
 				render: () => {
@@ -224,17 +256,17 @@
 								return true;
 							}
 							if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-								const size = list.items.length;
-								if (size)
+								const size = list.items.length + (oncreate ? 1 : 0);
+								if (!size) return false;
 									list.selected =
-										(list.selected + (event.key === 'ArrowDown' ? 1 : -1) + size) % size;
+									(list.selected + (event.key === 'ArrowDown' ? 1 : -1) + size) % size;
 								updateActive();
 								document
 									.getElementById(`${popupID}-${list.selected}`)
 									?.scrollIntoView({ block: 'nearest' });
 								return true;
 							}
-							if ((event.key === 'Enter' || event.key === 'Tab') && list.items.length) {
+							if ((event.key === 'Enter' || event.key === 'Tab') && (list.items.length || oncreate)) {
 								choose(list.selected);
 								return true;
 							}
@@ -278,6 +310,10 @@
 					'aria-autocomplete': 'list'
 				},
 				handleDOMEvents: {
+					pointerdown: (view) => {
+						view.dom.removeAttribute('data-keyboard-focus');
+						return false;
+					},
 					copy: (_view, event) => copySelection(event),
 					cut: (_view, event) => copySelection(event, true)
 				},
@@ -311,12 +347,17 @@
 						instance.commands.setHardBreak();
 						return true;
 					}
-					if ((event.metaKey || event.ctrlKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase()))
+					const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+					if ((mac ? event.metaKey : event.ctrlKey) && ['b', 'i', 'u'].includes(event.key.toLowerCase()))
 						return true;
 					return false;
 				}
 			},
-			onFocus: () => onfocus?.(),
+			onFocus: ({ editor }) => {
+				if (keyboard.current) editor.view.dom.setAttribute('data-keyboard-focus', 'true');
+				onfocus?.();
+			},
+			onBlur: ({ editor }) => editor.view.dom.removeAttribute('data-keyboard-focus'),
 			onUpdate: ({ editor }) => {
 				const next = postTextValue(editor.getJSON());
 				onchange(
@@ -373,6 +414,10 @@
 		overflow-wrap: anywhere;
 		min-height: 44px;
 		outline: none;
+	}
+	.post-editor :global(.tiptap[data-keyboard-focus='true']) {
+		outline: 2px solid var(--ring);
+		outline-offset: 2px;
 	}
 	.post-editor :global(p) {
 		margin: 0;

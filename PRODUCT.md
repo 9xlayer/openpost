@@ -31,14 +31,14 @@ The SvelteKit interface is embedded in the Go binary. A standalone Expo mobile a
 - Posts can be scheduled through a durable database-backed queue, with visible draft, scheduled, published, failed, and retry states.
 - Workspaces organize accounts, media, prompts, schedules, members, billing, and usage limits.
 - Organizations own a versioned theme library and default. When organization policy allows it, workspace admins may choose another published theme. Each person still chooses light, dark, or system appearance. The complete resolved theme applies to authenticated web and mobile chrome; theme creation and revision management remain a desktop web task.
-- OpenPost Image Editor creates editable, multi-page social images from workspace media, original templates, brand assets, text, and shapes. It exports ordered derivatives back to Media or the active composer without replacing source assets.
+- OpenPost Image Editor creates editable, multi-page social images from workspace media, original templates, brand assets, text, and shapes. Highlight-driven lens effects remain reversible. Animated GIF layers retain editable frames, timing and looping, with composited GIF export. It exports ordered derivatives back to Media or the active composer without replacing source assets.
 - Signed-in Video Editor projects belong to a workspace and sync authored project state, required Project Assets, revisions, checkpoints, and conflicts across devices. Device view state and browser file handles stay local. Local-only projects remain available for people who do not want cloud storage.
 - Mobile Video Projects can record or import footage, preserve it offline, and upload a non-destructive preparation recipe for completion in the full web editor. Mobile does not claim full timeline editing or export parity.
 - The web app, typed HTTP API, CLI, and MCP server share authorization and workspace boundaries.
 - Provider capabilities, media limits, review requirements, quotas, and live-account readiness vary. Product copy and UI must preserve those distinctions.
 - The web app supports light and dark appearance, twelve translated locales, and responsive browser use. The native mobile app uses the same resolved theme semantics and supports light, dark, and system appearance on Android and iOS.
 - Self-hosted deployments must remain portable: embedded static assets, configurable storage, SQLite by default, PostgreSQL support, and no hard dependency on an external queue service.
-- OpenPost Image Editor remains a focused still-image editor. Its supported page and layer operations are available to connected MCP clients through the same controller used by the web UI. Video editing inside Image Editor, animation, print color workflows, and arbitrary remote assets remain outside its product scope.
+- OpenPost Image Editor remains focused on social images and bounded GIF animation. Its advertised page and layer operations are available to connected MCP clients through the same controller used by the web UI. Video timelines, keyframe animation, print color workflows, and arbitrary remote assets remain outside its product scope. GIF export supports up to 200 composited frames, 60 seconds, 2048 px per side and 100 million rendered pixels. AI image editing and background removal support still images.
 
 ## Brand Commitments
 

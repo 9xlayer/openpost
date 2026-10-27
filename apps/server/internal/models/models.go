@@ -197,6 +197,16 @@ type Workspace struct {
 	CreatedAt                 time.Time `bun:",nullzero,notnull,default:current_timestamp" json:"created_at"`
 }
 
+type SavedMention struct {
+	bun.BaseModel `bun:"table:saved_mentions"`
+	ID            string    `bun:",pk"`
+	WorkspaceID   string    `bun:"workspace_id,notnull"`
+	Name          string    `bun:"name,notnull"`
+	NameKey       string    `bun:"name_key,notnull"`
+	ProfileJSON   string    `bun:"profile_json,notnull"`
+	UpdatedAt     time.Time `bun:"updated_at,notnull,default:current_timestamp"`
+}
+
 type User struct {
 	bun.BaseModel `bun:"table:users"`
 

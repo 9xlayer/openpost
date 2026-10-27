@@ -5,6 +5,73 @@ const youtube = { id: 'yt-1', platform: 'youtube', account_username: 'OpenPost' 
 const tiktok = { id: 'tt-1', platform: 'tiktok', account_username: 'openpost' };
 
 describe('publication composer payloads', () => {
+	it('keeps first comments independent of selected source identities', () => {
+		const mentions = {
+			version: 1 as const,
+			spans: [
+				{
+					start: 3,
+					end: 9,
+					text: '@guest',
+					target: {
+						provider: 'workspace' as const,
+						kind: 'profile' as const,
+						id: 'saved',
+						profiles: [{ provider: 'x', text: '@guest_x' }]
+					}
+				}
+			]
+		};
+		const payload = buildPublicationPayload({
+			mode: 'post',
+			workspaceId: 'ws',
+			accounts: [{ id: 'x', platform: 'x' }],
+			fields: { postText: 'Hi @guest' },
+			media: [],
+			segments: [
+				{
+					id: 'source',
+					content: 'Hi @guest',
+					media: [],
+					mentions,
+					settingsByAccount: { x: { first_comment: 'Thanks!' } }
+				}
+			]
+		});
+		expect(payload.renditions[0].segments?.[1]).toMatchObject({
+			body: 'Thanks!',
+			settings: { mentions: { version: 1, spans: [] } }
+		});
+	});
+	it('preserves selected mentions and exact text in a single canonical post', () => {
+		const body = ' 🚀 Hi @alice\n\n';
+		const mentions = {
+			version: 1 as const,
+			spans: [
+				{
+					start: 9,
+					end: 15,
+					text: '@alice',
+					target: {
+						provider: 'bluesky' as const,
+						kind: 'person' as const,
+						id: 'did:plc:ewvi7nxzyoun6zhxrhs64oiz'
+					}
+				}
+			]
+		};
+		const payload = buildPublicationPayload({
+			mode: 'post',
+			workspaceId: 'ws',
+			accounts: [{ id: 'x', platform: 'x' }],
+			fields: { postText: body },
+			media: [],
+			segments: [{ id: 'source', content: body, media: [], mentions }]
+		});
+		expect(payload.segments[0]).toMatchObject({ body, settings: { mentions } });
+		expect(payload.renditions[0].segments?.[0]).toMatchObject({ body });
+		expect(payload.renditions[0].segments?.[0].body_override).toBeUndefined();
+	});
 	it('keeps inline URLs in media posts without serializing native link settings', () => {
 		const accounts = [
 			{ id: 'facebook-1', platform: 'facebook', account_username: 'openpost' },
@@ -265,8 +332,33 @@ describe('publication composer payloads', () => {
 			fields: {},
 			media: [],
 			segments: [
-				{ id: 'segment-1', content: 'First', media: [] },
-				{ id: 'segment-2', content: 'Second', media: [] }
+				{
+					id: 'segment-1',
+					content: 'First',
+					media: [],
+					settingsByAccount: { 'li-1': { first_comment: 'Thanks!' } }
+				},
+				{
+					id: 'segment-2',
+					content: 'Hi @guest',
+					media: [],
+					mentions: {
+						version: 1,
+						spans: [
+							{
+								start: 3,
+								end: 9,
+								text: '@guest',
+								target: {
+									provider: 'workspace',
+									kind: 'profile',
+									id: 'saved',
+									profiles: [{ provider: 'linkedin', text: 'Guest' }]
+								}
+							}
+						]
+					}
+				}
 			],
 			resolvedByAccount: {
 				'li-1': {
@@ -278,7 +370,14 @@ describe('publication composer payloads', () => {
 		});
 
 		expect(payload.segments).toHaveLength(2);
-		expect(payload.renditions[0].segments).toHaveLength(1);
-		expect(payload.renditions[0].segments[0].body).toBe('First\n\nSecond');
+		expect(payload.renditions[0].segments).toHaveLength(2);
+		expect(payload.renditions[0].segments[0].body).toBe('First\n\nHi @guest');
+		expect(payload.renditions[0].segments[0].source_overrides).toEqual([
+			{ publication_segment_id: 'segment-1', media_inherited: true },
+			{ publication_segment_id: 'segment-2', media_inherited: true }
+		]);
+		expect(payload.renditions[0].segments[1].settings).toEqual({
+			mentions: { version: 1, spans: [] }
+		});
 	});
 });

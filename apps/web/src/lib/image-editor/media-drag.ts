@@ -3,6 +3,7 @@ export const IMAGE_EDITOR_MEDIA_DRAG_TYPE = 'application/x-openpost-image-editor
 export interface ImageEditorMediaDragPayload {
 	id: string;
 	name?: string;
+	mime_type?: string;
 	width?: number;
 	height?: number;
 }
@@ -27,6 +28,7 @@ export function writeImageEditorMediaDrag(
 interface RawImageEditorMediaDragPayload {
 	id?: unknown;
 	name?: unknown;
+	mime_type?: unknown;
 	width?: unknown;
 	height?: unknown;
 }
@@ -37,6 +39,7 @@ function parseImageEditorMediaDragPayload(
 	if (typeof raw.id !== 'string' || !raw.id.trim()) return null;
 	const payload: ImageEditorMediaDragPayload = { id: raw.id };
 	if (typeof raw.name === 'string') payload.name = raw.name;
+	if (typeof raw.mime_type === 'string') payload.mime_type = raw.mime_type;
 	if (typeof raw.width === 'number' && raw.width > 0) payload.width = raw.width;
 	if (typeof raw.height === 'number' && raw.height > 0) payload.height = raw.height;
 	return payload;

@@ -137,6 +137,23 @@ export interface ImageEditorImageValue {
 	adjustments: ImageEditorImageAdjustments;
 	/** Missing means the legacy Fabric adjustment behavior. New images use the shared GPU grade. */
 	color_grade_version?: 1;
+	lens_effect?: ImageEditorLensEffect;
+	animation?: ImageEditorAnimation;
+}
+
+export interface ImageEditorAnimation {
+	source_frame_count: number;
+	repeat: number;
+	frames: Array<{ source_index: number; duration_ms: number }>;
+}
+
+export interface ImageEditorLensEffect {
+	kind: 'flare' | 'starburst' | 'mist' | 'prism' | 'bokeh';
+	amount: number;
+	threshold: number;
+	size: number;
+	angle: number;
+	blades: number;
 }
 
 export interface ImageEditorShapeValue {
@@ -293,7 +310,7 @@ export interface ImageEditorDocument {
 	brand_kit_id?: string;
 	brand_kit_revision: number;
 	export_defaults: {
-		format: 'png' | 'jpeg' | 'webp';
+		format: 'png' | 'jpeg' | 'webp' | 'gif';
 		quality: number;
 		matte_color: string;
 	};

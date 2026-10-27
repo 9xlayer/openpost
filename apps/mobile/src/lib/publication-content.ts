@@ -4,6 +4,7 @@ import {
   type PostTextValue,
 } from "@openpost/platform-text/mentions";
 import type { components } from "@openpost/api-contract";
+import type { ReadinessSegment } from "./destination-readiness";
 
 type Media = Pick<components["schemas"]["MediaSummary"], "id"> &
   Partial<
@@ -22,6 +23,40 @@ type PublicationContent = {
   segments?: readonly Segment[] | null;
   media?: readonly Media[] | null;
 };
+
+export function publicationReadinessSegments(
+  publication: PublicationContent,
+  body: string,
+  firstSegmentMediaIds: string[],
+  textEdits?: Readonly<Record<string, PostTextValue>>,
+): ReadinessSegment[] {
+  const update = publicationContentUpdate(
+    publication,
+    body,
+    firstSegmentMediaIds,
+    undefined,
+    textEdits,
+  );
+  if (update.segments) {
+    return update.segments.map((segment) => ({
+      content: segment.body ?? "",
+      mediaIds: (segment.media ?? []).map((media) => media.media_id),
+      ...(readMentionMetadata(segment.body ?? "", segment.settings?.mentions)
+        ? { mentions: readMentionMetadata(segment.body ?? "", segment.settings?.mentions)!.spans }
+        : {}),
+    }));
+  }
+  const canonical = publication.segments?.length
+    ? publication.segments
+    : [{ body: publication.source_text, media: publication.media }];
+  return canonical.map((segment, index) => ({
+    content: index === 0 ? body : segment.body,
+    ...("settings" in segment && readMentionMetadata(segment.body, segment.settings?.mentions)
+      ? { mentions: readMentionMetadata(segment.body, segment.settings?.mentions)!.spans }
+      : {}),
+    mediaIds: index === 0 ? firstSegmentMediaIds : (segment.media ?? []).map((media) => media.id),
+  }));
+}
 
 function mediaInput(
   media: Media,

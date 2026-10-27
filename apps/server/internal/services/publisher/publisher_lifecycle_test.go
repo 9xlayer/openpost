@@ -483,6 +483,26 @@ type mentionPreflightPublisher struct {
 	validated []string
 }
 
+func TestSavedMentionSnapshotReachesProviderWithoutChangingSource(t *testing.T) {
+	adapter := &fakePublisherAdapter{externalID: "saved-mention-post"}
+	srv := newPublisherLifecycleTestServer(t, adapter)
+	metadata := posttext.Mentions{Version: 1, Spans: []posttext.MentionSpan{{Start: 3, End: 9, Text: "@guest", Target: posttext.MentionTarget{Provider: "workspace", Kind: "profile", ID: "saved", Profiles: []posttext.MentionProfile{{Provider: "x", Text: "@guest_x"}}}}}}
+	settings, err := json.Marshal(map[string]any{"mentions": metadata})
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.PublicationSegment{ID: "source", PublicationID: "publication-1", Body: "Hi @guest", SettingsJSON: string(settings)}).Exec(t.Context())
+	require.NoError(t, err)
+	_, err = srv.db.NewInsert().Model(&models.RenditionSegment{ID: "output", RenditionID: "rendition-1", PublicationSegmentID: "source", Body: "Hi @guest", Description: "  Hi @guest\n", SettingsJSON: "{}", Status: models.RenditionStatusReady}).Exec(t.Context())
+	require.NoError(t, err)
+	require.NoError(t, srv.publishPublication(t))
+	require.NotNil(t, adapter.lastRequest)
+	require.Equal(t, "Hi @guest_x", adapter.lastRequest.Content)
+	require.Equal(t, "  Hi @guest_x\n", adapter.lastRequest.Description)
+	var source models.PublicationSegment
+	require.NoError(t, srv.db.NewSelect().Model(&source).Where("id = ?", "source").Scan(t.Context()))
+	require.Equal(t, "Hi @guest", source.Body)
+	require.JSONEq(t, string(settings), source.SettingsJSON)
+}
+
 func (p *mentionPreflightPublisher) ValidateMentionTargets(_ context.Context, _ string, req *platform.PublishRequest) error {
 	p.validated = append(p.validated, req.Content)
 	if req.Content == "Second mention" {

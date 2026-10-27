@@ -277,9 +277,7 @@ export function buildPublicationPayload(
 			const renditionSegments = destinationSegments.map((segment) => {
 				const overrides = input.segmentOverridesByAccount?.[account.id]?.[segment.id];
 				const body =
-					overrides && Object.hasOwn(overrides, 'body')
-						? (overrides.body ?? '')
-						: firstNonEmpty(segment.content, input.fields.postText, sourceText);
+					overrides && Object.hasOwn(overrides, 'body') ? (overrides.body ?? '') : segment.content;
 				const segmentSettings = cloneComposerSettings(segment.settingsByAccount?.[account.id]);
 				if (!segment.link && MEDIA_TEXT_LINK_PLATFORMS.has(platform) && profile !== 'link_share') {
 					delete segmentSettings.url;
@@ -294,7 +292,9 @@ export function buildPublicationPayload(
 						title: '',
 						description: '',
 						media_inherited: false,
-						settings: emptyComposerSettings(),
+						settings: canonicalSegments.some((source) => source.mentions)
+							? { mentions: { version: 1, spans: [] } }
+							: emptyComposerSettings(),
 						media: []
 					});
 				}
@@ -330,6 +330,12 @@ export function buildPublicationPayload(
 					settings: segmentSettings,
 					media: destinationMedia
 				};
+				if (resolved?.segmentStrategy === 'join' && canonicalSegments.length > 1) {
+					renditionSegment.source_overrides = canonicalSegments.map((source) => ({
+						publication_segment_id: source.id,
+						media_inherited: true
+					}));
+				}
 				const trimmedSegmentURL = segmentURL.trim();
 				if (trimmedSegmentURL) renditionSegment.url = trimmedSegmentURL;
 				if (overrides && Object.hasOwn(overrides, 'body')) {
@@ -401,12 +407,13 @@ function publicationSegments(input: PublicationComposerInput): PublicationSegmen
 	return [
 		{
 			id: source?.id || 'segment-1',
-			content: firstNonEmpty(input.fields.postText, source?.content),
+			content: input.fields.postText ?? source?.content ?? '',
 			title: firstNonEmpty(source?.title),
 			description: firstNonEmpty(source?.description),
 			url: firstNonEmpty(input.fields.linkUrl, source?.url),
 			media: input.media.length > 0 ? input.media : (source?.media ?? []),
 			poll: source?.poll,
+			mentions: source?.mentions,
 			link: source?.link,
 			settingsByAccount: source?.settingsByAccount
 		}

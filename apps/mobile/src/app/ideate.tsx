@@ -9,11 +9,10 @@ import {
   publicationBuildKeys,
   voiceProfilesQueryOptions,
 } from "@openpost/query-catalog";
-import { NativeText as Text } from "@/components/native-text";
 import { BodyText, Button, Card, ContentTitle, Screen, TextField } from "@/components/ui";
 import { DelayedQueryPlaceholder, InitialQueryError } from "@/components/query-state";
 import { BottomDrawer } from "@/components/bottom-drawer";
-import { PlatformIcon } from "@/components/platform-icon";
+import { DestinationChooser } from "@/components/destination-chooser";
 import { IdeateOption } from "@/components/ideate-option";
 import {
   createIdeateAPI,
@@ -30,6 +29,11 @@ import {
   prefetchPublicationEditor,
 } from "@/lib/queries";
 import { captureApiRequestIdentity, apiRequestIdentityIsCurrent } from "@/lib/api/client";
+import {
+  applySocialSetSelection,
+  destinationSummaryLabel,
+  reconcileDestinationSelection,
+} from "@/lib/destination-selection";
 import { invalidatePublicationData } from "@/lib/query-cache";
 import {
   MAX_MOBILE_ATTACHMENT_COUNT,
@@ -64,7 +68,7 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
     build?: string;
     attachments?: string;
   }>();
-  const { colors, spacing, typography } = useNativeTheme().manifest;
+  const { colors, spacing } = useNativeTheme().manifest;
   const queryClient = useQueryClient();
   const accounts = useAccounts();
   const sets = useSocialSets();
@@ -108,13 +112,22 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
   const running = buildIsRunning(build);
   const defaultSet = sets.data?.find((set) => set.is_default) ?? sets.data?.[0];
   const effectiveSet = socialSetId ? sets.data?.find((set) => set.id === socialSetId) : defaultSet;
-  const accountIds =
+  // The full selection in the order the user chose, including set members
+  // whose account is gone. The drawer renders those as explicit, removable
+  // rows; only publishable ids reach the build request.
+  const fullSelection: string[] =
     selected ??
-    effectiveSet?.accounts
-      ?.map((account) => account.social_account_id)
-      .filter((id) => accounts.data?.some((account) => account.id === id)) ??
-    accounts.data?.map((account) => account.id) ??
-    [];
+    (effectiveSet
+      ? applySocialSetSelection(effectiveSet.accounts ?? [])
+      : (accounts.data?.map((account) => account.id) ?? []));
+  const accountIds =
+    accounts.data === undefined
+      ? fullSelection
+      : reconcileDestinationSelection(fullSelection, accounts.data).selectable;
+  const summarySetName =
+    selected === null
+      ? effectiveSet?.name
+      : (sets.data?.find((set) => set.id === socialSetId)?.name ?? null);
   const disabled = busy || uploading || running || restoring;
   const options = build?.state === "ready" ? (build.result?.options ?? []) : [];
 
@@ -384,7 +397,7 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
                 disabled={disabled || assets.length >= MAX_MOBILE_ATTACHMENT_COUNT}
               />
               <Button
-                title={`${accountIds.length} ${accountIds.length === 1 ? "destination" : "destinations"}`}
+                title={destinationSummaryLabel(summarySetName, fullSelection.length)}
                 intent="ordinary"
                 onPress={() => setDestinationsOpen(true)}
                 disabled={disabled}
@@ -550,55 +563,28 @@ function IdeateWorkspace({ workspaceId }: { workspaceId: string }) {
       </ScrollView>
       <BottomDrawer
         open={destinationsOpen}
-        title="Destinations"
+        title="Social Set"
         onDismiss={() => setDestinationsOpen(false)}
       >
-        <View style={{ gap: spacing.small }}>
-          {(sets.data ?? []).map((set) => (
-            <Button
-              key={set.id}
-              title={set.name}
-              intent="ordinary"
-              onPress={() => {
-                setSocialSetId(set.id);
-                setSelected(
-                  (set.accounts ?? [])
-                    .map((account) => account.social_account_id)
-                    .filter((id) => accounts.data?.some((account) => account.id === id)),
-                );
-                setDestinationsOpen(false);
-              }}
-            />
-          ))}
-          {(accounts.data ?? []).map((account) => (
-            <View
-              key={account.id}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.small,
-              }}
-            >
-              <PlatformIcon platform={account.platform} />
-              <Text style={[typography.bodyLarge, { flex: 1, color: colors.onSurface }]}>
-                {account.alias || account.account_username}
-              </Text>
-              <Switch
-                value={accountIds.includes(account.id)}
-                accessibilityLabel={`Select ${account.alias || account.account_username}`}
-                onValueChange={(checked) => {
-                  setSocialSetId("");
-                  setSelected(
-                    checked
-                      ? [...new Set([...accountIds, account.id])]
-                      : accountIds.filter((id) => id !== account.id),
-                  );
-                }}
-              />
-            </View>
-          ))}
-          <Button title="Done" onPress={() => setDestinationsOpen(false)} />
-        </View>
+        <DestinationChooser
+          accounts={accounts}
+          socialSets={sets}
+          selectedIds={fullSelection}
+          activeSetId={selected === null ? (effectiveSet?.id ?? "") : socialSetId}
+          onApplySet={(setId, accountIds) => {
+            setSocialSetId(setId);
+            setSelected([...new Set(accountIds)]);
+          }}
+          onToggle={(accountId) => {
+            setSocialSetId("");
+            setSelected(
+              fullSelection.includes(accountId)
+                ? fullSelection.filter((id) => id !== accountId)
+                : [...fullSelection, accountId],
+            );
+          }}
+          onConfirm={() => setDestinationsOpen(false)}
+        />
       </BottomDrawer>
       <BottomDrawer open={voiceOpen} title="Voice" onDismiss={() => setVoiceOpen(false)}>
         <View style={{ gap: spacing.small }}>

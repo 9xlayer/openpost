@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { imageEditorErrorMessage } from '$lib/image-editor/animation-error-message';
 	import { appBranding } from '$lib/app-branding.svelte';
 	import { onMount } from 'svelte';
 	import { createQuery, createInfiniteQuery } from '@tanstack/svelte-query';
@@ -91,7 +92,7 @@
 			await Promise.all([cloudDesignsQuery.refetch(), trashedDesignsQuery.refetch()]);
 		} catch (cause) {
 			if (workspaceID === targetWorkspace)
-				error = cause instanceof Error ? cause.message : m.image_editor_public_load_failed();
+				error = imageEditorErrorMessage(cause) ?? m.image_editor_public_load_failed();
 		} finally {
 			restoring = '';
 		}
@@ -203,8 +204,7 @@
 			});
 		} catch (cause) {
 			if (sequence === localDesignLoadSequence)
-				localLoadError =
-					cause instanceof Error ? cause.message : m.image_editor_public_load_failed();
+				localLoadError = imageEditorErrorMessage(cause) ?? m.image_editor_public_load_failed();
 		} finally {
 			if (sequence === localDesignLoadSequence) localLoading = false;
 		}
@@ -236,7 +236,7 @@
 			});
 			await goto(resolveAppPath(`/image-editor/${design.id}`));
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_create_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_create_failed();
 		} finally {
 			creating = '';
 		}
@@ -280,7 +280,7 @@
 			});
 			await goto(resolveAppPath(`/image-editor/${design.id}`));
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_template_use_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_template_use_failed();
 		} finally {
 			creating = '';
 		}
@@ -308,7 +308,7 @@
 			trackPublicImageEditorEvent('image_editor_design_started', { entry: 'image' });
 			await goto(resolveAppPath(`/image-editor/${design.id}`));
 		} catch (cause) {
-			error = cause instanceof Error ? cause.message : m.image_editor_media_open_failed();
+			error = imageEditorErrorMessage(cause) ?? m.image_editor_media_open_failed();
 		} finally {
 			creating = '';
 		}
@@ -488,7 +488,7 @@
 			<Input
 				bind:ref={fileInput}
 				type="file"
-				accept="image/png,image/jpeg,image/webp"
+				accept="image/png,image/jpeg,image/webp,image/gif"
 				aria-label={m.image_editor_public_open_image()}
 				class="hidden"
 				onchange={() => void openImage()}

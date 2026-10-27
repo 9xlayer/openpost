@@ -625,15 +625,29 @@ export function imageEditorCommandsForRail(): ImageEditorCommandDescriptor[] {
 }
 
 export function imageEditorCommandForKeyboardEvent(
-	event: Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'isComposing'>
+	event: Pick<
+		KeyboardEvent,
+		'key' | 'metaKey' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'isComposing'
+	> &
+		Partial<Pick<KeyboardEvent, 'code'>>
 ): ImageEditorCommandID | null {
 	if (event.isComposing) return null;
-	const key = event.key.toLowerCase();
 	const primary = event.metaKey || event.ctrlKey;
+	// Keep Latin layouts character-based, including AZERTY/Dvorak. Only plain
+	// tool keys fall back to their physical location under non-Latin layouts.
+	const typedKey = event.key.toLowerCase();
+	const physicalToolKey =
+		!primary &&
+		!event.altKey &&
+		/^[\p{L}\p{M}]+$/u.test(typedKey) &&
+		!/\p{Script=Latin}/u.test(typedKey) &&
+		/^Key[A-Z]$/.test(event.code ?? '')
+			? event.code!.slice(3).toLowerCase()
+			: null;
 	for (const command of IMAGE_EDITOR_COMMANDS) {
 		for (const shortcut of command.shortcuts) {
 			if (
-				shortcut.key === key &&
+				(shortcut.key === typedKey || (command.tool && shortcut.key === physicalToolKey)) &&
 				Boolean(shortcut.primary) === primary &&
 				Boolean(shortcut.shift) === event.shiftKey &&
 				Boolean(shortcut.alt) === event.altKey

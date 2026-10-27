@@ -42,6 +42,8 @@
 
 	let { children } = $props();
 	provideUiMessages({
+		editor_add_mention: m.editor_add_mention,
+		editor_search_characters: m.editor_search_characters,
 		editor_permission_required: m.editor_permission_required,
 		editor_rate_limited: m.editor_rate_limited,
 		editor_mention_limit: m.editor_mention_limit,

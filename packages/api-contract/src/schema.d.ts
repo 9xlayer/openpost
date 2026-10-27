@@ -6797,6 +6797,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workspaces/{workspace_id}/mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List reusable Workspace mentions */
+        get: operations["list-saved-mentions"];
+        put?: never;
+        /** Save a reusable Workspace mention */
+        post: operations["save-saved-mention"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workspaces/{workspace_id}/mentions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a saved mention without changing existing posts */
+        delete: operations["delete-saved-mention"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -10810,6 +10845,19 @@ export interface components {
             /** Format: date-time */
             verified_at?: string;
         };
+        ImageEditorAnimation: {
+            frames: components["schemas"]["ImageEditorAnimationFrame"][] | null;
+            /** Format: int64 */
+            repeat: number;
+            /** Format: int64 */
+            source_frame_count: number;
+        };
+        ImageEditorAnimationFrame: {
+            /** Format: int64 */
+            duration_ms: number;
+            /** Format: int64 */
+            source_index: number;
+        };
         ImageEditorBrandColor: {
             id: string;
             name: string;
@@ -11002,7 +11050,7 @@ export interface components {
         };
         ImageEditorExportDefaults: {
             /** @enum {string} */
-            format: "png" | "jpeg" | "webp";
+            format: "png" | "jpeg" | "webp" | "gif";
             matte_color: string;
             /** Format: double */
             quality: number;
@@ -11048,6 +11096,7 @@ export interface components {
         };
         ImageEditorImageValue: {
             adjustments: components["schemas"]["ImageEditorImageAdjustments"];
+            animation?: components["schemas"]["ImageEditorAnimation"];
             /**
              * Format: int64
              * @enum {integer}
@@ -11057,6 +11106,7 @@ export interface components {
             /** @enum {string} */
             fit: "cover" | "contain" | "stretch";
             intrinsic_pending?: boolean;
+            lens_effect?: components["schemas"]["ImageEditorLensEffect"];
             media_id: string;
             /** Format: int64 */
             source_height: number;
@@ -11096,6 +11146,20 @@ export interface components {
             radius: number;
             /** @enum {string} */
             shape: "rectangle" | "rounded_rectangle" | "circle" | "ellipse" | "diamond";
+        };
+        ImageEditorLensEffect: {
+            /** Format: double */
+            amount: number;
+            /** Format: double */
+            angle: number;
+            /** Format: int64 */
+            blades: number;
+            /** @enum {string} */
+            kind: "flare" | "starburst" | "mist" | "prism" | "bokeh";
+            /** Format: double */
+            size: number;
+            /** Format: double */
+            threshold: number;
         };
         ImageEditorPageBackground: {
             color?: string;
@@ -12535,6 +12599,13 @@ export interface components {
             /** @enum {string} */
             mode: "accounts" | "exact_company";
         };
+        MentionProfile: {
+            authority?: string;
+            provider: string;
+            /** @description Validated native identity, or omitted for an ordinary text replacement */
+            target?: components["schemas"]["NativeMentionTarget"];
+            text: string;
+        };
         MentionSpan: {
             /**
              * Format: int64
@@ -12557,9 +12628,11 @@ export interface components {
             handle?: string;
             id: string;
             /** @enum {string} */
-            kind: "person" | "page";
+            kind: "person" | "page" | "profile";
+            /** @description Immutable per-network snapshot for a reusable Workspace mention */
+            profiles?: components["schemas"]["MentionProfile"][] | null;
             /** @enum {string} */
-            provider: "bluesky" | "mastodon" | "linkedin";
+            provider: "bluesky" | "mastodon" | "linkedin" | "workspace";
         };
         Mentions: {
             /** @description Ordered, nonoverlapping native mention selections; an empty list explicitly contains no selected mentions */
@@ -12649,6 +12722,15 @@ export interface components {
             format: "ttf" | "otf";
             identity: string;
             sourceUrl: string;
+        };
+        NativeMentionTarget: {
+            authority?: string;
+            handle?: string;
+            id: string;
+            /** @enum {string} */
+            kind: "person" | "page";
+            /** @enum {string} */
+            provider: "bluesky" | "mastodon" | "linkedin";
         };
         NextAvailableSlotOutputBody: {
             /**
@@ -15592,6 +15674,28 @@ export interface components {
             media_id: string;
             /** Format: int64 */
             revision: number;
+        };
+        SavedMentionResponse: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/SavedMentionResponse.json
+             */
+            readonly $schema?: string;
+            id: string;
+            name: string;
+            profiles: components["schemas"]["MentionProfile"][] | null;
+        };
+        SavedMentionSaveInputBody: {
+            /**
+             * Format: uri
+             * @description A URL to the JSON Schema for this object.
+             * @example https://example.com/api/v1/schemas/SavedMentionSaveInputBody.json
+             */
+            readonly $schema?: string;
+            id?: string;
+            name: string;
+            profiles: components["schemas"]["MentionProfile"][] | null;
         };
         Screenshot: {
             data: string;
@@ -46801,6 +46905,192 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WorkspaceTeamOutputBody"];
                 };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "list-saved-mentions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMentionResponse"][] | null;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "save-saved-mention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavedMentionSaveInputBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedMentionResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
+    "delete-saved-mention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Forbidden */
             403: {

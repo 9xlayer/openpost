@@ -13,6 +13,8 @@
 			selected: number;
 			error: string;
 			loading: boolean;
+			hint: string;
+			create?: () => void;
 			choose: (index: number) => void;
 			retry: () => void;
 		};
@@ -41,6 +43,13 @@
 					>{/if}
 			</button>
 		{/each}
+		{#if state.create}
+			<button id={`${id}-${state.items.length}`} type="button" role="option"
+				aria-selected={state.selected === state.items.length}
+				class="flex min-h-11 w-full items-center rounded-sm px-3 py-2 text-left text-sm hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring data-[active=true]:bg-accent"
+				data-active={state.selected === state.items.length}
+				onpointerdown={(event) => event.preventDefault()} onclick={state.create}>{m.editor_add_mention()}</button>
+		{/if}
 	</div>
 	{#if state.loading}<p class="px-3 py-2 text-sm text-muted-foreground" role="status">
 			{m.editor_searching()}
@@ -51,7 +60,8 @@
 			class="min-h-11 rounded-sm px-3 text-sm underline focus-visible:ring-2 focus-visible:ring-ring"
 			onclick={state.retry}>{m.editor_retry()}</button
 		>
-	{:else if !state.items.length}<p class="px-3 py-2 text-sm text-muted-foreground" role="status">
+	{:else if state.hint}<p class="px-3 py-2 text-sm text-muted-foreground" role="status">{state.hint}</p>
+	{:else if !state.items.length && !state.create}<p class="px-3 py-2 text-sm text-muted-foreground" role="status">
 			{m.editor_no_matches()}
 		</p>{/if}
 </div>

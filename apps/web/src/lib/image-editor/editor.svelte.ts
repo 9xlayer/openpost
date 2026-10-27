@@ -235,6 +235,8 @@ export class ImageEditorController {
 	workspaceID = $state('');
 	revision = $state(0);
 	canEdit = $state(false);
+	animationTimeMs = $state(0);
+	animationFrameOverrides = $state.raw<Record<string, number>>({});
 	document = $state.raw<ImageEditorDocument | null>(null);
 	private pageID = $state('');
 	private layerIDs = $state.raw<string[]>([]);
@@ -242,7 +244,11 @@ export class ImageEditorController {
 		return this.pageID;
 	}
 	set activePageID(value: string) {
-		if (value !== this.pageID) this.textRange = null;
+		if (value !== this.pageID) {
+			this.textRange = null;
+			this.animationTimeMs = 0;
+			this.animationFrameOverrides = {};
+		}
 		this.pageID = value;
 	}
 	get selectedLayerIDs(): string[] {
@@ -296,7 +302,16 @@ export class ImageEditorController {
 	snapToGrid = $state(false);
 	gridSize = $state(50);
 	leftPanel = $state<'media' | null>('media');
-	backgroundImagePickerActive = $state(false);
+	#backgroundImagePickerActive = $state(false);
+	backgroundImagePickerRevision = 0;
+	get backgroundImagePickerActive(): boolean {
+		return this.#backgroundImagePickerActive;
+	}
+	set backgroundImagePickerActive(active: boolean) {
+		if (active === this.#backgroundImagePickerActive) return;
+		this.#backgroundImagePickerActive = active;
+		this.backgroundImagePickerRevision += 1;
+	}
 	rightPanelVisible = $state(true);
 	layersPanelOpen = $state(false);
 	pagesExpanded = $state(true);
@@ -431,6 +446,8 @@ export class ImageEditorController {
 	}
 
 	load(response: ImageEditorDocumentResponse): void {
+		this.animationTimeMs = 0;
+		this.animationFrameOverrides = {};
 		this.imageAdjustmentGesture = null;
 		this.pageColorGradeGesture = null;
 		this.colorPreviewActive = false;
@@ -1681,7 +1698,13 @@ export class ImageEditorController {
 	}
 
 	addImage(
-		media: { id: string; width?: number; height?: number; name?: string },
+		media: {
+			id: string;
+			width?: number;
+			height?: number;
+			name?: string;
+			animation?: import('./types').ImageEditorAnimation;
+		},
 		center?: SelectionPoint,
 		pageID = this.activePageID
 	): void {
@@ -1724,6 +1747,7 @@ export class ImageEditorController {
 			),
 			image: {
 				media_id: media.id,
+				animation: media.animation,
 				source_width: sourceWidth,
 				source_height: sourceHeight,
 				intrinsic_pending: !hasIntrinsicSize,

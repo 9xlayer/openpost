@@ -25,6 +25,7 @@
 		actionLabel?: string;
 		compact?: boolean;
 		onSelect: (file: File, asset: StockAsset) => void | Promise<void>;
+		onSelectStart?: () => void;
 		onDragStart?: (event: DragEvent, asset: StockAsset) => void;
 		onDragEnd?: () => void;
 		services?: StockMediaServices;
@@ -45,6 +46,7 @@
 		actionLabel = m.stock_media_use(),
 		compact = false,
 		onSelect,
+		onSelectStart,
 		onDragStart,
 		onDragEnd,
 		services = {
@@ -276,6 +278,7 @@
 		selecting = asset.external_id;
 		error = '';
 		try {
+			onSelectStart?.();
 			const resolved = await services.resolve(asset.provider, asset.external_id);
 			const file = await downloadStockAsset(asset, resolved);
 			await onSelect(file, asset);

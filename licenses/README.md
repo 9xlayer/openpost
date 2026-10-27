@@ -6,6 +6,8 @@ OpenPost dependency licenses remain available through their upstream packages an
 - IMG.LY Background Removal 1.7.0
 - ONNX Runtime Web 1.21.0
 - fflate 0.8.2
+- gifenc 1.0.3, MIT. See `GIFENC.txt`.
+- gifuct-js 2.1.2, MIT. See `GIFUCT-JS.txt`.
 
 The bundled background-removal runtime, quantized model, content-addressed resource filenames, source reference, and full notices are in `apps/web/static/image-editor-models/`. Redistributors must keep those notices with the corresponding assets.
 

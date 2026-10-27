@@ -151,6 +151,28 @@ type ImageEditorImageValue struct {
 	Crop              ImageEditorCrop             `json:"crop"`
 	Adjustments       ImageEditorImageAdjustments `json:"adjustments"`
 	ColorGradeVersion int                         `json:"color_grade_version,omitempty" enum:"1"`
+	LensEffect        *ImageEditorLensEffect      `json:"lens_effect,omitempty"`
+	Animation         *ImageEditorAnimation       `json:"animation,omitempty"`
+}
+
+type ImageEditorLensEffect struct {
+	Kind      string  `json:"kind" enum:"flare,starburst,mist,prism,bokeh"`
+	Amount    float64 `json:"amount" minimum:"0" maximum:"1"`
+	Threshold float64 `json:"threshold" minimum:"0" maximum:"1"`
+	Size      float64 `json:"size" minimum:"0" maximum:"1"`
+	Angle     float64 `json:"angle" minimum:"-180" maximum:"180"`
+	Blades    int     `json:"blades" minimum:"3" maximum:"8"`
+}
+
+type ImageEditorAnimationFrame struct {
+	SourceIndex int `json:"source_index" minimum:"0" maximum:"199"`
+	DurationMS  int `json:"duration_ms" minimum:"20" maximum:"10000"`
+}
+
+type ImageEditorAnimation struct {
+	SourceFrameCount int                         `json:"source_frame_count" minimum:"1" maximum:"200"`
+	Repeat           int                         `json:"repeat" minimum:"-1" maximum:"65535"`
+	Frames           []ImageEditorAnimationFrame `json:"frames" minItems:"1" maxItems:"200"`
 }
 
 type ImageEditorShapeValue struct {
@@ -321,7 +343,7 @@ func (page ImageEditorPagePayload) BackgroundMediaID() string {
 }
 
 type ImageEditorExportDefaults struct {
-	Format     string  `json:"format" enum:"png,jpeg,webp"`
+	Format     string  `json:"format" enum:"png,jpeg,webp,gif"`
 	Quality    float64 `json:"quality" minimum:"0.1" maximum:"1"`
 	MatteColor string  `json:"matte_color"`
 }
@@ -2242,7 +2264,7 @@ func validateImageEditorPayload(payload ImageEditorDocumentPayload) error {
 	if len(payload.Pages) == 0 || len(payload.Pages) > imageEditorMaxPages {
 		return fmt.Errorf("image editor designs must contain between 1 and %d pages", imageEditorMaxPages)
 	}
-	if !oneOfImageEditorString(payload.ExportDefaults.Format, "png", "jpeg", "webp") ||
+	if !oneOfImageEditorString(payload.ExportDefaults.Format, "png", "jpeg", "webp", "gif") ||
 		!finiteImageEditorNumber(payload.ExportDefaults.Quality) ||
 		payload.ExportDefaults.Quality < 0.1 ||
 		payload.ExportDefaults.Quality > 1 ||
@@ -2683,6 +2705,47 @@ func validateImageEditorImageLayer(layer ImageEditorLayer) error {
 	}
 	if !finiteImageEditorNumber(adjustments.Blur) || adjustments.Blur < 0 || adjustments.Blur > 1 {
 		return fmt.Errorf("image blur must be between 0 and 1")
+	}
+	if err := validateImageEditorLensEffect(layer.Image.LensEffect); err != nil {
+		return err
+	}
+	if err := validateImageEditorAnimation(layer.Image.Animation); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateImageEditorLensEffect(effect *ImageEditorLensEffect) error {
+	if effect == nil {
+		return nil
+	}
+	if !oneOfImageEditorString(effect.Kind, "flare", "starburst", "mist", "prism", "bokeh") || effect.Blades < 3 || effect.Blades > 8 || !finiteImageEditorNumber(effect.Angle) || effect.Angle < -180 || effect.Angle > 180 {
+		return fmt.Errorf("invalid lens effect")
+	}
+	for _, value := range []float64{effect.Amount, effect.Threshold, effect.Size} {
+		if !finiteImageEditorNumber(value) || value < 0 || value > 1 {
+			return fmt.Errorf("lens effect values must be between zero and one")
+		}
+	}
+	return nil
+}
+
+func validateImageEditorAnimation(animation *ImageEditorAnimation) error {
+	if animation == nil {
+		return nil
+	}
+	if animation.SourceFrameCount < 1 || animation.SourceFrameCount > 200 || animation.Repeat < -1 || animation.Repeat > 65535 || len(animation.Frames) < 1 || len(animation.Frames) > 200 {
+		return fmt.Errorf("invalid GIF animation")
+	}
+	duration := 0
+	for _, frame := range animation.Frames {
+		if frame.SourceIndex < 0 || frame.SourceIndex >= animation.SourceFrameCount || frame.DurationMS < 20 || frame.DurationMS > 10000 || frame.DurationMS%10 != 0 {
+			return fmt.Errorf("invalid GIF frame or timing")
+		}
+		duration += frame.DurationMS
+	}
+	if duration > 60000 {
+		return fmt.Errorf("GIF animation exceeds 60 seconds")
 	}
 	return nil
 }

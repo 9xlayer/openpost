@@ -1,4 +1,5 @@
 import type { components } from "@openpost/api-contract";
+import type { TextMention } from "@openpost/platform-text/mentions";
 
 import type { Api } from "./api/client";
 
@@ -10,6 +11,7 @@ type ReadinessDecision = ResolvedDestinationCapability["immediate_readiness"];
 export type ReadinessSegment = {
   content: string;
   mediaIds: string[];
+  mentions?: TextMention[];
 };
 
 export type ReadinessRequestInput = {

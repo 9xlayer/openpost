@@ -1,4 +1,4 @@
-import type { TextMention } from "@openpost/platform-text/mentions";
+import { mentionTarget, type TextMention } from "@openpost/platform-text/mentions";
 import { getQueryActorRevision } from "./query-session";
 // Native clipboard HTML is accepted only for identities this actor has read or
 // selected in this Workspace. Unknown HTML never supplies a new mention target.
@@ -10,7 +10,7 @@ function key(workspaceId: string, span: TextMention) {
     known.clear();
     actor = current;
   }
-  const target = span.target;
+  const target = mentionTarget(span.target) ?? span.target;
   return JSON.stringify([
     workspaceId,
     target.provider,
@@ -18,6 +18,7 @@ function key(workspaceId: string, span: TextMention) {
     target.authority ?? "",
     target.id,
     target.handle ?? "",
+    target.profiles ?? [],
     span.text,
   ]);
 }

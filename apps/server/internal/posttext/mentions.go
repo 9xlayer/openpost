@@ -24,11 +24,25 @@ var didPattern = regexp.MustCompile(`^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$`)
 var organizationURN = regexp.MustCompile(`^urn:li:organization:[1-9][0-9]{0,30}$`)
 
 type MentionTarget struct {
+	Provider  string           `json:"provider" enum:"bluesky,mastodon,linkedin,workspace"`
+	Kind      string           `json:"kind" enum:"person,page,profile"`
+	ID        string           `json:"id" minLength:"1" maxLength:"2048"`
+	Authority string           `json:"authority,omitempty" maxLength:"2048" doc:"Connected instance origin for Mastodon; empty for global identity namespaces"`
+	Handle    string           `json:"handle,omitempty" maxLength:"512" doc:"Native account address returned by the provider lookup"`
+	Profiles  []MentionProfile `json:"profiles,omitempty" maxItems:"32" doc:"Immutable per-network snapshot for a reusable Workspace mention"`
+}
+type MentionProfile struct {
+	Provider  string               `json:"provider" minLength:"1" maxLength:"40"`
+	Authority string               `json:"authority,omitempty" maxLength:"2048"`
+	Text      string               `json:"text" minLength:"1" maxLength:"512"`
+	Target    *NativeMentionTarget `json:"target,omitempty" doc:"Validated native identity, or omitted for an ordinary text replacement"`
+}
+type NativeMentionTarget struct {
 	Provider  string `json:"provider" enum:"bluesky,mastodon,linkedin"`
 	Kind      string `json:"kind" enum:"person,page"`
 	ID        string `json:"id" minLength:"1" maxLength:"2048"`
-	Authority string `json:"authority,omitempty" maxLength:"2048" doc:"Connected instance origin for Mastodon; empty for global identity namespaces"`
-	Handle    string `json:"handle,omitempty" maxLength:"512" doc:"Native account address returned by the provider lookup"`
+	Authority string `json:"authority,omitempty" maxLength:"2048"`
+	Handle    string `json:"handle,omitempty" maxLength:"512"`
 }
 type MentionSpan struct {
 	Start  int           `json:"start" minimum:"0" doc:"Inclusive UTF-8 byte offset in the exact authored text"`
@@ -107,7 +121,12 @@ func validateTarget(target MentionTarget) error {
 		return ErrInvalid
 	}
 	valid := false
+	if target.Provider != "workspace" && len(target.Profiles) > 0 {
+		return ErrInvalid
+	}
 	switch target.Provider {
+	case "workspace":
+		return ValidateProfiles(target)
 	case "bluesky":
 		valid = validBlueskyTarget(target)
 	case "linkedin":
