@@ -609,7 +609,7 @@ func TestAcceptWorkspaceInvitationAddsWorkspaceMember(t *testing.T) {
 		Email:           "teammate@example.com",
 		Role:            models.WorkspaceRoleViewer,
 		InvitedByUserID: "admin-1",
-		TokenHash:       hashWorkspaceInvitationToken(rawInviteToken),
+		TokenHash:       workspaceteam.HashInvitationToken(rawInviteToken),
 		ExpiresAt:       time.Now().UTC().Add(24 * time.Hour),
 		CreatedAt:       time.Now().UTC(),
 	}).Exec(ctx)
@@ -621,7 +621,7 @@ func TestAcceptWorkspaceInvitationAddsWorkspaceMember(t *testing.T) {
 		Email:           "former-address@example.com",
 		Role:            models.WorkspaceRoleViewer,
 		InvitedByUserID: "admin-1",
-		TokenHash:       hashWorkspaceInvitationToken(oldAddressInviteToken),
+		TokenHash:       workspaceteam.HashInvitationToken(oldAddressInviteToken),
 		ExpiresAt:       time.Now().UTC().Add(24 * time.Hour),
 		CreatedAt:       time.Now().UTC(),
 	}).Exec(ctx)
@@ -666,9 +666,9 @@ func TestInvalidInvitationAcceptanceUsesOneSafeResponse(t *testing.T) {
 	require.NoError(t, err)
 	now := time.Now().UTC()
 	rows := []models.WorkspaceInvitation{
-		{ID: "wrong-email", WorkspaceID: "ws-1", Email: "other@example.com", Role: "viewer", InvitedByUserID: "admin-1", TokenHash: hashWorkspaceInvitationToken("op_inv_wrong_email"), ExpiresAt: now.Add(time.Hour), CreatedAt: now},
-		{ID: "expired", WorkspaceID: "ws-1", Email: "invitee@example.com", Role: "viewer", InvitedByUserID: "admin-1", TokenHash: hashWorkspaceInvitationToken("op_inv_expired_link"), ExpiresAt: now.Add(-time.Hour), CreatedAt: now},
-		{ID: "revoked", WorkspaceID: "ws-1", Email: "invitee@example.com", Role: "viewer", InvitedByUserID: "admin-1", TokenHash: hashWorkspaceInvitationToken("op_inv_revoked_link"), ExpiresAt: now.Add(time.Hour), RevokedAt: now, CreatedAt: now},
+		{ID: "wrong-email", WorkspaceID: "ws-1", Email: "other@example.com", Role: "viewer", InvitedByUserID: "admin-1", TokenHash: workspaceteam.HashInvitationToken("op_inv_wrong_email"), ExpiresAt: now.Add(time.Hour), CreatedAt: now},
+		{ID: "expired", WorkspaceID: "ws-1", Email: "invitee@example.com", Role: "viewer", InvitedByUserID: "admin-1", TokenHash: workspaceteam.HashInvitationToken("op_inv_expired_link"), ExpiresAt: now.Add(-time.Hour), CreatedAt: now},
+		{ID: "revoked", WorkspaceID: "ws-1", Email: "invitee@example.com", Role: "viewer", InvitedByUserID: "admin-1", TokenHash: workspaceteam.HashInvitationToken("op_inv_revoked_link"), ExpiresAt: now.Add(time.Hour), RevokedAt: now, CreatedAt: now},
 	}
 	_, err = srv.db.NewInsert().Model(&rows).Exec(t.Context())
 	require.NoError(t, err)

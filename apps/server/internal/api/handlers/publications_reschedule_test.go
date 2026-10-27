@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/openpost/backend/internal/models"
 	"github.com/openpost/backend/internal/platform"
+	"github.com/openpost/backend/internal/services/providerreadiness"
 	"github.com/openpost/backend/internal/services/providerwrite"
 	"github.com/openpost/backend/internal/services/publicationauth"
 	"github.com/stretchr/testify/require"
@@ -935,10 +937,14 @@ func TestPrimaryPublicationQueueUsesCurrentScheduleAtTransactionBoundary(t *test
 	require.NoError(t, err)
 
 	handler := newReadyPublicationHandler(t, db, testAuthenticator{})
-	jobID, err := handler.queueScheduledPublication(ctx, "publication-1")
-	require.NoError(t, err)
+	var queued publicationEnqueueResult
+	require.NoError(t, db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		var queueErr error
+		queued, queueErr = handler.queueScheduledPublicationTx(txCtx, tx, "publication-1", 0, providerreadiness.ExecutionIntentProduction)
+		return queueErr
+	}))
 	var job models.Job
-	require.NoError(t, db.NewSelect().Model(&job).Where("id = ?", jobID).Scan(ctx))
+	require.NoError(t, db.NewSelect().Model(&job).Where("id = ?", queued.JobID).Scan(ctx))
 	require.True(t, job.RunAt.Equal(currentRunAt), "expected current run_at %s, got %s", currentRunAt, job.RunAt)
 	require.False(t, job.RunAt.Equal(staleRunAt))
 
@@ -948,10 +954,13 @@ func TestPrimaryPublicationQueueUsesCurrentScheduleAtTransactionBoundary(t *test
 		Where("id = ?", "publication-1").
 		Exec(ctx)
 	require.NoError(t, err)
-	_, err = db.NewDelete().Model((*models.Job)(nil)).Where("id = ?", jobID).Exec(ctx)
+	_, err = db.NewDelete().Model((*models.Job)(nil)).Where("id = ?", queued.JobID).Exec(ctx)
 	require.NoError(t, err)
 
-	_, err = handler.queueScheduledPublication(ctx, "publication-1")
+	err = db.RunInTx(ctx, &sql.TxOptions{}, func(txCtx context.Context, tx bun.Tx) error {
+		_, queueErr := handler.queueScheduledPublicationTx(txCtx, tx, "publication-1", 0, providerreadiness.ExecutionIntentProduction)
+		return queueErr
+	})
 	require.ErrorIs(t, err, errPublicationScheduleRequired)
 	jobCount, err := db.NewSelect().Model((*models.Job)(nil)).Count(ctx)
 	require.NoError(t, err)
@@ -991,7 +1000,7 @@ func TestPrimaryPublicationQueueRevalidatesLifecycleAtTransactionBoundary(t *tes
 		Exec(ctx)
 	require.NoError(t, err)
 
-	err = (&PublicationHandler{db: db}).queuePublicationNow(ctx, stalePublication.ID)
+	_, err = (&PublicationHandler{db: db}).queuePublicationNowExpected(ctx, stalePublication.ID, 0)
 	require.ErrorIs(t, err, errPublicationNotEditable)
 	jobCount, err := db.NewSelect().Model((*models.Job)(nil)).Count(ctx)
 	require.NoError(t, err)

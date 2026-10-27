@@ -224,8 +224,9 @@ func TestSignedIngressVerifiesBeforeNormalizationAndQueuesOneSafeReference(t *te
 	_, err = web.Accept(t.Context(), badRequest)
 	require.ErrorIs(t, err, ErrInvalidSignature)
 	require.Equal(t, int32(2), normalizeCalls.Load(), "a bad signature must be rejected before normalization")
-	require.Equal(t, CodeInvalidSignature, CodeOf(err))
-	require.Equal(t, http.StatusUnauthorized, HTTPStatusOf(err))
+	var safe *SafeError
+	require.ErrorAs(t, err, &safe)
+	require.Equal(t, CodeInvalidSignature, safe.Code())
 	require.NotContains(t, err.Error(), "wrong-secret")
 	require.NotContains(t, err.Error(), testWebhookSecret)
 

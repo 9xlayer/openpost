@@ -330,7 +330,7 @@ func TestReadBudgetIsFreshAtTheUTCDayItsRetryWaitsFor(t *testing.T) {
 	account := seedPostImportAccount(t, db, "bluesky", "did:plc:owner", "")
 	service := NewService(db, &stubTokenSource{token: "token"})
 	service.SetProvider("bluesky", reader)
-	service.SetPolicy("bluesky", Policy{ReadRequestsPerDay: 1, PageSize: 50})
+	service.policies["bluesky"] = Policy{ReadRequestsPerDay: 1, PageSize: 50}
 	now := time.Date(2026, 9, 26, 15, 0, 0, 0, time.UTC)
 	service.now = func() time.Time { return now }
 	_, err := service.Enable(context.Background(), "workspace-1", account.ID)

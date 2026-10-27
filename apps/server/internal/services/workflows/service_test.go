@@ -225,7 +225,7 @@ func TestDraftConflictScopeAndConnectionSecrecy(t *testing.T) {
 	scoped.CredentialWorkspaceID = "other"
 	_, err = s.List(t.Context(), scoped, "ws")
 	require.ErrorIs(t, err, ErrAccess)
-	connection, err := s.SaveConnection(t.Context(), actor, "ws", "GitHub", "github-secret-token")
+	connection, err := s.SaveCredential(t.Context(), actor, "ws", WorkflowCredentialRequest{Name: "GitHub", Kind: "github", Token: "github-secret-token"})
 	require.NoError(t, err)
 	list, err := s.Connections(t.Context(), actor, "ws")
 	require.NoError(t, err)
@@ -373,7 +373,7 @@ func TestGitHubPollReconcilesPagesWithoutReplayingKnownReleases(t *testing.T) {
 
 func TestDeletedConnectionCannotBeSavedFromStaleEditor(t *testing.T) {
 	s, actor := workflowTestService(t, nil)
-	connection, err := s.SaveConnection(t.Context(), actor, "ws", "Private releases", "github-secret-token")
+	connection, err := s.SaveCredential(t.Context(), actor, "ws", WorkflowCredentialRequest{Name: "Private releases", Kind: "github", Token: "github-secret-token"})
 	require.NoError(t, err)
 	workflow := saveTestWorkflow(t, s, actor, nil)
 	require.NoError(t, s.DeleteConnection(t.Context(), actor, "ws", connection.ID))
