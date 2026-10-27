@@ -10,7 +10,9 @@ targetRules = ["curl-auth-header"]
 condition = "AND"
 regexTarget = "line"
 paths = ['''(?:^|/)apps/web/src/lib/workflows/curl\.test\.ts$''']
-regexes = ['''^\s*command: `curl https://example\.com -H '(?:Authorization: Bearer|X-API-Key:) private-token'`,\s*$''']
+regexes = [
+  '''^\s*command: `curl https://example\.com -H '(?:Authorization: Bearer|X-API-Key:) private-token'`,\s*$''',
+]
 
 [[allowlists]]
 description = "Video EQ field-map keys are identifiers, not credentials"
