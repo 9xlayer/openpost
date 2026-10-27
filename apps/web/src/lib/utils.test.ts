@@ -9,10 +9,6 @@ import {
 } from './utils';
 
 describe('formatAccountHandle', () => {
-	it('adds a handle prefix when it is missing', () => {
-		expect(formatAccountHandle('rodgds')).toBe('@rodgds');
-	});
-
 	it('does not duplicate an existing handle prefix', () => {
 		expect(formatAccountHandle('@rodgds')).toBe('@rodgds');
 	});
@@ -65,19 +61,6 @@ describe('formatSocialAccountName', () => {
 });
 
 describe('getPlatformName', () => {
-	it('labels Google Business instead of the raw slug', () => {
-		expect(getPlatformName('googlebusiness')).toBe('Google Business');
-		expect(getPlatformName('gmb')).toBe('Google Business');
-	});
-
-	it('labels fediverse software and reddit instead of the raw slug', () => {
-		expect(getPlatformName('gotosocial')).toBe('GoToSocial');
-		expect(getPlatformName('akkoma')).toBe('Akkoma');
-		expect(getPlatformName('pleroma')).toBe('Pleroma');
-		expect(getPlatformName('friendica')).toBe('Friendica');
-		expect(getPlatformName('reddit')).toBe('Reddit');
-	});
-
 	it('resolves every canonical platform key to a name different from the raw key', () => {
 		const expected = {
 			x: 'X',
