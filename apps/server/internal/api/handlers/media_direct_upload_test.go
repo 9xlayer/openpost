@@ -167,14 +167,18 @@ type fakeDirectUploadStorage struct {
 type cancelingUploadStorage struct {
 	cancel           context.CancelFunc
 	deleteContextErr error
+	saveCalls        int
+	deleteCalls      int
 }
 
 func (*cancelingUploadStorage) Driver() string { return "canceling" }
 func (s *cancelingUploadStorage) Save(ctx context.Context, _ string, _ io.Reader) (string, error) {
+	s.saveCalls++
 	s.cancel()
 	return "", ctx.Err()
 }
 func (s *cancelingUploadStorage) Delete(ctx context.Context, _ string) error {
+	s.deleteCalls++
 	s.deleteContextErr = ctx.Err()
 	return nil
 }
@@ -342,6 +346,8 @@ func TestCanceledStreamingUploadReturnsSessionToPending(t *testing.T) {
 	srv.echo.ServeHTTP(recorder, req)
 
 	require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+	require.Equal(t, 1, storage.saveCalls, "the canceled write must be attempted exactly once")
+	require.Equal(t, 1, storage.deleteCalls, "a rejected streaming write must clean up its partial object")
 	require.NoError(t, storage.deleteContextErr)
 	var stored models.MediaAttachment
 	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("id = ?", media.ID).Scan(t.Context()))

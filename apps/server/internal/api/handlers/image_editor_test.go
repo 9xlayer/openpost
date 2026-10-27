@@ -633,8 +633,13 @@ func TestImageEditorReturnTokenEnforcesComposerMIMEConstraints(t *testing.T) {
 
 func TestPublicImageEditorTemplatesExposeOnlyBuiltins(t *testing.T) {
 	t.Parallel()
-	handler, _ := newImageEditorHandlerTest(t)
+	handler, ctx := newImageEditorHandlerTest(t)
 	handler.enabled = false
+	_, err := handler.db.NewInsert().Model(&models.DesignTemplate{
+		ID: "private-template", WorkspaceID: "workspace-1", CreatedByID: "user-1",
+		Name: "Private launch template", SnapshotJSON: `{}`,
+	}).Exec(ctx)
+	require.NoError(t, err)
 
 	response, err := handler.listPublicTemplates(context.Background(), &struct{}{})
 
@@ -643,6 +648,7 @@ func TestPublicImageEditorTemplatesExposeOnlyBuiltins(t *testing.T) {
 	for _, template := range response.Body.Templates {
 		require.True(t, template.BuiltIn)
 		require.Empty(t, template.WorkspaceID)
+		require.NotEqual(t, "private-template", template.ID, "public discovery must not expose workspace templates")
 	}
 }
 
