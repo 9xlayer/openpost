@@ -96,12 +96,12 @@ func TestStoreSavesConnectorAccountsAndBindingsAtomically(t *testing.T) {
 	require.ErrorContains(t, err, "binding insert blocked")
 
 	rolledBackAccounts, err := db.NewSelect().Model((*models.SocialAccount)(nil)).
-		Where("workspace_id = ? AND account_id IN (?)", "workspace-1", bun.In([]string{"pages", "reels"})).
+		Where("workspace_id = ? AND account_id IN (?)", "workspace-1", bun.List([]string{"pages", "reels"})).
 		Count(ctx)
 	require.NoError(t, err)
 	require.Zero(t, rolledBackAccounts, "a failed binding write must not leave connector accounts")
 	rolledBackBindings, err := db.NewSelect().Model((*models.ProviderAccountBinding)(nil)).
-		Where("workspace_id = ? AND external_account_id IN (?)", "workspace-1", bun.In([]string{"pages", "reels"})).
+		Where("workspace_id = ? AND external_account_id IN (?)", "workspace-1", bun.List([]string{"pages", "reels"})).
 		Count(ctx)
 	require.NoError(t, err)
 	require.Zero(t, rolledBackBindings, "a failed binding write must not leave bindings")
