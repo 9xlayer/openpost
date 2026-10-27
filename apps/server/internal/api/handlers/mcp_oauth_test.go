@@ -188,8 +188,22 @@ func TestMCPOAuthAuthorizationCodeFlowIssuesUsableMCPToken(t *testing.T) {
 				"jsonrpc": "2.0",
 				"id":      "init",
 				"method":  "initialize",
+				"params": map[string]any{
+					"protocolVersion": "2025-06-18",
+					"capabilities":    map[string]any{},
+					"clientInfo":      map[string]any{"name": "oauth-test", "version": "1"},
+				},
 			}, token.AccessToken)
 			require.Equal(t, http.StatusOK, initializeResp.Code, initializeResp.Body.String())
+			var initialized map[string]any
+			require.NoError(t, json.Unmarshal(initializeResp.Body.Bytes(), &initialized))
+			require.Equal(t, "2.0", initialized["jsonrpc"])
+			require.Equal(t, "init", initialized["id"])
+			require.NotContains(t, initialized, "error")
+			initializedResult := initialized["result"].(map[string]any)
+			require.Equal(t, "2025-06-18", initializedResult["protocolVersion"])
+			require.Equal(t, "openpost", initializedResult["serverInfo"].(map[string]any)["name"])
+			require.Contains(t, initializedResult["capabilities"].(map[string]any), "tools")
 
 			var stored models.APIToken
 			require.NoError(t, srv.db.NewSelect().Model(&stored).Where("token_prefix = ?", tokenPrefix(t, token.AccessToken)).Scan(context.Background()))
