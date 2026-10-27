@@ -312,7 +312,8 @@ describe('MediaPicker library loading', () => {
 	});
 
 	it('renders a content-shaped placeholder while library results load', async () => {
-		mocks.listMedia.mockImplementation(() => new Promise<ImageEditorMediaItem[]>(() => {}));
+		const loaded = Promise.withResolvers<ImageEditorMediaItem[]>();
+		mocks.listMedia.mockReturnValue(loaded.promise);
 		const screen = await renderPicker(false);
 
 		const placeholder = screen.getByTestId('page-loading');
@@ -321,5 +322,13 @@ describe('MediaPicker library loading', () => {
 		expect(placeholder.element().querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(
 			0
 		);
+		loaded.resolve([]);
+		await expect.element(placeholder).not.toBeInTheDocument();
+		await expect.element(screen.getByText(m.media_empty_title(), { exact: true })).toBeVisible();
+		mocks.listMedia.mockResolvedValue([overlayMedia]);
+		await screen.getByRole('button', { name: m.media_picker_search_action() }).click();
+		await expect
+			.element(screen.getByRole('button', { name: 'Select Team photo.png' }))
+			.toBeVisible();
 	});
 });
