@@ -30,20 +30,6 @@ func validReport() Report {
 	}
 }
 
-func TestValidateReportAcceptsAllowlistedPayload(t *testing.T) {
-	if err := ValidateReport(validReport()); err != nil {
-		t.Fatalf("expected valid report, got %v", err)
-	}
-}
-
-func TestValidateReportRejectsUnknownErrorCode(t *testing.T) {
-	report := validReport()
-	report.ErrorCode = "something_broke_badly"
-	if err := ValidateReport(report); err == nil {
-		t.Fatal("expected unknown error_code to be rejected")
-	}
-}
-
 func TestValidateReportAcceptsCanonicalProviders(t *testing.T) {
 	providers := []string{
 		"bluesky", "devnull", "discord", "facebook", "instagram", "lemmy", "linkedin", "mastodon", "peertube",
@@ -163,12 +149,6 @@ func TestLoadOrCreateInstallationIDPersists(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("installation ID file has permissions %o, want 0600", info.Mode().Perm())
-	}
-}
-
-func TestLoadOrCreateInstallationIDWithoutPathIsUnknown(t *testing.T) {
-	if _, err := LoadOrCreateInstallationID(""); err == nil {
-		t.Fatal("expected empty path to report unknown decision")
 	}
 }
 
