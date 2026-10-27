@@ -652,5 +652,23 @@ describe('quick-cut mediabunny fixture', () => {
 		});
 		ac.abort();
 		await expect(promise).rejects.toThrow(/cancelled|abort/i);
+
+		// Copying progress is emitted after the streaming output has started.
+		const started = new AbortController();
+		let copyingObserved = false;
+		const startedExport = exportSegments({
+			sources: [srcA],
+			segments: segs,
+			cutMode: 'nearestKeyframe',
+			merge: true,
+			signal: started.signal,
+			onProgress: (progress) => {
+				if (progress.phase !== 'copying' || started.signal.aborted) return;
+				copyingObserved = true;
+				started.abort();
+			}
+		});
+		await expect(startedExport).rejects.toMatchObject({ name: 'AbortError' });
+		expect(copyingObserved).toBe(true);
 	}, 15000);
 });
