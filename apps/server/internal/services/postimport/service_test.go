@@ -212,43 +212,6 @@ func TestSyncDedupesRepeatedReads(t *testing.T) {
 	require.Equal(t, 1, countImported(t, db, account.ID))
 }
 
-func TestSyncResumesFromStoredCursor(t *testing.T) {
-	reader := &nativeReaderFixture{pages: map[string]platform.NativePostPage{
-		"":       {Coverage: platform.NativePostComplete, NextCursor: "page-2", Items: []platform.NativePostItem{nativePostItem("at://did:plc:owner/app.bsky.feed.post/aaa", "first", "2026-09-26T11:00:00Z")}},
-		"page-2": {Coverage: platform.NativePostComplete, NextCursor: "", Items: []platform.NativePostItem{nativePostItem("at://did:plc:owner/app.bsky.feed.post/bbb", "second", "2026-09-26T10:00:00Z")}},
-	}}
-
-	db := newPostImportTestDB(t)
-	account := seedPostImportAccount(t, db, "bluesky", "did:plc:owner", "")
-	service := NewService(db, &stubTokenSource{token: "token"})
-	service.SetProvider("bluesky", reader)
-	service.maxPages = 1
-	frozen := time.Date(2026, 9, 26, 9, 0, 0, 0, time.UTC)
-	service.now = func() time.Time { return frozen }
-
-	_, err := service.Enable(context.Background(), "workspace-1", account.ID)
-	require.NoError(t, err)
-
-	// First execution commits page one with its checkpoint and stops at the
-	// page bound, keeping the cursor for resume.
-	require.NoError(t, service.SyncAccount(context.Background(), "workspace-1", account.ID))
-	require.Equal(t, 1, countImported(t, db, account.ID))
-	state := loadImportState(t, db, account.ID)
-	require.Equal(t, "page-2", state.Cursor)
-
-	// The retry resumes from the stored cursor instead of re-reading page one.
-	_, err = db.NewUpdate().Model((*models.PostImportState)(nil)).
-		Set("next_eligible_at = ?", frozen.Add(-time.Minute)).
-		Where("social_account_id = ?", account.ID).
-		Exec(context.Background())
-	require.NoError(t, err)
-	require.NoError(t, service.SyncAccount(context.Background(), "workspace-1", account.ID))
-	require.Equal(t, 2, countImported(t, db, account.ID))
-	state = loadImportState(t, db, account.ID)
-	require.Empty(t, state.Cursor)
-	require.False(t, state.LastSuccessAt.IsZero())
-}
-
 func TestResumedSyncKeepsStartWatermark(t *testing.T) {
 	reader := &nativeReaderFixture{pages: map[string]platform.NativePostPage{
 		"":      {Coverage: platform.NativePostComplete, NextCursor: "older", Items: []platform.NativePostItem{nativePostItem("at://did:plc:owner/app.bsky.feed.post/first", "first", "2026-09-26T11:00:00Z")}},
@@ -265,11 +228,16 @@ func TestResumedSyncKeepsStartWatermark(t *testing.T) {
 	_, err := service.Enable(t.Context(), "workspace-1", account.ID)
 	require.NoError(t, err)
 	require.NoError(t, service.SyncAccount(t.Context(), "workspace-1", account.ID))
+	require.Equal(t, 1, countImported(t, db, account.ID), "the first execution commits the first provider page")
+	state := loadImportState(t, db, account.ID)
+	require.Equal(t, "older", state.Cursor, "the first execution stops at the page bound with the remaining cursor stored")
 	current = started.Add(25 * time.Hour)
 	_, err = db.NewUpdate().Model((*models.PostImportState)(nil)).Set("next_eligible_at = ?", started).Where("social_account_id = ?", account.ID).Exec(t.Context())
 	require.NoError(t, err)
 	require.NoError(t, service.SyncAccount(t.Context(), "workspace-1", account.ID))
-	state := loadImportState(t, db, account.ID)
+	require.Equal(t, 2, countImported(t, db, account.ID), "the resumed execution imports the remaining provider page")
+	state = loadImportState(t, db, account.ID)
+	require.Empty(t, state.Cursor, "the resumed execution finishes the stored cursor")
 	require.True(t, state.LastSuccessAt.Equal(started), "next cycle must revisit posts published during the cursor resume")
 	require.True(t, state.CycleStartedAt.IsZero())
 }

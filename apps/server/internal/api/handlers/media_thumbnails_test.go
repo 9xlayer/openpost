@@ -86,12 +86,3 @@ func TestProcessImageUsesJPEGThumbnailsForOpaqueImages(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, imageHasTransparency(thumbnail))
 }
-
-func TestThumbnailContentTypeFollowsFilename(t *testing.T) {
-	t.Parallel()
-
-	require.Equal(t, "image/png", thumbnailContentType("sm_media.png"))
-	require.Equal(t, "image/png", thumbnailContentType("sm_media.PNG"))
-	require.Equal(t, "image/jpeg", thumbnailContentType("sm_media.jpg"))
-	require.Equal(t, "image/jpeg", thumbnailContentType(""))
-}

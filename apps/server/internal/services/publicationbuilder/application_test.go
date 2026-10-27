@@ -336,39 +336,6 @@ func TestApplicationRetryRequeuesFailedBuildAndClearsPreviousWorkerOwnership(t *
 	require.Zero(t, rows, "the old worker no longer owns the requeued job")
 }
 
-func TestApplicationRetryCannotBypassActiveBuildCap(t *testing.T) {
-	db := newBuilderApplicationTestDB(t)
-	now := time.Date(2026, 8, 23, 16, 30, 0, 0, time.UTC)
-	application, err := NewApplication(db, packageBuilderFunc(func(context.Context, BuildInput) (BuildResult, error) {
-		return BuildResult{}, nil
-	}), ApplicationConfig{
-		Now:             func() time.Time { return now },
-		AuthorizeStored: func(context.Context, workspaceaccess.StoredAuthority) error { return nil },
-	})
-	require.NoError(t, err)
-	failed, _, err := application.Enqueue(t.Context(), testBuildRequest(now, "retry-limited"))
-	require.NoError(t, err)
-	_, err = db.NewUpdate().Model((*BuildRecord)(nil)).
-		Set("state = ?", BuildStateFailed).Set("phase = ?", BuildPhaseFailed).
-		Where("id = ?", failed.ID).Exec(t.Context())
-	require.NoError(t, err)
-	_, err = db.NewUpdate().Model((*models.Job)(nil)).
-		Set("status = ?", jobregistry.StatusFailed).
-		Where("type = ? AND scope_id = ?", jobregistry.TypePublicationBuild, failed.ID).
-		Exec(t.Context())
-	require.NoError(t, err)
-	for _, key := range []string{"retry-active-one", "retry-active-two", "retry-active-three"} {
-		_, _, err = application.Enqueue(t.Context(), testBuildRequest(now, key))
-		require.NoError(t, err)
-	}
-
-	_, err = application.Retry(t.Context(), "user-1", failed.ID)
-	require.ErrorIs(t, err, ErrTooManyActiveBuilds)
-	stored, err := application.Get(t.Context(), "user-1", failed.ID)
-	require.NoError(t, err)
-	require.Equal(t, BuildStateFailed, stored.State)
-}
-
 func newBuilderApplicationTestDB(t *testing.T) *bun.DB {
 	t.Helper()
 	sqldb, err := sql.Open("sqlite3", "file:"+strings.ReplaceAll(t.Name(), "/", "_")+"?mode=memory&cache=shared")

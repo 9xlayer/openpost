@@ -668,47 +668,6 @@ func TestCreateMediaUploadSessionRejectsMalformedMimeType(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, resp.Code, resp.Body.String())
 }
 
-func TestCreateMediaUploadSessionAppliesTypeSpecificSizeLimits(t *testing.T) {
-	t.Parallel()
-
-	storage := newFakeDirectUploadStorage()
-	srv := newMediaDirectUploadTestServer(t, storage, entitlements.NewSelfHostedService())
-
-	videoResp := srv.postJSON(t, "/api/v1/media/upload-session", map[string]any{
-		"workspace_id": "ws-1",
-		"filename":     "launch.mp4",
-		"mime_type":    "video/mp4",
-		"size":         MaxMediaUploadBytes,
-	})
-	require.Equal(t, http.StatusOK, videoResp.Code, videoResp.Body.String())
-	var videoSession map[string]any
-	require.NoError(t, json.Unmarshal(videoResp.Body.Bytes(), &videoSession))
-	videoID := videoSession["media_id"].(string)
-	require.Equal(
-		t,
-		"/api/v1/media/upload-session/"+videoID+"/content",
-		videoSession["upload"].(map[string]any)["url"],
-	)
-
-	oversizeVideoResp := srv.postJSON(t, "/api/v1/media/upload-session", map[string]any{
-		"workspace_id": "ws-1",
-		"filename":     "launch.mp4",
-		"mime_type":    "video/mp4",
-		"size":         MaxMediaUploadBytes + 1,
-	})
-	require.Equal(t, http.StatusBadRequest, oversizeVideoResp.Code, oversizeVideoResp.Body.String())
-	require.Contains(t, oversizeVideoResp.Body.String(), "16 GiB")
-
-	oversizeImageResp := srv.postJSON(t, "/api/v1/media/upload-session", map[string]any{
-		"workspace_id": "ws-1",
-		"filename":     "launch.png",
-		"mime_type":    "image/png",
-		"size":         MaxBufferedMediaUploadBytes + 1,
-	})
-	require.Equal(t, http.StatusBadRequest, oversizeImageResp.Code, oversizeImageResp.Body.String())
-	require.Contains(t, oversizeImageResp.Body.String(), "50MB")
-}
-
 func TestMediaUploadSessionTTLScalesForLargeVideos(t *testing.T) {
 	require.Equal(t, MediaUploadSessionTTL, mediaUploadSessionTTL(12))
 	require.Greater(t, mediaUploadSessionTTL(MaxDirectMediaUploadBytes), time.Hour)

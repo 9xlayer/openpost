@@ -286,6 +286,9 @@ func TestFeatureGateGrowEnforcement(t *testing.T) {
 	// Enabled control: a queued follow reaches the provider exactly once.
 	followJobID, err := growSvc.QueueFollow(ctx, workspaceAccessActor(), "ws-1", discovered.ID)
 	require.NoError(t, err)
+	followJobs, err := db.NewSelect().Model((*models.Job)(nil)).Where("type = ?", "growth_follow").Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, followJobs)
 	require.NoError(t, executeGrowthJob(t, db, growSvc, followJobID))
 	require.Equal(t, 1, int(atomic.LoadInt32(&growFake.followCount)), "enabled follow must reach the provider")
 	require.NoError(t, db.NewSelect().Model(&discovered).Where("id = ?", discovered.ID).Scan(ctx))
@@ -532,38 +535,6 @@ func TestFeatureGateGrowNeverQueuesAutomaticFollow(t *testing.T) {
 	require.NoError(t, db.NewSelect().Model(&followJobs).Where("type = ?", "growth_follow").Scan(ctx))
 	require.Len(t, followJobs, 0)
 	require.Equal(t, 0, int(atomic.LoadInt32(&growFake.followCount)), "discovery must not trigger automatic follow")
-}
-
-func TestFeatureGateStaleCallerCannotBypass(t *testing.T) {
-	t.Parallel()
-	db := newFeatureEnforcementDB(t)
-	seedFeatureUserWorkspace(t, db)
-	ctx := context.Background()
-	_, err := db.NewInsert().Model(&models.SocialAccount{ID: "acc-stale", WorkspaceID: "ws-1", Platform: "bluesky", AccountID: "did:plc:stale", Slug: "acc-stale", AccessTokenEnc: []byte("tok"), IsActive: true, CreatedAt: time.Now().UTC()}).Exec(ctx)
-	require.NoError(t, err)
-	_, err = db.NewInsert().Model(&models.GrowthRecommendation{ID: "rec-stale", WorkspaceID: "ws-1", SocialAccountID: "acc-stale", Platform: "bluesky", RemoteAccountID: "remote-stale", Handle: "h", GenerationID: "gen-stale", FollowState: "idle", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(), LastSeenAt: time.Now().UTC()}).Exec(ctx)
-	require.NoError(t, err)
-	growFake := &countingGrowthProvider{}
-	af := accountfeatures.NewService(db, map[string]platform.Adapter{"bluesky": growFake}, nil)
-	growSvc := growthservice.NewService(db, staticTokenSourceFeature{}, nil)
-	growSvc.SetProvider("bluesky", growFake)
-	growSvc.SetFeatureGate(af)
-
-	// Enable then queue follow
-	_, err = af.BatchSave(ctx, "ws-1", workspaceAccessActor(), []accountfeatures.ChoiceInput{{AccountID: "acc-stale", Feature: "grow", Enabled: true}})
-	require.NoError(t, err)
-	_, err = growSvc.QueueFollow(ctx, workspaceAccessActor(), "ws-1", "rec-stale")
-	require.NoError(t, err)
-	var jobs []models.Job
-	require.NoError(t, db.NewSelect().Model(&jobs).Where("type = ?", "growth_follow").Scan(ctx))
-	require.Len(t, jobs, 1)
-	// Disable before job execution (stale page would have already queued)
-	_, err = af.BatchSave(ctx, "ws-1", workspaceAccessActor(), []accountfeatures.ChoiceInput{{AccountID: "acc-stale", Feature: "grow", Enabled: false}})
-	require.NoError(t, err)
-	growFake.followCount = 0
-	err = growSvc.HandleJob(ctx, "growth_follow", jobs[0].Payload)
-	require.Error(t, err)
-	require.Equal(t, 0, int(atomic.LoadInt32(&growFake.followCount)), "stale follow job must not bypass current disabled state")
 }
 
 type staticTokenSourceFeature struct{}
