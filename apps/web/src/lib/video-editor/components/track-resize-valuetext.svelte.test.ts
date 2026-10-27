@@ -2,7 +2,6 @@ import { expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { m } from '$lib/paraglide/messages';
 import { createDefaultTracks } from '$lib/video-editor/project/defaults';
-import { formatTrackHeightText } from '$lib/video-editor/timeline/track-resize';
 import { timelineStore } from '$lib/video-editor/timeline/stores/timeline-store.svelte';
 import TimelinePanel from './timeline-panel.svelte';
 
@@ -14,6 +13,7 @@ it('announces the track-height resize slider with a pixels unit', async () => {
 		fps: timelineStore.fps
 	};
 	const tracks = createDefaultTracks();
+	const audioTrack = tracks.find((track) => track.kind === 'audio')!;
 	timelineStore.setAll({
 		tracks,
 		items: [],
@@ -26,11 +26,9 @@ it('announces the track-height resize slider with a pixels unit', async () => {
 			importProjectAsset: vi.fn(async () => null)
 		});
 		const slider = screen.getByRole('slider', {
-			name: m.video_editor_track_resize({ name: tracks[1].name })
+			name: m.video_editor_track_resize({ name: audioTrack.name })
 		});
-		await expect
-			.element(slider.element())
-			.toHaveAttribute('aria-valuetext', formatTrackHeightText(tracks[1].height));
+		await expect.element(slider.element()).toHaveAttribute('aria-valuetext', '72 pixels');
 	} finally {
 		timelineStore.setAll({
 			tracks: previous.tracks,

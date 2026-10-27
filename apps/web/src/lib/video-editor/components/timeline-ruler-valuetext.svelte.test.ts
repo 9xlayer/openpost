@@ -2,7 +2,6 @@ import { expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { m } from '$lib/paraglide/messages';
 import { createDefaultTracks } from '$lib/video-editor/project/defaults';
-import { formatTimelinePreviewTimecode } from '$lib/video-editor/preview/timeline-preview-scrub';
 import { timelineStore } from '$lib/video-editor/timeline/stores/timeline-store.svelte';
 import TimelinePanel from './timeline-panel.svelte';
 
@@ -25,14 +24,10 @@ it('announces the ruler playhead position as a timecode', async () => {
 			importProjectAsset: vi.fn(async () => null)
 		});
 		const ruler = screen.getByRole('slider', { name: m.video_editor_playhead() });
-		await expect
-			.element(ruler.element())
-			.toHaveAttribute('aria-valuetext', formatTimelinePreviewTimecode(90, 30));
+		await expect.element(ruler.element()).toHaveAttribute('aria-valuetext', '00:00:03:00');
 
 		timelineStore._setCurrentFrame(150);
-		await expect
-			.element(ruler.element())
-			.toHaveAttribute('aria-valuetext', formatTimelinePreviewTimecode(150, 30));
+		await expect.element(ruler.element()).toHaveAttribute('aria-valuetext', '00:00:05:00');
 	} finally {
 		timelineStore.setAll({
 			tracks: previous.tracks,
