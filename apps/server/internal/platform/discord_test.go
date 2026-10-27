@@ -566,7 +566,9 @@ func TestDiscordWebhookDeleteRegression(t *testing.T) {
 	originalClient := httpClient
 	defer func() { httpClient = originalClient }()
 
+	requests := 0
 	httpClient = &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		requests++
 		if req.Method != http.MethodDelete || req.URL.String() != "https://discord.com/api/webhooks/123/token/messages/message-1" {
 			t.Fatalf("unexpected webhook delete %s %s", req.Method, req.URL.String())
 		}
@@ -575,5 +577,8 @@ func TestDiscordWebhookDeleteRegression(t *testing.T) {
 
 	if err := NewDiscordAdapter().DeletePublished(t.Context(), "https://discord.com/api/webhooks/123/token", "message-1"); err != nil {
 		t.Fatal(err)
+	}
+	if requests != 1 {
+		t.Fatalf("expected one native request, got %d", requests)
 	}
 }
