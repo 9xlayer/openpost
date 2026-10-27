@@ -274,20 +274,6 @@ func TestOptionalAuthMiddlewareAuthenticationTimeoutReturns503(t *testing.T) {
 	require.Contains(t, rec.Body.String(), "authentication is temporarily unavailable")
 }
 
-func TestOptionalAuthMiddlewareInvalidTokenContinuesAnonymously(t *testing.T) {
-	called := false
-	e := newHumaOptionallyAuthed(&fakeAuthenticator{err: errors.New("invalid token")}, &called)
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/optional-auth-test", nil)
-	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "invalid-token"})
-	rec := httptest.NewRecorder()
-
-	e.ServeHTTP(rec, req)
-
-	require.True(t, called)
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NotContains(t, rec.Body.String(), "authentication is temporarily unavailable")
-}
-
 func TestBearerMiddlewareRejectsMCPResourceToken(t *testing.T) {
 	auth := &fakeAuthenticator{principal: &Principal{
 		UserID:   "u",

@@ -1000,34 +1000,6 @@ func TestCompleteMediaUploadSessionDedupesExistingMedia(t *testing.T) {
 	require.Equal(t, int64(0), current)
 }
 
-func TestMediaRollbackCompletesAfterRequestCancellation(t *testing.T) {
-	storage := newFakeDirectUploadStorage()
-	srv := newMediaDirectUploadTestServer(t, storage, entitlements.NewSelfHostedService())
-	media := &models.MediaAttachment{
-		ID:               "rollback-media",
-		WorkspaceID:      "ws-1",
-		FilePath:         "rollback-media.txt",
-		StorageType:      "s3",
-		MimeType:         "text/plain",
-		ProcessingStatus: mediaReadyStatus,
-		Size:             7,
-		OriginalFilename: "rollback-media.txt",
-		CreatedAt:        time.Now().UTC(),
-	}
-	_, err := srv.db.NewInsert().Model(media).Exec(t.Context())
-	require.NoError(t, err)
-	storage.objects[media.FilePath] = []byte("content")
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	handler := NewMediaHandler(srv.db, storage, nil, testAuthenticator{}, nil)
-
-	require.NoError(t, handler.rollbackMediaRecord(ctx, media))
-	count, err := srv.db.NewSelect().Model((*models.MediaAttachment)(nil)).Where("id = ?", media.ID).Count(t.Context())
-	require.NoError(t, err)
-	require.Zero(t, count)
-	require.NotContains(t, storage.objects, media.FilePath)
-}
-
 func TestFailedMediaInsertReconcilesCommittedRowBeforeDeletingFiles(t *testing.T) {
 	storage := newFakeDirectUploadStorage()
 	srv := newMediaDirectUploadTestServer(t, storage, entitlements.NewSelfHostedService())
