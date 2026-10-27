@@ -218,7 +218,10 @@ it('extends selection while dragging below the sticky actions and scrolling', as
 	try {
 		const screen = await render(TranscriptPanel, { target: host, props: { onedit: vi.fn() } });
 		const first = screen.getByRole('button', { name: 'word0', exact: true }).element();
+		const panel = host.querySelector<HTMLElement>('[data-testid="transcript-panel"]');
+		if (!panel) throw new Error('Transcript panel is missing.');
 		first.scrollIntoView({ block: 'center' });
+		const initialScrollTop = panel.scrollTop;
 		const rect = first.getBoundingClientRect();
 		first.dispatchEvent(
 			new PointerEvent('pointerdown', {
@@ -238,10 +241,35 @@ it('extends selection while dragging below the sticky actions and scrolling', as
 				clientY: bottom + 30
 			})
 		);
+		// Dragging past the edge must autoscroll the pane, not only grow a count.
+		await expect.poll(() => panel.scrollTop).toBeGreaterThan(initialScrollTop);
 		await expect
 			.poll(() => host.querySelectorAll('[data-selected="true"]').length)
 			.toBeGreaterThan(20);
 		window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 11, bubbles: true }));
+
+		const selected = [...panel.querySelectorAll<HTMLElement>('[data-selected="true"]')];
+		expect(selected.length).toBeGreaterThan(20);
+		expect(selected[0]).toBe(first);
+		const indices = selected.map((word) => Number(word.dataset.transcriptWord));
+		for (let index = 1; index < indices.length; index += 1) {
+			expect(indices[index]).toBe(indices[index - 1]! + 1);
+		}
+		expect(indices.at(-1)).toBeLessThan(119);
+		// The pointer is clamped just above the sticky selection toolbar, so the
+		// selection must end on that visible boundary line (`leading-8` is 32px),
+		// not earlier and not on the whole document.
+		const toolbar = panel.querySelector('[role="toolbar"]');
+		if (!toolbar) throw new Error('Selection toolbar is missing.');
+		const clampY = Math.min(
+			panel.getBoundingClientRect().bottom,
+			toolbar.getBoundingClientRect().top
+		);
+		const endWord = panel.querySelector<HTMLElement>(`[data-transcript-word="${indices.at(-1)}"]`);
+		if (!endWord) throw new Error('Last selected word is missing.');
+		const endBounds = endWord.getBoundingClientRect();
+		expect(endBounds.bottom).toBeGreaterThan(clampY - 32);
+		expect(endBounds.top).toBeLessThan(clampY + 2);
 	} finally {
 		host.remove();
 	}
