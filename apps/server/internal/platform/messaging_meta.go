@@ -137,14 +137,14 @@ func (m metaMessagingAdapter) fetch(ctx context.Context, token string, input Fet
 		messages := make([]ProviderMessage, 0, len(remote.Messages.Data))
 		var latestInbound time.Time
 		for _, item := range remote.Messages.Data {
-			createdAt := nativePostTime(item.CreatedTime)
+			createdAt := ProviderTime(item.CreatedTime)
 			if item.From.ID != input.AccountID && createdAt.After(latestInbound) {
 				latestInbound = createdAt
 			}
 			messages = append(messages, item.provider(input.AccountID))
 		}
 		sort.Slice(messages, func(a, b int) bool { return messages[a].RemoteCreatedAt.Before(messages[b].RemoteCreatedAt) })
-		updatedAt := nativePostTime(remote.UpdatedTime)
+		updatedAt := ProviderTime(remote.UpdatedTime)
 		preview := ""
 		lastID := ""
 		if len(messages) > 0 {

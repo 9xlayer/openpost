@@ -58,7 +58,7 @@ const metaMessageFields = "id,from,message,created_time,attachments,shares,story
 
 func (m metaMessageView) provider(accountID string) ProviderMessage {
 	// Graph returns offsets without a colon, such as 2026-10-26T21:01:00+0000.
-	at := nativePostTime(m.CreatedTime)
+	at := ProviderTime(m.CreatedTime)
 	direction := "inbound"
 	if m.From.ID == accountID {
 		direction = "outbound"

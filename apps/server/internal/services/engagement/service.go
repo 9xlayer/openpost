@@ -36,7 +36,6 @@ const (
 	defaultXDailyReadBudget = 12
 	xCommentPageSize        = 100
 	xMaxCommentPagesPerSync = 1
-	metaTimestampLayout     = "2006-01-02T15:04:05-0700"
 )
 
 var (
@@ -657,7 +656,7 @@ func engagementItemFromComment(
 		ArchivedAt:           existing.ArchivedAt,
 		EditedAt:             engagementEditedAt(existing, comment, attachments, now),
 		DeletedAt:            engagementDeletedAt(existing, comment, now),
-		RemoteCreatedAt:      firstNonZeroTime(parseProviderTime(comment.CreatedAt), existing.RemoteCreatedAt),
+		RemoteCreatedAt:      firstNonZeroTime(platform.ProviderTime(comment.CreatedAt), existing.RemoteCreatedAt),
 		LastSeenAt:           now,
 		CreatedAt:            firstNonZeroTime(existing.CreatedAt, now),
 		UpdatedAt:            now,
@@ -666,8 +665,8 @@ func engagementItemFromComment(
 }
 
 func engagementEditedAt(existing models.EngagementItem, comment platform.Comment, attachments string, now time.Time) time.Time {
-	remoteUpdatedAt := parseProviderTime(comment.UpdatedAt)
-	if !remoteUpdatedAt.IsZero() && remoteUpdatedAt.After(parseProviderTime(comment.CreatedAt)) {
+	remoteUpdatedAt := platform.ProviderTime(comment.UpdatedAt)
+	if !remoteUpdatedAt.IsZero() && remoteUpdatedAt.After(platform.ProviderTime(comment.CreatedAt)) {
 		return remoteUpdatedAt
 	}
 	if existing.ID != "" &&
@@ -1833,16 +1832,6 @@ func (s *Service) enqueue(ctx context.Context, workspaceID, jobType, payload str
 
 func syncStateID(renditionID string) string {
 	return "engagement:rendition:" + renditionID
-}
-
-func parseProviderTime(raw string) time.Time {
-	raw = strings.TrimSpace(raw)
-	value, err := time.Parse(time.RFC3339, raw)
-	if err == nil {
-		return value
-	}
-	value, _ = time.Parse(metaTimestampLayout, raw)
-	return value
 }
 
 func firstNonZeroTime(values ...time.Time) time.Time {
