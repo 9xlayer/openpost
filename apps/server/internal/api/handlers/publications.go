@@ -3614,13 +3614,6 @@ func secureRandomInt(n int) int {
 	return int(time.Now().UnixNano() % int64(n))
 }
 
-func (h *PublicationHandler) queuePublication(ctx context.Context, publicationID string, runAt time.Time) (string, error) {
-	result, err := h.queuePublicationWithRunAt(ctx, publicationID, 0, publicationauth.PolicyScheduled, providerreadiness.ExecutionIntentProduction, func(_ *models.Publication, _ time.Time) (time.Time, error) {
-		return runAt, nil
-	})
-	return result.JobID, err
-}
-
 func (h *PublicationHandler) queueScheduledPublication(ctx context.Context, publicationID string) (string, error) {
 	result, err := h.queueScheduledPublicationExpected(ctx, publicationID, 0)
 	return result.JobID, err
