@@ -120,11 +120,20 @@ test("changed files route to their CI paths", () => {
 
 test("delivery changes fail closed to the complete matrix", () => {
   const plan = planCI([".github/workflows/ci.yml"], manifest);
-  assert.ok(
-    Object.entries(plan)
-      .filter(([name]) => name !== "cache_contract")
-      .every(([, enabled]) => enabled),
-  );
+  assert.deepEqual(plan, {
+    application: true,
+    backend: true,
+    frontend: true,
+    marketing: true,
+    documentation: true,
+    cli: true,
+    n8n: true,
+    npm: true,
+    security: true,
+    image: true,
+    android: true,
+    cache_contract: false,
+  });
 });
 
 test("main candidates always run the complete matrix", () => {

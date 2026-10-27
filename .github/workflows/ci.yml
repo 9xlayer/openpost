@@ -131,7 +131,7 @@ jobs:
         env:
           OPENPOST_SECRET_SCAN_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
           OPENPOST_SECRET_SCAN_HEAD: ${{ github.sha }}
-        run: bun run format:check && bun run check -- policy
+        run: bun run format:check && bun run check -- policy && bun test ./scripts
       - if: always()
         run: bash scripts/ci-timing-summary.sh finish policy
 
@@ -417,6 +417,7 @@ jobs:
         run: |
           bun run sync
           if [[ "${{ matrix.shard }}" == server ]]; then
+            bun run test:browser-tools
             bunx vitest run --project server
           else
             bun run test:browser ${{ matrix.shard }}

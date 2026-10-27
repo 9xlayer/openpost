@@ -86,7 +86,7 @@ function planFiltered(files, manifest, { full = false } = {}) {
         "scripts/npm-package-release.mjs",
         "scripts/npm-package-release.test.mjs",
         "scripts/check-npm-package-build.mjs",
-        "scripts/check-npm-package-build.test.mjs",
+        "tests/build/npm-package-build.test.mjs",
         "scripts/verify-published-npm-package.mjs",
       ],
     ),

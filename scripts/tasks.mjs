@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { mkdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { shardRunPattern } from "./go-test-shards.mjs";
@@ -32,24 +33,33 @@ const checks = {
   // The payload assertions run after both builds because they inspect the
   // built dist output that clean checkouts only produce here.
   "npm-packages": stage("npm packages", [
-    bunTest("scripts/npm-package-release.test.mjs"),
+    bunTest(
+      "scripts/npm-package-release.test.mjs",
+      "scripts/npm-pack-result.test.mjs",
+      "scripts/npm-view-result.test.mjs",
+    ),
     commandStep("bun", "run", "check", { cwd: "packages/sdk" }),
     commandStep("bun", "run", "test", { cwd: "packages/sdk" }),
     commandStep("bun", "run", "build", { cwd: "packages/sdk" }),
     commandStep("bun", "run", "check", { cwd: "packages/cli" }),
     commandStep("bun", "run", "test", { cwd: "packages/cli" }),
     commandStep("bun", "run", "build", { cwd: "packages/cli" }),
-    bunTest("scripts/check-npm-package-build.test.mjs"),
+    bunTest("tests/build/npm-package-build.test.mjs"),
     bun("scripts/check-npm-package-build.mjs"),
   ]),
   "n8n-package": stage("n8n package", [
-    bunTest("scripts/n8n-package-release.test.mjs"),
+    bunTest(
+      "scripts/n8n-package-release.test.mjs",
+      "scripts/npm-pack-result.test.mjs",
+      "scripts/npm-view-result.test.mjs",
+    ),
     bunTest("scripts/generate-selected-automation-contract.test.mjs"),
     bun("scripts/generate-selected-automation-contract.mjs", "--check"),
     commandStep("bun", "run", "check", { cwd: "packages/n8n-nodes-openpost" }),
     commandStep("bun", "run", "test", { cwd: "packages/n8n-nodes-openpost" }),
     commandStep("bun", "run", "lint", { cwd: "packages/n8n-nodes-openpost" }),
     commandStep("bun", "run", "build", { cwd: "packages/n8n-nodes-openpost" }),
+    bunTest("tests/build/n8n-package-build.test.mjs"),
     bun("scripts/check-n8n-package-build.mjs"),
   ]),
   "build-graph": stage("build graph", [
@@ -95,6 +105,8 @@ const checks = {
     bunTest(
       "scripts/next-release-version.test.mjs",
       "scripts/n8n-package-release.test.mjs",
+      "scripts/npm-pack-result.test.mjs",
+      "scripts/npm-view-result.test.mjs",
       "scripts/mobile-release.test.mjs",
       "scripts/release-assets.test.mjs",
       "scripts/release-lifecycle.test.mjs",
@@ -197,6 +209,7 @@ const checks = {
   tasks: stage("task interface", [
     bunTest(
       "scripts/tasks.test.mjs",
+      "scripts/affected-checks.test.mjs",
       "scripts/changed-files-check.test.mjs",
       "scripts/secret-scan-contract.test.mjs",
       "scripts/turbo-cache.test.mjs",
@@ -224,10 +237,16 @@ const policyGroups = [
 
 if (import.meta.main) {
   try {
-    const plan = resolvePlan(command, scope, options);
+    const plan =
+      command === "check:affected"
+        ? affectedPlan(
+            (await import("./affected-checks.mjs")).affectedSelection(process.argv.slice(3), root),
+          )
+        : resolvePlan(command, scope, options);
     if (options.has("--plan")) {
       console.log(JSON.stringify(publicPlan(plan), null, 2));
     } else {
+      if (plan.affected) console.log(JSON.stringify(publicPlan(plan), null, 2));
       const cacheDirectory = resolveTurboCacheDirectory({ repositoryRoot: root });
       if (process.env.OPENPOST_ROOT_TASK_LOCKED === "1") {
         await execute(plan, { cacheDirectory, enforceCacheLimit: false });
@@ -244,6 +263,14 @@ if (import.meta.main) {
             await executeWithCacheLease(plan, cacheDirectory);
           });
         }
+      }
+      if (plan.affected) {
+        console.log(
+          plan.affected.files.length || plan.affected.fallback
+            ? "check:affected: selected checks passed"
+            : "check:affected: no local changes selected",
+        );
+        console.log(`Omitted: ${plan.affected.omitted.join("; ")}. ${plan.affected.proof}`);
       }
     }
   } catch (error) {
@@ -280,14 +307,15 @@ export function resolvePlan(requestedCommand, requestedScope, requestedOptions =
     case "verify":
       if (requestedScope) throw unsupported(requestedCommand, requestedScope, []);
       return plan(requestedCommand, undefined, [
+        ...(requestedCommand === "preflight" ? [[taskStage("format check", "format:check")]] : []),
         [taskStage("static checks", "check")],
         [
-          taskStage("format check", "format:check"),
+          ...(requestedCommand === "verify" ? [taskStage("format check", "format:check")] : []),
           taskStage("lint", "lint"),
           ...(requestedCommand === "preflight"
             ? [
-                checks["npm-packages"],
-                checks["n8n-package"],
+                withoutRepositoryTests(checks["npm-packages"]),
+                withoutRepositoryTests(checks["n8n-package"]),
                 stage("mobile source checks", [
                   commandStep("bun", "run", "check:source", { cwd: "apps/mobile" }),
                 ]),
@@ -300,6 +328,75 @@ export function resolvePlan(requestedCommand, requestedScope, requestedOptions =
     default:
       throw new Error(`unknown task ${JSON.stringify(requestedCommand)}\n${help()}`);
   }
+}
+
+function affectedPathPhases(selection) {
+  if (!selection.files.length) return [];
+  const phases = [];
+  if (selection.mergeBase)
+    phases.push([
+      stage("committed whitespace", [
+        commandStep("git", "diff", "--check", selection.mergeBase, selection.head),
+      ]),
+    ]);
+  phases.push([
+    stage("changed syntax and format", [
+      commandStep("bash", "scripts/changed-files-check.sh", "--files0", {
+        input: `${selection.files.join("\0")}\0`,
+      }),
+    ]),
+  ]);
+  return phases;
+}
+
+function affectedPlan(selection) {
+  const phases = affectedPathPhases(selection);
+  if (selection.fallback) {
+    const full = resolvePlan("preflight");
+    return {
+      ...full,
+      command: "check:affected",
+      affected: selection,
+      phases: [...phases, ...full.phases],
+    };
+  }
+  const used = new Set();
+  const commands = new Set();
+  const append = (selected) => {
+    for (const items of selected.phases) {
+      const fresh = items.flatMap((item) => {
+        if (used.has(item.label)) return [];
+        used.add(item.label);
+        const steps = item.steps.filter((step) => {
+          const key = JSON.stringify(step);
+          if (commands.has(key)) return false;
+          commands.add(key);
+          return true;
+        });
+        return steps.length ? [{ ...item, steps }] : [];
+      });
+      if (fresh.length) phases.push(fresh);
+    }
+  };
+  if (selection.files.length) {
+    for (const owner of selection.scopes) {
+      if (owner !== "mobile") append(checkPlan(owner, new Set()));
+    }
+    for (const owner of selection.scopes) {
+      if (owner === "mobile") {
+        append(
+          plan("check", "mobile", [
+            [
+              stage("mobile source checks", [
+                commandStep("bun", "run", "check:source", { cwd: "apps/mobile" }),
+              ]),
+            ],
+          ]),
+        );
+      } else append(testPlan(owner));
+    }
+  }
+  return { ...plan("check:affected", undefined, phases), affected: selection };
 }
 
 function devPlan(requestedScope) {
@@ -470,7 +567,9 @@ function checkPlan(requestedScope, requestedOptions) {
     return plan("check", requestedScope, [[translations], [marketing]]);
   if (requestedScope === "docs") return plan("check", requestedScope, [[checks.docs]]);
 
-  const groups = policyGroups.map((group) => group.map((name) => checks[name]));
+  const groups = policyGroups.map((group) =>
+    group.map((name) => withoutRepositoryTests(checks[name])),
+  );
   if (requestedScope === "policy") {
     if (requestedOptions.has("--policy-only")) {
       return plan("check", requestedScope, groups);
@@ -728,7 +827,9 @@ async function gitFiles(directory, pattern) {
   const result = await capture(["git", "ls-files", "-co", "--exclude-standard", "--", directory]);
   if (result.status !== 0) return [];
   const suffix = pattern.replace("*", "");
-  return result.stdout.split("\n").filter((file) => file && file.endsWith(suffix));
+  return result.stdout
+    .split("\n")
+    .filter((file) => file.endsWith(suffix) && existsSync(path.join(root, file)));
 }
 
 async function spawn(argv, step = {}, signal) {
@@ -736,7 +837,7 @@ async function spawn(argv, step = {}, signal) {
   const child = Bun.spawn(argv, {
     cwd: step.cwd ? path.join(root, step.cwd) : root,
     env: { ...process.env, ...step.env },
-    stdin: "inherit",
+    stdin: step.input === undefined ? "inherit" : new Blob([step.input]),
     stdout: "inherit",
     stderr: "inherit",
   });
@@ -764,17 +865,40 @@ function plan(requestedCommand, requestedScope, phases) {
 }
 
 export function publicPlan(taskPlan) {
-  return {
+  const result = {
     command: taskPlan.command,
     scope: taskPlan.scope ?? null,
     stages: taskPlan.phases.flatMap((items, phase) =>
-      items.map((item) => ({
-        phase,
-        label: item.label,
-        commands: item.steps.map((step) => step.display ?? step.argv?.join(" ") ?? step.type),
-      })),
+      items.map((item) => {
+        const entry = {
+          phase,
+          label: item.label,
+          commands: item.steps.map((step) => step.display ?? step.argv?.join(" ") ?? step.type),
+        };
+        if (taskPlan.affected) entry.steps = item.steps.map(publicAffectedStep);
+        return entry;
+      }),
     ),
   };
+  if (taskPlan.affected) result.affected = taskPlan.affected;
+  return result;
+}
+
+function publicAffectedStep(step) {
+  const result = {
+    type: step.type,
+    cwd: step.cwd ? path.join(root, step.cwd) : root,
+    argv: step.argv ?? null,
+    env: { ...step.env, OPENPOST_ROOT_TASK_LOCKED: "1" },
+  };
+  if (step.type === "task") {
+    result.task = step.task;
+    result.scope = step.scope ?? null;
+    result.argv = ["bun", "scripts/tasks.mjs", step.task, ...(step.scope ? [step.scope] : [])];
+    result.cwd = root;
+    result.env = { OPENPOST_ROOT_TASK_LOCKED: "1" };
+  }
+  return result;
 }
 
 function stage(label, steps) {
@@ -808,6 +932,20 @@ function bunTest(...args) {
   return commandStep("bun", "test", ...exactPaths);
 }
 
+// Aggregate policy checks inspect the checkout. Repository regression tests
+// have one owner: the scripts sweep in `test` (and the CI policy job).
+// Explicit check selectors still include their focused regression tests.
+function withoutRepositoryTests(taskStage) {
+  return {
+    ...taskStage,
+    steps: taskStage.steps.flatMap((step) => {
+      if (step.argv?.[0] !== "bun" || step.argv[1] !== "test") return [step];
+      const files = step.argv.slice(2).filter((file) => !file.startsWith("./scripts/"));
+      return files.length ? [bunTest(...files)] : [];
+    }),
+  };
+}
+
 function go(...values) {
   return commandStep("go", ...values);
 }
@@ -821,7 +959,8 @@ function unsupported(requestedCommand, requestedScope, supported) {
 function help() {
   return [
     "Usage: bun scripts/tasks.mjs <command> [scope] [--plan]",
-    "Commands: dev, format, format:check, lint, fallow, check, test, build, preflight, verify",
+    "Commands: dev, format, format:check, lint, fallow, check, test, build, preflight, verify, check:affected",
+    "Affected: bun run check:affected [--base REV] [--plan]",
     `Surface scopes: ${surfaceScopes.join(", ")}`,
     `Browser test scopes: ${browserScopes.join(", ")}`,
     `Policy selectors: ${Object.keys(checks).join(", ")}`,
