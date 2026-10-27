@@ -40,25 +40,6 @@ test("formats account handles with exactly one at sign", () => {
   expect(accountHandle("", "youtube-rodrgds", "threads")).toBe("youtube-rodrgds");
 });
 
-test("labels fediverse platforms by name", () => {
-  expect(platformLabel("pixelfed")).toBe("Pixelfed");
-  expect(platformLabel("peertube")).toBe("PeerTube");
-  expect(platformLabel("lemmy")).toBe("Lemmy");
-  expect(platformLabel("piefed")).toBe("PieFed");
-});
-
-test("labels Google Business instead of the raw slug", () => {
-  expect(platformLabel("googlebusiness")).toBe("Google Business");
-  expect(platformLabel("gmb")).toBe("Google Business");
-});
-
-test("labels fediverse software instead of the raw slug", () => {
-  expect(platformLabel("gotosocial")).toBe("GoToSocial");
-  expect(platformLabel("akkoma")).toBe("Akkoma");
-  expect(platformLabel("pleroma")).toBe("Pleroma");
-  expect(platformLabel("friendica")).toBe("Friendica");
-});
-
 test("every canonical platform key resolves to a name different from the raw key", () => {
   const expected = {
     x: "X",

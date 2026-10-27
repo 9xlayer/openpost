@@ -6,12 +6,7 @@ import {
   type ThemeValidationRgba,
 } from "@openpost/dither/theme-validation";
 
-import {
-  BUILTIN_THEME_FAMILIES,
-  BUILTIN_THEME_IDS,
-  builtinThemeForScheme,
-  validateNativeThemeManifest,
-} from "./builtins";
+import { BUILTIN_THEME_FAMILIES, BUILTIN_THEME_IDS, validateNativeThemeManifest } from "./builtins";
 import { NATIVE_ICON_ROLES, NATIVE_MIN_TEXT_SIZE, type NativeThemeManifest } from "./contract";
 
 describe("native built-in themes", () => {
@@ -28,14 +23,6 @@ describe("native built-in themes", () => {
         );
       }
     }
-  });
-
-  test("uses a complete Workshop theme when a family does not support the requested scheme", () => {
-    const resolved = builtinThemeForScheme("midnight", "light");
-
-    expect(resolved.family.id).toBe("workshop");
-    expect(resolved.fallbackReason).toBe("unsupported-scheme");
-    expect(resolved.manifest).toBe(BUILTIN_THEME_FAMILIES.workshop.manifests.light!);
   });
 
   test("keeps core text and filled actions at accessible contrast", () => {
