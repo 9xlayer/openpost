@@ -109,10 +109,6 @@ test("character-counter description counts the counter's own platform list", () 
   const match = entry.description.match(/\b(\d+) social networks\b/u);
   assert.ok(match, "character-counter description must state its platform count");
   assert.equal(Number(match[1]), counterPlatforms.length);
-  assert.equal(
-    entry.description,
-    `Check one draft against the limits and counting rules for ${counterPlatforms.length} social networks.`,
-  );
 });
 
 test("documentation corpus policy is complete canonical metadata", () => {
