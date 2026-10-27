@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -245,6 +246,10 @@ func TestOAuthDynamicClientRegistrationIsPolicyControlled(t *testing.T) {
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	require.Contains(t, response["client_id"], "op_app_")
 	require.Equal(t, "none", response["token_endpoint_auth_method"])
+
+	var createdBy sql.NullString
+	require.NoError(t, db.NewRaw("SELECT created_by_user_id FROM external_applications WHERE client_id = ?", response["client_id"]).Scan(t.Context(), &createdBy))
+	require.False(t, createdBy.Valid)
 
 	for attempt := 1; attempt < dynamicClientRegistrationsPerHour; attempt++ {
 		request = httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/oauth/register", strings.NewReader(body))

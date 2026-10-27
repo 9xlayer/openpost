@@ -117,19 +117,6 @@ func TestSanitizeReportStripsDomainsAndHomeDirs(t *testing.T) {
 	}
 }
 
-func TestSanitizeReportNormalizesUnknownDrivers(t *testing.T) {
-	report := validReport()
-	report.DBDriver = "cockroachlabs-managed"
-	report.StorageDriver = "ftp://files.internal"
-	SanitizeReport(&report)
-	if report.DBDriver != "other" || report.StorageDriver != "other" {
-		t.Fatalf("expected drivers normalized to other, got %q/%q", report.DBDriver, report.StorageDriver)
-	}
-	if err := ValidateReport(report); err != nil {
-		t.Fatalf("sanitized report should validate: %v", err)
-	}
-}
-
 func TestDecodeStrictReportRejectsUnknownFields(t *testing.T) {
 	payload := `{"installation_id":"0123456789abcdef0123456789abcdef","surface":"backend","operation":"x","error_code":"api_5xx","first_seen":"2026-01-01T00:00:00Z","last_seen":"2026-01-01T00:00:00Z","post_text":"hello world"}`
 	if _, err := DecodeStrictReport([]byte(payload), maxReportBodyBytes); err == nil {
@@ -175,21 +162,6 @@ func TestLoadOrCreateInstallationIDPersists(t *testing.T) {
 	}
 }
 
-func TestDedupeFirstSendsThenAggregates(t *testing.T) {
-	dedupe := NewDeduplicator()
-	fixed := time.Now().UTC()
-	dedupe.now = func() time.Time { return fixed }
-
-	decision, first := dedupe.Observe(validReport())
-	if decision != DedupeSend || first.OccurrenceCount != 1 {
-		t.Fatalf("expected first occurrence to send, got decision=%v count=%d", decision, first.OccurrenceCount)
-	}
-	decision, _ = dedupe.Observe(validReport())
-	if decision != DedupeAggregate {
-		t.Fatalf("expected repeat to aggregate, got %v", decision)
-	}
-}
-
 func TestDedupeKeepsDifferentDiagnosticCausesSeparate(t *testing.T) {
 	dedupe := NewDeduplicator()
 	for _, details := range []struct{ kind, method string }{
@@ -216,8 +188,14 @@ func TestDedupeWindowSummaryCountsOccurrences(t *testing.T) {
 	current := time.Now().UTC()
 	dedupe.now = func() time.Time { return current }
 
-	_, _ = dedupe.Observe(validReport())
-	_, _ = dedupe.Observe(validReport())
+	decision, first := dedupe.Observe(validReport())
+	if decision != DedupeSend || first.OccurrenceCount != 1 {
+		t.Fatalf("expected first occurrence to send, got decision=%v count=%d", decision, first.OccurrenceCount)
+	}
+	decision, _ = dedupe.Observe(validReport())
+	if decision != DedupeAggregate {
+		t.Fatalf("expected repeat to aggregate, got %v", decision)
+	}
 	current = current.Add(dedupeWindow + time.Second)
 	decision, summary := dedupe.Observe(validReport())
 	if decision != DedupeWindowSummary {
@@ -301,10 +279,18 @@ func TestReporterDeliversFirstOccurrence(t *testing.T) {
 	report.Operation = "publication_publish"
 	report.ErrorCode = CodePublishFailed
 	report.Version = ""
+	report.DBDriver = "cockroachlabs-managed"
+	report.StorageDriver = "ftp://files.internal"
 	reporter.Report(report)
 	reporter.flush()
 	select {
 	case delivered := <-received:
+		if delivered.DBDriver != "other" || delivered.StorageDriver != "other" {
+			t.Fatalf("expected drivers normalized to other, got %q/%q", delivered.DBDriver, delivered.StorageDriver)
+		}
+		if err := ValidateReport(delivered); err != nil {
+			t.Fatalf("delivered report should validate: %v", err)
+		}
 		if delivered.ErrorCode != CodePublishFailed || delivered.OccurrenceCount != 1 {
 			t.Fatalf("unexpected delivered report: %+v", delivered)
 		}
