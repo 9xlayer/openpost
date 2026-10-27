@@ -94,6 +94,8 @@ describe('WorkspaceSetupGuide', () => {
 				data: {
 					visible: false,
 					activated: true,
+					next_action: 'create_publication',
+					action_href: '/',
 					completed_steps: 3,
 					total_steps: 3,
 					steps: []
@@ -105,6 +107,14 @@ describe('WorkspaceSetupGuide', () => {
 		});
 		await expect.element(screen.getByTestId('workspace-setup-guide-home')).toBeVisible();
 		ui.refreshWorkspaceSetup();
+		await expect.poll(() => mocks.get).toHaveBeenCalledTimes(2);
+		expect(mocks.get).toHaveBeenNthCalledWith(2, '/workspaces/{id}/setup', {
+			params: { path: { id: 'workspace-1' } },
+			signal: expect.any(AbortSignal)
+		});
+		await expect
+			.poll(() => queryClient.getQueryData(workspaceSettingsQueryKeys.setup('workspace-1')))
+			.toMatchObject({ visible: false, action_href: '/' });
 		await expect.element(screen.getByTestId('workspace-setup-guide-home')).not.toBeInTheDocument();
 	});
 });

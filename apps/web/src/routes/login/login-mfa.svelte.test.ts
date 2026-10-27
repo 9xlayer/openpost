@@ -56,8 +56,10 @@ describe('login TOTP submit gate', () => {
 				};
 			}
 			if (path === '/auth/login/totp') {
-				// SAFETY: The incomplete-code guard returns before this response is consumed; the shape only satisfies the mock's return type.
-				return { data: { user: null }, response: new Response() } as never;
+				// SAFETY: The spied POST overload resolves its generic response to never for a
+				// concrete body. This is the real error branch the page consumes: verifyTOTP
+				// throws on `error` and the page renders its detail.
+				return { data: undefined, error: { detail: 'Authenticator code expired.' } } as never;
 			}
 			return { data: undefined };
 		});
@@ -105,9 +107,21 @@ describe('login TOTP submit gate', () => {
 		await codeInput.fill('123');
 		// Keyboard submission bypasses the disabled submit button, so drive the
 		// form's submit path directly the way an Enter keypress would.
-		document.querySelector<HTMLInputElement>('#totpCode')?.closest('form')?.requestSubmit();
-
-		await new Promise((resolve) => setTimeout(resolve, 150));
+		const form = codeInput.element().closest<HTMLFormElement>('form');
+		expect(form).toBeInstanceOf(HTMLFormElement);
+		const submitted = vi.fn();
+		form!.addEventListener('submit', submitted);
+		form!.requestSubmit();
+		await vi.waitFor(() => expect(submitted).toHaveBeenCalledOnce());
 		expect(totpCalls()).toHaveLength(0);
+
+		// Positive control: the same submit path reaches verify once the code is complete.
+		await codeInput.fill('123456');
+		form!.requestSubmit();
+		await vi.waitFor(() => expect(totpCalls()).toHaveLength(1));
+		expect(postMock).toHaveBeenCalledWith('/auth/login/totp', {
+			body: { mfa_token: 'mfa-token', code: '123456' }
+		});
+		await expect.element(screen.getByText('Authenticator code expired.')).toBeVisible();
 	});
 });
