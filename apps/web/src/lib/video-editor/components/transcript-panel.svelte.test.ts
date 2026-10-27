@@ -3,7 +3,7 @@ import { render } from 'vitest-browser-svelte';
 import { page, userEvent } from 'vitest/browser';
 import { addGeneratedSubtitleItem } from '../transcript/transcribe-action';
 import { addSubtitleItemFromSrt } from '../transcript/captions';
-import { trimItemStart } from '../timeline/actions/items';
+import { planTrimGesture } from '../timeline/edit-gesture';
 import { timelineStore } from '../timeline/stores/timeline-store.svelte';
 import { createBlankProject, createDefaultTracks } from '../project/defaults';
 import { sequenceStore } from '../sequences/sequence-store.svelte';
@@ -447,7 +447,10 @@ it('rejects an inverted caption end without compressing words and still admits a
 it('uses sequence frames for imported captions after a timeline start trim', async () => {
 	timelineStore.setAll({ fps: 30, tracks: createDefaultTracks(), items: [] });
 	const id = addSubtitleItemFromSrt('1\n00:00:10,200 --> 00:00:15,000\nImported line');
-	expect(trimItemStart(id, 300)).toBe(true);
+	const item = timelineStore.itemById.get(id)!;
+	const trim = planTrimGesture(item, 'start', 300 - item.from, timelineStore.items, 30, [], 0);
+	timelineStore._updateItems([{ id, patch: trim.patch }]);
+	expect(timelineStore.itemById.get(id)?.from).toBe(300);
 	commandHistory.clearHistory();
 	const screen = await render(TranscriptPanel, { onedit: vi.fn() });
 	await screen.getByRole('button', { name: 'Imported line', exact: true }).click();
