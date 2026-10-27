@@ -130,6 +130,16 @@ describe('built-in themes', () => {
 			expect(theme.revision).toMatch(/^builtin-v\d+$/);
 			for (const scheme of theme.supportedSchemes) {
 				const manifest = theme.schemes[scheme]!;
+				if (theme.id === 'corkboard') {
+					expect(
+						themeColorContrastRatio(
+							manifest.colors.disabledInk,
+							manifest.colors.disabled,
+							manifest.colors.canvas
+						),
+						`Corkboard ${scheme} disabled text contrast`
+					).toBeGreaterThanOrEqual(4.5);
+				}
 				expect(isCompleteThemeSchemeManifest(manifest, scheme)).toBe(true);
 				expect(Object.keys(manifest.colors).sort()).toEqual([...THEME_COLOR_TOKEN_KEYS].sort());
 				expect(Object.keys(manifest.protectedEditor).sort()).toEqual(
@@ -234,7 +244,7 @@ describe('built-in themes', () => {
 		}
 	});
 
-	it('gives every non-Workshop family a distinct structural identity', () => {
+	it('keeps recipe tuples distinct and the Dither navigation choices explicit', () => {
 		const identities = BUILT_IN_THEMES.slice(1).map((theme) => {
 			const manifest = theme.schemes.light ?? theme.schemes.dark!;
 			return JSON.stringify({
@@ -248,7 +258,10 @@ describe('built-in themes', () => {
 			});
 		});
 
-		expect(new Set(identities).size).toBe(identities.length);
+		expect(new Set(identities).size, 'non-Workshop recipe tuples').toBe(identities.length);
+		// DESIGN.md defines outlined Dither navigation and tonal Dither Moss navigation.
+		expect(getBuiltInTheme('dither').schemes.light!.components.navigation).toBe('outlined');
+		expect(getBuiltInTheme('dither-moss').schemes.light!.components.navigation).toBe('tonal');
 	});
 
 	it('falls back to a complete Workshop scheme without mixing families', () => {

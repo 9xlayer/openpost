@@ -3,7 +3,7 @@ import { render } from 'vitest-browser-svelte';
 import { switchLocale } from '$lib/i18n';
 import { getBuiltInTheme, WebThemeRuntime, type ThemeRuntimeLoaders } from '$lib/themes';
 import ThemeEditor from './theme-editor.svelte';
-import { duplicateThemeManifest } from './theme-editor-model';
+import { duplicateThemeManifest } from './theme-manifest.test-fixtures';
 import '../../../routes/layout.css';
 
 function previewFrame(element: Element): HTMLIFrameElement {

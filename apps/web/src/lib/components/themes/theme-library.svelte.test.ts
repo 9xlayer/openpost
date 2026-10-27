@@ -3,7 +3,7 @@ import { render } from 'vitest-browser-svelte';
 import { switchLocale } from '$lib/i18n';
 import { getBuiltInTheme, type ThemeFamilyId } from '$lib/themes';
 import ThemeLibrary from './theme-library.svelte';
-import { duplicateThemeManifest } from './theme-editor-model';
+import { duplicateThemeManifest } from './theme-manifest.test-fixtures';
 import { builtInManifestReference } from './theme-library-model';
 import '../../../routes/layout.css';
 
