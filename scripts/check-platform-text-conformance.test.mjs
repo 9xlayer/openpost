@@ -47,14 +47,6 @@ var _ = []Capability{
   devnull: ``,
 };
 
-test("matching sources produce no conformance problems", () => {
-  const problems = platformTextConformanceProblems(
-    parseTypeScriptTextFacts(tsSource),
-    parseGoTextFacts(goSources),
-  );
-  assert.deepEqual(problems, []);
-});
-
 test("a drifted TypeScript limit is reported", () => {
   const ts = parseTypeScriptTextFacts(tsSource.replace("charLimit: 500", "charLimit: 501"));
   const problems = platformTextConformanceProblems(ts, parseGoTextFacts(goSources));

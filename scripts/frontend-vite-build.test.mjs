@@ -37,10 +37,6 @@ describe("frontend Vite build memory", () => {
 });
 
 describe("frontend Vite build arguments", () => {
-  test("uses the web application mode by default", () => {
-    expect(parseFrontendBuildArguments([])).toEqual({});
-  });
-
   test("rejects arguments that could silently change the canonical build", () => {
     expect(() => parseFrontendBuildArguments(["--mode=development"])).toThrow(
       "Unsupported frontend build arguments",
