@@ -6,6 +6,9 @@ services:
     image: ghcr.io/getopenpost/openpost:latest
     restart: unless-stopped
     stop_grace_period: 15s
+    extra_hosts:
+      - "www.linkedin.com:104.18.41.41"
+      - "api.linkedin.com:104.18.41.41"
     expose:
       - "8080"
     volumes:
