@@ -549,6 +549,21 @@ function checkPlan(requestedScope, requestedOptions) {
       env: { OPENPOST_CHECK_PREPARED: "1" },
     }),
   ]);
+  // One dependency graph builds shared UI output before either consumer reads it.
+  // Separate Turbo processes can rebuild dist while the other checker is running.
+  const frontendAndMarketing = stage("frontend and marketing types", [
+    commandStep(
+      "bunx",
+      "turbo",
+      "run",
+      "check",
+      "--filter",
+      "@openpost/web",
+      "--filter",
+      "@openpost/site",
+      { env: { OPENPOST_CHECK_PREPARED: "1" } },
+    ),
+  ]);
   const backend = stage("backend types", [
     go("test", "-tags", "dev", "-run", "^$", "./...", { cwd: "apps/server" }),
   ]);
@@ -559,7 +574,7 @@ function checkPlan(requestedScope, requestedOptions) {
     return plan("check", requestedScope, [[contracts], [translations], [frontend]]);
   }
   if (requestedScope === "frontend-marketing") {
-    return plan("check", requestedScope, [[contracts], [translations], [frontend, marketing]]);
+    return plan("check", requestedScope, [[contracts], [translations], [frontendAndMarketing]]);
   }
   if (requestedScope === "backend") return plan("check", requestedScope, [[contracts], [backend]]);
   if (requestedScope === "cli") return plan("check", requestedScope, [[contracts], [cli]]);
@@ -579,7 +594,7 @@ function checkPlan(requestedScope, requestedOptions) {
   return plan("check", undefined, [
     [contracts],
     [translations],
-    [frontend, marketing, backend, cli],
+    [frontendAndMarketing, backend, cli],
     // Policy checks build public artifacts and rewrite Paraglide output.
     [policy],
   ]);

@@ -66,8 +66,7 @@ function taskPlan(command, scope, environment = {}) {
 test("checks finish translation readers before policy builds regenerate translations", () => {
   const { stdout } = taskPlan("check");
   const stages = Object.fromEntries(JSON.parse(stdout).stages.map((stage) => [stage.label, stage]));
-  assert.ok(stages["repository policy"].phase > stages["frontend types"].phase);
-  assert.ok(stages["repository policy"].phase > stages["marketing types"].phase);
+  assert.ok(stages["repository policy"].phase > stages["frontend and marketing types"].phase);
 });
 
 test("combined frontend and marketing checks compile translations once before both readers", () => {
@@ -81,11 +80,13 @@ test("combined frontend and marketing checks compile translations once before bo
   const stages = JSON.parse(combined.stdout).stages;
   assert.equal(stages.filter((stage) => stage.label === "frontend translations").length, 1);
   const translations = stages.find((stage) => stage.label === "frontend translations");
-  const frontend = stages.find((stage) => stage.label === "frontend types");
-  const marketing = stages.find((stage) => stage.label === "marketing types");
-  assert.ok(translations.phase < frontend.phase);
-  assert.ok(translations.phase < marketing.phase);
-  assert.equal(frontend.phase, marketing.phase);
+  const readers = stages.filter((stage) =>
+    stage.commands.some((command) => command.includes("turbo run check")),
+  );
+  assert.equal(readers.length, 1, "shared UI outputs must have one Turbo dependency graph");
+  assert.ok(translations.phase < readers[0].phase);
+  assert.equal(readers[0].commands.length, 1);
+  assert.match(readers[0].commands[0], /--filter @openpost\/web --filter @openpost\/site/u);
 
   for (const scope of ["frontend", "marketing"]) {
     const standalone = plannedCheck(scope);
