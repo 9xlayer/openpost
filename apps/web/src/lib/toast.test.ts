@@ -36,12 +36,22 @@ beforeEach(() => {
 });
 
 it('maps each tone to exactly one sonner variant', () => {
-	expect(showToast('ok', 'success')).toBe('variant-id');
-	expect(showToast('bad', 'error')).toBe('variant-id');
-	expect(showToast('note', 'info')).toBe('variant-id');
-	expect(showToast('careful', 'warning')).toBe('variant-id');
+	success.mockReturnValue('success-id');
+	error.mockReturnValue('error-id');
+	info.mockReturnValue('info-id');
+	warning.mockReturnValue('warning-id');
+	expect(showToast('ok', 'success')).toBe('success-id');
+	expect(success).toHaveBeenCalledWith('ok', {});
+	expect(showToast('bad', 'error')).toBe('error-id');
+	expect(error).toHaveBeenCalledWith('bad', {});
+	expect(showToast('note', 'info')).toBe('info-id');
+	expect(info).toHaveBeenCalledWith('note', {});
+	expect(showToast('careful', 'warning')).toBe('warning-id');
+	expect(warning).toHaveBeenCalledWith('careful', {});
 	expect(showToast('plain', 'neutral')).toBe('neutral-id');
 	expect(showToast('default')).toBe('neutral-id');
+	expect(callable).toHaveBeenCalledWith('plain', {});
+	expect(callable).toHaveBeenCalledWith('default', {});
 	expect(success).toHaveBeenCalledTimes(1);
 	expect(error).toHaveBeenCalledTimes(1);
 	expect(info).toHaveBeenCalledTimes(1);
