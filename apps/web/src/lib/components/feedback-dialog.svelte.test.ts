@@ -46,7 +46,7 @@ async function renderOpenDialog() {
 	);
 }
 
-it('promises same-day reading with a fast fix', async () => {
+it('renders the same-day response promise', async () => {
 	const screen = await renderOpenDialog();
 	await expect
 		.element(screen.getByText('We read every report the same day', { exact: false }))
