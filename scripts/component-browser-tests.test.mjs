@@ -115,3 +115,66 @@ test("invalid or extra shard arguments fail before preparation", () => {
     assert.deepEqual(result.calls, []);
   }
 });
+
+// Exercise the real Vitest project/Vite merge, including resource reactivation
+// after the project initialization closes its watcher.
+test("one-shot projects cannot reactivate file watching while watch mode still receives edits", () => {
+  const result = spawnSync(
+    nodeExecutable,
+    [
+      "--input-type=module",
+      "-e",
+      String.raw`import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { loadConfigFromFile } from 'vite';
+import { createVitest } from 'vitest/node';
+const root=path.resolve('../..');
+const base=await loadConfigFromFile({command:'serve',mode:'test'},path.join(root,'apps/web/vitest.config.ts'));
+const projects=base.config.test.projects.map(project=>({...project,extends:path.join(root,'apps/web/vite.config.ts')}));
+const results=[];
+for(const watch of [false,true]) {
+ const fixture=await mkdtemp(path.join(os.tmpdir(),'openpost-vitest-watcher-'));
+ const file=path.join(fixture,'watched.txt');await writeFile(file,'before');
+ let ctx;
+ try {
+  ctx=await createVitest('test',{root:fixture,config:false,watch,project:['client'],reporters:[]},{logLevel:'silent',test:{...base.config.test,projects}});
+  const project=ctx.projects[0].vite;await project.watcher.add(file);
+  for(let i=0;i<50 && Object.keys(project.watcher.getWatched()).length===0;i++) await new Promise(r=>setTimeout(r,10));
+  let changed=false;
+  if(watch) {
+   const signal=new Promise(resolve=>ctx.vite.watcher.once('change',()=>{changed=true;resolve();}));
+   for(let i=0;i<50 && Object.keys(ctx.vite.watcher.getWatched()).length===0;i++) await new Promise(r=>setTimeout(r,10));
+   await writeFile(file,'after');await Promise.race([signal,new Promise(r=>setTimeout(r,1000))]);
+  }
+  results.push({watch,projectWatcher:project.watcher.constructor.name,projectWatchedPaths:Object.keys(project.watcher.getWatched()).length,rootWatcher:ctx.vite.watcher.constructor.name,watchModeChangeObserved:changed});
+ } finally {await ctx?.close();await rm(fixture,{recursive:true,force:true});}
+}
+console.log('WATCHER_RESULT '+JSON.stringify(results));
+`,
+    ],
+    {
+      cwd: path.resolve("apps/web"),
+      env: { ...process.env, VITEST: "true", OPENPOST_PARAGLIDE_PRECOMPILED: "1" },
+      encoding: "utf8",
+      timeout: 15000,
+    },
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const line = result.stdout.split("\n").find((value) => value.startsWith("WATCHER_RESULT "));
+  assert.ok(line, "the real server probe must return its watcher results");
+  const modes = JSON.parse(line.slice("WATCHER_RESULT ".length));
+  assert.equal(modes.length, 2);
+  for (const mode of modes) {
+    assert.equal(
+      mode.projectWatchedPaths,
+      0,
+      "Vitest project initialization must not allocate a live watcher",
+    );
+    assert.equal(
+      mode.watchModeChangeObserved,
+      mode.watch,
+      "interactive watch mode must still receive edits",
+    );
+  }
+});
