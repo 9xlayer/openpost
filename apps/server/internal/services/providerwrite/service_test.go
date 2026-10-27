@@ -72,7 +72,9 @@ func TestAcceptedWriteWithoutNativeIDFailsAmbiguousForManualResolution(t *testin
 	service := New(db)
 	input := providerWriteTestInput(t, "accepted-without-id")
 
+	var calls atomic.Int32
 	send := func(_ context.Context, control *Control) (platform.PublishResult, error) {
+		calls.Add(1)
 		require.NoError(t, control.Begin(platform.PublishResult{ProviderState: "create_post", RetrySafety: platform.PublishRetryNever}))
 		accepted := platform.AcceptedPublishResult("")
 		require.NoError(t, control.Checkpoint(accepted))
@@ -81,6 +83,7 @@ func TestAcceptedWriteWithoutNativeIDFailsAmbiguousForManualResolution(t *testin
 	_, err := service.Execute(t.Context(), input, send, nil)
 	require.Error(t, err)
 	require.True(t, IsAmbiguous(err), "expected a terminal ambiguous error, got %v", err)
+	require.Equal(t, int32(1), calls.Load())
 
 	attempt := latestProviderWriteAttempt(t, db, input.OperationID)
 	require.Equal(t, StatusAmbiguous, attempt.Status)
@@ -93,6 +96,7 @@ func TestAcceptedWriteWithoutNativeIDFailsAmbiguousForManualResolution(t *testin
 	_, err = service.Execute(t.Context(), input, send, nil)
 	require.Error(t, err)
 	require.True(t, IsAmbiguous(err), "an id-less acceptance must never be replayed, got %v", err)
+	require.Equal(t, int32(1), calls.Load(), "an id-less acceptance must never be replayed")
 }
 
 func TestAcceptedWriteWithoutIDButWithReferenceStaysAccepted(t *testing.T) {

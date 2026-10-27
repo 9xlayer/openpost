@@ -179,8 +179,11 @@ func TestEnableSetsWatermarkWithoutBackfill(t *testing.T) {
 }
 
 func TestSyncDedupesRepeatedReads(t *testing.T) {
-	reader := &nativeReaderFixture{pages: map[string]platform.NativePostPage{
-		"": {Coverage: platform.NativePostComplete, NextCursor: "", Items: []platform.NativePostItem{nativePostItem("at://did:plc:owner/app.bsky.feed.post/aaa", "hello", "2026-09-26T11:00:00Z")}},
+	page := platform.NativePostPage{Coverage: platform.NativePostComplete, NextCursor: "", Items: []platform.NativePostItem{nativePostItem("at://did:plc:owner/app.bsky.feed.post/aaa", "hello", "2026-09-26T11:00:00Z")}}
+	reads := 0
+	reader := &nativeReaderFixture{read: func(context.Context, platform.NativePostRequest) (platform.NativePostPage, error) {
+		reads++
+		return page, nil
 	}}
 
 	db := newPostImportTestDB(t)
@@ -193,9 +196,11 @@ func TestSyncDedupesRepeatedReads(t *testing.T) {
 	_, err := service.Enable(context.Background(), "workspace-1", account.ID)
 	require.NoError(t, err)
 	require.NoError(t, service.SyncAccount(context.Background(), "workspace-1", account.ID))
+	require.Equal(t, 1, reads)
 	require.Equal(t, 1, countImported(t, db, account.ID))
 
-	// Force the next cycle: the same provider post must not duplicate.
+	// Force the next cycle: the same provider post must be read again and must
+	// not duplicate, so a skipped second read cannot pass this test.
 	_, err = db.NewUpdate().Model((*models.PostImportState)(nil)).
 		Set("next_eligible_at = ?", frozen.Add(-time.Minute)).
 		Set("last_success_at = ?", frozen.Add(-25*time.Hour)).
@@ -203,6 +208,7 @@ func TestSyncDedupesRepeatedReads(t *testing.T) {
 		Exec(context.Background())
 	require.NoError(t, err)
 	require.NoError(t, service.SyncAccount(context.Background(), "workspace-1", account.ID))
+	require.Equal(t, 2, reads, "the second cycle must issue a second provider read")
 	require.Equal(t, 1, countImported(t, db, account.ID))
 }
 
@@ -339,7 +345,11 @@ func TestReadBudgetGuardBlocksProvidersReads(t *testing.T) {
 	require.Equal(t, 0, countImported(t, db, account.ID))
 	state := loadImportState(t, db, account.ID)
 	require.Equal(t, "cost_limited", state.Status)
-	require.True(t, account.IsActive)
+	// The block is a policy refusal, not a disconnection: the persisted account
+	// must still be active after the sync.
+	var stored models.SocialAccount
+	require.NoError(t, db.NewSelect().Model(&stored).Where("id = ?", account.ID).Scan(context.Background()))
+	require.True(t, stored.IsActive)
 }
 
 func TestReadBudgetIsFreshAtTheUTCDayItsRetryWaitsFor(t *testing.T) {

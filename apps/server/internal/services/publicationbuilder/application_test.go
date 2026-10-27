@@ -281,7 +281,10 @@ func TestApplicationReclaimsExpiredBuildLeaseAndFencesOldWorker(t *testing.T) {
 	require.EqualValues(t, 2, calls.Load())
 }
 
-func TestApplicationRetryStealsProcessingFailureJobBeforeOldWorkerCanFenceIt(t *testing.T) {
+// Retry must requeue the failed build and clear the previous worker's
+// ownership fields on the job row. This is a service-level contract: it does
+// not exercise the worker's own finalization fence.
+func TestApplicationRetryRequeuesFailedBuildAndClearsPreviousWorkerOwnership(t *testing.T) {
 	db := newBuilderApplicationTestDB(t)
 	now := time.Date(2026, 8, 23, 16, 15, 0, 0, time.UTC)
 	application, err := NewApplication(db, packageBuilderFunc(func(context.Context, BuildInput) (BuildResult, error) {
@@ -319,6 +322,10 @@ func TestApplicationRetryStealsProcessingFailureJobBeforeOldWorkerCanFenceIt(t *
 	require.True(t, job.LockedAt.IsZero())
 	require.Equal(t, now.Unix(), job.RunAt.Unix())
 
+	// This mirrors the old worker's ownership predicate against the requeued row.
+	// It is the test's own copy of that predicate, not the worker's finalization
+	// path, so it demonstrates the row no longer matches; it does not prove the
+	// worker's fence.
 	oldWorkerFence, err := db.NewUpdate().Model((*models.Job)(nil)).
 		Set("status = ?", jobregistry.StatusFailed).
 		Where("id = ? AND status = ? AND locked_by = ?", job.ID, jobregistry.StatusProcessing, "old-worker").

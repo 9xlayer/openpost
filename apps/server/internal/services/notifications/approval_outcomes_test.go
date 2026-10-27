@@ -183,6 +183,8 @@ func TestWorkflowApprovalReminderReportsTheTimeLeft(t *testing.T) {
 	require.Contains(t, oneDayInput.Body, "One day")
 	require.Contains(t, threeDaysInput.Body, "3 days")
 	require.NotEqual(t, oneDayInput.Body, threeDaysInput.Body)
+	require.Contains(t, lastDayInput.Body, "expires today", "the final day must say the approval expires today")
+	require.NotContains(t, lastDayInput.Body, "1 day")
 	require.NotEqual(t, lastDayInput.Body, oneDayInput.Body)
 }
 

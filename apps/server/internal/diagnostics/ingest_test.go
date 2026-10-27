@@ -106,8 +106,14 @@ func TestPostDiscordReportDeliversBoundedPayload(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
+	// A report the validator accepts, carrying the maximum frame list at the
+	// maximum per-frame lengths, so the sender has to clip for real.
 	report := ingestTestReport()
-	report.Operation = strings.Repeat("a", 500)
+	report.Frames = make([]Frame, maxFrames)
+	for i := range report.Frames {
+		report.Frames[i] = Frame{Module: strings.Repeat("m", 240), Function: strings.Repeat("f", 160), Line: 1}
+	}
+	require.NoError(t, ValidateReport(report))
 	require.NoError(t, postDiscordReport(t.Context(), server.Client(), server.URL, report))
 	require.NotEmpty(t, captured)
 	require.Less(t, len(captured), 16<<10)
@@ -123,6 +129,22 @@ func TestPostDiscordReportDeliversBoundedPayload(t *testing.T) {
 	serialized, err := json.Marshal(embed)
 	require.NoError(t, err)
 	require.NotContains(t, string(serialized), "discord.example")
+	require.NotContains(t, string(captured), server.URL, "the webhook secret must never be echoed in the payload")
+
+	var decoded discordDiagnosticsPayload
+	require.NoError(t, json.Unmarshal(captured, &decoded))
+	require.Len(t, decoded.Embeds, 1)
+	framesFields := 0
+	for _, field := range decoded.Embeds[0].Fields {
+		require.LessOrEqual(t, utf8.RuneCountInString(field.Value), 1024, "Discord rejects oversized %s fields", field.Name)
+		if field.Name != "Frames" {
+			continue
+		}
+		framesFields++
+		require.True(t, strings.HasPrefix(field.Value, "```\n"))
+		require.True(t, strings.HasSuffix(field.Value, "\n```"))
+	}
+	require.Equal(t, 1, framesFields, "frames must stay in one clipped code block")
 }
 
 func TestFormatDiscordPayloadClipsFields(t *testing.T) {
