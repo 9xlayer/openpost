@@ -166,8 +166,9 @@ describe("hand-written contracts against the real checkout", () => {
       const scratch = path.join(fixture, "types.ts");
       await writeFile(scratch, mutated);
       const { problems } = checkHandwrittenContracts({ directory: repoRoot, sdkTypes: scratch });
-      expect(problems.some((problem) => problem.includes("sdk:Rendition"))).toBe(true);
-      expect(problems.some((problem) => problem.includes("status"))).toBe(true);
+      expect(
+        problems.some((problem) => problem.includes("sdk:Rendition") && problem.includes("status")),
+      ).toBe(true);
     } finally {
       const { rm } = await import("node:fs/promises");
       await rm(fixture, { recursive: true, force: true });
