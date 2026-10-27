@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { QueryClient } from '@tanstack/svelte-query';
 import AuthorizePage from './oauth-authorize-page.svelte';
-import type { Workspace } from '$lib/api/client';
+import type { SocialAccount, Workspace } from '$lib/api/client';
 import '../../layout.css';
 
 function workspace(id: string, name: string): Workspace {
@@ -161,19 +161,19 @@ describe('OAuth authorization request validation', () => {
 			}
 			const workspaceID = options?.params?.query?.workspace_id;
 			if (workspaceID === 'workspace-empty') return { data: [], error: undefined };
+			const account: Pick<SocialAccount, 'id' | 'account_username' | 'platform' | 'is_active'> &
+				Partial<Pick<SocialAccount, 'account_avatar_url'>> = {
+				id: `account-${workspaceID}`,
+				account_username: `account-${workspaceID}`,
+				platform: 'x',
+				is_active: true
+			};
+			// Only the first workspace carries a photo; its consent row must render it.
+			if (workspaceID === 'workspace-1') {
+				account.account_avatar_url = 'https://example.com/photo.png';
+			}
 			return {
-				data: [
-					{
-						id: `account-${workspaceID}`,
-						account_username: `account-${workspaceID}`,
-						// Only the first workspace carries a photo; its consent row must render it.
-						...(workspaceID === 'workspace-1'
-							? { account_avatar_url: 'https://example.com/photo.png' }
-							: {}),
-						platform: 'x',
-						is_active: true
-					}
-				],
+				data: [account],
 				error: undefined
 			};
 		});
