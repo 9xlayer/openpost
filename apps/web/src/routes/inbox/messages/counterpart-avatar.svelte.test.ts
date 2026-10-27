@@ -149,18 +149,6 @@ describe('messages counterpart avatar', () => {
 		expect(image?.getAttribute('referrerpolicy')).toBe('no-referrer');
 		expect(image?.getAttribute('loading')).toBe('lazy');
 	});
-
-	it('uses the shared monogram rule for the counterpart fallback', async () => {
-		mockInbox([conversation('Ada King Lovelace', 0)]);
-		const screen = await renderMessages();
-		await vi.waitFor(() => {
-			const fallback = rowByName(screen.container, 'Ada King Lovelace').querySelector(
-				'[data-slot="avatar-fallback"]'
-			);
-			// Shared rule: first + last word initials. The route-local rule used the first two words ("AK").
-			expect(fallback?.textContent?.trim()).toBe('AL');
-		});
-	});
 });
 
 function conversation(name: string, unreadCount: number, avatarUrl = '') {

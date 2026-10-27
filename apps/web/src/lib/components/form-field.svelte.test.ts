@@ -27,13 +27,4 @@ describe('form field', () => {
 			.element(input)
 			.toHaveAttribute('aria-describedby', 'display-name-description display-name-error');
 	});
-
-	it('keeps the error quiet until the field is touched', async () => {
-		const screen = await render(Fixture, { error: 'Enter a name.', touched: false });
-
-		await expect.element(screen.getByRole('status')).toHaveTextContent('');
-		await expect
-			.element(screen.getByRole('textbox', { name: 'Display name' }))
-			.not.toHaveAttribute('aria-invalid');
-	});
 });

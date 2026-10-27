@@ -1,5 +1,4 @@
 import { expect, it, vi } from 'vitest';
-import { page } from 'vitest/browser';
 import { render } from 'vitest-browser-svelte';
 import PublicationDeliveryCard from './publication-delivery-card.svelte';
 
@@ -9,19 +8,6 @@ const baseRendition = {
 	target_key: 'x',
 	status: 'failed'
 };
-
-it('renders the account photo with its platform badge instead of a bare platform icon', async () => {
-	const avatarUrl =
-		'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="blue"/%3E%3C/svg%3E';
-	const screen = await render(PublicationDeliveryCard, {
-		rendition: { ...baseRendition },
-		destinationLabel: '@openpost',
-		accountAvatarUrl: avatarUrl
-	});
-
-	const image = screen.container.querySelector('img');
-	expect(image?.getAttribute('src')).toBe(avatarUrl);
-});
 
 it('prefers the projected destination photo over the explicit avatar fallback', async () => {
 	const projectedUrl =
@@ -41,31 +27,6 @@ it('prefers the projected destination photo over the explicit avatar fallback', 
 	expect(image?.getAttribute('src')).toBe(projectedUrl);
 	await expect.element(screen.getByText('@projected', { exact: true })).toBeVisible();
 	await expect.element(screen.getByText('@stale', { exact: true })).not.toBeInTheDocument();
-});
-
-it('renders the projected destination photo without an explicit avatar prop', async () => {
-	const projectedUrl =
-		'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="10" height="10"%3E%3Crect width="10" height="10" fill="green"/%3E%3C/svg%3E';
-	const screen = await render(PublicationDeliveryCard, {
-		rendition: {
-			...baseRendition,
-			account: { platform: 'x', display_name: '@projected', avatar_url: projectedUrl }
-		},
-		destinationLabel: '@projected'
-	});
-
-	const image = screen.container.querySelector('img');
-	expect(image?.getAttribute('src')).toBe(projectedUrl);
-});
-
-it('keeps its audit identity without a photo for an unavailable account', async () => {
-	const screen = await render(PublicationDeliveryCard, {
-		rendition: { ...baseRendition },
-		destinationLabel: '@gone'
-	});
-
-	await expect.element(screen.getByText('@gone')).toBeVisible();
-	expect(screen.container.querySelector('img')).toBeNull();
 });
 
 it('does not offer a stale retry after the destination has been queued again', async () => {

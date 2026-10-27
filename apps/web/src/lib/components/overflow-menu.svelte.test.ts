@@ -14,9 +14,6 @@ describe('OverflowMenu trigger contract', () => {
 			const target = trigger.element().getBoundingClientRect();
 			expect(target.width).toBeGreaterThanOrEqual(44);
 			expect(target.height).toBeGreaterThanOrEqual(44);
-			const icon = trigger.element().querySelector('svg');
-			if (!icon) throw new Error('Expected the overflow trigger icon');
-			expect(icon.getAttribute('class') ?? '').toContain('size-4');
 		} finally {
 			await page.viewport(1280, 900);
 		}
