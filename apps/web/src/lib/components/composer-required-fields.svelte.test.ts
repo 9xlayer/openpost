@@ -1,7 +1,9 @@
 import { expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { page } from 'vitest/browser';
 import type { SocialAccount } from '$lib/api/client';
 import type { components } from '$lib/api/types';
+import '../../routes/layout.css';
 import ComposerRequiredFields from './composer-required-fields.svelte';
 
 type ResolvedAccountCapability = components['schemas']['ResolvedAccountCapability'];
@@ -105,6 +107,13 @@ function capability(setting: SettingDefinition): ResolvedAccountCapability {
 }
 
 it('keeps a lone required channel label left and select right', async () => {
+	await page.viewport(390, 844);
+	const secondAccount: SocialAccount = {
+		...discordAccount,
+		id: 'discord-bot-2',
+		slug: 'discord-bot-2',
+		account_id: 'guild-2'
+	};
 	const screen = await render(ComposerRequiredFields, {
 		props: {
 			accounts: [discordAccount],
@@ -118,11 +127,59 @@ it('keeps a lone required channel label left and select right', async () => {
 			onAddMedia: vi.fn()
 		}
 	});
-	const select = screen.getByRole('button', { name: /Channel/ });
-	await expect.element(select).toHaveClass('w-auto');
-	await expect.element(select).not.toHaveClass('mt-1');
-	const label = document.querySelector<HTMLLabelElement>(
+	const loneSelect = screen.getByRole('button', { name: /Channel/ });
+	await expect.element(loneSelect).toBeVisible();
+	const loneLabel = document.querySelector<HTMLLabelElement>(
 		'label[for="required-discord-bot-channel_id"]'
 	);
-	expect(label?.parentElement).toHaveClass('justify-between');
+	const loneRow = loneLabel?.parentElement;
+	if (!loneLabel || !loneRow) throw new Error('expected the lone required field row');
+	const loneLabelBounds = loneLabel.getBoundingClientRect();
+	const loneSelectBounds = loneSelect.element().getBoundingClientRect();
+	const loneRowBounds = loneRow.getBoundingClientRect();
+
+	// The lone label and its select share a row, with the select pinned to the
+	// right edge and sized by its content rather than the row.
+	expect(
+		Math.abs(
+			loneLabelBounds.top +
+				loneLabelBounds.height / 2 -
+				(loneSelectBounds.top + loneSelectBounds.height / 2)
+		)
+	).toBeLessThanOrEqual(2);
+	expect(loneSelectBounds.width).toBeLessThan(loneRowBounds.width);
+	expect(loneLabelBounds.right).toBeLessThanOrEqual(loneSelectBounds.left);
+	expect(Math.abs(loneRowBounds.right - loneSelectBounds.right)).toBeLessThanOrEqual(1);
+	expect(loneSelectBounds.right).toBeLessThanOrEqual(390);
+	expect(loneRowBounds.right).toBeLessThanOrEqual(390);
+
+	// A second required field leaves the general branch, which stacks each
+	// label above its select while the same select keeps its intrinsic width.
+	await screen.rerender({
+		accounts: [discordAccount, secondAccount],
+		resolvedByAccount: {
+			[discordAccount.id]: capability(channelSetting()),
+			[secondAccount.id]: { ...capability(channelSetting()), account_id: secondAccount.id }
+		},
+		valuesByAccount: {},
+		optionGroupsByAccount: {
+			[discordAccount.id]: { discord_channels: [{ value: 'general', label: '#general' }] },
+			[secondAccount.id]: { discord_channels: [{ value: 'general', label: '#general' }] }
+		},
+		onChange: vi.fn(),
+		onFormatChange: vi.fn(),
+		onAddMedia: vi.fn()
+	});
+	const stackedSelects = screen.getByRole('button', { name: /Channel/ }).elements();
+	expect(stackedSelects).toHaveLength(2);
+	const stackedSelect = stackedSelects[0];
+	await expect.element(stackedSelect).toBeVisible();
+	const stackedLabel = document.querySelector<HTMLLabelElement>(
+		'label[for="required-discord-bot-channel_id"]'
+	);
+	if (!stackedLabel) throw new Error('expected the first stacked label');
+	const stackedLabelBounds = stackedLabel.getBoundingClientRect();
+	const stackedSelectBounds = stackedSelect.getBoundingClientRect();
+	expect(stackedSelectBounds.top).toBeGreaterThanOrEqual(stackedLabelBounds.bottom - 1);
+	expect(Math.abs(stackedSelectBounds.width - loneSelectBounds.width)).toBeLessThanOrEqual(1);
 });

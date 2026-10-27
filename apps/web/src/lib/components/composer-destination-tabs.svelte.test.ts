@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import type { SocialAccount } from '$lib/api/client';
+import '../../routes/layout.css';
 import ComposerDestinationTabs from './composer-destination-tabs.svelte';
 
 function socialAccount(id: string, platform: string, account_username: string): SocialAccount {
@@ -33,18 +34,18 @@ describe('Composer destination tabs', () => {
 			isCustomFor: (account: SocialAccount) => account.id === 'acc-1'
 		});
 
-		const customTab = screen.getByTestId('composer-destination-custom');
-		expect(customTab).toBeDefined();
+		await expect.element(screen.getByTestId('composer-destination-custom')).toBeVisible();
 		expect(
 			screen.container.querySelectorAll('[data-testid="composer-destination-custom"]')
 		).toHaveLength(1);
 
 		const customButton = screen.getByRole('button', { name: '@one, X, custom' });
+		await expect.element(customButton).toBeVisible();
 		expect(customButton.element().getAttribute('aria-pressed')).toBe('false');
-		expect(screen.getByRole('button', { name: '@one, Threads' })).toBeDefined();
+		await expect.element(screen.getByRole('button', { name: '@one, Threads' })).toBeVisible();
 
 		await customButton.click();
-		expect(onActivate).toHaveBeenCalledWith('acc-1');
+		expect(onActivate).toHaveBeenCalledExactlyOnceWith('acc-1');
 	});
 
 	it('keeps the custom marker next to the issue count', async () => {
@@ -60,7 +61,7 @@ describe('Composer destination tabs', () => {
 		expect(
 			screen.container.querySelectorAll('[data-testid="composer-destination-custom"]')
 		).toHaveLength(1);
-		expect(screen.getByText('2')).toBeDefined();
+		await expect.element(screen.getByText('2')).toBeVisible();
 	});
 
 	it('exposes a labelled group of toggle buttons instead of a tab contract', async () => {
@@ -76,7 +77,7 @@ describe('Composer destination tabs', () => {
 		expect(screen.container.querySelectorAll('[role="tablist"]')).toHaveLength(0);
 		expect(screen.container.querySelectorAll('[role="tab"]')).toHaveLength(0);
 		const group = screen.getByRole('group', { name: 'Destinations' });
-		expect(group).toBeDefined();
+		await expect.element(group).toBeVisible();
 		expect(screen.container.querySelectorAll('button[aria-pressed]')).toHaveLength(3);
 	});
 
@@ -95,7 +96,7 @@ describe('Composer destination tabs', () => {
 		expect(allButton.element().getAttribute('aria-pressed')).toBe('false');
 		const activeButton = screen.getByRole('button', { name: '@one, Threads' });
 		expect(activeButton.element().getAttribute('aria-pressed')).toBe('true');
-		expect(screen.getByRole('button', { name: '@one, X' })).toBeDefined();
+		await expect.element(screen.getByRole('button', { name: '@one, X' })).toBeVisible();
 		for (const button of screen.container.querySelectorAll('button')) {
 			expect(button.getAttribute('tabindex')).toBe(null);
 		}
