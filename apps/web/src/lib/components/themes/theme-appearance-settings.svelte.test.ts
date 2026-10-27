@@ -197,12 +197,11 @@ it('keeps theme controls usable during a background catalog refresh', async () =
 		{ wrapper: QueryClientProvider, wrapperProps: { client: queryClient } }
 	);
 	await expect.element(screen.getByRole('button', { name: 'Test Notebook' })).toBeEnabled();
-	let finish: (() => void) | undefined;
-	const held = new Promise<void>((resolve) => {
-		finish = resolve;
-	});
-	getMock.mockImplementation(async () => {
-		await held;
+	expect(getPaths.filter((path) => path === '/themes/available')).toHaveLength(1);
+	const released = Promise.withResolvers<void>();
+	getMock.mockImplementation(async (path) => {
+		getPaths.push(path);
+		await released.promise;
 		// SAFETY: This held catalog response supplies the empty theme page used by the component.
 		return {
 			data: { items: [], next_cursor: null },
@@ -213,12 +212,17 @@ it('keeps theme controls usable during a background catalog refresh', async () =
 		queryKey: themeQueryKeys.available('workspace-a')
 	});
 	try {
+		// The second catalog read has entered the held transport, so the controls
+		// are being asserted while the refresh is genuinely in flight.
+		await expect
+			.poll(() => getPaths.filter((path) => path === '/themes/available'), { timeout: 5_000 })
+			.toHaveLength(2);
 		await expect.element(screen.getByRole('button', { name: 'Test Notebook' })).toBeEnabled();
 		await expect
 			.element(screen.getByRole('button', { name: 'Create theme', exact: true }))
 			.toBeEnabled();
 	} finally {
-		finish?.();
+		released.resolve();
 		await refresh;
 	}
 });
