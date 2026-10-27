@@ -58,7 +58,8 @@ describe('versioned still-image color grade', () => {
 		expect(editorColorGradeAdjustmentsToEffects(neutralGrade)).toEqual([]);
 		// Fabric owns blur for still images, so a non-zero blur must not reach
 		// the shared color pipeline.
-		expect(editorColorGradeAdjustmentsToEffects({ ...neutralGrade, blur: 0.6 })).toEqual([]);
+		const imageAdjustments = { ...neutralGrade, blur: 0.6 };
+		expect(editorColorGradeAdjustmentsToEffects(imageAdjustments)).toEqual([]);
 	});
 
 	it('keeps alpha unchanged in the deterministic CPU fallback', () => {
