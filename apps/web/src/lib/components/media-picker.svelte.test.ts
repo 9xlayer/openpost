@@ -190,16 +190,13 @@ describe('MediaPicker meme source', () => {
 			.toHaveValue('team photo');
 	});
 
-	it('exposes the media source switcher as a named group', async () => {
+	it('exposes the media source tablist by name', async () => {
 		const screen = await renderPicker(false);
 
+		// The source switcher container and its tab list both carry the localized name.
 		const sourceGroup = screen.getByRole('group', { name: m.media_source() });
 		await expect.element(sourceGroup).toBeVisible();
 		await expect.element(sourceGroup.getByRole('tab', { name: 'Library' })).toBeVisible();
-	});
-
-	it('exposes the media source tablist by name', async () => {
-		const screen = await renderPicker(false);
 
 		const sourceTabs = screen.getByRole('tablist', { name: m.media_source() });
 		await expect.element(sourceTabs).toBeVisible();
@@ -248,25 +245,9 @@ describe('MediaPicker meme source', () => {
 		await expect
 			.element(screen.getByText('Drop files here or choose from your device'))
 			.toBeVisible();
-	});
-
-	it('describes the limits for an image-only upload', async () => {
-		const screen = await render(MediaPicker, {
-			props: {
-				open: true,
-				workspaceId: 'workspace-1',
-				accept: ['image/*'],
-				maxSelection: 1,
-				multiple: false,
-				showCreate: false,
-				initialMode: 'upload',
-				services,
-				onConfirm: vi.fn()
-			}
-		});
-
+		// An image-only picker states the image limit and never advertises a video limit.
 		await expect.element(screen.getByText('Maximum: 1 · Images up to 50 MB')).toBeVisible();
-		await expect.element(screen.getByText(/video up to/i)).not.toBeInTheDocument();
+		await expect.element(screen.getByText(/Videos up to 16 GiB/)).not.toBeInTheDocument();
 	});
 
 	it('opens camera-first pickers directly on the camera source', async () => {

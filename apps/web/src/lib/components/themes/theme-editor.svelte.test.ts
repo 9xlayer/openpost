@@ -300,26 +300,6 @@ describe('ThemeEditor', () => {
 		expect(onPublish).not.toHaveBeenCalled();
 	});
 
-	it('keeps the draft dirty and reports a failed save', async () => {
-		const initialTheme = duplicateThemeManifest(
-			getBuiltInTheme('workshop'),
-			'northstar',
-			'Northstar'
-		);
-		const screen = render(ThemeEditor, {
-			initialTheme,
-			onSave: vi.fn().mockRejectedValue(new Error('The draft changed on another device'))
-		});
-
-		await screen.getByLabelText('Canvas', { exact: true }).fill('#F1F5FF');
-		await screen.getByRole('button', { name: 'Save draft' }).click();
-
-		await expect
-			.element(screen.getByRole('alert'))
-			.toHaveTextContent('The draft changed on another device');
-		await expect.element(screen.getByText('Unsaved changes')).toBeVisible();
-	});
-
 	it('requires confirmation before replacing conflicted local changes', async () => {
 		const initialTheme = duplicateThemeManifest(
 			getBuiltInTheme('workshop'),
@@ -339,6 +319,14 @@ describe('ThemeEditor', () => {
 
 		await screen.getByLabelText('Canvas', { exact: true }).fill('#F1F5FF');
 		await screen.getByRole('button', { name: 'Save draft' }).click();
+
+		// A failed save reports the conflict and leaves the authored changes dirty.
+		await expect
+			.element(screen.getByRole('alert'))
+			.toHaveTextContent('The draft changed on another device');
+		await expect.element(screen.getByText('Unsaved changes')).toBeVisible();
+		await expect.element(screen.getByLabelText('Canvas', { exact: true })).toHaveValue('#F1F5FF');
+
 		await screen.getByRole('button', { name: 'Reload latest' }).click();
 
 		expect(onReload).not.toHaveBeenCalled();

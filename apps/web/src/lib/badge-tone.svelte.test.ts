@@ -26,20 +26,11 @@ describe('Badge tone', () => {
 		expect(badge).not.toBeNull();
 		expect(badge?.getAttribute('data-tone')).toBe(tone);
 		await expect.element(badge!).toHaveClass(token);
-	});
-
-	it('produces a distinct class set for each tone', async () => {
-		const seen = new Set<string>();
-		for (const { tone } of tones) {
-			const screen = await render(Badge, {
-				tone,
-				children: textSnippet(`Badge distinct ${tone}`)
-			});
-			const badge = screen.container.querySelector<HTMLElement>('[data-slot="badge"]');
-			expect(badge).not.toBeNull();
-			seen.add(badge!.className);
+		// Each tone keeps its own class set: no other tone's background token is present.
+		for (const other of tones) {
+			if (other.tone === tone) continue;
+			await expect.element(badge!).not.toHaveClass(other.token);
 		}
-		expect(seen.size).toBe(tones.length);
 	});
 
 	it('keeps the default muted appearance without a tone', async () => {
