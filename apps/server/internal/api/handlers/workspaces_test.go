@@ -119,35 +119,6 @@ func newWorkspaceTestServerWithAuthenticator(t *testing.T, entitlement entitleme
 	return &workspaceTestServer{echo: e, db: db, api: api, handler: handler, recorder: recorder}
 }
 
-func TestWorkspaceCompositionStartsOnceForMeaningfulSignals(t *testing.T) {
-	t.Parallel()
-
-	for _, signal := range []string{"text"} {
-		t.Run(signal, func(t *testing.T) {
-			srv := newWorkspaceTestServer(t, entitlements.NewSelfHostedService())
-			seedWorkspaceUserAndMember(t, srv.db, "user-1", "user@example.com", models.WorkspaceRoleAdmin)
-
-			first := srv.postJSON(t, "/api/v1/workspaces/ws-1/setup/composition", map[string]any{"signal": signal, "origin_key": "origin-signal-0001"}, "web-token")
-			require.Equal(t, http.StatusOK, first.Code, first.Body.String())
-			var firstClaim StartWorkspaceCompositionResponse
-			require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstClaim))
-			require.True(t, firstClaim.Claimed)
-
-			reconciled := srv.postJSON(t, "/api/v1/workspaces/ws-1/setup/composition", map[string]any{"signal": signal, "origin_key": "origin-signal-0001"}, "web-token")
-			require.Equal(t, http.StatusOK, reconciled.Code, reconciled.Body.String())
-			var reconciledClaim StartWorkspaceCompositionResponse
-			require.NoError(t, json.Unmarshal(reconciled.Body.Bytes(), &reconciledClaim))
-			require.True(t, reconciledClaim.Claimed)
-
-			repeat := srv.postJSON(t, "/api/v1/workspaces/ws-1/setup/composition", map[string]any{"signal": signal, "origin_key": "origin-repeat-0001"}, "web-token")
-			require.Equal(t, http.StatusOK, repeat.Code, repeat.Body.String())
-			var repeatClaim StartWorkspaceCompositionResponse
-			require.NoError(t, json.Unmarshal(repeat.Body.Bytes(), &repeatClaim))
-			require.False(t, repeatClaim.Claimed)
-		})
-	}
-}
-
 func TestWorkspaceCompositionCapturesServerObservationOnce(t *testing.T) {
 	t.Parallel()
 
@@ -156,6 +127,13 @@ func TestWorkspaceCompositionCapturesServerObservationOnce(t *testing.T) {
 
 	first := srv.postJSON(t, "/api/v1/workspaces/ws-1/setup/composition", map[string]any{"signal": "text", "origin_key": "origin-signal-0001"}, "web-token")
 	require.Equal(t, http.StatusOK, first.Code, first.Body.String())
+	var firstClaim StartWorkspaceCompositionResponse
+	require.NoError(t, json.Unmarshal(first.Body.Bytes(), &firstClaim))
+	require.True(t, firstClaim.Claimed)
+	var stored models.WorkspaceFirstComposition
+	require.NoError(t, srv.db.NewSelect().Model(&stored).Where("workspace_id = ?", "ws-1").Scan(t.Context()))
+	require.Equal(t, "text", stored.Signal)
+	require.Equal(t, "origin-signal-0001", stored.OriginKey)
 	require.Len(t, srv.recorder.Events, 1)
 	event := srv.recorder.Events[0]
 	require.Equal(t, telemetry.EventFirstCompositionStarted, event.Name)
@@ -238,7 +216,7 @@ func TestWorkspaceCompositionConcurrentMembersClaimOnce(t *testing.T) {
 	require.True(t, firstClaim.Claimed)
 	require.Len(t, srv.recorder.Events, 1)
 
-	// A second member racing the same workspace loses the durable claim
+	// A later claim from a second member loses the durable claim
 	// and must not emit a duplicate observation.
 	second := srv.postJSON(t, "/api/v1/workspaces/ws-1/setup/composition", map[string]any{"signal": "media", "origin_key": "origin-member-2-0001"}, "member-2-token")
 	require.Equal(t, http.StatusOK, second.Code, second.Body.String())
