@@ -6,6 +6,10 @@ services:
     image: ghcr.io/getopenpost/openpost:latest
     restart: unless-stopped
     stop_grace_period: 15s
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
     extra_hosts:
       - "www.linkedin.com:104.18.41.41"
       - "api.linkedin.com:104.18.41.41"
